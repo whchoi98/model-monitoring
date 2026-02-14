@@ -1,0 +1,23 @@
+aws:
+  region: us-east-1
+
+models:
+  - id: "us.anthropic.claude-opus-4-5-20251101-v1:0"
+    name: "Claude Opus 4.5"
+  - id: "us.anthropic.claude-opus-4-6-v1"
+    name: "Claude Opus 4.6"
+  - id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+    name: "Claude Sonnet 4.5"
+  - id: "us.amazon.nova-2-lite-v1:0"
+    name: "Nova 2.0 Lite"
+
+probing:
+  interval_seconds: 300
+  max_tokens: 256
+  temperature: 0.1
+  prompts:
+    - "Explain what cloud computing is in 2-3 sentences."
+    - "What is 15 multiplied by 27?"
+
+db:
+  path: "monitoring.db"

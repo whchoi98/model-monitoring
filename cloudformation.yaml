@@ -1,0 +1,387 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: 'Bedrock Model Monitoring - CloudFront -> ALB -> EC2 (existing VPC)'
+
+Metadata:
+  "AWS::CloudFormation::Interface":
+    ParameterGroups:
+      - Label:
+          default: "Existing VPC Configuration"
+        Parameters:
+         - VpcId
+         - VpcCIDR
+         - PublicSubnetA
+         - PublicSubnetB
+         - PrivateSubnetA
+         - CloudFrontPrefixListId
+      - Label:
+          default: "Monitoring Configuration"
+        Parameters:
+         - InstanceType
+         - ProbeIntervalSeconds
+
+Parameters:
+  VpcId:
+    Type: AWS::EC2::VPC::Id
+    Description: "Existing VPC ID"
+
+  VpcCIDR:
+    Type: String
+    Default: "10.254.0.0/16"
+    Description: "VPC CIDR block (for SSM SG)"
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Existing Public Subnet A (for ALB)"
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Existing Public Subnet B (for ALB)"
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet::Id
+    Description: "Existing Private Subnet A (for EC2)"
+
+  CloudFrontPrefixListId:
+    Type: String
+    Description: "CloudFront origin-facing managed prefix list ID"
+
+  InstanceType:
+    Type: String
+    Default: t3.medium
+    Description: "EC2 Instance Type"
+    AllowedValues:
+      - t3.small
+      - t3.medium
+      - t3.large
+
+  ProbeIntervalSeconds:
+    Type: Number
+    Default: 300
+    MinValue: 60
+    Description: "Probe interval in seconds"
+
+  AmazonLinux2023AmiId:
+    Type: AWS::SSM::Parameter::Value<AWS::EC2::Image::Id>
+    Default: /aws/service/ami-amazon-linux-latest/al2023-ami-kernel-6.1-x86_64
+
+Resources:
+  # ============================================================
+  # Security Groups
+  # ============================================================
+  ALBSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "ALB SG - HTTP from CloudFront only"
+      GroupName: !Sub '${AWS::StackName}-ALB-SG'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          SourcePrefixListId: !Ref CloudFrontPrefixListId
+          Description: "HTTP from CloudFront origin-facing only"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALB-SG'
+
+  EC2SecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: "EC2 SG - Next.js from ALB only"
+      GroupName: !Sub '${AWS::StackName}-EC2-SG'
+      VpcId: !Ref VpcId
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3000
+          ToPort: 3000
+          SourceSecurityGroupId: !Ref ALBSecurityGroup
+          Description: "Next.js port from ALB only"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-EC2-SG'
+
+  # ============================================================
+  # IAM Role (SSM + Bedrock)
+  # ============================================================
+  MonitoringRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub '${AWS::StackName}-Role'
+      AssumeRolePolicyDocument:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service: ec2.amazonaws.com
+            Action: sts:AssumeRole
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore
+      Policies:
+        - PolicyName: BedrockInvokeModel
+          PolicyDocument:
+            Version: '2012-10-17'
+            Statement:
+              - Effect: Allow
+                Action:
+                  - bedrock:InvokeModel
+                Resource: "arn:aws:bedrock:*::foundation-model/*"
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Role'
+
+  MonitoringInstanceProfile:
+    Type: AWS::IAM::InstanceProfile
+    Properties:
+      Roles:
+        - !Ref MonitoringRole
+
+  # ============================================================
+  # EC2 Instance
+  # ============================================================
+  MonitoringServer:
+    Type: AWS::EC2::Instance
+    Properties:
+      InstanceType: !Ref InstanceType
+      ImageId: !Ref AmazonLinux2023AmiId
+      IamInstanceProfile: !Ref MonitoringInstanceProfile
+      SubnetId: !Ref PrivateSubnetA
+      SecurityGroupIds:
+        - !Ref EC2SecurityGroup
+      BlockDeviceMappings:
+        - DeviceName: /dev/xvda
+          Ebs:
+            VolumeSize: 30
+            VolumeType: gp3
+            Encrypted: true
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          set -euxo pipefail
+          exec > >(tee /var/log/user-data.log) 2>&1
+          echo "=== Starting monitoring server setup at $(date) ==="
+
+          dnf update -y --allowerasing
+          dnf install -y python3 python3-pip
+
+          # Decode and extract application code
+          APP_DIR=/home/ec2-user/model-monitoring
+          echo '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' | base64 -d | tar xz -C /home/ec2-user/
+
+          APP_DIR=/home/ec2-user/model-monitoring
+          chown -R ec2-user:ec2-user $APP_DIR
+
+          # Install Python dependencies
+          pip3 install -r $APP_DIR/requirements.txt
+
+          # Overwrite config with correct probe interval
+          cat > $APP_DIR/config.yaml << 'CFGEOF'
+          aws:
+            region: us-east-1
+          models:
+            - id: "us.anthropic.claude-opus-4-5-20251101-v1:0"
+              name: "Claude Opus 4.5"
+            - id: "us.anthropic.claude-opus-4-6-v1"
+              name: "Claude Opus 4.6"
+            - id: "us.anthropic.claude-sonnet-4-5-20250929-v1:0"
+              name: "Claude Sonnet 4.5"
+            - id: "us.amazon.nova-2-lite-v1:0"
+              name: "Nova 2.0 Lite"
+          probing:
+            interval_seconds: ${ProbeIntervalSeconds}
+            max_tokens: 256
+            temperature: 0.1
+            prompts:
+              - "Explain what cloud computing is in 2-3 sentences."
+              - "What is 15 multiplied by 27?"
+          db:
+            path: "monitoring.db"
+          CFGEOF
+
+          chown ec2-user:ec2-user $APP_DIR/config.yaml
+
+          # Systemd: Prober
+          cat > /etc/systemd/system/bedrock-prober.service << 'SVCEOF'
+          [Unit]
+          Description=Bedrock Model Monitoring Prober
+          After=network.target
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/home/ec2-user/model-monitoring
+          ExecStart=/usr/bin/python3 run_prober.py
+          Restart=always
+          RestartSec=30
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
+
+          # Systemd: Dashboard
+          cat > /etc/systemd/system/bedrock-dashboard.service << 'SVCEOF'
+          [Unit]
+          Description=Bedrock Model Monitoring Dashboard
+          After=network.target
+          [Service]
+          Type=simple
+          User=ec2-user
+          WorkingDirectory=/home/ec2-user/model-monitoring
+          ExecStart=/usr/bin/python3 run_dashboard.py
+          Restart=always
+          RestartSec=10
+          [Install]
+          WantedBy=multi-user.target
+          SVCEOF
+
+          systemctl daemon-reload
+          systemctl enable --now bedrock-prober
+          systemctl enable --now bedrock-dashboard
+
+          echo "=== Setup complete at $(date) ===" | tee -a /var/log/user-data.log
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-Server'
+
+  # ============================================================
+  # ALB
+  # ============================================================
+  ALB:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Name: !Sub "${AWS::StackName}-ALB"
+      Type: application
+      Scheme: internet-facing
+      IpAddressType: ipv4
+      LoadBalancerAttributes:
+        - Key: idle_timeout.timeout_seconds
+          Value: 3600
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      SecurityGroups:
+        - !Ref ALBSecurityGroup
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-ALB'
+
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    DependsOn: MonitoringServer
+    Properties:
+      Name: !Sub "${AWS::StackName}-TG"
+      VpcId: !Ref VpcId
+      Protocol: HTTP
+      Port: 3000
+      TargetType: instance
+      HealthCheckEnabled: true
+      HealthCheckProtocol: HTTP
+      HealthCheckPath: "/api/health"
+      HealthCheckPort: "3000"
+      HealthCheckIntervalSeconds: 30
+      HealthCheckTimeoutSeconds: 10
+      HealthyThresholdCount: 2
+      UnhealthyThresholdCount: 5
+      Matcher:
+        HttpCode: 200
+      Targets:
+        - Id: !Ref MonitoringServer
+          Port: 3000
+      TargetGroupAttributes:
+        - Key: deregistration_delay.timeout_seconds
+          Value: 30
+        - Key: stickiness.enabled
+          Value: true
+        - Key: stickiness.type
+          Value: lb_cookie
+        - Key: stickiness.lb_cookie.duration_seconds
+          Value: 86400
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-TG'
+
+  ALBListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref ALB
+      Protocol: HTTP
+      Port: 80
+      DefaultActions:
+        - Type: fixed-response
+          FixedResponseConfig:
+            StatusCode: 403
+            ContentType: text/plain
+            MessageBody: Access Denied
+
+  ALBListenerRule:
+    Type: AWS::ElasticLoadBalancingV2::ListenerRule
+    Properties:
+      ListenerArn: !Ref ALBListener
+      Priority: 1
+      Conditions:
+        - Field: http-header
+          HttpHeaderConfig:
+            HttpHeaderName: X-Custom-Secret
+            Values:
+              - !Sub '${AWS::StackName}-secret-${AWS::AccountId}'
+      Actions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  # ============================================================
+  # CloudFront
+  # ============================================================
+  CloudFrontDistribution:
+    Type: AWS::CloudFront::Distribution
+    Properties:
+      DistributionConfig:
+        Enabled: true
+        Comment: !Sub "Bedrock Monitoring Dashboard - ${AWS::StackName}"
+        Origins:
+          - Id: ALBOrigin
+            DomainName: !GetAtt ALB.DNSName
+            CustomOriginConfig:
+              HTTPPort: 80
+              OriginProtocolPolicy: http-only
+              OriginReadTimeout: 60
+              OriginKeepaliveTimeout: 5
+            OriginCustomHeaders:
+              - HeaderName: X-Custom-Secret
+                HeaderValue: !Sub '${AWS::StackName}-secret-${AWS::AccountId}'
+        DefaultCacheBehavior:
+          TargetOriginId: ALBOrigin
+          ViewerProtocolPolicy: redirect-to-https
+          AllowedMethods: [GET, HEAD, OPTIONS, PUT, POST, PATCH, DELETE]
+          CachedMethods: [GET, HEAD]
+          Compress: true
+          ForwardedValues:
+            QueryString: true
+            Cookies:
+              Forward: all
+            Headers: ['*']
+          MinTTL: 0
+          DefaultTTL: 0
+          MaxTTL: 0
+        PriceClass: PriceClass_All
+        ViewerCertificate:
+          CloudFrontDefaultCertificate: true
+        Restrictions:
+          GeoRestriction:
+            RestrictionType: none
+      Tags:
+        - Key: Name
+          Value: !Sub '${AWS::StackName}-CF'
+
+Outputs:
+  DashboardURL:
+    Description: "Dashboard URL (CloudFront)"
+    Value: !Sub "https://${CloudFrontDistribution.DomainName}"
+
+  InstanceId:
+    Description: "EC2 Instance ID (for SSM)"
+    Value: !Ref MonitoringServer
+
+  SSMCommand:
+    Description: "SSM session command"
+    Value: !Sub "aws ssm start-session --target ${MonitoringServer} --region ${AWS::Region}"
+
+  Architecture:
+    Description: "Network path"
+    Value: "CloudFront (HTTPS) -> ALB (HTTP:80 + Custom Header) -> EC2 (Next.js:3000)"
