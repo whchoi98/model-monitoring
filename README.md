@@ -7,6 +7,10 @@ AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로
 ![Stack](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
 ![Stack](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
 
+### 대시보드 스크린샷
+
+![Dashboard](docs/images/dashboard.png)
+
 ---
 
 ## 주요 기능
