@@ -11,6 +11,10 @@ AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로
 
 ![Dashboard](docs/images/dashboard.png)
 
+### 수동 프로브 스크린샷
+
+![Manual Probe](docs/images/manual-probe.png)
+
 ---
 
 ## 주요 기능

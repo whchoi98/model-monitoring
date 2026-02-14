@@ -14,6 +14,10 @@
 
 ![Dashboard](docs/images/dashboard.png)
 
+### Manual Probe Screenshot / 수동 프로브 스크린샷
+
+![Manual Probe](docs/images/manual-probe.png)
+
 ---
 
 ## Architecture / 아키텍처
