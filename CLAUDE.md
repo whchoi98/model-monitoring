@@ -10,6 +10,10 @@
 - **Frontend**: Next.js 14 + React 18 + Tailwind CSS + Recharts
 - **Infra**: EC2 (Amazon Linux 2023) + CloudFront + ALB + systemd
 
+### Dashboard Screenshot / 대시보드 스크린샷
+
+![Dashboard](docs/images/dashboard.png)
+
 ---
 
 ## Architecture / 아키텍처
