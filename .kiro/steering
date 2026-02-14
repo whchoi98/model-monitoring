@@ -1,0 +1,290 @@
+# Steering Instructions for Bedrock LLM Monitor / Bedrock LLM 모니터 Steering 지침
+
+## Project Context / 프로젝트 컨텍스트
+
+This is a production AWS Bedrock LLM monitoring dashboard with FastAPI backend, Next.js frontend, and PostgreSQL database. The system auto-probes 9 Bedrock models every 5 minutes and displays real-time metrics.
+
+프로덕션 환경의 AWS Bedrock LLM 모니터링 대시보드입니다. FastAPI 백엔드, Next.js 프론트엔드, PostgreSQL 데이터베이스로 구성되어 있으며, 5분마다 9개의 Bedrock 모델을 자동으로 프로빙하여 실시간 메트릭을 표시합니다.
+
+---
+
+## Critical Rules / 중요 규칙
+
+### Python Compatibility (Python 3.9) / Python 호환성 (Python 3.9)
+
+- **NEVER** use `X | Y` union syntax in type hints used by FastAPI dependencies / FastAPI 의존성에서 사용하는 타입 힌트에 `X | Y` 유니온 문법 절대 사용 금지
+- **ALWAYS** use `Optional[X]` from `typing` module instead / 대신 `typing` 모듈의 `Optional[X]` 항상 사용
+- **NEVER** add `from __future__ import annotations` (breaks FastAPI runtime type evaluation) / `from __future__ import annotations` 절대 추가 금지 (FastAPI 런타임 타입 평가 손상)
+- Example / 예시: Use `def func(x: Optional[str] = None)` NOT `def func(x: str | None = None)`
+
+### Dependency Versions / 의존성 버전
+
+- bcrypt must be `>=4.0,<4.1` (version 5.x breaks passlib compatibility) / bcrypt는 반드시 `>=4.0,<4.1` (5.x 버전은 passlib 호환성 손상)
+- Do not upgrade bcrypt beyond 4.x without testing passlib integration / passlib 통합 테스트 없이 bcrypt를 4.x 이상으로 업그레이드 금지
+
+### Korean UI / 한글 UI
+
+- All user-facing text must be in Korean / 모든 사용자 화면 텍스트는 반드시 한글로 작성
+- Add translations to `frontend/src/lib/i18n.ts` when adding new UI elements / 새 UI 요소 추가 시 `frontend/src/lib/i18n.ts`에 번역 추가
+- Metric names and descriptions follow Korean conventions in i18n file / 메트릭 이름과 설명은 i18n 파일의 한글 규칙 준수
+
+### Auto-prober Architecture / Auto-prober 아키텍처
+
+- Auto-prober runs as daemon thread inside FastAPI process (not separate service) / Auto-prober는 FastAPI 프로세스 내부의 데몬 스레드로 실행 (별도 서비스 아님)
+- Singleton instance managed in `backend/auto_prober.py` / `backend/auto_prober.py`에서 싱글톤 인스턴스 관리
+- Started in `main.py` lifespan event / `main.py` lifespan 이벤트에서 시작
+- Do not create separate systemd service for auto-prober / auto-prober를 위한 별도 systemd 서비스 생성 금지
+
+---
+
+## Code Modification Guidelines / 코드 수정 가이드라인
+
+### Backend Changes / 백엔드 변경
+
+1. **Type hints / 타입 힌트**: Use Python 3.9 compatible syntax only / Python 3.9 호환 문법만 사용
+2. **Database migrations / 데이터베이스 마이그레이션**: Add to `main.py` lifespan using `ALTER TABLE ... ADD COLUMN IF NOT EXISTS` / `main.py` lifespan에 추가
+3. **Auto-prober changes / Auto-prober 변경**: Test with `/api/auto-probe/trigger` endpoint after modifications / 수정 후 `/api/auto-probe/trigger` 엔드포인트로 테스트
+4. **New endpoints / 새 엔드포인트**: Add to appropriate router in `backend/routers/` / `backend/routers/`의 적절한 라우터에 추가
+5. **Authentication / 인증**: Use `get_current_user` dependency for protected endpoints / 보호된 엔드포인트에는 `get_current_user` 의존성 사용
+
+### Frontend Changes / 프론트엔드 변경
+
+1. **API calls / API 호출**: Use functions from `frontend/src/lib/api.ts` (handles auth tokens) / `frontend/src/lib/api.ts`의 함수 사용 (인증 토큰 처리)
+2. **SSE streaming / SSE 스트리밍**: Use `useProbeStream` hook for streaming endpoints / 스트리밍 엔드포인트에는 `useProbeStream` 훅 사용
+3. **Auto-refresh / 자동 새로고침**: Use `useAutoRefresh` hook for periodic data updates / 주기적 데이터 업데이트에는 `useAutoRefresh` 훅 사용
+4. **Translations / 번역**: Add to `i18n.ts` before using in components / 컴포넌트에서 사용하기 전에 `i18n.ts`에 추가
+5. **Type safety / 타입 안전성**: Define interfaces in `frontend/src/lib/types.ts` / `frontend/src/lib/types.ts`에 인터페이스 정의
+
+### Database Changes / 데이터베이스 변경
+
+1. **Schema changes / 스키마 변경**: Add migration in `main.py` lifespan / `main.py` lifespan에 마이그레이션 추가
+2. **ORM models / ORM 모델**: Update `backend/models.py` (SQLAlchemy) / `backend/models.py` 업데이트
+3. **Response schemas / 응답 스키마**: Update `backend/schemas.py` (Pydantic) / `backend/schemas.py` 업데이트
+4. **Test migrations / 마이그레이션 테스트**: Run `docker exec -it monitoring-postgres psql -U postgres -d monitoring`
+
+---
+
+## Common Pitfalls to Avoid / 피해야 할 일반적인 실수
+
+### Backend / 백엔드
+
+- ❌ Using `str | None` in FastAPI route parameters / FastAPI 라우트 파라미터에서 `str | None` 사용
+- ❌ Upgrading bcrypt to 5.x / bcrypt를 5.x로 업그레이드
+- ❌ Creating separate auto-prober service / 별도 auto-prober 서비스 생성
+- ❌ Forgetting to restart systemd service after code changes / 코드 변경 후 systemd 서비스 재시작 누락
+- ❌ Hardcoding English text in API responses / API 응답에 영어 텍스트 하드코딩
+
+### Frontend / 프론트엔드
+
+- ❌ Hardcoding English text in components / 컴포넌트에 영어 텍스트 하드코딩
+- ❌ Direct fetch calls without auth token handling / 인증 토큰 처리 없이 직접 fetch 호출
+- ❌ Not handling SSE connection errors / SSE 연결 오류 처리 누락
+- ❌ Forgetting to rebuild before deploying (`npm run build`) / 배포 전 리빌드 누락
+- ❌ Not testing auto-refresh behavior / 자동 새로고침 동작 테스트 누락
+
+---
+
+## Testing Checklist / 테스트 체크리스트
+
+### After Backend Changes / 백엔드 변경 후
+
+- [ ] Check auto-prober status / auto-prober 상태 확인: `curl http://localhost:8000/api/auto-probe/status`
+- [ ] Trigger manual probe / 수동 프로브 트리거: `curl -X POST http://localhost:8000/api/auto-probe/trigger`
+- [ ] Check systemd logs / systemd 로그 확인: `journalctl -u monitor-backend -f`
+- [ ] Verify DB schema / DB 스키마 확인: `docker exec -it monitoring-postgres psql -U postgres -d monitoring`
+- [ ] Test protected endpoints with JWT token / JWT 토큰으로 보호된 엔드포인트 테스트
+
+### After Frontend Changes / 프론트엔드 변경 후
+
+- [ ] Test login/register flow / 로그인/회원가입 플로우 테스트
+- [ ] Verify manual probe SSE streaming / 수동 프로브 SSE 스트리밍 확인
+- [ ] Check auto-refresh countdown (30s) / 자동 새로고침 카운트다운 확인 (30초)
+- [ ] Verify all Korean translations display correctly / 모든 한글 번역이 올바르게 표시되는지 확인
+- [ ] Test responsive layout on mobile / 모바일에서 반응형 레이아웃 테스트
+- [ ] Check browser console for errors / 브라우저 콘솔에서 오류 확인
+
+### After Model Changes / 모델 변경 후
+
+- [ ] Update `AVAILABLE_MODELS` in `backend/prober.py` / `backend/prober.py`의 `AVAILABLE_MODELS` 업데이트
+- [ ] Test with manual probe first / 먼저 수동 프로브로 테스트
+- [ ] Verify auto-prober picks up new model / auto-prober가 새 모델을 인식하는지 확인
+- [ ] Check model status grid displays correctly (3x3 layout) / 모델 상태 그리드가 올바르게 표시되는지 확인 (3x3 레이아웃)
+
+---
+
+## Deployment Process / 배포 프로세스
+
+### Backend Deployment / 백엔드 배포
+
+```bash
+cd /home/ec2-user/model-monitoring/backend
+# Make changes / 변경 작업
+sudo systemctl restart monitor-backend
+journalctl -u monitor-backend -f  # Watch for errors / 오류 확인
+```
+
+### Frontend Deployment / 프론트엔드 배포
+
+```bash
+cd /home/ec2-user/model-monitoring/frontend
+# Make changes / 변경 작업
+npm run build
+sudo systemctl restart monitor-frontend
+journalctl -u monitor-frontend -f  # Watch for errors / 오류 확인
+```
+
+### Database Changes / 데이터베이스 변경
+
+```bash
+# Add migration to main.py lifespan / main.py lifespan에 마이그레이션 추가
+sudo systemctl restart monitor-backend
+# Verify migration ran successfully in logs / 로그에서 마이그레이션 성공 확인
+```
+
+---
+
+## Debugging Strategies / 디버깅 전략
+
+### Auto-prober Not Running / Auto-prober가 실행되지 않을 때
+
+1. Check status / 상태 확인: `curl http://localhost:8000/api/auto-probe/status`
+2. Check backend logs / 백엔드 로그 확인: `journalctl -u monitor-backend -f`
+3. Verify thread started in lifespan event / lifespan 이벤트에서 스레드가 시작되었는지 확인
+4. Check for exceptions in `auto_prober.py` / `auto_prober.py`에서 예외 확인
+
+### SSE Streaming Issues / SSE 스트리밍 문제
+
+1. Check browser network tab for EventSource connection / 브라우저 네트워크 탭에서 EventSource 연결 확인
+2. Verify auth token in request headers / 요청 헤더의 인증 토큰 확인
+3. Check backend logs for streaming errors / 백엔드 로그에서 스트리밍 오류 확인
+4. Test with curl / curl로 테스트: `curl -N -H "Authorization: Bearer <token>" http://localhost:8000/api/probes/run`
+
+### Database Connection Issues / 데이터베이스 연결 문제
+
+1. Check PostgreSQL container / PostgreSQL 컨테이너 확인: `docker ps | grep postgres`
+2. Test connection / 연결 테스트: `docker exec monitoring-postgres pg_isready -U postgres`
+3. Verify DATABASE_URL environment variable / DATABASE_URL 환경 변수 확인
+4. Check backend logs for SQLAlchemy errors / 백엔드 로그에서 SQLAlchemy 오류 확인
+
+### Authentication Issues / 인증 문제
+
+1. Verify JWT_SECRET_KEY environment variable / JWT_SECRET_KEY 환경 변수 확인
+2. Check token expiry (24h default) / 토큰 만료 확인 (기본 24시간)
+3. Verify user approved status in database / 데이터베이스에서 사용자 승인 상태 확인
+4. Check SES email delivery for approval emails / 승인 이메일의 SES 이메일 전송 확인
+
+---
+
+## Performance Considerations / 성능 고려사항
+
+### Backend / 백엔드
+
+- Auto-prober uses concurrency=3 to avoid overwhelming Bedrock API / Auto-prober는 Bedrock API 과부하 방지를 위해 concurrency=3 사용
+- Database queries use indexes on timestamp and model_id / 데이터베이스 쿼리는 timestamp와 model_id에 인덱스 사용
+- SSE streaming uses generators to avoid memory buildup / SSE 스트리밍은 메모리 누적 방지를 위해 제너레이터 사용
+
+### Frontend / 프론트엔드
+
+- Auto-refresh interval is 30s (configurable in useAutoRefresh) / 자동 새로고침 간격은 30초 (useAutoRefresh에서 설정 가능)
+- Trend charts limit data points to last 24h by default / 트렌드 차트는 기본적으로 최근 24시간 데이터 포인트로 제한
+- Model status grid uses color-coded metrics for quick scanning / 모델 상태 그리드는 빠른 스캔을 위해 색상 코드 메트릭 사용
+
+---
+
+## Security Notes / 보안 참고사항
+
+### Authentication / 인증
+
+- JWT tokens expire after 24h / JWT 토큰은 24시간 후 만료
+- Passwords hashed with bcrypt (cost factor 12) / 비밀번호는 bcrypt로 해싱 (cost factor 12)
+- Admin approval required for new users / 신규 사용자는 관리자 승인 필요
+- Protected endpoints require Bearer token / 보호된 엔드포인트는 Bearer 토큰 필요
+
+### AWS Credentials / AWS 자격증명
+
+- Backend uses IAM role credentials (no hardcoded keys) / 백엔드는 IAM 역할 자격증명 사용 (하드코딩된 키 없음)
+- Bedrock API calls use boto3 default credential chain / Bedrock API 호출은 boto3 기본 자격증명 체인 사용
+- SES email sending requires IAM permissions / SES 이메일 발송은 IAM 권한 필요
+
+### Database / 데이터베이스
+
+- PostgreSQL runs in Docker with password authentication / PostgreSQL은 Docker에서 비밀번호 인증으로 실행
+- Connection string in environment variable (not hardcoded) / 연결 문자열은 환경 변수에 저장 (하드코딩 안 됨)
+- No public database exposure (localhost only) / 공개 데이터베이스 노출 없음 (localhost만)
+
+---
+
+## Monitoring and Observability / 모니터링 및 관찰성
+
+### Logs / 로그
+
+- Backend / 백엔드: `journalctl -u monitor-backend -f`
+- Frontend / 프론트엔드: `journalctl -u monitor-frontend -f`
+- PostgreSQL: `docker logs monitoring-postgres -f`
+
+### Metrics / 메트릭
+
+- Auto-probe status / Auto-probe 상태: `/api/auto-probe/status`
+- Latest results / 최신 결과: `/api/auto-probe/latest`
+- Trend data / 트렌드 데이터: `/api/auto-probe/trend?hours=24`
+- Statistics / 통계: `/api/results/stats`
+
+### Health Checks / 헬스 체크
+
+- Backend / 백엔드: `curl http://localhost:8000/health`
+- Frontend / 프론트엔드: `curl http://localhost:3000`
+- Database / 데이터베이스: `docker exec monitoring-postgres pg_isready -U postgres`
+
+---
+
+## Code Style Preferences / 코드 스타일 선호사항
+
+### Backend (Python) / 백엔드 (Python)
+
+- Use type hints for all function parameters and return values / 모든 함수 파라미터와 반환값에 타입 힌트 사용
+- Follow PEP 8 naming conventions / PEP 8 네이밍 규칙 준수
+- Use SQLAlchemy ORM (not raw SQL) / SQLAlchemy ORM 사용 (raw SQL 금지)
+- Use Pydantic for request/response validation / 요청/응답 검증에 Pydantic 사용
+- Keep router files focused (one resource per router) / 라우터 파일은 집중적으로 유지 (라우터당 하나의 리소스)
+
+### Frontend (TypeScript) / 프론트엔드 (TypeScript)
+
+- Use functional components with hooks / 훅을 사용하는 함수형 컴포넌트 사용
+- Define interfaces in types.ts / types.ts에 인터페이스 정의
+- Use Tailwind CSS for styling (no custom CSS) / 스타일링에 Tailwind CSS 사용 (커스텀 CSS 금지)
+- Keep components small and focused / 컴포넌트는 작고 집중적으로 유지
+- Use custom hooks for reusable logic / 재사용 가능한 로직에 커스텀 훅 사용
+
+---
+
+## When Adding New Features / 새 기능 추가 시
+
+### New Metric / 새 메트릭
+
+1. Add to `backend/models.py` (ProbeResult model) / `backend/models.py`에 추가 (ProbeResult 모델)
+2. Add migration in `main.py` lifespan / `main.py` lifespan에 마이그레이션 추가
+3. Update `backend/prober.py` to collect metric / 메트릭 수집을 위해 `backend/prober.py` 업데이트
+4. Add to `backend/schemas.py` (response schema) / `backend/schemas.py`에 추가 (응답 스키마)
+5. Add translation to `frontend/src/lib/i18n.ts` / `frontend/src/lib/i18n.ts`에 번역 추가
+6. Update frontend components to display metric / 메트릭 표시를 위해 프론트엔드 컴포넌트 업데이트
+
+### New Model / 새 모델
+
+1. Add to `AVAILABLE_MODELS` in `backend/prober.py` / `backend/prober.py`의 `AVAILABLE_MODELS`에 추가
+2. Test with manual probe / 수동 프로브로 테스트
+3. Verify auto-prober picks up model / auto-prober가 모델을 인식하는지 확인
+4. Update frontend model list if needed / 필요시 프론트엔드 모델 목록 업데이트
+
+### New Endpoint / 새 엔드포인트
+
+1. Create router in `backend/routers/` or add to existing / `backend/routers/`에 라우터 생성 또는 기존에 추가
+2. Add route to `backend/main.py` (app.include_router) / `backend/main.py`에 라우트 추가
+3. Add function to `frontend/src/lib/api.ts` / `frontend/src/lib/api.ts`에 함수 추가
+4. Use in frontend components / 프론트엔드 컴포넌트에서 사용
+
+### New UI Component / 새 UI 컴포넌트
+
+1. Create in `frontend/src/components/` / `frontend/src/components/`에 생성
+2. Add translations to `i18n.ts` / `i18n.ts`에 번역 추가
+3. Define types in `types.ts` / `types.ts`에 타입 정의
+4. Import and use in page.tsx or other components / page.tsx 또는 다른 컴포넌트에서 import 및 사용
