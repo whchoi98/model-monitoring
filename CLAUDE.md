@@ -295,4 +295,3 @@ journalctl -u monitor-frontend -f
 
 - Remote: `https://github.com/whchoi98/model-monitoring.git`
 - Branch: `main`
-- Auth: `gh auth login` (GitHub CLI device code flow, user `whchoi98`)
