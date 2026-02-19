@@ -38,7 +38,7 @@ function formatCountdown(nextRunTime: string | null, t: Translations): string {
   return `${min}${t.minutes} ${sec < 10 ? "0" : ""}${sec}${t.seconds}`;
 }
 
-const TREND_RANGE_HOURS = [1, 3, 6, 12, 24, 72, 120, 168];
+const TREND_RANGE_HOURS = [168, 120, 72, 24, 12, 6, 3, 1];
 
 export default function AutoDashboard() {
   const t = useT();
