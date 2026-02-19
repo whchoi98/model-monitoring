@@ -3,7 +3,12 @@
 from __future__ import annotations
 
 import logging
+import os
 from contextlib import asynccontextmanager
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +37,7 @@ async def lifespan(app: FastAPI):
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS is_auto INTEGER DEFAULT 0"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approved INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS prompt_category TEXT"))
         conn.commit()
 
     # Seed default admin user if no users exist
@@ -51,10 +57,11 @@ def _seed_default_admin():
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
-            admin = User(username="admin", password_hash=hash_password("!Chldngud16"), approved=1)
+            default_password = os.environ.get("DEFAULT_ADMIN_PASSWORD", "changeme")
+            admin = User(username="admin", password_hash=hash_password(default_password), approved=1)
             db.add(admin)
             db.commit()
-            logger.info("Default admin user created (admin / admin1234)")
+            logger.info("Default admin user created (username: admin)")
     except Exception:
         logger.exception("Failed to seed default admin user")
     finally:

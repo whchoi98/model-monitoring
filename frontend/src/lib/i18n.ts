@@ -72,6 +72,11 @@ export interface Translations {
   minutesAgo: (n: number) => string;
   hoursAgo: (n: number) => string;
 
+  // Prompt categories
+  promptCategory: string;
+  nextCategory: string;
+  promptCategories: Record<string, string>;
+
   // Metric descriptions
   metrics: {
     ttft: MetricInfo;
@@ -144,6 +149,18 @@ export const ko: Translations = {
   pendingApproval: "계정 승인 대기 중입니다. 관리자 승인 후 이용 가능합니다.",
   noAccount: "계정이 없으신가요?",
   hasAccount: "이미 계정이 있으신가요?",
+
+  // Prompt categories
+  promptCategory: "평가 유형",
+  nextCategory: "다음 평가",
+  promptCategories: {
+    explanation: "설명",
+    summary: "요약",
+    reasoning: "추론",
+    coding: "코딩",
+    korean: "한국어",
+    math: "수학",
+  },
 
   // Status
   success: "성공",
@@ -250,6 +267,18 @@ export const en: Translations = {
   pendingApproval: "Account pending approval. Please wait for admin approval.",
   noAccount: "Don't have an account?",
   hasAccount: "Already have an account?",
+
+  // Prompt categories
+  promptCategory: "Eval Type",
+  nextCategory: "Next Eval",
+  promptCategories: {
+    explanation: "Explanation",
+    summary: "Summary",
+    reasoning: "Reasoning",
+    coding: "Coding",
+    korean: "Korean",
+    math: "Math",
+  },
 
   // Status
   success: "OK",

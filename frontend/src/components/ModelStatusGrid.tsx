@@ -99,9 +99,16 @@ export default function ModelStatusGrid({ results }: Props) {
           >
             {/* Header */}
             <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-200 truncate pr-2">
-                {r.model_name}
-              </h3>
+              <div className="flex items-center gap-2 min-w-0">
+                <h3 className="text-sm font-semibold text-gray-200 truncate">
+                  {r.model_name}
+                </h3>
+                {r.prompt_category && (
+                  <span className="shrink-0 inline-flex px-1.5 py-0.5 rounded text-[10px] font-medium bg-violet-500/10 text-violet-400 border border-violet-500/20">
+                    {t.promptCategories[r.prompt_category] ?? r.prompt_category}
+                  </span>
+                )}
+              </div>
               {getStatusBadge(r.status, t)}
             </div>
 

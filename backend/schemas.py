@@ -45,6 +45,7 @@ class ProbeResultResponse(BaseModel):
     output_text: Optional[str] = None
     error_message: Optional[str] = None
     iteration: int = 1
+    prompt_category: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -59,6 +60,7 @@ class ProbeRunResponse(BaseModel):
     repeat_count: int
     status: str
     is_auto: int = 0
+    prompt_category: Optional[str] = None
     results: list[ProbeResultResponse] = []
 
     model_config = {"from_attributes": True}

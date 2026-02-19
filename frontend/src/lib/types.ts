@@ -20,6 +20,7 @@ export interface ProbeResult {
   output_text?: string;
   error_message?: string;
   iteration: number;
+  prompt_category?: string;
 }
 
 export interface ModelStats {
@@ -74,6 +75,9 @@ export interface AutoProbeStatus {
   next_run_time: string | null;
   interval_seconds: number;
   current_cycle_running: boolean;
+  current_prompt_category?: string;
+  next_prompt_category?: string;
+  total_prompt_categories?: number;
 }
 
 export interface AuthUser {
@@ -89,4 +93,5 @@ export interface TrendPoint {
   total_latency_ms: number | null;
   tps: number | null;
   status: string;
+  prompt_category?: string;
 }
