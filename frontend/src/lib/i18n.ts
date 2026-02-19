@@ -72,6 +72,19 @@ export interface Translations {
   minutesAgo: (n: number) => string;
   hoursAgo: (n: number) => string;
 
+  // History panel
+  historyTitle: string;
+  historyProbes: string;
+  historyNoData: string;
+  avg: string;
+  range1h: string;
+  range6h: string;
+  range24h: string;
+  range7d: string;
+  range30d: string;
+  regionGlobal: string;
+  regionUS: string;
+
   // Metric descriptions
   metrics: {
     ttft: MetricInfo;
@@ -153,6 +166,19 @@ export const ko: Translations = {
   justNow: "방금 전",
   minutesAgo: (n: number) => `${n}분 전`,
   hoursAgo: (n: number) => `${n}시간 전`,
+
+  // History panel
+  historyTitle: "이력 통계",
+  historyProbes: "회 프로빙",
+  historyNoData: "선택한 기간에 이력 데이터가 없습니다.",
+  avg: "평균",
+  range1h: "1시간",
+  range6h: "6시간",
+  range24h: "24시간",
+  range7d: "7일",
+  range30d: "30일",
+  regionGlobal: "Global",
+  regionUS: "US",
 
   // Metric descriptions
   metrics: {
@@ -259,6 +285,19 @@ export const en: Translations = {
   justNow: "Just now",
   minutesAgo: (n: number) => `${n}m ago`,
   hoursAgo: (n: number) => `${n}h ago`,
+
+  // History panel
+  historyTitle: "Historical Stats",
+  historyProbes: " probes",
+  historyNoData: "No historical data available for this time range.",
+  avg: "Avg",
+  range1h: "1 Hour",
+  range6h: "6 Hours",
+  range24h: "24 Hours",
+  range7d: "7 Days",
+  range30d: "30 Days",
+  regionGlobal: "Global",
+  regionUS: "US",
 
   // Metric descriptions
   metrics: {

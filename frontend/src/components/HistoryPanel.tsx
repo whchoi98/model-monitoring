@@ -3,6 +3,8 @@
 import { useState, useEffect, useCallback } from "react";
 import { ModelStats } from "@/lib/types";
 import { fetchStats } from "@/lib/api";
+import { useT } from "@/lib/i18n-context";
+import { Translations } from "@/lib/i18n";
 
 interface HistoryPanelProps {
   isOpen: boolean;
@@ -32,7 +34,69 @@ function formatNum(val: number | null, decimals: number = 0): string {
   return val.toFixed(decimals);
 }
 
+function getTtftColor(ms: number | null): string {
+  if (ms === null) return "text-gray-500";
+  if (ms < 1000) return "text-emerald-400";
+  if (ms < 3000) return "text-amber-400";
+  return "text-rose-400";
+}
+
+function getLatencyColor(ms: number | null): string {
+  if (ms === null) return "text-gray-500";
+  if (ms < 2000) return "text-emerald-400";
+  if (ms < 5000) return "text-amber-400";
+  return "text-rose-400";
+}
+
+function getTpsColor(tps: number | null): string {
+  if (tps === null) return "text-gray-500";
+  if (tps > 50) return "text-emerald-400";
+  if (tps > 20) return "text-amber-400";
+  return "text-rose-400";
+}
+
+function isGlobal(name: string): boolean {
+  return name.includes("(Global)");
+}
+
+function sortStats(stats: ModelStats[]): ModelStats[] {
+  return [...stats].sort((a, b) => {
+    const aGlobal = isGlobal(a.model_name);
+    const bGlobal = isGlobal(b.model_name);
+    // Global first, then US
+    if (aGlobal && !bGlobal) return -1;
+    if (!aGlobal && bGlobal) return 1;
+    return a.model_name.localeCompare(b.model_name);
+  });
+}
+
+function getRegionBadge(name: string, t: Translations) {
+  if (isGlobal(name)) {
+    return (
+      <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/25">
+        {t.regionGlobal}
+      </span>
+    );
+  }
+  return (
+    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">
+      {t.regionUS}
+    </span>
+  );
+}
+
+function getTimeRanges(t: Translations): { value: TimeRange; label: string }[] {
+  return [
+    { value: "1h", label: t.range1h },
+    { value: "6h", label: t.range6h },
+    { value: "24h", label: t.range24h },
+    { value: "7d", label: t.range7d },
+    { value: "30d", label: t.range30d },
+  ];
+}
+
 export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
+  const t = useT();
   const [stats, setStats] = useState<ModelStats[]>([]);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [loading, setLoading] = useState(false);
@@ -58,13 +122,8 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
 
   if (!isOpen) return null;
 
-  const timeRanges: { value: TimeRange; label: string }[] = [
-    { value: "1h", label: "1 Hour" },
-    { value: "6h", label: "6 Hours" },
-    { value: "24h", label: "24 Hours" },
-    { value: "7d", label: "7 Days" },
-    { value: "30d", label: "30 Days" },
-  ];
+  const sorted = sortStats(stats);
+  const timeRanges = getTimeRanges(t);
 
   return (
     <div className="fixed inset-0 z-50 flex">
@@ -78,7 +137,7 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
       <div className="relative ml-auto w-full max-w-4xl bg-gray-950 border-l border-gray-800 overflow-y-auto">
         <div className="sticky top-0 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
           <h2 className="text-lg font-semibold text-gray-200">
-            Historical Stats
+            {t.historyTitle}
           </h2>
           <button
             onClick={onClose}
@@ -125,87 +184,69 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
             </div>
           )}
 
-          {/* Stats Table */}
-          {!loading && stats.length > 0 && (
-            <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="px-3 py-2.5 text-left text-xs font-semibold text-gray-400 uppercase">
-                        Model
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        Count
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        TTFT Avg
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        TTFT p50
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        TTFT p95
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        Lat Avg
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        Lat p95
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        TPS Avg
-                      </th>
-                      <th className="px-3 py-2.5 text-right text-xs font-semibold text-gray-400 uppercase">
-                        TPS p50
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-800/50">
-                    {stats.map((s) => (
-                      <tr
-                        key={s.model_id}
-                        className="hover:bg-gray-800/30 transition-colors"
-                      >
-                        <td className="px-3 py-2 text-gray-200 font-medium whitespace-nowrap">
-                          {s.model_name}
-                        </td>
-                        <td className="px-3 py-2 text-gray-400 text-right tabular-nums">
-                          {s.count}
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.avg_ttft_ms)}ms
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.p50_ttft_ms)}ms
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.p95_ttft_ms)}ms
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.avg_latency_ms)}ms
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.p95_latency_ms)}ms
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.avg_tps, 1)}
-                        </td>
-                        <td className="px-3 py-2 text-gray-300 text-right tabular-nums font-mono">
-                          {formatNum(s.p50_tps, 1)}
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+          {/* Stats Cards */}
+          {!loading && sorted.length > 0 && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {sorted.map((s) => (
+                <div
+                  key={s.model_id}
+                  className="rounded-xl border border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-colors"
+                >
+                  {/* Card Header */}
+                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${s.count > 0 ? "bg-emerald-400" : "bg-gray-600"}`} />
+                      <h3 className="text-sm font-semibold text-gray-200 truncate">
+                        {s.model_name}
+                      </h3>
+                      {getRegionBadge(s.model_name, t)}
+                    </div>
+                    <span className="text-xs text-gray-500 tabular-nums shrink-0 ml-2">
+                      {s.count}{t.historyProbes}
+                    </span>
+                  </div>
+
+                  {/* Card Body */}
+                  <div className="px-4 py-3 space-y-2.5">
+                    {/* TTFT row */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 w-16 shrink-0">TTFT</span>
+                      <div className="flex gap-4 text-xs font-mono tabular-nums">
+                        <span className="text-gray-500">{t.avg}: <span className={getTtftColor(s.avg_ttft_ms)}>{formatNum(s.avg_ttft_ms)}ms</span></span>
+                        <span className="text-gray-500">p50: <span className={getTtftColor(s.p50_ttft_ms)}>{formatNum(s.p50_ttft_ms)}ms</span></span>
+                        <span className="text-gray-500">p95: <span className={getTtftColor(s.p95_ttft_ms)}>{formatNum(s.p95_ttft_ms)}ms</span></span>
+                      </div>
+                    </div>
+
+                    {/* Latency row */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 w-16 shrink-0">Latency</span>
+                      <div className="flex gap-4 text-xs font-mono tabular-nums">
+                        <span className="text-gray-500">{t.avg}: <span className={getLatencyColor(s.avg_latency_ms)}>{formatNum(s.avg_latency_ms)}ms</span></span>
+                        <span className="text-gray-500">p50: <span className={getLatencyColor(s.p50_latency_ms)}>{formatNum(s.p50_latency_ms)}ms</span></span>
+                        <span className="text-gray-500">p95: <span className={getLatencyColor(s.p95_latency_ms)}>{formatNum(s.p95_latency_ms)}ms</span></span>
+                      </div>
+                    </div>
+
+                    {/* TPS row */}
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs text-gray-500 w-16 shrink-0">TPS</span>
+                      <div className="flex gap-4 text-xs font-mono tabular-nums">
+                        <span className="text-gray-500">{t.avg}: <span className={getTpsColor(s.avg_tps)}>{formatNum(s.avg_tps, 1)}</span></span>
+                        <span className="text-gray-500">p50: <span className={getTpsColor(s.p50_tps)}>{formatNum(s.p50_tps, 1)}</span></span>
+                        <span className="text-gray-500">p95: <span className={getTpsColor(s.p95_tps)}>{formatNum(s.p95_tps, 1)}</span></span>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
 
           {!loading && stats.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500">
-                No historical data available for this time range.
+                {t.historyNoData}
               </p>
             </div>
           )}
