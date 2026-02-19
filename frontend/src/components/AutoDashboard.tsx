@@ -37,6 +37,17 @@ function formatCountdown(nextRunTime: string | null): string {
   return `${min}분 ${sec < 10 ? "0" : ""}${sec}${ko.seconds}`;
 }
 
+const TREND_RANGE_OPTIONS = [
+  { label: "1시간", hours: 1 },
+  { label: "3시간", hours: 3 },
+  { label: "6시간", hours: 6 },
+  { label: "12시간", hours: 12 },
+  { label: "24시간", hours: 24 },
+  { label: "3일", hours: 72 },
+  { label: "5일", hours: 120 },
+  { label: "7일", hours: 168 },
+];
+
 export default function AutoDashboard() {
   const [status, setStatus] = useState<AutoProbeStatus | null>(null);
   const [results, setResults] = useState<ProbeResult[]>([]);
@@ -44,13 +55,14 @@ export default function AutoDashboard() {
   const [loading, setLoading] = useState(true);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [nextCountdown, setNextCountdown] = useState("-");
+  const [trendHours, setTrendHours] = useState(1);
 
   const loadData = useCallback(async () => {
     try {
       const [s, r, t] = await Promise.all([
         fetchAutoStatus(),
         fetchAutoLatest(),
-        fetchAutoTrend(24),
+        fetchAutoTrend(trendHours),
       ]);
       setStatus(s);
       setResults(r);
@@ -60,7 +72,7 @@ export default function AutoDashboard() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [trendHours]);
 
   // Initial load
   useEffect(() => {
@@ -170,6 +182,26 @@ export default function AutoDashboard() {
           {/* Trend Charts */}
           {trend.length > 0 && (
             <div className="space-y-4">
+              {/* Time Range Selector */}
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-medium text-gray-400">{ko.trendRange}</span>
+                <div className="flex gap-1">
+                  {TREND_RANGE_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.hours}
+                      onClick={() => setTrendHours(opt.hours)}
+                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                        trendHours === opt.hours
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
               <TrendChart data={trend} metric="ttft_ms" title={ko.ttftTrend} />
               <TrendChart data={trend} metric="total_latency_ms" title={ko.latencyTrend} />
               <TrendChart data={trend} metric="tps" title={ko.tpsTrend} />

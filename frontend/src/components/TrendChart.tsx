@@ -28,6 +28,8 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Opus 4.5 (Global)": "#ec4899",
   "Claude Opus 4.6 (Global)": "#f97316",
   "Nova 2.0 Lite (US)": "#84cc16",
+  "Claude Sonnet 4.6 (US)": "#14b8a6",
+  "Claude Sonnet 4.6 (Global)": "#ef4444",
 };
 
 function getColor(modelName: string): string {

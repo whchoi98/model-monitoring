@@ -28,17 +28,35 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (US)",
     "us.anthropic.claude-opus-4-5-20251101-v1:0": "Claude Opus 4.5 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (US)",
+    "us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (US)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
     "global.anthropic.claude-sonnet-4-5-20250929-v1:0": "Claude Sonnet 4.5 (Global)",
     "global.anthropic.claude-opus-4-5-20251101-v1:0": "Claude Opus 4.5 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (Global)",
     "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US)",
+    "global.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (Global)",
 }
 
+# Region mapping: model-id prefix -> AWS region
+_REGION_MAP: dict[str, str] = {
+    "us": "us-east-1",
+    "global": "ap-northeast-2",
+}
 
-def _get_bedrock_client():
-    """Return a boto3 bedrock-runtime client for us-east-1."""
-    return boto3.client("bedrock-runtime", region_name="us-east-1")
+_client_cache: dict[str, object] = {}
+
+
+def _get_region_for_model(model_id: str) -> str:
+    """Derive the AWS region from a model ID prefix."""
+    prefix = model_id.split(".")[0]
+    return _REGION_MAP.get(prefix, "us-east-1")
+
+
+def _get_bedrock_client(region_name: str = "us-east-1"):
+    """Return a cached boto3 bedrock-runtime client for the given region."""
+    if region_name not in _client_cache:
+        _client_cache[region_name] = boto3.client("bedrock-runtime", region_name=region_name)
+    return _client_cache[region_name]
 
 
 def _probe_single_model(
@@ -266,7 +284,6 @@ def stream_probe_events(
     Events are pulled from a shared queue and yielded to the caller.
     """
     event_queue: Queue[str | None] = Queue()
-    client = _get_bedrock_client()
 
     # Total number of individual probe tasks
     total_tasks = len(model_ids) * repeat_count
@@ -288,6 +305,7 @@ def stream_probe_events(
             futures = []
             for model_id in model_ids:
                 model_name = AVAILABLE_MODELS.get(model_id, model_id)
+                client = _get_bedrock_client(_get_region_for_model(model_id))
                 for iteration in range(1, repeat_count + 1):
                     thread_db = SessionLocal()
                     future = executor.submit(

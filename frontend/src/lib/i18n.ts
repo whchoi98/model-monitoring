@@ -26,6 +26,7 @@ export const ko = {
   triggerNow: "지금 실행",
   triggering: "실행 요청 중...",
   cycleRunning: "프로빙 진행 중",
+  trendRange: "조회 기간",
 
   // Manual probe
   readyTitle: "프로브 실행 준비 완료",

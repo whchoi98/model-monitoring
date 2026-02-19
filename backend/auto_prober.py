@@ -14,7 +14,7 @@ from queue import Queue
 
 from database import SessionLocal
 from models import ProbeRun
-from prober import AVAILABLE_MODELS, _get_bedrock_client, _probe_single_model
+from prober import AVAILABLE_MODELS, _get_bedrock_client, _get_region_for_model, _probe_single_model
 
 logger = logging.getLogger(__name__)
 
@@ -86,13 +86,13 @@ class AutoProber:
             self.current_cycle_running = False
             return
 
-        client = _get_bedrock_client()
         # Event queue — events are discarded (no SSE needed)
         event_queue: Queue = Queue()
 
         with ThreadPoolExecutor(max_workers=3) as executor:
             futures = []
             for model_id, model_name in AVAILABLE_MODELS.items():
+                client = _get_bedrock_client(_get_region_for_model(model_id))
                 thread_db = SessionLocal()
                 future = executor.submit(
                     _probe_single_model,
