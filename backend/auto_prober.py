@@ -19,15 +19,7 @@ from prober import AVAILABLE_MODELS, _get_bedrock_client, _get_region_for_model,
 logger = logging.getLogger(__name__)
 
 PROBE_INTERVAL = 300  # 5 minutes
-
-PROBE_PROMPTS = [
-    {"category": "explanation", "prompt": "Explain what cloud computing is in 2-3 sentences."},
-    {"category": "summary", "prompt": "Summarize the key benefits of using containers in software development in 2-3 sentences."},
-    {"category": "reasoning", "prompt": "A store sells apples for $2 each. If you buy 3 apples and pay with a $10 bill, how much change do you get? Show your reasoning."},
-    {"category": "coding", "prompt": "Write a Python function that checks if a given string is a palindrome. Keep it concise."},
-    {"category": "korean", "prompt": "클라우드 컴퓨팅의 장점을 2-3문장으로 설명해주세요."},
-    {"category": "math", "prompt": "What is 15% of 240? Show the calculation steps briefly."},
-]
+PROBE_PROMPT = "Explain what cloud computing is in 2-3 sentences."
 
 
 class AutoProber:
@@ -40,8 +32,6 @@ class AutoProber:
         self.next_run_time: datetime | None = None
         self.is_running = False
         self.current_cycle_running = False
-        self._cycle_index = 0
-        self.current_prompt_category: str | None = None
 
     def start(self) -> None:
         self._stop_event.clear()
@@ -73,27 +63,18 @@ class AutoProber:
     def _run_cycle(self) -> None:
         """Probe all models once with concurrency=3."""
         self.current_cycle_running = True
-
-        # Round-robin prompt selection
-        prompt_entry = PROBE_PROMPTS[self._cycle_index % len(PROBE_PROMPTS)]
-        self._cycle_index += 1
-        prompt_text = prompt_entry["prompt"]
-        prompt_category = prompt_entry["category"]
-        self.current_prompt_category = prompt_category
-
-        logger.info("AutoProber: starting probe cycle (category=%s)", prompt_category)
+        logger.info("AutoProber: starting probe cycle")
 
         db = SessionLocal()
         try:
             run = ProbeRun(
-                prompt=prompt_text,
+                prompt=PROBE_PROMPT,
                 temperature=0.1,
                 max_tokens=256,
                 concurrency=3,
                 repeat_count=1,
                 status="running",
                 is_auto=1,
-                prompt_category=prompt_category,
             )
             db.add(run)
             db.commit()
@@ -118,7 +99,7 @@ class AutoProber:
                     client,
                     model_id,
                     model_name,
-                    prompt_text,
+                    PROBE_PROMPT,
                     0.1,   # temperature
                     256,   # max_tokens
                     1,     # iteration

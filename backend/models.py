@@ -26,7 +26,6 @@ class ProbeRun(Base):
     repeat_count = Column(Integer, default=1)
     status = Column(Text, default="running")  # running | completed | failed
     is_auto = Column(Integer, default=0)  # 0=manual, 1=auto
-    prompt_category = Column(Text, nullable=True)  # e.g. explanation, summary, reasoning, coding, korean, math
 
     results = relationship("ProbeResult", back_populates="run", lazy="selectin")
 

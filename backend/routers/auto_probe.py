@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, Query
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
-from auto_prober import auto_prober, PROBE_PROMPTS
+from auto_prober import auto_prober
 from database import get_db
 from models import ProbeRun, ProbeResult
 from schemas import ProbeResultResponse
@@ -20,20 +20,16 @@ router = APIRouter(prefix="/api/auto-probe", tags=["auto-probe"])
 @router.get("/status")
 def get_status():
     """Return current auto-prober status."""
-    next_category = PROBE_PROMPTS[auto_prober._cycle_index % len(PROBE_PROMPTS)]["category"]
     return {
         "is_running": auto_prober.is_running,
         "last_run_time": auto_prober.last_run_time.isoformat() if auto_prober.last_run_time else None,
         "next_run_time": auto_prober.next_run_time.isoformat() if auto_prober.next_run_time else None,
         "interval_seconds": 300,
         "current_cycle_running": auto_prober.current_cycle_running,
-        "current_prompt_category": auto_prober.current_prompt_category,
-        "next_prompt_category": next_category,
-        "total_prompt_categories": len(PROBE_PROMPTS),
     }
 
 
-@router.get("/latest")
+@router.get("/latest", response_model=list[ProbeResultResponse])
 def get_latest(db: Session = Depends(get_db)):
     """Return the latest auto-probe results (one per model from the most recent auto run)."""
     # Find the most recent completed auto run
@@ -52,15 +48,7 @@ def get_latest(db: Session = Depends(get_db)):
         .order_by(ProbeResult.model_name)
         .all()
     )
-
-    prompt_category = latest_run.prompt_category
-    return [
-        {
-            **ProbeResultResponse.model_validate(r).model_dump(),
-            "prompt_category": prompt_category,
-        }
-        for r in results
-    ]
+    return results
 
 
 @router.get("/trend")
@@ -84,7 +72,6 @@ def get_trend(
     if not auto_runs:
         return []
 
-    run_category_map = {r.id: r.prompt_category for r in auto_runs}
     run_ids = [r.id for r in auto_runs]
 
     results = (
@@ -104,7 +91,6 @@ def get_trend(
             "total_latency_ms": r.total_latency_ms,
             "tps": r.tps,
             "status": r.status,
-            "prompt_category": run_category_map.get(r.run_id),
         })
 
     return trend_points

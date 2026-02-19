@@ -142,26 +142,6 @@ export default function AutoDashboard() {
                 {t.waiting}
               </span>
             )}
-
-            {/* Current prompt category */}
-            {status?.current_prompt_category && (
-              <div className="text-xs text-gray-400">
-                <span className="text-gray-600">{t.promptCategory}: </span>
-                <span className="inline-flex px-1.5 py-0.5 rounded bg-violet-500/10 text-violet-400 border border-violet-500/20 font-medium">
-                  {t.promptCategories[status.current_prompt_category] ?? status.current_prompt_category}
-                </span>
-              </div>
-            )}
-
-            {/* Next prompt category */}
-            {status?.next_prompt_category && !status.current_cycle_running && (
-              <div className="text-xs text-gray-400">
-                <span className="text-gray-600">{t.nextCategory}: </span>
-                <span className="text-gray-300">
-                  {t.promptCategories[status.next_prompt_category] ?? status.next_prompt_category}
-                </span>
-              </div>
-            )}
           </div>
 
           <div className="flex items-center gap-3">
