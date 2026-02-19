@@ -1,10 +1,95 @@
-export const ko = {
+export interface MetricInfo {
+  name: string;
+  unit: string;
+  desc: string;
+}
+
+export interface Translations {
+  // Top tabs
+  dashboardTab: string;
+  manualProbeTab: string;
+
+  // Header
+  appTitle: string;
+  appDesc: string;
+  history: string;
+
+  // Dashboard
+  autoProbeStatus: string;
+  lastProbe: string;
+  nextProbe: string;
+  interval: string;
+  running: string;
+  waiting: string;
+  modelStatus: string;
+  latencyTrend: string;
+  ttftTrend: string;
+  tpsTrend: string;
+  noDataYet: string;
+  noDataDesc: string;
+  autoRefresh: string;
+  seconds: string;
+  minutes: string;
+  triggerNow: string;
+  triggering: string;
+  cycleRunning: string;
+  trendRange: string;
+  metricDescTitle: string;
+  trendRangeLabel: (hours: number) => string;
+
+  // Manual probe
+  readyTitle: string;
+  readyDesc: string;
+  runProbe: string;
+  stopProbe: string;
+
+  // Tabs
+  resultsTable: string;
+  chartsTab: string;
+  comparisonTab: string;
+
+  // Auth
+  loginTitle: string;
+  loginDesc: string;
+  username: string;
+  password: string;
+  loginButton: string;
+  registerButton: string;
+  logout: string;
+  loginError: string;
+  registerError: string;
+  registerSuccess: string;
+  pendingApproval: string;
+  noAccount: string;
+  hasAccount: string;
+
+  // Status
+  success: string;
+  error: string;
+
+  // Time
+  justNow: string;
+  minutesAgo: (n: number) => string;
+  hoursAgo: (n: number) => string;
+
+  // Metric descriptions
+  metrics: {
+    ttft: MetricInfo;
+    totalLatency: MetricInfo;
+    serverLatency: MetricInfo;
+    tps: MetricInfo;
+    inputTokens: MetricInfo;
+    outputTokens: MetricInfo;
+  };
+}
+
+export const ko: Translations = {
   // Top tabs
   dashboardTab: "대시보드",
   manualProbeTab: "수동 프로브",
 
   // Header
-  appTitle: "Bedrock LLM 모니터",
+  appTitle: "Amazon Bedrock LLM Monitor",
   appDesc: "실시간 모델 성능 모니터링",
   history: "이력 조회",
 
@@ -23,10 +108,16 @@ export const ko = {
   noDataDesc: "자동 프로빙이 5분 간격으로 실행됩니다. 첫 번째 결과를 기다려주세요.",
   autoRefresh: "자동 새로고침",
   seconds: "초",
+  minutes: "분",
   triggerNow: "지금 실행",
   triggering: "실행 요청 중...",
   cycleRunning: "프로빙 진행 중",
   trendRange: "조회 기간",
+  metricDescTitle: "지표 설명",
+  trendRangeLabel: (hours: number) => {
+    if (hours < 24) return `${hours}시간`;
+    return `${hours / 24}일`;
+  },
 
   // Manual probe
   readyTitle: "프로브 실행 준비 완료",
@@ -96,4 +187,112 @@ export const ko = {
       desc: "모델이 생성한 응답 토큰 수. 비용 및 TPS 계산에 사용됩니다.",
     },
   },
-} as const;
+};
+
+export const en: Translations = {
+  // Top tabs
+  dashboardTab: "Dashboard",
+  manualProbeTab: "Manual Probe",
+
+  // Header
+  appTitle: "Amazon Bedrock LLM Monitor",
+  appDesc: "Real-time model performance monitoring",
+  history: "History",
+
+  // Dashboard
+  autoProbeStatus: "Auto-Probe Status",
+  lastProbe: "Last Probe",
+  nextProbe: "Next Probe",
+  interval: "Interval",
+  running: "Running",
+  waiting: "Waiting",
+  modelStatus: "Latest Model Status",
+  latencyTrend: "Latency Trend",
+  ttftTrend: "TTFT Trend",
+  tpsTrend: "TPS Trend",
+  noDataYet: "No auto-probe data yet.",
+  noDataDesc: "Auto-probing runs every 5 minutes. Please wait for the first result.",
+  autoRefresh: "Auto Refresh",
+  seconds: "s",
+  minutes: "m",
+  triggerNow: "Run Now",
+  triggering: "Triggering...",
+  cycleRunning: "Probing in progress",
+  trendRange: "Time Range",
+  metricDescTitle: "Metric Descriptions",
+  trendRangeLabel: (hours: number) => {
+    if (hours < 24) return `${hours}h`;
+    return `${hours / 24}d`;
+  },
+
+  // Manual probe
+  readyTitle: "Ready to Run Probe",
+  readyDesc: "Select a model, configure the prompt, and click 'Run Probe'.",
+  runProbe: "Run Probe",
+  stopProbe: "Stop",
+
+  // Tabs
+  resultsTable: "Results Table",
+  chartsTab: "Charts",
+  comparisonTab: "Comparison",
+
+  // Auth
+  loginTitle: "Login",
+  loginDesc: "Login is required to use manual probe features.",
+  username: "Username",
+  password: "Password",  // pragma: allowlist secret
+  loginButton: "Login",
+  registerButton: "Register",
+  logout: "Logout",
+  loginError: "Invalid username or password",
+  registerError: "Registration failed",
+  registerSuccess: "Registration complete. You can log in after admin approval.",
+  pendingApproval: "Account pending approval. Please wait for admin approval.",
+  noAccount: "Don't have an account?",
+  hasAccount: "Already have an account?",
+
+  // Status
+  success: "OK",
+  error: "Error",
+
+  // Time
+  justNow: "Just now",
+  minutesAgo: (n: number) => `${n}m ago`,
+  hoursAgo: (n: number) => `${n}h ago`,
+
+  // Metric descriptions
+  metrics: {
+    ttft: {
+      name: "TTFT (Time to First Token)",
+      unit: "ms",
+      desc: "Time from request to first token arrival. Represents perceived initial response speed.",
+    },
+    totalLatency: {
+      name: "Total Latency",
+      unit: "ms",
+      desc: "End-to-end time from request to last token. Client-measured total latency.",
+    },
+    serverLatency: {
+      name: "Server Latency",
+      unit: "ms",
+      desc: "Internal processing time reported by Bedrock. Difference from total latency = network overhead.",
+    },
+    tps: {
+      name: "TPS (Tokens/sec)",
+      unit: "tok/s",
+      desc: "Tokens per second. Output throughput from first to last token.",
+    },
+    inputTokens: {
+      name: "Input Tokens",
+      unit: "tokens",
+      desc: "Tokens consumed by the prompt. Basis for cost calculation.",
+    },
+    outputTokens: {
+      name: "Output Tokens",
+      unit: "tokens",
+      desc: "Tokens generated by the model. Used for cost and TPS calculation.",
+    },
+  },
+};
+
+export type Lang = "ko" | "en";

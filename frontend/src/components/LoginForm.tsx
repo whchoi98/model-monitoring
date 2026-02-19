@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { ko } from "@/lib/i18n";
+import { useT } from "@/lib/i18n-context";
 import { login, register, setToken } from "@/lib/api";
 
 interface Props {
@@ -9,6 +9,7 @@ interface Props {
 }
 
 export default function LoginForm({ onLoginSuccess }: Props) {
+  const t = useT();
   const [mode, setMode] = useState<"login" | "register">("login");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -29,7 +30,7 @@ export default function LoginForm({ onLoginSuccess }: Props) {
         onLoginSuccess(res.username);
       } else {
         await register(username, password);
-        setSuccess(ko.registerSuccess);
+        setSuccess(t.registerSuccess);
         setMode("login");
         setPassword("");
       }
@@ -37,9 +38,9 @@ export default function LoginForm({ onLoginSuccess }: Props) {
       const msg = err instanceof Error ? err.message : "";
       // Detect pending approval error from backend
       if (msg.includes("승인 대기") || msg.includes("승인")) {
-        setError(ko.pendingApproval);
+        setError(t.pendingApproval);
       } else {
-        setError(msg || (mode === "login" ? ko.loginError : ko.registerError));
+        setError(msg || (mode === "login" ? t.loginError : t.registerError));
       }
     } finally {
       setLoading(false);
@@ -58,9 +59,9 @@ export default function LoginForm({ onLoginSuccess }: Props) {
               </svg>
             </div>
             <h2 className="text-lg font-semibold text-gray-100">
-              {mode === "login" ? ko.loginTitle : ko.registerButton}
+              {mode === "login" ? t.loginTitle : t.registerButton}
             </h2>
-            <p className="text-xs text-gray-500 mt-1">{ko.loginDesc}</p>
+            <p className="text-xs text-gray-500 mt-1">{t.loginDesc}</p>
           </div>
 
           {/* Messages */}
@@ -83,7 +84,7 @@ export default function LoginForm({ onLoginSuccess }: Props) {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">{ko.username}</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">{t.username}</label>
               <input
                 type="text"
                 value={username}
@@ -96,7 +97,7 @@ export default function LoginForm({ onLoginSuccess }: Props) {
               />
             </div>
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">{ko.password}</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">{t.password}</label>
               <input
                 type="password"
                 value={password}
@@ -113,7 +114,7 @@ export default function LoginForm({ onLoginSuccess }: Props) {
               disabled={loading}
               className="w-full py-2 px-4 bg-blue-600 hover:bg-blue-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              {loading ? "..." : mode === "login" ? ko.loginButton : ko.registerButton}
+              {loading ? "..." : mode === "login" ? t.loginButton : t.registerButton}
             </button>
           </form>
 
@@ -123,7 +124,7 @@ export default function LoginForm({ onLoginSuccess }: Props) {
               onClick={() => { setMode(mode === "login" ? "register" : "login"); setError(null); setSuccess(null); }}
               className="text-xs text-blue-400 hover:text-blue-300 transition-colors"
             >
-              {mode === "login" ? ko.noAccount : ko.hasAccount}
+              {mode === "login" ? t.noAccount : t.hasAccount}
             </button>
           </div>
         </div>

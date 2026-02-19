@@ -5,8 +5,8 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Bedrock LLM 모니터",
-  description: "AWS Bedrock LLM 모델 실시간 성능 모니터링 대시보드",
+  title: "Amazon Bedrock LLM Monitor",
+  description: "AWS Bedrock LLM model real-time performance monitoring dashboard",
 };
 
 export default function RootLayout({

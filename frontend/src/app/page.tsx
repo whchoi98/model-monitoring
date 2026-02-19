@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { ModelInfo, ProbeConfig, PromptSet, AuthUser } from "@/lib/types";
 import { fetchModels, fetchPromptSets, fetchMe, setToken, getToken } from "@/lib/api";
-import { ko } from "@/lib/i18n";
+import { useT, useLang, LanguageProvider } from "@/lib/i18n-context";
 import { useProbeStream } from "@/hooks/useProbeStream";
 import ModelSelector from "@/components/ModelSelector";
 import ProbeConfigPanel from "@/components/ProbeConfigPanel";
@@ -29,6 +29,17 @@ const DEFAULT_CONFIG: ProbeConfig = {
 type TopTab = "dashboard" | "manual";
 
 export default function HomePage() {
+  return (
+    <LanguageProvider>
+      <HomeContent />
+    </LanguageProvider>
+  );
+}
+
+function HomeContent() {
+  const t = useT();
+  const { lang, setLang } = useLang();
+
   const [topTab, setTopTab] = useState<TopTab>("dashboard");
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [promptSets, setPromptSets] = useState<PromptSet[]>([]);
@@ -118,15 +129,39 @@ export default function HomePage() {
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-100">
-                {ko.appTitle}
+                {t.appTitle}
               </h1>
               <p className="text-xs text-gray-500">
-                {ko.appDesc}
+                {t.appDesc}
               </p>
             </div>
           </div>
 
           <div className="flex items-center gap-3">
+            {/* Language Selector */}
+            <div className="flex bg-gray-800/50 rounded-lg p-0.5">
+              <button
+                onClick={() => setLang("ko")}
+                className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                  lang === "ko"
+                    ? "bg-gray-600 text-white"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                KO
+              </button>
+              <button
+                onClick={() => setLang("en")}
+                className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
+                  lang === "en"
+                    ? "bg-gray-600 text-white"
+                    : "text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                EN
+              </button>
+            </div>
+
             {/* Top Tab Navigation */}
             <nav className="flex bg-gray-800/50 rounded-lg p-0.5">
               <button
@@ -137,7 +172,7 @@ export default function HomePage() {
                     : "text-gray-400 hover:text-gray-200"
                 }`}
               >
-                {ko.dashboardTab}
+                {t.dashboardTab}
               </button>
               <button
                 onClick={() => setTopTab("manual")}
@@ -147,7 +182,7 @@ export default function HomePage() {
                     : "text-gray-400 hover:text-gray-200"
                 }`}
               >
-                {ko.manualProbeTab}
+                {t.manualProbeTab}
               </button>
             </nav>
 
@@ -159,7 +194,7 @@ export default function HomePage() {
                   onClick={handleLogout}
                   className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
                 >
-                  {ko.logout}
+                  {t.logout}
                 </button>
               </div>
             )}
@@ -181,7 +216,7 @@ export default function HomePage() {
                   d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
                 />
               </svg>
-              {ko.history}
+              {t.history}
             </button>
           </div>
         </div>
@@ -268,9 +303,9 @@ export default function HomePage() {
                   <nav className="flex gap-1">
                     {(
                       [
-                        { key: "results", label: ko.resultsTable },
-                        { key: "charts", label: ko.chartsTab },
-                        { key: "compare", label: ko.comparisonTab },
+                        { key: "results", label: t.resultsTable },
+                        { key: "charts", label: t.chartsTab },
+                        { key: "compare", label: t.comparisonTab },
                       ] as const
                     ).map((tab) => (
                       <button
@@ -321,10 +356,10 @@ export default function HomePage() {
                       </svg>
                     </div>
                     <h2 className="text-xl font-semibold text-gray-300 mb-2">
-                      {ko.readyTitle}
+                      {t.readyTitle}
                     </h2>
                     <p className="text-gray-500 max-w-md text-sm">
-                      {ko.readyDesc}
+                      {t.readyDesc}
                     </p>
                   </div>
                 )}

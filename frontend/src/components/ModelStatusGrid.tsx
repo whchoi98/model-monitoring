@@ -1,7 +1,8 @@
 "use client";
 
 import { ProbeResult } from "@/lib/types";
-import { ko } from "@/lib/i18n";
+import { Translations } from "@/lib/i18n";
+import { useT } from "@/lib/i18n-context";
 import { useState } from "react";
 
 interface Props {
@@ -50,40 +51,42 @@ function getTpsColor(tps: number | null): string {
   return "text-rose-400";
 }
 
-function getStatusBadge(status: string) {
+function getStatusBadge(status: string, t: Translations) {
   if (status === "success") {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
         <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        {ko.success}
+        {t.success}
       </span>
     );
   }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
       <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-      {ko.error}
+      {t.error}
     </span>
   );
 }
 
-function formatTime(timestamp?: string): string {
+function formatTime(timestamp: string | undefined, t: Translations): string {
   if (!timestamp) return "-";
   const d = new Date(timestamp);
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return ko.justNow;
-  if (diffMin < 60) return ko.minutesAgo(diffMin);
-  return ko.hoursAgo(Math.floor(diffMin / 60));
+  if (diffMin < 1) return t.justNow;
+  if (diffMin < 60) return t.minutesAgo(diffMin);
+  return t.hoursAgo(Math.floor(diffMin / 60));
 }
 
 export default function ModelStatusGrid({ results }: Props) {
+  const t = useT();
+
   if (results.length === 0) return null;
 
   return (
     <div>
-      <h2 className="text-lg font-semibold text-gray-100 mb-4">{ko.modelStatus}</h2>
+      <h2 className="text-lg font-semibold text-gray-100 mb-4">{t.modelStatus}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
         {results.map((r) => (
           <div
@@ -99,7 +102,7 @@ export default function ModelStatusGrid({ results }: Props) {
               <h3 className="text-sm font-semibold text-gray-200 truncate pr-2">
                 {r.model_name}
               </h3>
-              {getStatusBadge(r.status)}
+              {getStatusBadge(r.status, t)}
             </div>
 
             {r.status === "success" ? (
@@ -107,8 +110,8 @@ export default function ModelStatusGrid({ results }: Props) {
                 {/* TTFT */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500 flex items-center">
-                    {ko.metrics.ttft.name}
-                    <MetricTooltip text={ko.metrics.ttft.desc} />
+                    {t.metrics.ttft.name}
+                    <MetricTooltip text={t.metrics.ttft.desc} />
                   </span>
                   <span className={`text-sm font-mono font-medium ${getTtftColor(r.ttft_ms)}`}>
                     {r.ttft_ms !== null ? `${r.ttft_ms.toFixed(0)} ms` : "-"}
@@ -118,8 +121,8 @@ export default function ModelStatusGrid({ results }: Props) {
                 {/* Total Latency */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500 flex items-center">
-                    {ko.metrics.totalLatency.name}
-                    <MetricTooltip text={ko.metrics.totalLatency.desc} />
+                    {t.metrics.totalLatency.name}
+                    <MetricTooltip text={t.metrics.totalLatency.desc} />
                   </span>
                   <span className={`text-sm font-mono font-medium ${getLatencyColor(r.total_latency_ms)}`}>
                     {r.total_latency_ms !== null ? `${(r.total_latency_ms / 1000).toFixed(1)}s` : "-"}
@@ -129,8 +132,8 @@ export default function ModelStatusGrid({ results }: Props) {
                 {/* TPS */}
                 <div className="flex items-center justify-between">
                   <span className="text-xs text-gray-500 flex items-center">
-                    {ko.metrics.tps.name}
-                    <MetricTooltip text={ko.metrics.tps.desc} />
+                    {t.metrics.tps.name}
+                    <MetricTooltip text={t.metrics.tps.desc} />
                   </span>
                   <span className={`text-sm font-mono font-medium ${getTpsColor(r.tps)}`}>
                     {r.tps !== null ? `${r.tps.toFixed(1)} tok/s` : "-"}
@@ -140,7 +143,7 @@ export default function ModelStatusGrid({ results }: Props) {
                 {/* Tokens */}
                 <div className="flex items-center justify-between pt-1 border-t border-gray-800/50">
                   <span className="text-xs text-gray-600">
-                    {ko.metrics.inputTokens.name}: {r.input_tokens ?? "-"} / {ko.metrics.outputTokens.name}: {r.output_tokens ?? "-"}
+                    {t.metrics.inputTokens.name}: {r.input_tokens ?? "-"} / {t.metrics.outputTokens.name}: {r.output_tokens ?? "-"}
                   </span>
                 </div>
               </div>
@@ -152,7 +155,7 @@ export default function ModelStatusGrid({ results }: Props) {
 
             {/* Timestamp */}
             <div className="mt-2 text-xs text-gray-600 text-right">
-              {formatTime(r.timestamp)}
+              {formatTime(r.timestamp, t)}
             </div>
           </div>
         ))}
