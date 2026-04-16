@@ -59,14 +59,23 @@ function isGlobal(name: string): boolean {
   return name.includes("(Global)");
 }
 
+/** Sort key: [regionOrder, -version, tierOrder] — same logic as ModelStatusGrid */
+function modelSortKey(name: string): [number, number, number] {
+  const regionOrder = name.includes("(Global)") ? 0 : name.includes("(US)") ? 1 : 2;
+  const verMatch = name.match(/(\d+\.\d+)/);
+  const version = verMatch ? parseFloat(verMatch[1]) : 0;
+  const tierOrder = name.includes("Opus") ? 0 : name.includes("Sonnet") ? 1 : name.includes("Haiku") ? 2 : 3;
+  return [regionOrder, -version, tierOrder];
+}
+
 function sortStats(stats: ModelStats[]): ModelStats[] {
   return [...stats].sort((a, b) => {
-    const aGlobal = isGlobal(a.model_name);
-    const bGlobal = isGlobal(b.model_name);
-    // Global first, then US
-    if (aGlobal && !bGlobal) return -1;
-    if (!aGlobal && bGlobal) return 1;
-    return a.model_name.localeCompare(b.model_name);
+    const ka = modelSortKey(a.model_name);
+    const kb = modelSortKey(b.model_name);
+    for (let i = 0; i < ka.length; i++) {
+      if (ka[i] !== kb[i]) return ka[i] - kb[i];
+    }
+    return 0;
   });
 }
 

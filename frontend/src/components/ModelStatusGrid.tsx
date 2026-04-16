@@ -79,16 +79,42 @@ function formatTime(timestamp: string | undefined, t: Translations): string {
   return t.hoursAgo(Math.floor(diffMin / 60));
 }
 
+/** Extract a sort key from model_name: [regionOrder, -version, tierOrder]. */
+function modelSortKey(name: string): [number, number, number] {
+  // Region: Global first (0), US second (1), others last (2)
+  const regionOrder = name.includes("(Global)") ? 0 : name.includes("(US)") ? 1 : 2;
+
+  // Version: extract major.minor (e.g. "4.7" → 4.7), higher = first (negate for ascending sort)
+  const verMatch = name.match(/(\d+\.\d+)/);
+  const version = verMatch ? parseFloat(verMatch[1]) : 0;
+
+  // Tier: Opus (0) > Sonnet (1) > Haiku (2) > others (3)
+  const tierOrder = name.includes("Opus") ? 0 : name.includes("Sonnet") ? 1 : name.includes("Haiku") ? 2 : 3;
+
+  return [regionOrder, -version, tierOrder];
+}
+
+function compareModels(a: ProbeResult, b: ProbeResult): number {
+  const ka = modelSortKey(a.model_name);
+  const kb = modelSortKey(b.model_name);
+  for (let i = 0; i < ka.length; i++) {
+    if (ka[i] !== kb[i]) return ka[i] - kb[i];
+  }
+  return 0;
+}
+
 export default function ModelStatusGrid({ results }: Props) {
   const t = useT();
 
   if (results.length === 0) return null;
 
+  const sorted = [...results].sort(compareModels);
+
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-100 mb-4">{t.modelStatus}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {results.map((r) => (
+        {sorted.map((r) => (
           <div
             key={r.model_id}
             className={`rounded-xl border p-4 transition-colors ${

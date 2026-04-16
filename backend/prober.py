@@ -28,11 +28,13 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (US)",
     "us.anthropic.claude-opus-4-5-20251101-v1:0": "Claude Opus 4.5 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (US)",
+    "us.anthropic.claude-opus-4-7": "Claude Opus 4.7 (US)",
     "us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (US)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
     "global.anthropic.claude-sonnet-4-5-20250929-v1:0": "Claude Sonnet 4.5 (Global)",
     "global.anthropic.claude-opus-4-5-20251101-v1:0": "Claude Opus 4.5 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (Global)",
+    "global.anthropic.claude-opus-4-7": "Claude Opus 4.7 (Global)",
     "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US)",
     "global.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (Global)",
 }
@@ -80,10 +82,14 @@ def _probe_single_model(
     server_latency_ms: float | None = None
 
     try:
+        inference_config: dict = {"maxTokens": max_tokens}
+        if "opus-4-7" not in model_id:
+            inference_config["temperature"] = temperature
+
         response = client.converse_stream(
             modelId=model_id,
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
+            inferenceConfig=inference_config,
         )
 
         stream = response["stream"]

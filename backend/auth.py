@@ -13,14 +13,16 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "bedrock-monitor-secret-change-me")
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY")
+if not SECRET_KEY:
+    raise RuntimeError("JWT_SECRET_KEY environment variable is required")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto", bcrypt__rounds=12)
 security = HTTPBearer(auto_error=False)
 
-ADMIN_EMAIL = "whchoi98@gmail.com"
+ADMIN_EMAIL = os.environ.get("ADMIN_EMAIL", "admin@example.com")
 PUBLIC_BASE_URL = os.environ.get("PUBLIC_BASE_URL", "https://d1ra694ytoup3r.cloudfront.net")
 
 

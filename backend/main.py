@@ -45,16 +45,18 @@ async def lifespan(app: FastAPI):
 
 def _seed_default_admin():
     """Create a default admin user if the users table is empty."""
+    import os
     from auth import hash_password
     from models import User
 
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
-            admin = User(username="admin", password_hash=hash_password("!Chldngud16"), approved=1)
+            password = os.environ.get("DEFAULT_ADMIN_PASSWORD", "changeme")
+            admin = User(username="admin", password_hash=hash_password(password), approved=1)
             db.add(admin)
             db.commit()
-            logger.info("Default admin user created (admin / admin1234)")
+            logger.info("Default admin user created (username: admin)")
     except Exception:
         logger.exception("Failed to seed default admin user")
     finally:
@@ -68,10 +70,16 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS middleware - allow all origins for development
+# CORS middleware - restrict to known origins
+_cors_origins = [
+    "https://d1ra694ytoup3r.cloudfront.net",
+    "https://llm-monitor.whchoi.net",
+    "http://localhost:3000",
+    "http://localhost:8000",
+]
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=_cors_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

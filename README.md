@@ -1,74 +1,341 @@
-# Bedrock LLM 모니터
+# Bedrock LLM Monitor
 
-AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로 모니터링하는 대시보드입니다.
+![License](https://img.shields.io/badge/License-MIT-blue.svg)
+![Version](https://img.shields.io/badge/Version-1.1.0-green.svg)
+![FastAPI](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
+![Next.js](https://img.shields.io/badge/Next.js_14-000000?style=flat&logo=next.js&logoColor=white)
+![PostgreSQL](https://img.shields.io/badge/PostgreSQL_16-4169E1?style=flat&logo=postgresql&logoColor=white)
+![Tailwind CSS](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+[![English](https://img.shields.io/badge/lang-English-blue)](#english)
+[![한국어](https://img.shields.io/badge/lang-한국어-red)](#한국어)
 
-![Stack](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
-![Stack](https://img.shields.io/badge/Next.js_14-000000?style=flat&logo=next.js&logoColor=white)
-![Stack](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
-![Stack](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+**A real-time dashboard for monitoring response speed, throughput, and reliability of AWS Bedrock LLM models.**
 
-### 대시보드 스크린샷
+**AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로 모니터링하는 대시보드입니다.**
+
+---
+
+# English
+
+## Overview
+
+Bedrock LLM Monitor is a full-stack monitoring dashboard that automatically probes 13 AWS Bedrock LLM models every 5 minutes and visualizes performance metrics including TTFT (Time To First Token), total latency, and tokens per second (TPS). It supports both US region (us-east-1) and Global cross-region inference (ap-northeast-2) models, providing real-time insights into model availability and performance.
 
 ![Dashboard](docs/images/dashboard.png)
 
-### 수동 프로브 스크린샷
+![Manual Probe](docs/images/manual-probe.png)
+
+## Features
+
+- **Auto Probing** — Automatically probes 13 models every 5 minutes with concurrency=3, storing results in PostgreSQL
+- **Real-time Dashboard** — Model status cards with color-coded metrics + TTFT / latency / TPS trend charts
+- **Manual Probe** — Execute probes with custom prompts, models, and parameters via SSE streaming (auth required)
+- **History Statistics** — View historical performance stats (avg, p50, p95, p99) with configurable time ranges
+- **Korean/English UI** — Full bilingual interface with metric descriptions and tooltips
+- **User Authentication** — JWT-based login with email-based admin approval flow via AWS SES
+
+## Prerequisites
+
+- Python 3.9+
+- Node.js 18+
+- Docker and Docker Compose
+- AWS credentials with `bedrock:InvokeModelWithResponseStream` permission
+  - Regions: `us-east-1`, `ap-northeast-2`
+
+## Installation
+
+```bash
+# Clone the repository
+git clone https://github.com/whchoi98/model-monitoring.git
+cd model-monitoring
+
+# Option 1: Automated setup (recommended)
+chmod +x deploy.sh
+./deploy.sh
+
+# Option 2: Manual setup
+# Start PostgreSQL
+docker compose up -d
+
+# Install and run backend
+cd backend
+cp ../.env.example .env   # Edit with your values
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+# Install and run frontend (in a separate terminal)
+cd frontend
+npm install
+npm run build
+npm start
+```
+
+## Usage
+
+```bash
+# Check auto-prober status
+curl http://localhost:8000/api/auto-probe/status
+
+# View latest probe results
+curl http://localhost:8000/api/auto-probe/latest
+
+# Trigger an immediate probe cycle
+curl -X POST http://localhost:8000/api/auto-probe/trigger
+
+# View available models (13 total)
+curl http://localhost:8000/api/models
+
+# Access the dashboard
+open http://localhost:3000
+```
+
+## Configuration
+
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `JWT_SECRET_KEY` | JWT signing key (required) | - |
+| `DATABASE_URL` | PostgreSQL connection string (required) | - |
+| `ADMIN_EMAIL` | Admin email for approval flow | `admin@example.com` |
+| `DEFAULT_ADMIN_PASSWORD` | Initial admin password | `changeme` |
+| `PUBLIC_BASE_URL` | Public URL for email links | `https://your-domain.com` |
+
+| Setting | File | Variable |
+|---------|------|----------|
+| Probe interval | `backend/auto_prober.py` | `PROBE_INTERVAL` (default: 300s) |
+| Model list | `backend/prober.py` | `AVAILABLE_MODELS` |
+| Auto-refresh interval | `frontend/src/hooks/useAutoRefresh.ts` | `intervalMs` (default: 30000ms) |
+
+## Monitored Models (13 Total)
+
+| Region | Models |
+|--------|--------|
+| US (us-east-1) | Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5, Nova 2.0 Lite |
+| Global (ap-northeast-2) | Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 |
+
+## Project Structure
+
+```
+model-monitoring/
+├── backend/
+│   ├── main.py              # FastAPI entrypoint + lifespan
+│   ├── auto_prober.py       # Background auto-probing thread
+│   ├── prober.py            # Core probe logic (Bedrock converse_stream)
+│   ├── auth.py              # JWT + bcrypt auth utilities
+│   ├── models.py            # SQLAlchemy ORM models
+│   ├── database.py          # DB connection config
+│   └── routers/             # API endpoint handlers
+├── frontend/
+│   ├── src/
+│   │   ├── app/             # Next.js App Router pages
+│   │   ├── components/      # Dashboard, charts, forms
+│   │   ├── hooks/           # Auto-refresh, SSE streaming
+│   │   └── lib/             # API client, i18n, types
+│   └── package.json
+├── docs/
+│   ├── architecture.md      # Architecture document (EN/KO)
+│   ├── onboarding.md        # Developer onboarding guide
+│   ├── api-reference.md     # API reference
+│   ├── decisions/           # Architecture Decision Records
+│   └── runbooks/            # Operational runbooks
+├── .claude/                 # Claude Code project config
+├── scripts/                 # Setup and utility scripts
+├── tests/                   # Project structure tests
+├── docker-compose.yml       # PostgreSQL container
+├── deploy.sh                # One-click deployment script
+└── cloudformation.yaml      # AWS CloudFormation template
+```
+
+## Architecture
+
+```
+                    ┌──────────────────────────────┐
+                    │     Internet / Users          │
+                    └──────────────┬───────────────┘
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │       CloudFront CDN          │
+                    │  llm-monitor.whchoi.net       │
+                    └──────────────┬───────────────┘
+                                   ▼
+              ┌────────────────────────────────────────┐
+              │              EC2 Instance               │
+              │                                        │
+              │  ┌──────────────┐  ┌────────────────┐  │
+              │  │  Next.js 14  │  │   FastAPI       │  │
+              │  │  :3000       │──▶  :8000          │  │
+              │  └──────────────┘  │                 │  │
+              │                    │  ┌────────────┐ │  │
+              │                    │  │Auto Prober │ │  │
+              │                    │  └─────┬──────┘ │  │
+              │                    └────┬───┼────────┘  │
+              │                    ┌────▼───▼────┐      │
+              │                    │ PostgreSQL   │      │
+              │                    │ :5432        │      │
+              │                    └─────────────┘      │
+              └────────────────────────┬───────────────┘
+                                       ▼
+                          ┌─────────────────────────┐
+                          │      AWS Bedrock         │
+                          │  us-east-1 (US models)   │
+                          │  ap-northeast-2 (Global) │
+                          └─────────────────────────┘
+```
+
+## Testing
+
+```bash
+# Run project structure tests (49 tests)
+bash tests/run-all.sh
+
+# Verify backend imports
+cd backend && python -c "import main; print('OK')"
+
+# Verify frontend builds
+cd frontend && npm run build
+```
+
+## API Documentation
+
+See [docs/api-reference.md](docs/api-reference.md) for the complete API reference.
+
+| Method | Path | Auth | Description |
+|--------|------|------|-------------|
+| GET | `/api/auto-probe/status` | - | Auto-prober status |
+| GET | `/api/auto-probe/latest` | - | Latest results per model |
+| GET | `/api/auto-probe/trend?hours=24` | - | Time-series data |
+| POST | `/api/auto-probe/trigger` | - | Trigger immediate probe |
+| POST | `/api/probes/run` | Bearer | SSE streaming probe |
+| GET | `/api/models` | - | Available model list |
+| GET | `/api/results/stats` | - | Statistics (avg, p50, p95, p99) |
+| POST | `/api/auth/login` | - | Login |
+| POST | `/api/auth/register` | - | Register |
+
+## Contributing
+
+1. Fork the repository
+2. Create a feature branch (`git checkout -b feat/amazing-feature`)
+3. Commit your changes (`git commit -m 'feat: add amazing feature'`)
+4. Push to the branch (`git push origin feat/amazing-feature`)
+5. Open a Pull Request
+
+Commit messages follow [Conventional Commits](https://www.conventionalcommits.org/):
+- `feat:` new feature
+- `fix:` bug fix
+- `docs:` documentation
+- `refactor:` code refactoring
+- `chore:` maintenance
+
+## License
+
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## Contact
+
+- **Maintainer**: Woo Hyung Choi (whchoi98)
+- **GitHub**: [https://github.com/whchoi98/model-monitoring](https://github.com/whchoi98/model-monitoring)
+- **Issues**: [https://github.com/whchoi98/model-monitoring/issues](https://github.com/whchoi98/model-monitoring/issues)
+- **Email**: whchoi98@gmail.com
+
+---
+
+# 한국어
+
+## 개요
+
+Bedrock LLM 모니터는 13개의 AWS Bedrock LLM 모델을 5분마다 자동으로 프로빙하여 TTFT(첫 토큰 시간), 총 응답시간, TPS(초당 토큰 수)를 실시간으로 시각화하는 풀스택 모니터링 대시보드입니다. US 리전(us-east-1)과 Global 크로스 리전 추론(ap-northeast-2) 모델을 모두 지원하며, 모델 가용성과 성능에 대한 실시간 인사이트를 제공합니다.
+
+![Dashboard](docs/images/dashboard.png)
 
 ![Manual Probe](docs/images/manual-probe.png)
 
----
-
 ## 주요 기능
 
-| 기능 | 설명 |
-|------|------|
-| **자동 프로빙** | 5분 간격으로 9개 모델을 자동 프로빙하여 결과를 DB에 저장 |
-| **대시보드** | 모델별 상태 카드(3×3 그리드) + TTFT / 응답시간 / TPS 추이 차트 |
-| **수동 프로브** | 로그인 후 모델·프롬프트·동시성·반복 횟수를 지정하여 즉시 실행, SSE 스트리밍 결과 확인 |
-| **사용자 인증** | 수동 프로브는 ID/비밀번호 로그인 필요 (JWT 토큰 기반). 대시보드는 공개 |
-| **한글 UI** | 전체 인터페이스 한글화 + 지표별 설명 툴팁 |
-| **이력 조회** | 과거 프로브 실행 이력 및 결과 조회 |
+- **자동 프로빙** — 5분 간격으로 13개 모델을 동시성=3으로 자동 프로빙하여 PostgreSQL에 저장합니다
+- **실시간 대시보드** — 색상 코딩된 모델 상태 카드 + TTFT / 응답시간 / TPS 추이 차트를 제공합니다
+- **수동 프로브** — 프롬프트, 모델, 파라미터를 지정하여 SSE 스트리밍으로 즉시 실행합니다 (인증 필요)
+- **이력 통계** — 시간 범위별 과거 성능 통계(avg, p50, p95, p99)를 조회합니다
+- **한국어/영어 UI** — 지표 설명 및 툴팁이 포함된 완전한 이중 언어 인터페이스입니다
+- **사용자 인증** — JWT 기반 로그인과 AWS SES를 통한 이메일 관리자 승인 플로우를 지원합니다
 
-## 모니터링 대상 모델
+## 사전 요구 사항
+
+- Python 3.9+
+- Node.js 18+
+- Docker 및 Docker Compose
+- `bedrock:InvokeModelWithResponseStream` 권한이 있는 AWS 자격 증명
+  - 리전: `us-east-1`, `ap-northeast-2`
+
+## 설치 방법
+
+```bash
+# 저장소 클론
+git clone https://github.com/whchoi98/model-monitoring.git
+cd model-monitoring
+
+# 방법 1: 자동 배포 (권장)
+chmod +x deploy.sh
+./deploy.sh
+
+# 방법 2: 수동 설치
+# PostgreSQL 시작
+docker compose up -d
+
+# 백엔드 설치 및 실행
+cd backend
+cp ../.env.example .env   # 값을 수정하세요
+pip install -r requirements.txt
+python -m uvicorn main:app --host 0.0.0.0 --port 8000
+
+# 프론트엔드 설치 및 실행 (별도 터미널에서)
+cd frontend
+npm install
+npm run build
+npm start
+```
+
+## 사용법
+
+```bash
+# 자동 프로버 상태 확인
+curl http://localhost:8000/api/auto-probe/status
+
+# 최신 프로빙 결과 조회
+curl http://localhost:8000/api/auto-probe/latest
+
+# 즉시 1회 프로빙 실행
+curl -X POST http://localhost:8000/api/auto-probe/trigger
+
+# 사용 가능한 모델 목록 (총 13개)
+curl http://localhost:8000/api/models
+
+# 대시보드 접속
+open http://localhost:3000
+```
+
+## 환경 설정
+
+| 변수 | 설명 | 기본값 |
+|------|------|--------|
+| `JWT_SECRET_KEY` | JWT 서명 키 (필수) | - |
+| `DATABASE_URL` | PostgreSQL 접속 문자열 (필수) | - |
+| `ADMIN_EMAIL` | 승인 알림 관리자 이메일 | `admin@example.com` |
+| `DEFAULT_ADMIN_PASSWORD` | 초기 관리자 비밀번호 | `changeme` |
+| `PUBLIC_BASE_URL` | 이메일 링크 베이스 URL | `https://your-domain.com` |
+
+| 설정 항목 | 파일 | 변수 |
+|-----------|------|------|
+| 프로빙 주기 | `backend/auto_prober.py` | `PROBE_INTERVAL` (기본: 300초) |
+| 모델 목록 | `backend/prober.py` | `AVAILABLE_MODELS` |
+| 자동 새로고침 주기 | `frontend/src/hooks/useAutoRefresh.ts` | `intervalMs` (기본: 30000ms) |
+
+## 모니터링 대상 모델 (총 13개)
 
 | 리전 | 모델 |
 |------|------|
-| US | Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5, Nova 2.0 Lite |
-| Global | Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 |
+| US (us-east-1) | Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5, Nova 2.0 Lite |
+| Global (ap-northeast-2) | Claude Opus 4.7, Claude Opus 4.6, Claude Sonnet 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 |
 
-## 측정 지표
-
-| 지표 | 단위 | 설명 |
-|------|------|------|
-| **TTFT** | ms | 요청 전송 후 첫 번째 토큰이 도착하기까지의 시간 |
-| **총 응답시간** | ms | 요청 전송부터 마지막 토큰 수신까지의 전체 소요 시간 |
-| **서버 처리시간** | ms | Bedrock 서버가 보고한 내부 처리 시간 |
-| **TPS** | tok/s | 초당 생성 토큰 수 (첫 토큰 이후 출력 처리량) |
-| **입력/출력 토큰** | 개 | 프롬프트 소비 토큰 수 및 모델 생성 토큰 수 |
-
----
-
-## 아키텍처
-
-```
-┌─────────────┐     ┌──────────────┐     ┌────────────┐
-│  Next.js 14 │────▶│  FastAPI      │────▶│ PostgreSQL │
-│  (포트 3000)│◀────│  (포트 8000)  │◀────│ (포트 5432)│
-└─────────────┘ SSE └──────┬───────┘     └────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │ AWS Bedrock  │
-                    │ (us-east-1)  │
-                    └──────────────┘
-```
-
-- **Frontend** — Next.js 14 + React 18 + Tailwind CSS + Recharts
-- **Backend** — FastAPI + SQLAlchemy ORM + SSE 스트리밍
-- **Database** — PostgreSQL 16 (Docker)
-- **자동 프로버** — Python 백그라운드 스레드 (5분 간격, 동시성 3)
-
----
-
-## 디렉토리 구조
+## 프로젝트 구조
 
 ```
 model-monitoring/
@@ -76,317 +343,118 @@ model-monitoring/
 │   ├── main.py              # FastAPI 엔트리포인트 + lifespan
 │   ├── auto_prober.py       # 자동 프로빙 백그라운드 스레드
 │   ├── prober.py            # 코어 프로브 로직 (Bedrock converse_stream)
+│   ├── auth.py              # JWT + bcrypt 인증 유틸리티
 │   ├── models.py            # SQLAlchemy ORM 모델
-│   ├── schemas.py           # Pydantic 스키마
 │   ├── database.py          # DB 연결 설정
-│   ├── requirements.txt     # Python 의존성
-│   └── routers/
-│       ├── auto_probe.py    # 자동 프로빙 API (/api/auto-probe/*)
-│       ├── probes.py        # 수동 프로브 API (/api/probes/*)
-│       ├── results.py       # 결과 조회 API (/api/results/*)
-│       ├── models.py        # 모델 목록 API (/api/models)
-│       └── prompts.py       # 프롬프트 세트 API (/api/prompts/*)
+│   └── routers/             # API 엔드포인트 핸들러
 ├── frontend/
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx     # 메인 페이지 (대시보드/수동 프로브 탭)
-│   │   │   └── layout.tsx   # 루트 레이아웃 (한글)
-│   │   ├── components/
-│   │   │   ├── AutoDashboard.tsx    # 자동 프로빙 대시보드
-│   │   │   ├── ModelStatusGrid.tsx  # 모델별 상태 카드 그리드
-│   │   │   ├── TrendChart.tsx       # 시계열 추이 차트
-│   │   │   └── ...                  # 기타 컴포넌트
-│   │   ├── hooks/
-│   │   │   ├── useAutoRefresh.ts    # 자동 새로고침 훅 (30초)
-│   │   │   └── useProbeStream.ts    # SSE 스트리밍 훅
-│   │   └── lib/
-│   │       ├── api.ts       # API 클라이언트
-│   │       ├── i18n.ts      # 한글 번역 사전 + 지표 설명
-│   │       └── types.ts     # TypeScript 인터페이스
-│   ├── package.json
-│   └── tailwind.config.ts
+│   │   ├── app/             # Next.js App Router 페이지
+│   │   ├── components/      # 대시보드, 차트, 폼
+│   │   ├── hooks/           # 자동 새로고침, SSE 스트리밍
+│   │   └── lib/             # API 클라이언트, i18n, 타입
+│   └── package.json
+├── docs/
+│   ├── architecture.md      # 아키텍처 문서 (EN/KO)
+│   ├── onboarding.md        # 개발자 온보딩 가이드
+│   ├── api-reference.md     # API 레퍼런스
+│   ├── decisions/           # ADR (아키텍처 결정 기록)
+│   └── runbooks/            # 운영 런북
+├── .claude/                 # Claude Code 프로젝트 설정
+├── scripts/                 # 셋업 및 유틸리티 스크립트
+├── tests/                   # 프로젝트 구조 테스트
 ├── docker-compose.yml       # PostgreSQL 컨테이너
 ├── deploy.sh                # 원클릭 배포 스크립트
-├── cloudformation.yaml      # AWS CloudFormation 템플릿
-└── README.md
+└── cloudformation.yaml      # AWS CloudFormation 템플릿
 ```
 
----
+## 아키텍처
 
-## 사전 요구사항
+```
+                    ┌──────────────────────────────┐
+                    │     인터넷 / 사용자            │
+                    └──────────────┬───────────────┘
+                                   ▼
+                    ┌──────────────────────────────┐
+                    │       CloudFront CDN          │
+                    │  llm-monitor.whchoi.net       │
+                    └──────────────┬───────────────┘
+                                   ▼
+              ┌────────────────────────────────────────┐
+              │              EC2 인스턴스                │
+              │                                        │
+              │  ┌──────────────┐  ┌────────────────┐  │
+              │  │  Next.js 14  │  │   FastAPI       │  │
+              │  │  :3000       │──▶  :8000          │  │
+              │  └──────────────┘  │                 │  │
+              │                    │  ┌────────────┐ │  │
+              │                    │  │자동 프로버  │ │  │
+              │                    │  └─────┬──────┘ │  │
+              │                    └────┬───┼────────┘  │
+              │                    ┌────▼───▼────┐      │
+              │                    │ PostgreSQL   │      │
+              │                    │ :5432        │      │
+              │                    └─────────────┘      │
+              └────────────────────────┬───────────────┘
+                                       ▼
+                          ┌─────────────────────────┐
+                          │      AWS Bedrock         │
+                          │  us-east-1 (US 모델)     │
+                          │  ap-northeast-2 (Global) │
+                          └─────────────────────────┘
+```
 
-- **OS**: Amazon Linux 2023 (또는 동등한 Linux)
-- **Python**: 3.9+
-- **Node.js**: 18+
-- **Docker**: PostgreSQL 컨테이너 실행용
-- **AWS 자격 증명**: Bedrock 모델 호출 권한이 있는 IAM Role 또는 자격 증명
-  - 필요 권한: `bedrock:InvokeModelWithResponseStream`
-  - 리전: `us-east-1`
-
----
-
-## 설치 및 실행
-
-### 방법 1: 자동 배포 (권장)
+## 테스트
 
 ```bash
-git clone <repository-url>
-cd model-monitoring
-chmod +x deploy.sh
-./deploy.sh
+# 프로젝트 구조 테스트 실행 (49개 테스트)
+bash tests/run-all.sh
+
+# 백엔드 임포트 검증
+cd backend && python -c "import main; print('OK')"
+
+# 프론트엔드 빌드 검증
+cd frontend && npm run build
 ```
 
-`deploy.sh`가 아래 작업을 순서대로 수행합니다:
-1. 시스템 패키지 설치 (Python, Docker)
-2. Docker로 PostgreSQL 기동
-3. Backend Python 의존성 설치
-4. Frontend 빌드 (`npm install` + `npm run build`)
-5. systemd 서비스 등록 및 시작
+## API 문서
 
-### 방법 2: 수동 설치
-
-#### 1. PostgreSQL 기동
-
-```bash
-docker compose up -d
-```
-
-PostgreSQL이 준비될 때까지 대기:
-
-```bash
-docker exec monitoring-postgres pg_isready -U postgres
-```
-
-#### 2. Backend 설치 및 실행
-
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
-```
-
-서버 시작 시 자동으로:
-- DB 테이블 생성
-- `is_auto` 컬럼 마이그레이션
-- 자동 프로버 스레드 시작 (5분 간격)
-
-#### 3. Frontend 설치 및 실행
-
-```bash
-cd frontend
-npm install
-npm run build
-npm start          # 프로덕션 (포트 3000)
-# 또는
-npm run dev        # 개발 모드 (HMR)
-```
-
-#### 4. systemd 서비스 등록 (선택)
-
-프로덕션 환경에서는 systemd로 관리하는 것을 권장합니다:
-
-```bash
-# /etc/systemd/system/monitor-backend.service
-[Unit]
-Description=Bedrock Monitor Backend (FastAPI)
-After=network.target docker.service
-Requires=docker.service
-
-[Service]
-Type=simple
-User=ec2-user
-WorkingDirectory=/home/ec2-user/model-monitoring/backend
-ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-# /etc/systemd/system/monitor-frontend.service
-[Unit]
-Description=Bedrock Monitor Frontend (Next.js)
-After=network.target monitor-backend.service
-
-[Service]
-Type=simple
-User=ec2-user
-WorkingDirectory=/home/ec2-user/model-monitoring/frontend
-ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now monitor-backend
-sudo systemctl enable --now monitor-frontend
-```
-
----
-
-## 접속
-
-| 서비스 | URL |
-|--------|-----|
-| Frontend 대시보드 | `http://localhost:3000` |
-| Backend API | `http://localhost:8000` |
-| API 문서 (Swagger) | `http://localhost:8000/docs` |
-| Health Check | `http://localhost:8000/api/health` |
-
----
-
-## 인증
-
-수동 프로브 기능은 로그인이 필요합니다. 대시보드(자동 프로빙)는 인증 없이 접근 가능합니다.
-
-### 기본 계정
-
-서버 최초 기동 시 사용자가 없으면 기본 관리자 계정이 자동 생성됩니다 (즉시 승인 상태).
-
-> 환경변수 `JWT_SECRET_KEY`를 설정하여 토큰 서명 키를 변경하세요.
-
-### 인증 방식
-
-- **JWT Bearer Token** 기반 (24시간 유효)
-- 로그인: `POST /api/auth/login` → `access_token` 발급
-- 보호 대상 API: `/api/probes/run`, `/api/prompts` (POST/DELETE)
-- 프론트엔드에서 수동 프로브 탭 클릭 시 로그인 폼이 표시됨
-
-### 회원가입 (수동 승인 방식)
-
-1. 사용자가 프론트엔드 또는 API로 회원가입
-2. 계정은 **승인 대기 상태**(`approved=0`)로 생성
-3. 관리자 이메일(`whchoi98@gmail.com`)로 **승인 요청 알림** 발송 (AWS SES)
-4. 관리자가 이메일의 **"승인하기"** 버튼 클릭 → 즉시 승인 (`approved=1`)
-5. 승인 전에는 로그인 불가 (403 응답)
-
-> SES 샌드박스 환경에서는 관리자 이메일 주소가 사전에 SES에서 인증되어 있어야 합니다.
-
-```bash
-# CLI로 회원가입
-curl -X POST http://localhost:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"myuser","password":"mypassword"}'
-```
-
----
-
-## API 엔드포인트
-
-### 인증
+전체 API 레퍼런스는 [docs/api-reference.md](docs/api-reference.md)를 참조하세요.
 
 | 메서드 | 경로 | 인증 | 설명 |
 |--------|------|------|------|
-| POST | `/api/auth/login` | - | 로그인 → JWT 토큰 발급 (승인된 계정만) |
-| POST | `/api/auth/register` | - | 회원가입 (승인 대기 상태로 생성, 관리자 이메일 발송) |
-| GET | `/api/auth/approve?token=` | - | 이메일 승인 링크 (관리자 클릭용) |
-| GET | `/api/auth/me` | Bearer | 현재 사용자 정보 |
-
-### 자동 프로빙
-
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/api/auto-probe/status` | 자동 프로버 상태 (실행 여부, 마지막/다음 실행 시각) |
-| GET | `/api/auto-probe/latest` | 가장 최근 자동 프로빙 결과 (모델별 1건) |
-| GET | `/api/auto-probe/trend?hours=24` | 시계열 데이터 (기본 24시간) |
-| POST | `/api/auto-probe/trigger` | 즉시 1회 프로빙 실행 |
-
-### 수동 프로브 (인증 필요)
-
-| 메서드 | 경로 | 인증 | 설명 |
-|--------|------|------|------|
-| POST | `/api/probes/run` | Bearer | SSE 스트리밍 프로브 실행 |
+| GET | `/api/auto-probe/status` | - | 자동 프로버 상태 |
+| GET | `/api/auto-probe/latest` | - | 모델별 최신 결과 |
+| GET | `/api/auto-probe/trend?hours=24` | - | 시계열 데이터 |
+| POST | `/api/auto-probe/trigger` | - | 즉시 프로빙 실행 |
+| POST | `/api/probes/run` | Bearer | SSE 스트리밍 프로브 |
 | GET | `/api/models` | - | 사용 가능한 모델 목록 |
+| GET | `/api/results/stats` | - | 통계 (avg, p50, p95, p99) |
+| POST | `/api/auth/login` | - | 로그인 |
+| POST | `/api/auth/register` | - | 회원가입 |
 
-### 결과 조회
+## 기여 방법
 
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/api/results` | 결과 조회 (필터: model_id, run_id, limit, offset) |
-| GET | `/api/results/latest` | 최신 결과 |
-| GET | `/api/results/stats` | 통계 (avg, p50, p95, p99) |
+1. 저장소를 Fork합니다
+2. 기능 브랜치를 생성합니다 (`git checkout -b feat/amazing-feature`)
+3. 변경 사항을 커밋합니다 (`git commit -m 'feat: add amazing feature'`)
+4. 브랜치에 Push합니다 (`git push origin feat/amazing-feature`)
+5. Pull Request를 생성합니다
 
-### 프롬프트 세트
+커밋 메시지는 [Conventional Commits](https://www.conventionalcommits.org/) 형식을 따릅니다:
+- `feat:` 새 기능
+- `fix:` 버그 수정
+- `docs:` 문서
+- `refactor:` 코드 리팩토링
+- `chore:` 유지보수
 
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/api/prompts` | 프롬프트 세트 목록 |
-| POST | `/api/prompts` | 프롬프트 세트 생성 |
-| DELETE | `/api/prompts/{id}` | 프롬프트 세트 삭제 |
+## 라이선스
 
----
+이 프로젝트는 MIT 라이선스로 배포됩니다. 자세한 내용은 [LICENSE](LICENSE) 파일을 참조하세요.
 
-## 운영 가이드
+## 연락처
 
-### 서비스 관리
-
-```bash
-# 상태 확인
-sudo systemctl status monitor-backend
-sudo systemctl status monitor-frontend
-
-# 재시작
-sudo systemctl restart monitor-backend
-sudo systemctl restart monitor-frontend
-
-# 로그 확인
-journalctl -u monitor-backend -f
-journalctl -u monitor-frontend -f
-```
-
-### 자동 프로빙 동작 확인
-
-```bash
-# 프로버 상태
-curl http://localhost:8000/api/auto-probe/status
-
-# 최신 결과
-curl http://localhost:8000/api/auto-probe/latest
-
-# 수동 트리거
-curl -X POST http://localhost:8000/api/auto-probe/trigger
-```
-
-### DB 직접 조회
-
-```bash
-docker exec -it monitoring-postgres psql -U postgres -d monitoring
-
-# 자동 프로빙 실행 횟수
-SELECT COUNT(*) FROM probe_runs WHERE is_auto = 1;
-
-# 최근 결과
-SELECT model_name, ttft_ms, total_latency_ms, tps, status
-FROM probe_results
-ORDER BY timestamp DESC LIMIT 9;
-```
-
-### Frontend 재빌드
-
-코드 수정 후:
-
-```bash
-cd frontend
-npm run build
-sudo systemctl restart monitor-frontend
-```
-
----
-
-## 설정 변경
-
-| 항목 | 파일 | 변수 |
-|------|------|------|
-| 프로빙 주기 | `backend/auto_prober.py` | `PROBE_INTERVAL` (기본 300초) |
-| 프로빙 프롬프트 | `backend/auto_prober.py` | `PROBE_PROMPT` |
-| 모델 목록 | `backend/prober.py` | `AVAILABLE_MODELS` |
-| DB 접속 정보 | `backend/database.py` | `DATABASE_URL` |
-| 자동 새로고침 주기 | `frontend/src/hooks/useAutoRefresh.ts` | `intervalMs` (기본 30000ms) |
-| JWT 서명 키 | 환경변수 `JWT_SECRET_KEY` | 기본값: `bedrock-monitor-secret-change-me` |
-| 토큰 유효기간 | `backend/auth.py` | `ACCESS_TOKEN_EXPIRE_HOURS` (기본 24시간) |
+- **메인테이너**: 최우형 (whchoi98)
+- **GitHub**: [https://github.com/whchoi98/model-monitoring](https://github.com/whchoi98/model-monitoring)
+- **Issues**: [https://github.com/whchoi98/model-monitoring/issues](https://github.com/whchoi98/model-monitoring/issues)
+- **Email**: whchoi98@gmail.com
