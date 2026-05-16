@@ -56,7 +56,20 @@ new EdgeStack(app, `${prefix}-Edge`, {
   env,
   alb: appServices.alb,
 });
-new SchedulerStack(app, `${prefix}-Scheduler`, { env });
+
+new SchedulerStack(app, `${prefix}-Scheduler`, {
+  env,
+  vpc: network.vpc,
+  appSubnets: network.appSubnets,
+  cluster: cluster.cluster,
+  backendRepo: cluster.backendRepo,
+  dbSecret: data.dbSecret,
+  dbSecurityGroup: data.dbSecurityGroup,
+  jwtSecretParam: data.jwtSecretParam,
+  agentCoreMemoryIdParam: agentCore.memoryIdParam,
+  agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
+});
+
 new ObservabilityStack(app, `${prefix}-Observability`, { env });
 
 // cdk-nag — 모든 스택에 AWS Solutions ruleset 적용.

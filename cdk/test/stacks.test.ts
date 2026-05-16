@@ -37,7 +37,21 @@ describe("스택 골격", () => {
     expect(
       () => new EdgeStack(app, "Edge", { env, alb: appServices.alb }),
     ).not.toThrow();
-    expect(() => new SchedulerStack(app, "Scheduler", { env })).not.toThrow();
+    expect(
+      () =>
+        new SchedulerStack(app, "Scheduler", {
+          env,
+          vpc: network.vpc,
+          appSubnets: network.appSubnets,
+          cluster: cluster.cluster,
+          backendRepo: cluster.backendRepo,
+          dbSecret: data.dbSecret,
+          dbSecurityGroup: data.dbSecurityGroup,
+          jwtSecretParam: data.jwtSecretParam,
+          agentCoreMemoryIdParam: agentCore.memoryIdParam,
+          agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
+        }),
+    ).not.toThrow();
     expect(() => new ObservabilityStack(app, "Observability", { env })).not.toThrow();
   });
 });
