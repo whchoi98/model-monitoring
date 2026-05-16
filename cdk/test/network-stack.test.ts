@@ -20,12 +20,16 @@ describe("NetworkStack (신규 VPC 생성)", () => {
     template.resourceCountIs("AWS::EC2::VPC", 1);
   });
 
-  it("App / Data 서브넷이 AZ당 1개씩 (총 4개) 생성된다", () => {
-    template.resourceCountIs("AWS::EC2::Subnet", 4);
+  it("Public / App / Data 서브넷이 AZ당 1개씩 (총 6개) 생성된다", () => {
+    template.resourceCountIs("AWS::EC2::Subnet", 6);
   });
 
-  it("NAT GW는 생성되지 않는다 (모든 egress는 PrivateLink)", () => {
-    template.resourceCountIs("AWS::EC2::NatGateway", 0);
+  it("NAT GW가 1개 생성된다 (단일 AZ, 비용 절감)", () => {
+    template.resourceCountIs("AWS::EC2::NatGateway", 1);
+  });
+
+  it("Internet Gateway가 1개 생성된다 (Public 서브넷용)", () => {
+    template.resourceCountIs("AWS::EC2::InternetGateway", 1);
   });
 
   it("VPC Flow Logs가 활성화된다", () => {

@@ -27,8 +27,12 @@ const env: cdk.Environment = {
 const prefix = "BedrockMonitor";
 
 // 스택 등록 순서는 후속 Phase에서 의존성 wiring과 동일하게 정렬.
-new NetworkStack(app, `${prefix}-Network`, { env });
-new DataStack(app, `${prefix}-Data`, { env });
+const network = new NetworkStack(app, `${prefix}-Network`, { env });
+new DataStack(app, `${prefix}-Data`, {
+  env,
+  vpc: network.vpc,
+  dataSubnets: network.dataSubnets,
+});
 new ClusterStack(app, `${prefix}-Cluster`, { env });
 new AgentCoreStack(app, `${prefix}-AgentCore`, { env });
 new AppServicesStack(app, `${prefix}-AppServices`, { env });

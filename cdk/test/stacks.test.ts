@@ -1,4 +1,5 @@
-// Phase 1 골격 테스트 — 모든 스택이 빈 템플릿으로라도 합성되는지 확인.
+// 스택 골격 테스트 — 8개 스택이 합성 단계에서 예외 없이 인스턴스화되는지 확인.
+// 의존성이 있는 스택은 NetworkStack 결과를 wiring하여 검증한다.
 import * as cdk from "aws-cdk-lib";
 import { NetworkStack } from "../lib/stacks/network-stack";
 import { DataStack } from "../lib/stacks/data-stack";
@@ -9,12 +10,15 @@ import { EdgeStack } from "../lib/stacks/edge-stack";
 import { SchedulerStack } from "../lib/stacks/scheduler-stack";
 import { ObservabilityStack } from "../lib/stacks/observability-stack";
 
-describe("Phase 1: stack skeleton", () => {
+describe("스택 골격", () => {
   it("모든 8개 스택이 합성 단계에서 예외 없이 인스턴스화된다", () => {
     const app = new cdk.App();
     const env: cdk.Environment = { account: "111111111111", region: "us-east-1" };
-    expect(() => new NetworkStack(app, "Network", { env })).not.toThrow();
-    expect(() => new DataStack(app, "Data", { env })).not.toThrow();
+    const network = new NetworkStack(app, "Network", { env });
+    expect(network).toBeDefined();
+    expect(
+      () => new DataStack(app, "Data", { env, vpc: network.vpc, dataSubnets: network.dataSubnets }),
+    ).not.toThrow();
     expect(() => new ClusterStack(app, "Cluster", { env })).not.toThrow();
     expect(() => new AgentCoreStack(app, "AgentCore", { env })).not.toThrow();
     expect(() => new AppServicesStack(app, "AppServices", { env })).not.toThrow();
