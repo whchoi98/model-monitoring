@@ -107,25 +107,28 @@ feat(v2): add ClusterStack with ECS, ECR, and KMS key
 
 ---
 
-## Phase 5 — AgentCoreStack
+## Phase 5 — AgentCoreStack (범위 축소: Memory만)
+
+**범위 결정**
+- AgentCore Runtime의 CfnRuntime L1은 별도 agent 컨테이너 이미지(ECR)를 요구하므로 본 Phase에서 제외.
+- backend ECS가 boto3/Strands SDK로 Bedrock + AgentCore Memory를 직접 호출.
+- Runtime + Gateway tool targets은 후속 Phase로 이연 (필요 시 별도 Phase 5b 신설).
 
 **산출물**
-- [ ] `cdk/lib/stacks/agentcore-stack.ts`
-- [ ] AgentCore Memory resource (`Cfn`*Memory L1 — L2 미출시 시)
-- [ ] AgentCore Agent Runtime (모델: `us.anthropic.claude-sonnet-4-6`)
-- [ ] AgentCore Gateway with 4 tool targets (`get_latest_results`, `get_trend`, `compare_models`, `optimize_prompt`)
-- [ ] Tool target은 backend `/api/agent/tool/*`를 가리키도록 구성 (HTTP target with IAM SigV4 trust)
-- [ ] IAM Role: AgentCoreExecutionRole
-- [ ] SSM SecureString: `AGENTCORE_AGENT_ID`, `AGENTCORE_MEMORY_ID`
-- [ ] CfnOutput: agentId, memoryId, gatewayUrl
+- [x] `cdk/lib/stacks/agentcore-stack.ts`
+- [x] `CfnMemory` (eventExpiryDuration 30일)
+- [x] IAM Managed Policy `BedrockMonitorAgentCoreMemoryAccess` (Memory ARN scope)
+- [x] SSM Parameter `/bedrock-monitor/agentcore-memory-id`
+- [x] CfnOutput: memoryId, memoryArn, policyArn, paramName
+- [ ] (이연) AgentCore Runtime + Gateway + tool targets
 
 **검증**
 - `make verify` PASS
-- `cdk-nag`에 AgentCore IAM 정책 wildcard 위반 없는지 확인
+- AgentCore IAM 정책 wildcard는 Memory ARN sub-resource에 한정 (cdk-nag 명시적 suppress).
 
 **커밋 메시지**
 ```
-feat(v2): add AgentCoreStack with Memory, Runtime, and 4 tools
+feat(v2): add AgentCoreStack with Memory and backend access policy (Runtime deferred)
 ```
 
 ---
