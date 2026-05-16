@@ -33,7 +33,7 @@ new DataStack(app, `${prefix}-Data`, {
   vpc: network.vpc,
   dataSubnets: network.dataSubnets,
 });
-new ClusterStack(app, `${prefix}-Cluster`, { env });
+new ClusterStack(app, `${prefix}-Cluster`, { env, vpc: network.vpc });
 new AgentCoreStack(app, `${prefix}-AgentCore`, { env });
 new AppServicesStack(app, `${prefix}-AppServices`, { env });
 new EdgeStack(app, `${prefix}-Edge`, { env });

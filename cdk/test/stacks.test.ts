@@ -19,7 +19,7 @@ describe("스택 골격", () => {
     expect(
       () => new DataStack(app, "Data", { env, vpc: network.vpc, dataSubnets: network.dataSubnets }),
     ).not.toThrow();
-    expect(() => new ClusterStack(app, "Cluster", { env })).not.toThrow();
+    expect(() => new ClusterStack(app, "Cluster", { env, vpc: network.vpc })).not.toThrow();
     expect(() => new AgentCoreStack(app, "AgentCore", { env })).not.toThrow();
     expect(() => new AppServicesStack(app, "AppServices", { env })).not.toThrow();
     expect(() => new EdgeStack(app, "Edge", { env })).not.toThrow();
