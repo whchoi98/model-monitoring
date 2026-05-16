@@ -90,3 +90,36 @@ export interface TrendPoint {
   tps: number | null;
   status: string;
 }
+
+// ---------------------------------------------------------------------------
+// Chat + Insights (v2)
+// ---------------------------------------------------------------------------
+
+export type ChatRole = "user" | "assistant";
+
+export interface ChatMessage {
+  id: string;
+  role: ChatRole;
+  text: string;
+  /** assistant 메시지 도중 발생한 tool 호출 (UI badge 용도). */
+  toolCalls?: { name: string; input: unknown }[];
+}
+
+export interface ChatStreamEvents {
+  onDelta?: (text: string) => void;
+  onToolCall?: (call: { name: string; input: unknown; toolUseId: string }) => void;
+  onUsage?: (usage: Record<string, unknown>) => void;
+  onWarning?: (message: string) => void;
+  /** 정상/예외 모두에서 정확히 1회 호출됨 (backend의 final 이벤트). */
+  onFinal?: (payload: { ok: boolean; error?: string; session_id?: string }) => void;
+  onError?: (err: Error) => void;
+}
+
+export interface Insight {
+  id: number;
+  window_start: string;
+  window_end: string;
+  summary_md: string;
+  model_breakdown: Record<string, unknown> | null;
+  created_at: string;
+}

@@ -7,6 +7,8 @@ import {
   AutoProbeStatus,
   TrendPoint,
   AuthUser,
+  ChatStreamEvents,
+  Insight,
 } from "./types";
 
 const BASE = "";
@@ -274,4 +276,109 @@ export function runProbe(
   })();
 
   return controller;
+}
+
+// --- Chat (v2) ---
+
+/** /api/chat/stream SSE — backend의 'delta', 'tool_call', 'final' 이벤트를 콜백으로 라우팅. */
+export function chatStream(
+  body: { message: string; session_id?: string | null },
+  callbacks: ChatStreamEvents,
+): AbortController {
+  const controller = new AbortController();
+
+  (async () => {
+    try {
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+        Accept: "text/event-stream",
+      };
+      const token = getToken();
+      if (token) headers["Authorization"] = `Bearer ${token}`;
+
+      const res = await fetch(`${BASE}/api/chat/stream`, {
+        method: "POST",
+        headers,
+        body: JSON.stringify(body),
+        signal: controller.signal,
+      });
+      if (!res.ok || !res.body) {
+        throw new Error(`chat stream failed: ${res.status}`);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = "";
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE 이벤트는 빈 줄(\n\n)로 분리됨.
+        let sep = buffer.indexOf("\n\n");
+        while (sep !== -1) {
+          const block = buffer.slice(0, sep);
+          buffer = buffer.slice(sep + 2);
+          sep = buffer.indexOf("\n\n");
+
+          let eventType = "message";
+          let dataLine = "";
+          for (const line of block.split("\n")) {
+            if (line.startsWith("event:")) eventType = line.slice(6).trim();
+            else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+          }
+          if (!dataLine) continue;
+
+          try {
+            const parsed = JSON.parse(dataLine);
+            switch (eventType) {
+              case "delta":
+                callbacks.onDelta?.(parsed.text ?? "");
+                break;
+              case "tool_call":
+                callbacks.onToolCall?.(parsed);
+                break;
+              case "usage":
+                callbacks.onUsage?.(parsed);
+                break;
+              case "warning":
+                callbacks.onWarning?.(parsed.message ?? "");
+                break;
+              case "final":
+                callbacks.onFinal?.(parsed);
+                break;
+              case "error":
+                callbacks.onError?.(new Error(parsed.message ?? "unknown"));
+                break;
+              default:
+                // user / usage 등 무시
+                break;
+            }
+          } catch {
+            // skip unparseable events
+          }
+        }
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === "AbortError") return;
+      callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+    }
+  })();
+
+  return controller;
+}
+
+// --- Insights (v2) ---
+
+export async function fetchLatestInsight(): Promise<Insight | null> {
+  const res = await fetch(`${BASE}/api/insights/latest`);
+  if (!res.ok) throw new Error(`fetchLatestInsight failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchInsights(limit: number = 10): Promise<Insight[]> {
+  const res = await fetch(`${BASE}/api/insights?limit=${limit}`);
+  if (!res.ok) throw new Error(`fetchInsights failed: ${res.statusText}`);
+  return res.json();
 }

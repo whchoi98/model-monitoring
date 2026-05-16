@@ -8,6 +8,7 @@ import { useT } from "@/lib/i18n-context";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import ModelStatusGrid from "./ModelStatusGrid";
 import TrendChart from "./TrendChart";
+import InsightsPanel from "./InsightsPanel";
 
 function formatRelativeTime(isoString: string | null, t: Translations): string {
   if (!isoString) return "-";
@@ -170,6 +171,9 @@ export default function AutoDashboard() {
 
       {hasData ? (
         <>
+          {/* AI 인사이트 패널 (insights_runner 30분 잡 결과) */}
+          <InsightsPanel />
+
           {/* Model Status Grid */}
           <ModelStatusGrid results={results} />
 

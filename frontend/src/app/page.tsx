@@ -16,6 +16,7 @@ import HistoryPanel from "@/components/HistoryPanel";
 import ProgressBar from "@/components/ProgressBar";
 import AutoDashboard from "@/components/AutoDashboard";
 import LoginForm from "@/components/LoginForm";
+import FloatingChat from "@/components/chat/FloatingChat";
 
 const DEFAULT_CONFIG: ProbeConfig = {
   model_ids: [],
@@ -370,6 +371,9 @@ function HomeContent() {
 
       {/* History Panel */}
       <HistoryPanel isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
+
+      {/* FloatingChat — 인증된 사용자만 챗봇 사용 가능 (panel 내부에서 한 번 더 확인). */}
+      {user && <FloatingChat />}
     </div>
   );
 }

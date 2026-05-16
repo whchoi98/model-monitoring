@@ -10,6 +10,7 @@ venv/
 # Node.js
 node_modules/
 .next/
+*.tsbuildinfo
 
 # AWS CDK
 cdk.out/
