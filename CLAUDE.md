@@ -6,6 +6,19 @@
 
 **Bedrock LLM 모니터** — AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로 모니터링하는 대시보드.
 
+### v2 (현재) — CDK + ECS Fargate + AgentCore 챗봇
+
+- **Backend**: FastAPI + SQLAlchemy + RDS PostgreSQL 16 (t4g.micro, Single-AZ) + AgentCore Memory
+- **Frontend**: Next.js 14 standalone + React 18 + Tailwind + Recharts + react-markdown + FloatingChat
+- **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
+- **Edge**: CloudFront VPC Origin → Internal ALB (HTTPS-only) → ECS Fargate × 2
+- **Scheduling**: EventBridge Scheduler → AutoProber(5min) + Insights(30min) Fargate Tasks
+- **AI**: Claude Sonnet 4.6 챗봇 (4 tools), 30분 인사이트 잡
+
+자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/).
+
+### v1 (legacy, 본 문서 하단 — 점진적으로 정리 중)
+
 - **Backend**: FastAPI + SQLAlchemy ORM + PostgreSQL 16 (Docker)
 - **Frontend**: Next.js 14 + React 18 + Tailwind CSS + Recharts
 - **Infra**: EC2 (Amazon Linux 2023) + CloudFront + ALB + systemd

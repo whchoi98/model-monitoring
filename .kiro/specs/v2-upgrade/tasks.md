@@ -317,20 +317,20 @@ feat(v2): add EC2 fallback construct for non-Fargate deployment
 ## Phase 13 — 문서화 + ADR
 
 **산출물**
-- [ ] `docs/architecture.md` — v2 다이어그램 + 한/영 병기
-- [ ] `docs/decisions/ADR-001-cloudfront-vpc-origin.md`
-- [ ] `docs/decisions/ADR-002-rds-single-az.md`
-- [ ] `docs/decisions/ADR-003-autoprober-decoupling.md`
-- [ ] `docs/decisions/ADR-004-alb-http-target.md`
-- [ ] `docs/decisions/ADR-005-acm-private-ca.md`
-- [ ] `docs/decisions/ADR-006-agentcore-managed.md`
-- [ ] `docs/decisions/ADR-007-sse-pattern.md`
-- [ ] `docs/decisions/ADR-008-cdk-typescript.md`
-- [ ] `docs/decisions/ADR-009-floating-chat-dual-mode.md`
-- [ ] `docs/runbooks/deploy.md`
-- [ ] `docs/runbooks/rollback.md`
-- [ ] `README.md` v2 섹션 추가 (`docker build && cdk deploy --all`)
-- [ ] `CLAUDE.md` v2 갱신 (RDS, AgentCore, 챗봇, Scheduler 추가)
+- [x] `docs/architecture.md` — v2 다이어그램 + 한/영 병기
+- [x] `docs/decisions/ADR-001-cloudfront-vpc-origin.md`
+- [x] `docs/decisions/ADR-002-rds-single-az.md`
+- [x] `docs/decisions/ADR-003-autoprober-decoupling.md`
+- [x] `docs/decisions/ADR-004-alb-http-target.md`
+- [x] `docs/decisions/ADR-005-acm-private-ca.md`
+- [x] `docs/decisions/ADR-006-agentcore-managed.md`
+- [x] `docs/decisions/ADR-007-sse-pattern.md`
+- [x] `docs/decisions/ADR-008-cdk-typescript.md`
+- [x] `docs/decisions/ADR-009-floating-chat-dual-mode.md`
+- [x] `docs/runbooks/deploy.md`
+- [x] `docs/runbooks/rollback.md`
+- [x] `README.md` v2 섹션 추가
+- [x] `CLAUDE.md` v2 갱신 (RDS, AgentCore, 챗봇, Scheduler 추가)
 
 **검증**
 - 문서 링크 깨짐 없음 (`grep -RE '\\]\\([^)]+\\.md\\)' docs/`)

@@ -2,6 +2,9 @@
 
 AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로 모니터링하는 대시보드입니다.
 
+> ⚡ **v2 — CDK TypeScript + ECS Fargate + CloudFront VPC Origin + AgentCore + 챗봇**.
+> 설계: [`docs/architecture.md`](./docs/architecture.md) · 배포/롤백: [`docs/runbooks/`](./docs/runbooks/) · ADR: [`docs/decisions/`](./docs/decisions/) · 스펙: [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/)
+
 ![Stack](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
 ![Stack](https://img.shields.io/badge/Next.js_14-000000?style=flat&logo=next.js&logoColor=white)
 ![Stack](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
