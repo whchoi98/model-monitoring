@@ -11,6 +11,17 @@ venv/
 node_modules/
 .next/
 
+# AWS CDK
+cdk.out/
+cdk.context.json
+# tsc 컴파일 산출물 (ts-node 사용으로 평상시엔 생성되지 않음, 방어적으로 제외)
+cdk/bin/**/*.js
+cdk/bin/**/*.d.ts
+cdk/lib/**/*.js
+cdk/lib/**/*.d.ts
+cdk/test/**/*.js
+cdk/test/**/*.d.ts
+
 # Database
 *.db
 *.sqlite3

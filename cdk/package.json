@@ -1,0 +1,37 @@
+{
+  "name": "model-monitoring-cdk",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK v2 TypeScript infrastructure for Bedrock LLM Monitor",
+  "bin": {
+    "model-monitoring-cdk": "bin/app.js"
+  },
+  "scripts": {
+    "build": "tsc",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --ext .ts",
+    "synth": "cdk synth --all --quiet",
+    "diff": "cdk diff --all",
+    "deploy": "cdk deploy --all --require-approval never",
+    "test": "jest",
+    "nag": "cdk synth --all --quiet"
+  },
+  "devDependencies": {
+    "@types/jest": "^29.5.12",
+    "@types/node": "^20.11.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "aws-cdk": "^2.150.0",
+    "eslint": "^8.57.0",
+    "jest": "^29.7.0",
+    "ts-jest": "^29.1.2",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.150.0",
+    "cdk-nag": "^2.28.0",
+    "constructs": "^10.3.0",
+    "source-map-support": "^0.5.21"
+  }
+}
