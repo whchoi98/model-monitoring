@@ -116,4 +116,44 @@ describe("AppServicesStack", () => {
   it("Auto Scaling Target이 2개 (frontend / backend)", () => {
     template.resourceCountIs("AWS::ApplicationAutoScaling::ScalableTarget", 2);
   });
+
+  it("Internal ALB가 1개 생성된다 (Scheme=internal)", () => {
+    template.resourceCountIs("AWS::ElasticLoadBalancingV2::LoadBalancer", 1);
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", Match.objectLike({
+      Scheme: "internal",
+    }));
+  });
+
+  it("HTTPS:443 listener가 1개 존재하고 HTTP:80은 없다", () => {
+    template.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 1);
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike({
+      Port: 443,
+      Protocol: "HTTPS",
+    }));
+    template.resourcePropertiesCountIs(
+      "AWS::ElasticLoadBalancingV2::Listener",
+      { Port: 80 },
+      0,
+    );
+  });
+
+  it("Listener Rule /api/* → priority 10 (backend TG forward)", () => {
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::ListenerRule", Match.objectLike({
+      Priority: 10,
+      Conditions: Match.arrayWith([
+        Match.objectLike({
+          Field: "path-pattern",
+          PathPatternConfig: Match.objectLike({ Values: ["/api/*"] }),
+        }),
+      ]),
+    }));
+  });
+
+  it("ALB drop_invalid_header_fields가 활성화된다", () => {
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::LoadBalancer", Match.objectLike({
+      LoadBalancerAttributes: Match.arrayWith([
+        Match.objectLike({ Key: "routing.http.drop_invalid_header_fields.enabled", Value: "true" }),
+      ]),
+    }));
+  });
 });

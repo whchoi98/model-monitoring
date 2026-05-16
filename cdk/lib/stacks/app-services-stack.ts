@@ -1,19 +1,24 @@
-// AppServicesStack — frontend / backend Fargate Service 2개 + IAM 4개 + SG 매트릭스 + TG 2개.
+// AppServicesStack — frontend / backend Fargate Service 2개 + IAM 4개 + SG 매트릭스 + TG 2개 +
+// Internal ALB (HTTPS only) + ALB access logs S3 bucket.
+//
+// ALB가 본 스택에 함께 있는 이유:
+//   - ECS Service.attachToApplicationTargetGroup이 Listener 생성에 자동 의존성을 추가하여
+//     ALB를 별도 스택에 두면 순환 참조가 발생.
+//   - 같은 스택에 두면 CDK가 단일 스택 내 dependency tree로 자연스럽게 해결.
 //
 // 주요 흐름:
 //   - DataStack의 dbSecurityGroup에 backend SG로부터 5432 ingress 추가 (cross-stack).
 //   - AgentCoreStack의 memoryAccessPolicy를 BackendTaskRole에 attach.
-//   - SG 매트릭스:
-//       sg-frontend: ingress = ALB SG → 3000 (EdgeStack/Phase 7에서 추가)
-//       sg-backend : ingress = ALB SG → 8000 (EdgeStack/Phase 7에서 추가)
-//                    egress  = RDS SG 5432, 443 (AWS API)
+//   - ALB SG → backend/frontend SG ingress는 본 스택 내에서 추가 (cycle 없음).
 //   - 컨테이너 이미지: ECR 'latest' tag (배포 시점에 사전 push 필요).
 import * as cdk from "aws-cdk-lib";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
 import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as iam from "aws-cdk-lib/aws-iam";
+import * as s3 from "aws-cdk-lib/aws-s3";
 import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import { NagSuppressions } from "cdk-nag";
@@ -31,6 +36,8 @@ export interface AppServicesStackProps extends cdk.StackProps {
   readonly jwtSecretParam: ssm.IStringParameter;
   readonly agentCoreMemoryAccessPolicy: iam.IManagedPolicy;
   readonly agentCoreMemoryIdParam: ssm.IStringParameter;
+  /** ALB internal HTTPS listener용 ACM Private CA 인증서 ARN. 미주입 시 synth용 placeholder. */
+  readonly albCertificateArn?: string;
 }
 
 export class AppServicesStack extends cdk.Stack {
@@ -38,6 +45,11 @@ export class AppServicesStack extends cdk.Stack {
   public readonly frontend: FargateServiceConstruct;
   public readonly backendTargetGroup: elbv2.IApplicationTargetGroup;
   public readonly frontendTargetGroup: elbv2.IApplicationTargetGroup;
+  public readonly backendSecurityGroup: ec2.ISecurityGroup;
+  public readonly frontendSecurityGroup: ec2.ISecurityGroup;
+  public readonly alb: elbv2.ApplicationLoadBalancer;
+  public readonly albSecurityGroup: ec2.SecurityGroup;
+  public readonly albLogsBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: AppServicesStackProps) {
     super(scope, id, props);
@@ -125,6 +137,76 @@ export class AppServicesStack extends cdk.Stack {
 
     this.backendTargetGroup = this.backend.targetGroup;
     this.frontendTargetGroup = this.frontend.targetGroup;
+    this.backendSecurityGroup = this.backend.securityGroup;
+    this.frontendSecurityGroup = this.frontend.securityGroup;
+
+    // ---------------------------------------------------------------------
+    // Internal ALB — HTTPS:443 only. ALB SG는 본 스택에서 생성하고 backend/frontend
+    // SG에 cross-construct ingress 추가 (같은 스택이라 cycle 없음).
+    // ---------------------------------------------------------------------
+    this.albSecurityGroup = new ec2.SecurityGroup(this, "AlbSg", {
+      vpc: props.vpc,
+      description: "Internal ALB SG — inbound from CloudFront VPC Origin only",
+      allowAllOutbound: false,
+    });
+    this.albSecurityGroup.addEgressRule(
+      this.backend.securityGroup,
+      ec2.Port.tcp(8000),
+      "ALB → Backend",
+    );
+    this.albSecurityGroup.addEgressRule(
+      this.frontend.securityGroup,
+      ec2.Port.tcp(3000),
+      "ALB → Frontend",
+    );
+    this.backend.securityGroup.addIngressRule(
+      this.albSecurityGroup,
+      ec2.Port.tcp(8000),
+      "Internal ALB → Backend",
+    );
+    this.frontend.securityGroup.addIngressRule(
+      this.albSecurityGroup,
+      ec2.Port.tcp(3000),
+      "Internal ALB → Frontend",
+    );
+
+    // ALB access logs S3 bucket.
+    this.albLogsBucket = new s3.Bucket(this, "AlbLogsBucket", {
+      bucketName: `bedrock-monitor-alb-logs-${this.account}-${this.region}`,
+      encryption: s3.BucketEncryption.S3_MANAGED,
+      blockPublicAccess: s3.BlockPublicAccess.BLOCK_ALL,
+      enforceSSL: true,
+      lifecycleRules: [{ expiration: cdk.Duration.days(90) }],
+      removalPolicy: cdk.RemovalPolicy.RETAIN,
+    });
+
+    this.alb = new elbv2.ApplicationLoadBalancer(this, "InternalAlb", {
+      vpc: props.vpc,
+      internetFacing: false,
+      vpcSubnets: props.appSubnets,
+      securityGroup: this.albSecurityGroup,
+      dropInvalidHeaderFields: true,
+    });
+    this.alb.logAccessLogs(this.albLogsBucket, "alb");
+
+    // 인증서 — context 미주입 시 placeholder (synth만 가능, deploy 시 실 cert 필요).
+    const albCertArn =
+      props.albCertificateArn ??
+      `arn:aws:acm:${this.region}:${this.account}:certificate/00000000-0000-0000-0000-000000000000`;
+    const albCert = acm.Certificate.fromCertificateArn(this, "AlbCert", albCertArn);
+
+    const httpsListener = this.alb.addListener("HttpsListener", {
+      port: 443,
+      protocol: elbv2.ApplicationProtocol.HTTPS,
+      sslPolicy: elbv2.SslPolicy.TLS13_RES,
+      certificates: [albCert],
+      defaultAction: elbv2.ListenerAction.forward([this.frontendTargetGroup]),
+    });
+    httpsListener.addAction("ApiRoute", {
+      priority: 10,
+      conditions: [elbv2.ListenerCondition.pathPatterns(["/api/*"])],
+      action: elbv2.ListenerAction.forward([this.backendTargetGroup]),
+    });
 
     // ---------------------------------------------------------------------
     // SG cross-stack ingress — backend SG → RDS SG :5432.
@@ -191,6 +273,16 @@ export class AppServicesStack extends cdk.Stack {
           "TaskExecutionRole's DefaultPolicy auto-grants ECR/Logs/Secrets read on resources that are dynamically created by ECS (image layers, log streams, secret versions). Scope is bounded by the role's trust policy.",
         appliesTo: ["Resource::*"],
       },
+      {
+        id: "AwsSolutions-EC23",
+        reason:
+          "ALB is internal scheme — the 0.0.0.0/0 rule auto-added by HTTPS listener is restricted to traffic within the VPC and reachable only via CloudFront VPC Origin ENIs in EdgeStack. AWS does not allow us to restrict the ALB SG to a specific VPC Origin SG.",
+      },
+      {
+        id: "AwsSolutions-S1",
+        reason:
+          "ALB access logs bucket stores logs FROM the ALB; enabling its own S3 server access logs would create a recursive sink. ALB access logging is sufficient observability.",
+      },
     ]);
 
     // ---------------------------------------------------------------------
@@ -210,5 +302,8 @@ export class AppServicesStack extends cdk.Stack {
     new cdk.CfnOutput(this, "FrontendSgId", {
       value: this.frontend.securityGroup.securityGroupId,
     });
+    new cdk.CfnOutput(this, "AlbDns", { value: this.alb.loadBalancerDnsName });
+    new cdk.CfnOutput(this, "AlbArn", { value: this.alb.loadBalancerArn });
+    new cdk.CfnOutput(this, "AlbSgId", { value: this.albSecurityGroup.securityGroupId });
   }
 }

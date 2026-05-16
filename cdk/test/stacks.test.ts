@@ -21,23 +21,22 @@ describe("스택 골격", () => {
     });
     const cluster = new ClusterStack(app, "Cluster", { env, vpc: network.vpc });
     const agentCore = new AgentCoreStack(app, "AgentCore", { env });
+    const appServices = new AppServicesStack(app, "AppServices", {
+      env,
+      vpc: network.vpc,
+      appSubnets: network.appSubnets,
+      cluster: cluster.cluster,
+      backendRepo: cluster.backendRepo,
+      frontendRepo: cluster.frontendRepo,
+      dbSecret: data.dbSecret,
+      dbSecurityGroup: data.dbSecurityGroup,
+      jwtSecretParam: data.jwtSecretParam,
+      agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
+      agentCoreMemoryIdParam: agentCore.memoryIdParam,
+    });
     expect(
-      () =>
-        new AppServicesStack(app, "AppServices", {
-          env,
-          vpc: network.vpc,
-          appSubnets: network.appSubnets,
-          cluster: cluster.cluster,
-          backendRepo: cluster.backendRepo,
-          frontendRepo: cluster.frontendRepo,
-          dbSecret: data.dbSecret,
-          dbSecurityGroup: data.dbSecurityGroup,
-          jwtSecretParam: data.jwtSecretParam,
-          agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
-          agentCoreMemoryIdParam: agentCore.memoryIdParam,
-        }),
+      () => new EdgeStack(app, "Edge", { env, alb: appServices.alb }),
     ).not.toThrow();
-    expect(() => new EdgeStack(app, "Edge", { env })).not.toThrow();
     expect(() => new SchedulerStack(app, "Scheduler", { env })).not.toThrow();
     expect(() => new ObservabilityStack(app, "Observability", { env })).not.toThrow();
   });

@@ -37,7 +37,7 @@ const cluster = new ClusterStack(app, `${prefix}-Cluster`, { env, vpc: network.v
 
 const agentCore = new AgentCoreStack(app, `${prefix}-AgentCore`, { env });
 
-new AppServicesStack(app, `${prefix}-AppServices`, {
+const appServices = new AppServicesStack(app, `${prefix}-AppServices`, {
   env,
   vpc: network.vpc,
   appSubnets: network.appSubnets,
@@ -49,9 +49,13 @@ new AppServicesStack(app, `${prefix}-AppServices`, {
   jwtSecretParam: data.jwtSecretParam,
   agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
   agentCoreMemoryIdParam: agentCore.memoryIdParam,
+  albCertificateArn: app.node.tryGetContext("albCertificateArn") as string | undefined,
 });
 
-new EdgeStack(app, `${prefix}-Edge`, { env });
+new EdgeStack(app, `${prefix}-Edge`, {
+  env,
+  alb: appServices.alb,
+});
 new SchedulerStack(app, `${prefix}-Scheduler`, { env });
 new ObservabilityStack(app, `${prefix}-Observability`, { env });
 
