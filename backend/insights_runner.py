@@ -1,0 +1,166 @@
+"""인사이트 도출 잡 — EventBridge Scheduler가 30분마다 호출.
+
+흐름:
+  1. 최근 N시간(기본 6h) ProbeResult 로드.
+  2. 모델별 stats 계산 (avg/p50/p95/err_rate).
+  3. Sonnet 4.6에 요약 프롬프트 + stats를 전달, 마크다운 요약 수신.
+  4. Insight 테이블에 INSERT.
+
+ECS Task Definition CMD:
+  python -m insights_runner --window 6h
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import logging
+import re
+import sys
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List
+
+from database import SessionLocal
+from models import Insight, ProbeResult, ProbeRun
+
+logger = logging.getLogger(__name__)
+
+
+def parse_window(spec: str) -> timedelta:
+    """'6h', '24h', '3d' 같은 입력 파싱."""
+    m = re.match(r"^(\d+)([hd])$", spec.strip().lower())
+    if not m:
+        raise ValueError("--window는 '6h', '24h', '3d' 형식이어야 합니다")
+    n = int(m.group(1))
+    unit = m.group(2)
+    return timedelta(hours=n) if unit == "h" else timedelta(days=n)
+
+
+def compute_stats(rows: List[ProbeResult]) -> Dict[str, Any]:
+    """모델별 ttft/total_latency/tps 통계 + 에러율."""
+    by_model: Dict[str, List[ProbeResult]] = {}
+    for r in rows:
+        by_model.setdefault(r.model_name, []).append(r)
+
+    out: Dict[str, Dict[str, Any]] = {}
+    for name, items in by_model.items():
+        ok = [i for i in items if i.status == "success"]
+        err = [i for i in items if i.status != "success"]
+        total = len(items)
+
+        def _stats(values: List[float]) -> Dict[str, Any]:
+            if not values:
+                return {"n": 0}
+            s = sorted(values)
+            n = len(s)
+            return {
+                "n": n,
+                "avg": round(sum(s) / n, 2),
+                "p50": round(s[n // 2], 2),
+                "p95": round(s[min(n - 1, int(n * 0.95))], 2),
+                "max": round(s[-1], 2),
+            }
+
+        out[name] = {
+            "total": total,
+            "errors": len(err),
+            "error_rate": round(len(err) / total, 4) if total else 0.0,
+            "ttft_ms": _stats([i.ttft_ms for i in ok if i.ttft_ms is not None]),
+            "total_latency_ms": _stats(
+                [i.total_latency_ms for i in ok if i.total_latency_ms is not None]
+            ),
+            "tps": _stats([i.tps for i in ok if i.tps is not None]),
+        }
+    return out
+
+
+SUMMARY_SYSTEM = (
+    "당신은 AWS Bedrock LLM 성능 데이터를 분석하는 한국어 어시스턴트입니다. "
+    "수치는 그대로 인용하고, 추측하지 마세요. 마크다운 표를 활용해 핵심을 한눈에 보여주세요."
+)
+
+
+def summarize_with_bedrock(window_label: str, stats: Dict[str, Any]) -> str:
+    """Sonnet 4.6 호출 — 블로킹 converse() 사용 (배치 잡)."""
+    from agent.bedrock import converse_blocking, INSIGHTS_MODEL_ID
+
+    user_text = (
+        f"다음은 최근 {window_label} 동안의 Bedrock 모델 모니터링 통계입니다.\n"
+        f"각 모델의 성능과 에러율을 한국어로 요약하고, 눈에 띄는 이상 징후가 있다면 짚어 주세요.\n\n"
+        "```json\n"
+        f"{json.dumps(stats, ensure_ascii=False, indent=2)}\n"
+        "```\n\n"
+        "출력 형식: 마크다운. 첫 줄에 한 문장 요약, 이어서 모델별 표."
+    )
+    return converse_blocking(
+        messages=[{"role": "user", "content": [{"text": user_text}]}],
+        model_id=INSIGHTS_MODEL_ID,
+        system=SUMMARY_SYSTEM,
+        max_tokens=2048,
+        temperature=0.1,
+    )
+
+
+def main() -> int:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    parser = argparse.ArgumentParser(description="Insight 도출 잡 — 한 번 실행 후 종료")
+    parser.add_argument("--window", default="6h", help="분석 윈도우 (예: 6h, 24h, 3d)")
+    args = parser.parse_args()
+
+    try:
+        window = parse_window(args.window)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        return 2
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - window
+
+    db = SessionLocal()
+    try:
+        runs = (
+            db.query(ProbeRun)
+            .filter(
+                ProbeRun.is_auto == 1,
+                ProbeRun.status == "completed",
+                ProbeRun.created_at >= cutoff,
+            )
+            .all()
+        )
+        if not runs:
+            logger.info("최근 %s 동안 auto run 없음 — insight skip", args.window)
+            return 0
+
+        run_ids = [r.id for r in runs]
+        rows = db.query(ProbeResult).filter(ProbeResult.run_id.in_(run_ids)).all()
+        if not rows:
+            logger.info("ProbeResult 없음 — insight skip")
+            return 0
+
+        stats = compute_stats(rows)
+        summary = summarize_with_bedrock(args.window, stats)
+
+        insight = Insight(
+            window_start=cutoff,
+            window_end=now,
+            summary_md=summary,
+            model_breakdown=stats,
+        )
+        db.add(insight)
+        db.commit()
+        db.refresh(insight)
+        logger.info("insights_runner: insight id=%d 저장 (window=%s)", insight.id, args.window)
+    except Exception:
+        logger.exception("insights_runner 실패")
+        return 1
+    finally:
+        db.close()
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -72,3 +72,19 @@ class PromptSet(Base):
     temperature = Column(Float, default=0.1)
     max_tokens = Column(Integer, default=256)
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class Insight(Base):
+    """주기 잡(insights_runner)이 생성한 모니터링 인사이트 (Sonnet 4.6 요약).
+
+    한 row가 하나의 시간 윈도우에 대한 자연어 요약을 보관한다.
+    """
+
+    __tablename__ = "insights"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    window_start = Column(DateTime(timezone=True), nullable=False)
+    window_end = Column(DateTime(timezone=True), nullable=False)
+    summary_md = Column(Text, nullable=False)  # 마크다운 요약 본문
+    model_breakdown = Column(JSON, nullable=True)  # 모델별 stats 스냅샷
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

@@ -8,3 +8,6 @@ sse-starlette>=1.8.0
 passlib[bcrypt]>=1.7.0
 bcrypt>=4.0,<4.1
 python-jose[cryptography]>=3.3.0
+# Dev / test
+pytest>=8.0.0
+pytest-asyncio>=0.23.0

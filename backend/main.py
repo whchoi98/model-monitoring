@@ -9,11 +9,12 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 
-from auto_prober import auto_prober
 from database import create_tables, engine, SessionLocal
 from routers import models, probes, prompts, results
 from routers import auto_probe
 from routers import auth as auth_router
+from routers import chat as chat_router
+from routers import insights as insights_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -24,7 +25,11 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Application lifespan: run startup tasks before yielding, cleanup after."""
+    """Application lifespan: run startup tasks before yielding, cleanup after.
+
+    v2: 데몬 스레드 auto-prober는 EventBridge Scheduler + Fargate Task로 분리되어
+    여기서 시작하지 않는다. /api/auto-probe/trigger는 수동 호출시 in-process 실행.
+    """
     logger.info("Creating database tables...")
     create_tables()
 
@@ -38,9 +43,7 @@ async def lifespan(app: FastAPI):
     _seed_default_admin()
     logger.info("Database tables ready.")
 
-    auto_prober.start()
     yield
-    auto_prober.stop()
 
 
 def _seed_default_admin():
@@ -64,7 +67,7 @@ def _seed_default_admin():
 app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
-    version="1.0.0",
+    version="2.0.0",
     lifespan=lifespan,
 )
 
@@ -84,6 +87,8 @@ app.include_router(prompts.router)
 app.include_router(models.router)
 app.include_router(auto_probe.router)
 app.include_router(auth_router.router)
+app.include_router(chat_router.router)
+app.include_router(insights_router.router)
 
 
 @app.get("/api/health", tags=["health"])

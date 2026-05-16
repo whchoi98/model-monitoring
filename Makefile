@@ -15,7 +15,7 @@ help: ## 사용 가능한 타겟 목록을 출력
 # v2 자가검증
 # ----------------------------------------------------------------------
 .PHONY: verify
-verify: cdk-install cdk-lint cdk-typecheck cdk-test cdk-synth backend-lint frontend-lint ## CDK + 백엔드 + 프론트엔드 전체 검증
+verify: cdk-install cdk-lint cdk-typecheck cdk-test cdk-synth backend-lint backend-test frontend-lint ## CDK + 백엔드 + 프론트엔드 전체 검증
 	@echo "✓ make verify PASS"
 
 .PHONY: cdk-install
@@ -50,6 +50,14 @@ backend-lint: ## 백엔드 Python 정적 검사 (ruff 미설치 시 skip)
 		ruff check backend/; \
 	else \
 		echo "(skip) ruff 미설치 — 'pip install ruff'로 설치 권장"; \
+	fi
+
+.PHONY: backend-test
+backend-test: ## 백엔드 pytest 단위 테스트
+	@if command -v pytest >/dev/null 2>&1; then \
+		cd backend && pytest tests/ -q; \
+	else \
+		echo "(skip) pytest 미설치 — 'pip install pytest pytest-asyncio'"; \
 	fi
 
 .PHONY: frontend-lint
