@@ -43,6 +43,8 @@ export interface AppServicesStackProps extends cdk.StackProps {
 export class AppServicesStack extends cdk.Stack {
   public readonly backend: FargateServiceConstruct;
   public readonly frontend: FargateServiceConstruct;
+  public readonly backendService: ecs.FargateService;
+  public readonly frontendService: ecs.FargateService;
   public readonly backendTargetGroup: elbv2.IApplicationTargetGroup;
   public readonly frontendTargetGroup: elbv2.IApplicationTargetGroup;
   public readonly backendSecurityGroup: ec2.ISecurityGroup;
@@ -139,6 +141,8 @@ export class AppServicesStack extends cdk.Stack {
     this.frontendTargetGroup = this.frontend.targetGroup;
     this.backendSecurityGroup = this.backend.securityGroup;
     this.frontendSecurityGroup = this.frontend.securityGroup;
+    this.backendService = this.backend.service;
+    this.frontendService = this.frontend.service;
 
     // ---------------------------------------------------------------------
     // Internal ALB — HTTPS:443 only. ALB SG는 본 스택에서 생성하고 backend/frontend

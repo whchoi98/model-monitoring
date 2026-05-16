@@ -52,6 +52,16 @@ describe("스택 골격", () => {
           agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
         }),
     ).not.toThrow();
-    expect(() => new ObservabilityStack(app, "Observability", { env })).not.toThrow();
+    expect(
+      () =>
+        new ObservabilityStack(app, "Observability", {
+          env,
+          alb: appServices.alb,
+          cluster: cluster.cluster,
+          backendService: appServices.backendService,
+          frontendService: appServices.frontendService,
+          db: data.db,
+        }),
+    ).not.toThrow();
   });
 });

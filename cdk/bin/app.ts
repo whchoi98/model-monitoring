@@ -70,7 +70,15 @@ new SchedulerStack(app, `${prefix}-Scheduler`, {
   agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
 });
 
-new ObservabilityStack(app, `${prefix}-Observability`, { env });
+new ObservabilityStack(app, `${prefix}-Observability`, {
+  env,
+  alb: appServices.alb,
+  cluster: cluster.cluster,
+  backendService: appServices.backendService,
+  frontendService: appServices.frontendService,
+  db: data.db,
+  alarmEmail: app.node.tryGetContext("alarmEmail") as string | undefined,
+});
 
 // cdk-nag — 모든 스택에 AWS Solutions ruleset 적용.
 Aspects.of(app).add(new AwsSolutionsChecks({ verbose: true }));
