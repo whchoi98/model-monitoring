@@ -1,6 +1,5 @@
 #!/usr/bin/env node
 // CDK 진입점 — 모든 스택을 등록하고 cdk-nag aspect를 적용한다.
-// Phase 1: 빈 스택 8개 골격. 스택 간 props wiring은 각 Phase에서 추가.
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
 import { Aspects } from "aws-cdk-lib";
@@ -23,19 +22,35 @@ const env: cdk.Environment = {
   region: process.env.CDK_DEFAULT_REGION ?? "us-east-1",
 };
 
-// 공통 prefix — 다중 스택 deploy 시 리소스 이름 충돌 방지.
 const prefix = "BedrockMonitor";
 
-// 스택 등록 순서는 후속 Phase에서 의존성 wiring과 동일하게 정렬.
+// 스택 의존성: Network → Data → Cluster → AgentCore → AppServices → Edge → Scheduler → Observability
 const network = new NetworkStack(app, `${prefix}-Network`, { env });
-new DataStack(app, `${prefix}-Data`, {
+
+const data = new DataStack(app, `${prefix}-Data`, {
   env,
   vpc: network.vpc,
   dataSubnets: network.dataSubnets,
 });
-new ClusterStack(app, `${prefix}-Cluster`, { env, vpc: network.vpc });
-new AgentCoreStack(app, `${prefix}-AgentCore`, { env });
-new AppServicesStack(app, `${prefix}-AppServices`, { env });
+
+const cluster = new ClusterStack(app, `${prefix}-Cluster`, { env, vpc: network.vpc });
+
+const agentCore = new AgentCoreStack(app, `${prefix}-AgentCore`, { env });
+
+new AppServicesStack(app, `${prefix}-AppServices`, {
+  env,
+  vpc: network.vpc,
+  appSubnets: network.appSubnets,
+  cluster: cluster.cluster,
+  backendRepo: cluster.backendRepo,
+  frontendRepo: cluster.frontendRepo,
+  dbSecret: data.dbSecret,
+  dbSecurityGroup: data.dbSecurityGroup,
+  jwtSecretParam: data.jwtSecretParam,
+  agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
+  agentCoreMemoryIdParam: agentCore.memoryIdParam,
+});
+
 new EdgeStack(app, `${prefix}-Edge`, { env });
 new SchedulerStack(app, `${prefix}-Scheduler`, { env });
 new ObservabilityStack(app, `${prefix}-Observability`, { env });

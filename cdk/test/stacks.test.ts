@@ -1,5 +1,4 @@
 // 스택 골격 테스트 — 8개 스택이 합성 단계에서 예외 없이 인스턴스화되는지 확인.
-// 의존성이 있는 스택은 NetworkStack 결과를 wiring하여 검증한다.
 import * as cdk from "aws-cdk-lib";
 import { NetworkStack } from "../lib/stacks/network-stack";
 import { DataStack } from "../lib/stacks/data-stack";
@@ -15,13 +14,29 @@ describe("스택 골격", () => {
     const app = new cdk.App();
     const env: cdk.Environment = { account: "111111111111", region: "us-east-1" };
     const network = new NetworkStack(app, "Network", { env });
-    expect(network).toBeDefined();
+    const data = new DataStack(app, "Data", {
+      env,
+      vpc: network.vpc,
+      dataSubnets: network.dataSubnets,
+    });
+    const cluster = new ClusterStack(app, "Cluster", { env, vpc: network.vpc });
+    const agentCore = new AgentCoreStack(app, "AgentCore", { env });
     expect(
-      () => new DataStack(app, "Data", { env, vpc: network.vpc, dataSubnets: network.dataSubnets }),
+      () =>
+        new AppServicesStack(app, "AppServices", {
+          env,
+          vpc: network.vpc,
+          appSubnets: network.appSubnets,
+          cluster: cluster.cluster,
+          backendRepo: cluster.backendRepo,
+          frontendRepo: cluster.frontendRepo,
+          dbSecret: data.dbSecret,
+          dbSecurityGroup: data.dbSecurityGroup,
+          jwtSecretParam: data.jwtSecretParam,
+          agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
+          agentCoreMemoryIdParam: agentCore.memoryIdParam,
+        }),
     ).not.toThrow();
-    expect(() => new ClusterStack(app, "Cluster", { env, vpc: network.vpc })).not.toThrow();
-    expect(() => new AgentCoreStack(app, "AgentCore", { env })).not.toThrow();
-    expect(() => new AppServicesStack(app, "AppServices", { env })).not.toThrow();
     expect(() => new EdgeStack(app, "Edge", { env })).not.toThrow();
     expect(() => new SchedulerStack(app, "Scheduler", { env })).not.toThrow();
     expect(() => new ObservabilityStack(app, "Observability", { env })).not.toThrow();
