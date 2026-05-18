@@ -17,9 +17,9 @@ from botocore.exceptions import ClientError
 
 logger = logging.getLogger(__name__)
 
-# 챗봇 기본 모델 — C-8.
-CHAT_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
-INSIGHTS_MODEL_ID = "us.anthropic.claude-sonnet-4-6"
+# 챗봇 기본 모델 — Seoul deployment에서는 global inference profile 사용.
+CHAT_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+INSIGHTS_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
 
 
 def _client():

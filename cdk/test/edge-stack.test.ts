@@ -44,9 +44,16 @@ describe("EdgeStack", () => {
     template.resourceCountIs("AWS::CloudFront::Distribution", 1);
   });
 
-  it("CloudFront VPC Origin 리소스가 https-only protocol을 사용한다", () => {
-    template.hasResourceProperties("AWS::CloudFront::VpcOrigin", Match.objectLike({
-      VpcOriginEndpointConfig: Match.objectLike({ OriginProtocolPolicy: "https-only" }),
+  it("CloudFront → ALB origin은 CustomOrigin + HTTPS_ONLY protocol을 사용한다", () => {
+    // LoadBalancerV2Origin은 Distribution 내부 CustomOriginConfig로 인라인 등록됨.
+    template.hasResourceProperties("AWS::CloudFront::Distribution", Match.objectLike({
+      DistributionConfig: Match.objectLike({
+        Origins: Match.arrayWith([
+          Match.objectLike({
+            CustomOriginConfig: Match.objectLike({ OriginProtocolPolicy: "https-only" }),
+          }),
+        ]),
+      }),
     }));
   });
 

@@ -16,15 +16,20 @@ import { ObservabilityStack } from "../lib/stacks/observability-stack";
 
 const app = new cdk.App();
 
-// 배포 환경 — Bedrock + AgentCore + 모든 인프라가 us-east-1 단일 리전.
+// 배포 환경 — Bedrock + AgentCore + 모든 인프라가 ap-northeast-2 (Seoul).
+// 모니터링 대상 모델은 global.* / apac.* inference profile로 호출.
 const env: cdk.Environment = {
   account: process.env.CDK_DEFAULT_ACCOUNT,
-  region: process.env.CDK_DEFAULT_REGION ?? "us-east-1",
+  region: process.env.CDK_DEFAULT_REGION ?? "ap-northeast-2",
 };
 
 const prefix = "BedrockMonitor";
 
-// 스택 의존성: Network → Data → Cluster → AgentCore → AppServices → Edge → Scheduler → Observability
+// CloudFront managed prefix list (origin-facing). 리전별로 ID가 다름.
+// ap-northeast-2: pl-22a6434b.
+const cloudFrontPrefixListId = app.node.tryGetContext("cloudFrontPrefixListId") as string | undefined;
+
+// 스택 등록 순서.
 const network = new NetworkStack(app, `${prefix}-Network`, { env });
 
 const data = new DataStack(app, `${prefix}-Data`, {
@@ -41,6 +46,8 @@ const appServices = new AppServicesStack(app, `${prefix}-AppServices`, {
   env,
   vpc: network.vpc,
   appSubnets: network.appSubnets,
+  publicSubnets: network.publicSubnets,
+  cloudFrontPrefixListId,
   cluster: cluster.cluster,
   backendRepo: cluster.backendRepo,
   frontendRepo: cluster.frontendRepo,

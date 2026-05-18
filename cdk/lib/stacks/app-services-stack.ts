@@ -28,6 +28,10 @@ import { FargateServiceConstruct } from "../constructs/fargate-service";
 export interface AppServicesStackProps extends cdk.StackProps {
   readonly vpc: ec2.IVpc;
   readonly appSubnets: ec2.SubnetSelection;
+  /** ALB가 internet-facing이면 Public 서브넷 필요. 미주입 시 ALB는 internal scheme으로 fallback. */
+  readonly publicSubnets?: ec2.SubnetSelection;
+  /** ALB ingress를 CloudFront managed prefix list로 한정 (CF→ALB 보안 패턴). 미주입 시 internal ALB. */
+  readonly cloudFrontPrefixListId?: string;
   readonly cluster: ecs.ICluster;
   readonly backendRepo: ecr.IRepository;
   readonly frontendRepo: ecr.IRepository;
@@ -36,7 +40,7 @@ export interface AppServicesStackProps extends cdk.StackProps {
   readonly jwtSecretParam: ssm.IStringParameter;
   readonly agentCoreMemoryAccessPolicy: iam.IManagedPolicy;
   readonly agentCoreMemoryIdParam: ssm.IStringParameter;
-  /** ALB internal HTTPS listener용 ACM Private CA 인증서 ARN. 미주입 시 synth용 placeholder. */
+  /** ALB HTTPS:443 listener용 ACM 인증서 ARN. 미주입 시 synth용 placeholder. */
   readonly albCertificateArn?: string;
 }
 
@@ -145,14 +149,27 @@ export class AppServicesStack extends cdk.Stack {
     this.frontendService = this.frontend.service;
 
     // ---------------------------------------------------------------------
-    // Internal ALB — HTTPS:443 only. ALB SG는 본 스택에서 생성하고 backend/frontend
-    // SG에 cross-construct ingress 추가 (같은 스택이라 cycle 없음).
+    // ALB — internet-facing 모드(prefix list 패턴) 또는 internal 모드.
+    //   prefix list ID 제공 → internet-facing + Public 서브넷 + CF managed prefix list ingress.
+    //   미제공 → internal scheme + VPC Origin 가정 (v2 원래 design).
     // ---------------------------------------------------------------------
+    const useInternetFacing = Boolean(props.cloudFrontPrefixListId && props.publicSubnets);
+
     this.albSecurityGroup = new ec2.SecurityGroup(this, "AlbSg", {
       vpc: props.vpc,
-      description: "Internal ALB SG — inbound from CloudFront VPC Origin only",
+      description: useInternetFacing
+        ? "Internet-facing ALB SG — inbound only from CloudFront managed prefix list"
+        : "Internal ALB SG — inbound from CloudFront VPC Origin only",
       allowAllOutbound: false,
     });
+
+    if (useInternetFacing && props.cloudFrontPrefixListId) {
+      this.albSecurityGroup.addIngressRule(
+        ec2.Peer.prefixList(props.cloudFrontPrefixListId),
+        ec2.Port.tcp(443),
+        "CloudFront managed prefix list → ALB:443",
+      );
+    }
     this.albSecurityGroup.addEgressRule(
       this.backend.securityGroup,
       ec2.Port.tcp(8000),
@@ -186,8 +203,8 @@ export class AppServicesStack extends cdk.Stack {
 
     this.alb = new elbv2.ApplicationLoadBalancer(this, "InternalAlb", {
       vpc: props.vpc,
-      internetFacing: false,
-      vpcSubnets: props.appSubnets,
+      internetFacing: useInternetFacing,
+      vpcSubnets: useInternetFacing && props.publicSubnets ? props.publicSubnets : props.appSubnets,
       securityGroup: this.albSecurityGroup,
       dropInvalidHeaderFields: true,
     });

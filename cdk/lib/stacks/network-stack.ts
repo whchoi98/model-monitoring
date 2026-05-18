@@ -27,6 +27,8 @@ export class NetworkStack extends cdk.Stack {
   public readonly vpc: ec2.IVpc;
   public readonly appSubnets: ec2.SubnetSelection;
   public readonly dataSubnets: ec2.SubnetSelection;
+  /** internet-facing ALB가 들어갈 Public 서브넷 (기존 VPC 모드에서만 채워짐). */
+  public readonly publicSubnets?: ec2.SubnetSelection;
   // 기존 VPC 재사용 모드에서는 운영자가 별도 endpoint SG를 관리하므로 undefined.
   public readonly endpointSecurityGroup?: ec2.ISecurityGroup;
 
@@ -37,9 +39,10 @@ export class NetworkStack extends cdk.Stack {
     const isExistingMode = Boolean(existingVpcId);
 
     if (existingVpcId) {
-      // 기존 VPC 재사용 — 서브넷 ID도 명시적으로 받는다.
+      // 기존 VPC 재사용 — 서브넷 ID 명시적으로 받음.
       const appSubnetIds = parseCsvContext(this.node.tryGetContext("appSubnetIds"));
       const dataSubnetIds = parseCsvContext(this.node.tryGetContext("dataSubnetIds"));
+      const publicSubnetIds = parseCsvContext(this.node.tryGetContext("publicSubnetIds"));
       if (appSubnetIds.length === 0 || dataSubnetIds.length === 0) {
         throw new Error(
           "existingVpcId 사용 시 appSubnetIds와 dataSubnetIds context도 필요합니다 (e.g. -c appSubnetIds=subnet-a,subnet-b).",
@@ -51,6 +54,7 @@ export class NetworkStack extends cdk.Stack {
         // AZ 정보는 fromLookup이 더 정확하나, 명시 모드에선 stack region의 AZ 2개를 가정.
         availabilityZones: [`${this.region}a`, `${this.region}b`],
         privateSubnetIds: [...appSubnetIds, ...dataSubnetIds],
+        publicSubnetIds: publicSubnetIds.length > 0 ? publicSubnetIds : undefined,
       });
 
       this.appSubnets = {
@@ -59,6 +63,13 @@ export class NetworkStack extends cdk.Stack {
       this.dataSubnets = {
         subnets: dataSubnetIds.map((sid, i) => ec2.Subnet.fromSubnetId(this, `DataSubnet${i}`, sid)),
       };
+      if (publicSubnetIds.length > 0) {
+        this.publicSubnets = {
+          subnets: publicSubnetIds.map((sid, i) =>
+            ec2.Subnet.fromSubnetId(this, `PublicSubnet${i}`, sid),
+          ),
+        };
+      }
     } else {
       // 신규 VPC 생성 — 1 NAT GW + PrivateLink 병용.
       // NAT GW는 비용 절감을 위해 단일 AZ에 1개만 둔다 (HA 필요 시 maxAzs 만큼 늘림).

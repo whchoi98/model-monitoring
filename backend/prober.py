@@ -22,24 +22,17 @@ from models import ProbeResult, ProbeRun
 
 logger = logging.getLogger(__name__)
 
-# Map of model_id -> friendly display name
+# ap-northeast-2 (Seoul) 배포 — 모니터링 대상 5개 모델 (사용자 지정 4 + Nova 2 Lite).
 AVAILABLE_MODELS: dict[str, str] = {
-    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "Claude Sonnet 4.5 (US)",
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (US)",
-    "us.anthropic.claude-opus-4-5-20251101-v1:0": "Claude Opus 4.5 (US)",
-    "us.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (US)",
-    "us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (US)",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
-    "global.anthropic.claude-sonnet-4-5-20250929-v1:0": "Claude Sonnet 4.5 (Global)",
-    "global.anthropic.claude-opus-4-5-20251101-v1:0": "Claude Opus 4.5 (Global)",
+    "global.anthropic.claude-opus-4-7": "Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (Global)",
-    "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US)",
     "global.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (Global)",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
+    "global.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (Global)",
 }
 
-# Region mapping: model-id prefix -> AWS region
+# 모든 모델은 stack 리전(ap-northeast-2)에서 호출.
 _REGION_MAP: dict[str, str] = {
-    "us": "us-east-1",
     "global": "ap-northeast-2",
 }
 

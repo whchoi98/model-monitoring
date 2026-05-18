@@ -92,12 +92,16 @@ export class EdgeStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // CloudFront VPC Origin → Internal ALB.
+    // CloudFront Origin → ALB.
+    //   internet-facing ALB + CloudFront managed prefix list 패턴 사용 시
+    //   HttpOrigin(ALB DNS, HTTPS_ONLY)으로 직접 접근.
+    //   VPC Origin이 spec ADR-001-revised에서 폐기됨.
     // ---------------------------------------------------------------------
-    const vpcOrigin = origins.VpcOrigin.withApplicationLoadBalancer(props.alb, {
+    const albOrigin = new origins.LoadBalancerV2Origin(props.alb, {
       protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
       readTimeout: cdk.Duration.seconds(60),
       keepaliveTimeout: cdk.Duration.seconds(60),
+      // ALB cert hostname mismatch 시 — CF는 cert chain만 검증 (FQDN match 무관, CloudFront는 origin domain 자체를 SNI로 사용).
     });
 
     // ---------------------------------------------------------------------
@@ -105,7 +109,7 @@ export class EdgeStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
       defaultBehavior: {
-        origin: vpcOrigin,
+        origin: albOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
         cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
@@ -113,7 +117,7 @@ export class EdgeStack extends cdk.Stack {
       },
       additionalBehaviors: {
         "/api/*": {
-          origin: vpcOrigin,
+          origin: albOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
           // API: 캐시 절대 금지. SSE 청크가 viewer로 그대로 흘러가야 함 (NFR-4).
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
