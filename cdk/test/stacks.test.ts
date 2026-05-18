@@ -35,7 +35,7 @@ describe("스택 골격", () => {
       agentCoreMemoryIdParam: agentCore.memoryIdParam,
     });
     expect(
-      () => new EdgeStack(app, "Edge", { env, alb: appServices.alb }),
+      () => new EdgeStack(app, "Edge", { env, albDnsName: "test-alb.example.com" }),
     ).not.toThrow();
     expect(
       () =>

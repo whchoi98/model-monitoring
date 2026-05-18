@@ -59,10 +59,15 @@ const appServices = new AppServicesStack(app, `${prefix}-AppServices`, {
   albCertificateArn: app.node.tryGetContext("albCertificateArn") as string | undefined,
 });
 
-new EdgeStack(app, `${prefix}-Edge`, {
-  env,
-  alb: appServices.alb,
-});
+// EdgeStack은 WAFv2 CLOUDFRONT scope이 us-east-1만 허용하므로 별도 리전에 배포.
+// ALB DNS는 동일 계정 다른 리전(ap-northeast-2) ALB의 DNS를 context로 명시 주입.
+const albDnsName = app.node.tryGetContext("albDnsName") as string | undefined;
+if (albDnsName) {
+  new EdgeStack(app, `${prefix}-Edge`, {
+    env: { account: env.account, region: "us-east-1" },
+    albDnsName,
+  });
+}
 
 new SchedulerStack(app, `${prefix}-Scheduler`, {
   env,

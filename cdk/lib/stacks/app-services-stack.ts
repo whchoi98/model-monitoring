@@ -89,7 +89,7 @@ export class AppServicesStack extends cdk.Stack {
     // backend 컨테이너 비밀/환경.
     // ---------------------------------------------------------------------
     const backendSecrets: Record<string, ecs.Secret> = {
-      DATABASE_URL: ecs.Secret.fromSecretsManager(props.dbSecret, "host"), // 단순화 - 실제로는 SecretJSON 조합
+      // DATABASE_URL은 backend/database.py가 DB_USER/PASSWORD/HOST/PORT/NAME 으로 직접 조립한다.
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
       DB_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret, "password"),
       DB_HOST: ecs.Secret.fromSecretsManager(props.dbSecret, "host"),

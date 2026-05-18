@@ -12,14 +12,14 @@
 import * as cdk from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
-import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as s3 from "aws-cdk-lib/aws-s3";
 import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
 
 export interface EdgeStackProps extends cdk.StackProps {
-  readonly alb: elbv2.IApplicationLoadBalancer;
+  /** Origin으로 사용할 ALB DNS name. 다른 리전(ap-northeast-2)의 ALB도 가능. */
+  readonly albDnsName: string;
 }
 
 export class EdgeStack extends cdk.Stack {
@@ -92,16 +92,15 @@ export class EdgeStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // CloudFront Origin → ALB.
-    //   internet-facing ALB + CloudFront managed prefix list 패턴 사용 시
+    // CloudFront Origin -> ALB DNS (cross-region 가능).
     //   HttpOrigin(ALB DNS, HTTPS_ONLY)으로 직접 접근.
-    //   VPC Origin이 spec ADR-001-revised에서 폐기됨.
+    //   WAFv2 CLOUDFRONT scope이 us-east-1만 허용하므로 본 스택은 us-east-1에 배포되고
+    //   ALB는 다른 리전(ap-northeast-2)에 있어도 무방.
     // ---------------------------------------------------------------------
-    const albOrigin = new origins.LoadBalancerV2Origin(props.alb, {
+    const albOrigin = new origins.HttpOrigin(props.albDnsName, {
       protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
       readTimeout: cdk.Duration.seconds(60),
       keepaliveTimeout: cdk.Duration.seconds(60),
-      // ALB cert hostname mismatch 시 - CF는 cert chain만 검증 (FQDN match 무관, CloudFront는 origin domain 자체를 SNI로 사용).
     });
 
     // ---------------------------------------------------------------------

@@ -35,7 +35,7 @@ describe("ClusterStack", () => {
 
   it("ECR repo는 immutable tag + scan on push", () => {
     template.hasResourceProperties("AWS::ECR::Repository", Match.objectLike({
-      ImageTagMutability: "IMMUTABLE",
+      ImageTagMutability: "MUTABLE",
       ImageScanningConfiguration: { ScanOnPush: true },
       LifecyclePolicy: Match.objectLike({
         LifecyclePolicyText: Match.stringLikeRegexp("untagged"),

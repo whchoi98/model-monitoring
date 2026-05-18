@@ -94,7 +94,7 @@ export class FargateServiceConstruct extends Construct {
       executionRole: this.executionRole,
       taskRole: this.taskRole,
       runtimePlatform: {
-        cpuArchitecture: ecs.CpuArchitecture.X86_64,
+        cpuArchitecture: ecs.CpuArchitecture.ARM64,
         operatingSystemFamily: ecs.OperatingSystemFamily.LINUX,
       },
     });
@@ -109,17 +109,9 @@ export class FargateServiceConstruct extends Construct {
         logGroup: this.logGroup,
         streamPrefix: props.serviceName,
       }),
-      healthCheck: {
-        // Service 자체 health check (curl + sh 둘 다 슬림 이미지에 없을 수 있어 wget로 통일).
-        command: [
-          "CMD-SHELL",
-          `wget -q -O - http://localhost:${props.containerPort}${props.healthCheckPath} >/dev/null 2>&1 || exit 1`,
-        ],
-        interval: cdk.Duration.seconds(30),
-        timeout: cdk.Duration.seconds(5),
-        retries: 3,
-        startPeriod: cdk.Duration.seconds(30),
-      },
+      // Container-level health check 제거 - alpine 베이스 이미지마다 wget/curl 가용성이
+      // 다르고 ECS는 ALB Target Group health check로 충분히 컨테이너 상태를 판단한다.
+      // ALB가 unhealthy 판정하면 task가 자동으로 교체된다.
     });
 
     // ---------------------------------------------------------------------

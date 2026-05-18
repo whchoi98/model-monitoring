@@ -1,11 +1,7 @@
-// Phase 7 — EdgeStack 단위 테스트.
+// Phase 7 - EdgeStack 단위 테스트.
+// EdgeStack은 다른 리전(us-east-1)에 독립 배포되므로 ALB DNS만 받는다.
 import * as cdk from "aws-cdk-lib";
 import { Match, Template } from "aws-cdk-lib/assertions";
-import { NetworkStack } from "../lib/stacks/network-stack";
-import { DataStack } from "../lib/stacks/data-stack";
-import { ClusterStack } from "../lib/stacks/cluster-stack";
-import { AgentCoreStack } from "../lib/stacks/agentcore-stack";
-import { AppServicesStack } from "../lib/stacks/app-services-stack";
 import { EdgeStack } from "../lib/stacks/edge-stack";
 
 const env: cdk.Environment = { account: "111111111111", region: "us-east-1" };
@@ -15,28 +11,10 @@ describe("EdgeStack", () => {
 
   beforeAll(() => {
     const app = new cdk.App();
-    const network = new NetworkStack(app, "Network", { env });
-    const data = new DataStack(app, "Data", {
+    const edge = new EdgeStack(app, "Edge", {
       env,
-      vpc: network.vpc,
-      dataSubnets: network.dataSubnets,
+      albDnsName: "test-alb.example.com",
     });
-    const cluster = new ClusterStack(app, "Cluster", { env, vpc: network.vpc });
-    const agentCore = new AgentCoreStack(app, "AgentCore", { env });
-    const appServices = new AppServicesStack(app, "AppServices", {
-      env,
-      vpc: network.vpc,
-      appSubnets: network.appSubnets,
-      cluster: cluster.cluster,
-      backendRepo: cluster.backendRepo,
-      frontendRepo: cluster.frontendRepo,
-      dbSecret: data.dbSecret,
-      dbSecurityGroup: data.dbSecurityGroup,
-      jwtSecretParam: data.jwtSecretParam,
-      agentCoreMemoryAccessPolicy: agentCore.memoryAccessPolicy,
-      agentCoreMemoryIdParam: agentCore.memoryIdParam,
-    });
-    const edge = new EdgeStack(app, "Edge", { env, alb: appServices.alb });
     template = Template.fromStack(edge);
   });
 
@@ -44,8 +22,7 @@ describe("EdgeStack", () => {
     template.resourceCountIs("AWS::CloudFront::Distribution", 1);
   });
 
-  it("CloudFront → ALB origin은 CustomOrigin + HTTPS_ONLY protocol을 사용한다", () => {
-    // LoadBalancerV2Origin은 Distribution 내부 CustomOriginConfig로 인라인 등록됨.
+  it("CloudFront -> ALB origin은 CustomOrigin + HTTPS_ONLY protocol을 사용한다", () => {
     template.hasResourceProperties("AWS::CloudFront::Distribution", Match.objectLike({
       DistributionConfig: Match.objectLike({
         Origins: Match.arrayWith([
@@ -91,10 +68,6 @@ describe("EdgeStack", () => {
       }),
     }));
   });
-
-  // CloudFront 기본 *.cloudfront.net 인증서 사용 시 ViewerCertificate가 template에
-  // 명시되지 않고 AWS가 자동 적용. minimumProtocolVersion 검증은 default cert에 적용
-  // 불가하므로 본 테스트는 생략.
 
   it("CloudFront logs S3 버킷 1개 (Block public, enforceSSL)", () => {
     template.resourceCountIs("AWS::S3::Bucket", 1);
