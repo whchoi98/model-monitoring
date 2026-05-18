@@ -1,4 +1,4 @@
-// DataStack — RDS PostgreSQL 16 (t4g.micro) + Secrets Manager + SSM SecureString.
+// DataStack - RDS PostgreSQL 16 (t4g.micro) + Secrets Manager + SSM SecureString.
 //
 // 보안:
 //   - Single-AZ (C-7 / OOS-2: 초기 비용 최소화, 모니터링 시계열 데이터라 손실 허용).
@@ -29,23 +29,23 @@ export class DataStack extends cdk.Stack {
     super(scope, id, props);
 
     // ---------------------------------------------------------------------
-    // DB Security Group — Phase 6에서 backend/autoprober/insights SG ingress 추가.
+    // DB Security Group - Phase 6에서 backend/autoprober/insights SG ingress 추가.
     // ---------------------------------------------------------------------
     this.dbSecurityGroup = new ec2.SecurityGroup(this, "DbSg", {
       vpc: props.vpc,
-      description: "RDS PostgreSQL SG — ingress added by AppServicesStack",
+      description: "RDS PostgreSQL SG - ingress added by AppServicesStack",
       allowAllOutbound: false,
     });
 
     // ---------------------------------------------------------------------
-    // Secrets Manager — username 'monitoring_admin', password 자동 생성 32자.
+    // Secrets Manager - username 'monitoring_admin', password 자동 생성 32자.
     // ---------------------------------------------------------------------
     const dbCredentials = rds.Credentials.fromGeneratedSecret("monitoring_admin", {
       secretName: "bedrock-monitor/db",
     });
 
     // ---------------------------------------------------------------------
-    // RDS Subnet Group — Data subnets.
+    // RDS Subnet Group - Data subnets.
     // ---------------------------------------------------------------------
     const subnetGroup = new rds.SubnetGroup(this, "DbSubnetGroup", {
       description: "Bedrock Monitor RDS subnet group (Data tier)",
@@ -58,7 +58,7 @@ export class DataStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     this.db = new rds.DatabaseInstance(this, "Postgres", {
       engine: rds.DatabaseInstanceEngine.postgres({
-        version: rds.PostgresEngineVersion.VER_16_3,
+        version: rds.PostgresEngineVersion.VER_16_8,
       }),
       instanceType: ec2.InstanceType.of(ec2.InstanceClass.T4G, ec2.InstanceSize.MICRO),
       vpc: props.vpc,
@@ -83,7 +83,7 @@ export class DataStack extends cdk.Stack {
       cloudwatchLogsExports: ["postgresql"],
       parameterGroup: new rds.ParameterGroup(this, "PgParams", {
         engine: rds.DatabaseInstanceEngine.postgres({
-          version: rds.PostgresEngineVersion.VER_16_3,
+          version: rds.PostgresEngineVersion.VER_16_8,
         }),
         parameters: {
           // 한국어 로깅을 위해 client_encoding을 UTF8로 고정.
@@ -93,19 +93,19 @@ export class DataStack extends cdk.Stack {
     });
 
     if (!this.db.secret) {
-      throw new Error("DatabaseInstance가 secret을 반환하지 않았다 — credentials 설정 확인.");
+      throw new Error("DatabaseInstance가 secret을 반환하지 않았다 - credentials 설정 확인.");
     }
     this.dbSecret = this.db.secret;
 
     // ---------------------------------------------------------------------
-    // JWT_SECRET_KEY — placeholder. 배포 후 운영자가 수동으로 값 갱신.
+    // JWT_SECRET_KEY - placeholder. 배포 후 운영자가 수동으로 값 갱신.
     // ---------------------------------------------------------------------
     this.jwtSecretParam = new ssm.StringParameter(this, "JwtSecret", {
       parameterName: "/bedrock-monitor/jwt-secret-key",
       // CloudFormation은 SecureString 직접 생성 불가 → 운영자가 배포 후 SecureString으로 교체 권장.
       stringValue: "placeholder-replace-with-secure-string-after-deploy",
       description:
-        "JWT signing key (placeholder — replace with SecureString via AWS CLI after deploy)",
+        "JWT signing key (placeholder - replace with SecureString via AWS CLI after deploy)",
     });
 
     // ---------------------------------------------------------------------
@@ -123,7 +123,7 @@ export class DataStack extends cdk.Stack {
       {
         id: "AwsSolutions-RDS11",
         reason:
-          "Default Postgres port 5432 is acceptable — access is restricted to specific SGs (added in Phase 6). Port obfuscation is defense-in-depth, not primary control.",
+          "Default Postgres port 5432 is acceptable - access is restricted to specific SGs (added in Phase 6). Port obfuscation is defense-in-depth, not primary control.",
       },
       {
         id: "AwsSolutions-SMG4",

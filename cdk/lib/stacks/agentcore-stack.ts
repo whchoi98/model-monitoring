@@ -1,4 +1,4 @@
-// AgentCoreStack — AgentCore Memory + backend invoke용 IAM 정책 + SSM 참조.
+// AgentCoreStack - AgentCore Memory + backend invoke용 IAM 정책 + SSM 참조.
 //
 // Phase 5 범위 결정 (사용자 옵션 A):
 //   - AgentCore Memory만 생성. Runtime은 후속 Phase로 이연.
@@ -29,7 +29,7 @@ export class AgentCoreStack extends cdk.Stack {
     super(scope, id, props);
 
     // ---------------------------------------------------------------------
-    // AgentCore Memory — 채팅 세션 기록.
+    // AgentCore Memory - 채팅 세션 기록.
     //   - eventExpiryDuration: 30일 (사용자 대화 보존 기간, OOS-6 검색 미지원).
     //   - 별도 memory execution role 없이 기본 동작 사용.
     // ---------------------------------------------------------------------
@@ -40,7 +40,7 @@ export class AgentCoreStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // IAM Managed Policy — backend ECS Task Role에 첨부될 권한.
+    // IAM Managed Policy - backend ECS Task Role에 첨부될 권한.
     //   - 특정 Memory ID로 scope된 read/write 권한.
     //   - bedrock:InvokeModel*, bedrock:InvokeModelWithResponseStream은 별도 attach.
     // ---------------------------------------------------------------------
@@ -83,7 +83,7 @@ export class AgentCoreStack extends cdk.Stack {
     ]);
 
     // ---------------------------------------------------------------------
-    // SSM Parameter — backend가 런타임에 Memory ID를 읽어가도록 노출.
+    // SSM Parameter - backend가 런타임에 Memory ID를 읽어가도록 노출.
     // ---------------------------------------------------------------------
     this.memoryIdParam = new ssm.StringParameter(this, "MemoryIdParam", {
       parameterName: "/bedrock-monitor/agentcore-memory-id",

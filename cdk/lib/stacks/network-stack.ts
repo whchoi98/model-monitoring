@@ -1,4 +1,4 @@
-// NetworkStack — VPC 조회/생성 + PrivateLink 엔드포인트 + (신규 모드) NAT GW.
+// NetworkStack - VPC 조회/생성 + PrivateLink 엔드포인트 + (신규 모드) NAT GW.
 //
 // 사용 방식:
 //   cdk synth                              # 신규 VPC 생성 (기본)
@@ -13,9 +13,9 @@
 //     했다고 가정. CDK가 별도 NAT를 만들지 않는다.
 //
 // 신규 VPC 구조 (2 AZ):
-//   - "Public"  서브넷  (PUBLIC, /24)        — NAT GW + IGW route
-//   - "App"     서브넷  (PRIVATE_WITH_EGRESS, /24) — ECS 태스크, ALB, CloudFront VPC Origin ENI
-//   - "Data"    서브넷  (PRIVATE_ISOLATED, /28) — RDS PostgreSQL (egress 불필요)
+//   - "Public"  서브넷  (PUBLIC, /24)        - NAT GW + IGW route
+//   - "App"     서브넷  (PRIVATE_WITH_EGRESS, /24) - ECS 태스크, ALB, CloudFront VPC Origin ENI
+//   - "Data"    서브넷  (PRIVATE_ISOLATED, /28) - RDS PostgreSQL (egress 불필요)
 import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import { NagSuppressions } from "cdk-nag";
@@ -39,7 +39,7 @@ export class NetworkStack extends cdk.Stack {
     const isExistingMode = Boolean(existingVpcId);
 
     if (existingVpcId) {
-      // 기존 VPC 재사용 — 서브넷 ID 명시적으로 받음.
+      // 기존 VPC 재사용 - 서브넷 ID 명시적으로 받음.
       const appSubnetIds = parseCsvContext(this.node.tryGetContext("appSubnetIds"));
       const dataSubnetIds = parseCsvContext(this.node.tryGetContext("dataSubnetIds"));
       const publicSubnetIds = parseCsvContext(this.node.tryGetContext("publicSubnetIds"));
@@ -71,7 +71,7 @@ export class NetworkStack extends cdk.Stack {
         };
       }
     } else {
-      // 신규 VPC 생성 — 1 NAT GW + PrivateLink 병용.
+      // 신규 VPC 생성 - 1 NAT GW + PrivateLink 병용.
       // NAT GW는 비용 절감을 위해 단일 AZ에 1개만 둔다 (HA 필요 시 maxAzs 만큼 늘림).
       const vpc = new ec2.Vpc(this, "Vpc", {
         ipAddresses: ec2.IpAddresses.cidr("10.20.0.0/16"),
@@ -82,7 +82,7 @@ export class NetworkStack extends cdk.Stack {
           { name: "App", subnetType: ec2.SubnetType.PRIVATE_WITH_EGRESS, cidrMask: 24 },
           { name: "Data", subnetType: ec2.SubnetType.PRIVATE_ISOLATED, cidrMask: 28 },
         ],
-        // VPC Flow Logs — CloudWatch Logs (NFR-2 관측성).
+        // VPC Flow Logs - CloudWatch Logs (NFR-2 관측성).
         flowLogs: {
           all: {
             destination: ec2.FlowLogDestination.toCloudWatchLogs(),
@@ -96,7 +96,7 @@ export class NetworkStack extends cdk.Stack {
     }
 
     // ---------------------------------------------------------------------
-    // VPC Endpoints + 공용 SG — 신규 VPC 모드에서만 생성.
+    // VPC Endpoints + 공용 SG - 신규 VPC 모드에서만 생성.
     // 기존 VPC 재사용 모드에서는 운영자가 endpoints와 SG를 직접 관리한다.
     // ---------------------------------------------------------------------
     if (!isExistingMode) {
@@ -122,7 +122,7 @@ export class NetworkStack extends cdk.Stack {
         },
       ]);
 
-      // NAT GW 단일 AZ — 비용 절감을 위한 의도된 트레이드오프.
+      // NAT GW 단일 AZ - 비용 절감을 위한 의도된 트레이드오프.
       NagSuppressions.addStackSuppressions(this, [
         {
           id: "AwsSolutions-VPC7",
@@ -154,7 +154,7 @@ export class NetworkStack extends cdk.Stack {
         });
       }
 
-      // AgentCore endpoint — L2에 미등록 시 L1로 우회.
+      // AgentCore endpoint - L2에 미등록 시 L1로 우회.
       new ec2.InterfaceVpcEndpoint(this, "BedrockAgentCore", {
         vpc: this.vpc,
         service: new ec2.InterfaceVpcEndpointService(
@@ -166,7 +166,7 @@ export class NetworkStack extends cdk.Stack {
         privateDnsEnabled: true,
       });
 
-      // S3 Gateway endpoint — 무료, ECR layer pull 시 S3 백엔드 호출에 필수.
+      // S3 Gateway endpoint - 무료, ECR layer pull 시 S3 백엔드 호출에 필수.
       this.vpc.addGatewayEndpoint("S3", {
         service: ec2.GatewayVpcEndpointAwsService.S3,
         subnets: [this.appSubnets, this.dataSubnets],

@@ -1,4 +1,4 @@
-// EdgeStack — CloudFront Distribution + VPC Origin + WAFv2 + CloudFront access logs.
+// EdgeStack - CloudFront Distribution + VPC Origin + WAFv2 + CloudFront access logs.
 //
 // 책임 분리:
 //   - ALB와 Listener는 AppServicesStack에 위치 (Service↔Listener CDK 자동 의존 cycle 회피).
@@ -6,7 +6,7 @@
 //
 // 보안 원칙:
 //   - CloudFront → ALB: VPC Origin + https-only.
-//   - WAFv2 (CLOUDFRONT scope) — AWS managed common rules + bad inputs.
+//   - WAFv2 (CLOUDFRONT scope) - AWS managed common rules + bad inputs.
 //   - CloudFront access logs → S3 (KMS unused, S3-managed encryption).
 //   - 도메인 없음 → CloudFront은 기본 *.cloudfront.net 사용 + TLS1.2_2021 enforced.
 import * as cdk from "aws-cdk-lib";
@@ -44,7 +44,7 @@ export class EdgeStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // WAFv2 WebACL — CLOUDFRONT scope (us-east-1 필수).
+    // WAFv2 WebACL - CLOUDFRONT scope (us-east-1 필수).
     // ---------------------------------------------------------------------
     this.webAcl = new wafv2.CfnWebACL(this, "WebAcl", {
       name: "BedrockMonitorWebAcl",
@@ -101,7 +101,7 @@ export class EdgeStack extends cdk.Stack {
       protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
       readTimeout: cdk.Duration.seconds(60),
       keepaliveTimeout: cdk.Duration.seconds(60),
-      // ALB cert hostname mismatch 시 — CF는 cert chain만 검증 (FQDN match 무관, CloudFront는 origin domain 자체를 SNI로 사용).
+      // ALB cert hostname mismatch 시 - CF는 cert chain만 검증 (FQDN match 무관, CloudFront는 origin domain 자체를 SNI로 사용).
     });
 
     // ---------------------------------------------------------------------
@@ -146,7 +146,7 @@ export class EdgeStack extends cdk.Stack {
       {
         id: "AwsSolutions-CFR1",
         reason:
-          "Geo restriction is intentionally not applied — the monitoring tool is used by global engineers.",
+          "Geo restriction is intentionally not applied - the monitoring tool is used by global engineers.",
       },
       {
         id: "AwsSolutions-CFR2",

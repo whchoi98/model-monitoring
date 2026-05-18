@@ -1,4 +1,4 @@
-// ObservabilityStack — CloudWatch Alarms + Dashboard + SNS topic.
+// ObservabilityStack - CloudWatch Alarms + Dashboard + SNS topic.
 //
 // 로그 그룹은 각 서비스 스택(AppServices, Scheduler)에서 이미 생성하므로 본 스택은
 // 알람과 시각화에 집중.
@@ -18,7 +18,7 @@ export interface ObservabilityStackProps extends cdk.StackProps {
   readonly backendService: ecs.IBaseService;
   readonly frontendService: ecs.IBaseService;
   readonly db: rds.IDatabaseInstance;
-  /** SNS 알림 받을 이메일 주소 — 미지정 시 SNS topic만 생성, subscribe는 운영자가 콘솔에서. */
+  /** SNS 알림 받을 이메일 주소 - 미지정 시 SNS topic만 생성, subscribe는 운영자가 콘솔에서. */
   readonly alarmEmail?: string;
 }
 
@@ -30,13 +30,13 @@ export class ObservabilityStack extends cdk.Stack {
     super(scope, id, props);
 
     // ---------------------------------------------------------------------
-    // SNS 알림 토픽 — 모든 알람의 destination.
+    // SNS 알림 토픽 - 모든 알람의 destination.
     // ---------------------------------------------------------------------
     this.alarmTopic = new sns.Topic(this, "AlarmTopic", {
       topicName: "bedrock-monitor-alarms",
       displayName: "Bedrock Monitor v2 Alarms",
       enforceSSL: true,
-      masterKey: undefined, // 기본 AWS-managed encryption — KMS 키 충돌 방지.
+      masterKey: undefined, // 기본 AWS-managed encryption - KMS 키 충돌 방지.
     });
 
     if (props.alarmEmail) {
@@ -55,7 +55,7 @@ export class ObservabilityStack extends cdk.Stack {
     const alarms: cloudwatch.Alarm[] = [];
 
     // ALB 5xx 비율 > 1% (5분 윈도우, 2회 연속).
-    // IApplicationLoadBalancer는 loadBalancerFullName 미노출 — ConcreteApplicationLoadBalancer로 캐스팅.
+    // IApplicationLoadBalancer는 loadBalancerFullName 미노출 - ConcreteApplicationLoadBalancer로 캐스팅.
 const albName = (props.alb as elbv2.ApplicationLoadBalancer).loadBalancerFullName;
     const alb5xxRatio = new cloudwatch.MathExpression({
       expression: "100 * (m5xx / IF(req != 0, req, 1))",
@@ -249,7 +249,7 @@ const albName = (props.alb as elbv2.ApplicationLoadBalancer).loadBalancerFullNam
       {
         id: "AwsSolutions-SNS2",
         reason:
-          "Default AWS-managed encryption is acceptable for alarm topic — alarms contain operational metadata, not customer data.",
+          "Default AWS-managed encryption is acceptable for alarm topic - alarms contain operational metadata, not customer data.",
       },
     ]);
 

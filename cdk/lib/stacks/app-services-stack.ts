@@ -1,4 +1,4 @@
-// AppServicesStack — frontend / backend Fargate Service 2개 + IAM 4개 + SG 매트릭스 + TG 2개 +
+// AppServicesStack - frontend / backend Fargate Service 2개 + IAM 4개 + SG 매트릭스 + TG 2개 +
 // Internal ALB (HTTPS only) + ALB access logs S3 bucket.
 //
 // ALB가 본 스택에 함께 있는 이유:
@@ -61,7 +61,7 @@ export class AppServicesStack extends cdk.Stack {
     super(scope, id, props);
 
     // ---------------------------------------------------------------------
-    // backend Task Role — Bedrock + AgentCore Memory + SSM + Secrets + SES.
+    // backend Task Role - Bedrock + AgentCore Memory + SSM + Secrets + SES.
     // ---------------------------------------------------------------------
     const backendTaskRoleStatements: iam.PolicyStatement[] = [
       new iam.PolicyStatement({
@@ -71,7 +71,7 @@ export class AppServicesStack extends cdk.Stack {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
         ],
-        // 9개 모니터링 대상 + 챗봇용 Sonnet 4.6 — 광범위하게 anthropic / amazon 모델로 한정.
+        // 9개 모니터링 대상 + 챗봇용 Sonnet 4.6 - 광범위하게 anthropic / amazon 모델로 한정.
         resources: [
           `arn:aws:bedrock:${this.region}::foundation-model/*`,
           `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
@@ -89,7 +89,7 @@ export class AppServicesStack extends cdk.Stack {
     // backend 컨테이너 비밀/환경.
     // ---------------------------------------------------------------------
     const backendSecrets: Record<string, ecs.Secret> = {
-      DATABASE_URL: ecs.Secret.fromSecretsManager(props.dbSecret, "host"), // 단순화 — 실제로는 SecretJSON 조합
+      DATABASE_URL: ecs.Secret.fromSecretsManager(props.dbSecret, "host"), // 단순화 - 실제로는 SecretJSON 조합
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
       DB_PASSWORD: ecs.Secret.fromSecretsManager(props.dbSecret, "password"),
       DB_HOST: ecs.Secret.fromSecretsManager(props.dbSecret, "host"),
@@ -123,7 +123,7 @@ export class AppServicesStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // frontend Service — 권한 없음.
+    // frontend Service - 권한 없음.
     // ---------------------------------------------------------------------
     this.frontend = new FargateServiceConstruct(this, "Frontend", {
       serviceName: "frontend",
@@ -149,7 +149,7 @@ export class AppServicesStack extends cdk.Stack {
     this.frontendService = this.frontend.service;
 
     // ---------------------------------------------------------------------
-    // ALB — internet-facing 모드(prefix list 패턴) 또는 internal 모드.
+    // ALB - internet-facing 모드(prefix list 패턴) 또는 internal 모드.
     //   prefix list ID 제공 → internet-facing + Public 서브넷 + CF managed prefix list ingress.
     //   미제공 → internal scheme + VPC Origin 가정 (v2 원래 design).
     // ---------------------------------------------------------------------
@@ -158,8 +158,8 @@ export class AppServicesStack extends cdk.Stack {
     this.albSecurityGroup = new ec2.SecurityGroup(this, "AlbSg", {
       vpc: props.vpc,
       description: useInternetFacing
-        ? "Internet-facing ALB SG — inbound only from CloudFront managed prefix list"
-        : "Internal ALB SG — inbound from CloudFront VPC Origin only",
+        ? "Internet-facing ALB SG - inbound only from CloudFront managed prefix list"
+        : "Internal ALB SG - inbound from CloudFront VPC Origin only",
       allowAllOutbound: false,
     });
 
@@ -167,7 +167,7 @@ export class AppServicesStack extends cdk.Stack {
       this.albSecurityGroup.addIngressRule(
         ec2.Peer.prefixList(props.cloudFrontPrefixListId),
         ec2.Port.tcp(443),
-        "CloudFront managed prefix list → ALB:443",
+        "CloudFront managed prefix list to ALB 443",
       );
     }
     this.albSecurityGroup.addEgressRule(
@@ -210,7 +210,7 @@ export class AppServicesStack extends cdk.Stack {
     });
     this.alb.logAccessLogs(this.albLogsBucket, "alb");
 
-    // 인증서 — context 미주입 시 placeholder (synth만 가능, deploy 시 실 cert 필요).
+    // 인증서 - context 미주입 시 placeholder (synth만 가능, deploy 시 실 cert 필요).
     const albCertArn =
       props.albCertificateArn ??
       `arn:aws:acm:${this.region}:${this.account}:certificate/00000000-0000-0000-0000-000000000000`;
@@ -230,7 +230,7 @@ export class AppServicesStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // SG cross-stack ingress — backend SG → RDS SG :5432.
+    // SG cross-stack ingress - backend SG → RDS SG :5432.
     // dbSecurityGroup.addIngressRule(...)는 Data 스택을 mutate하여 순환 참조를
     // 만든다. 본 스택 안에 standalone CfnSecurityGroupIngress로 표현해
     // 두 SG ID만 import value로 참조하도록 분리.
@@ -241,13 +241,13 @@ export class AppServicesStack extends cdk.Stack {
       toPort: 5432,
       groupId: props.dbSecurityGroup.securityGroupId,
       sourceSecurityGroupId: this.backend.securityGroup.securityGroupId,
-      description: "Backend ECS → RDS PostgreSQL",
+      description: "Backend ECS to RDS PostgreSQL",
     });
 
     // ---------------------------------------------------------------------
     // cdk-nag suppressions.
     //   - IAM5 (Bedrock foundation-model/*): wildcard는 region scope 내 모든 모델 ID 허용.
-    //     동적 모델 추가 시 자동 적용 — spec FR-1의 9 모델 + Sonnet 4.6 모두 포함.
+    //     동적 모델 추가 시 자동 적용 - spec FR-1의 9 모델 + Sonnet 4.6 모두 포함.
     //   - IAM5 (SES resources:*): SES는 ARN scope이 제한적이므로 *.
     //   - ECS4 (Container Insights): 클러스터에서 활성화 (ClusterStack), 본 스택은 그대로 사용.
     // ---------------------------------------------------------------------
@@ -283,7 +283,7 @@ export class AppServicesStack extends cdk.Stack {
       {
         id: "AwsSolutions-IAM4",
         reason:
-          "ECS TaskExecutionRole uses the AWS-managed AmazonECSTaskExecutionRolePolicy — this is the standard pattern for ECR pull + CloudWatch Logs publishing.",
+          "ECS TaskExecutionRole uses the AWS-managed AmazonECSTaskExecutionRolePolicy - this is the standard pattern for ECR pull + CloudWatch Logs publishing.",
         appliesTo: [
           "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         ],
@@ -297,7 +297,7 @@ export class AppServicesStack extends cdk.Stack {
       {
         id: "AwsSolutions-EC23",
         reason:
-          "ALB is internal scheme — the 0.0.0.0/0 rule auto-added by HTTPS listener is restricted to traffic within the VPC and reachable only via CloudFront VPC Origin ENIs in EdgeStack. AWS does not allow us to restrict the ALB SG to a specific VPC Origin SG.",
+          "ALB is internal scheme - the 0.0.0.0/0 rule auto-added by HTTPS listener is restricted to traffic within the VPC and reachable only via CloudFront VPC Origin ENIs in EdgeStack. AWS does not allow us to restrict the ALB SG to a specific VPC Origin SG.",
       },
       {
         id: "AwsSolutions-S1",

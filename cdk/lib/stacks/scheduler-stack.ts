@@ -1,4 +1,4 @@
-// SchedulerStack — EventBridge Scheduler + AutoProber / Insights one-shot TaskDefinitions.
+// SchedulerStack - EventBridge Scheduler + AutoProber / Insights one-shot TaskDefinitions.
 //
 // 책임:
 //   - rate(5 minutes)  → AutoProber Fargate Task (auto_prober_runner --once)
@@ -38,7 +38,7 @@ export class SchedulerStack extends cdk.Stack {
     super(scope, id, props);
 
     // ---------------------------------------------------------------------
-    // 1) 공통 SG — 두 task 모두 RDS egress + 443 egress 필요.
+    // 1) 공통 SG - 두 task 모두 RDS egress + 443 egress 필요.
     // ---------------------------------------------------------------------
     const schedulerTaskSg = new ec2.SecurityGroup(this, "SchedulerTaskSg", {
       vpc: props.vpc,
@@ -46,18 +46,18 @@ export class SchedulerStack extends cdk.Stack {
       allowAllOutbound: true,
     });
 
-    // RDS SG에 standalone ingress 추가 — cross-stack cycle 회피.
+    // RDS SG에 standalone ingress 추가 - cross-stack cycle 회피.
     new ec2.CfnSecurityGroupIngress(this, "DbIngressFromScheduler", {
       ipProtocol: "tcp",
       fromPort: 5432,
       toPort: 5432,
       groupId: props.dbSecurityGroup.securityGroupId,
       sourceSecurityGroupId: schedulerTaskSg.securityGroupId,
-      description: "Scheduler tasks → RDS PostgreSQL",
+      description: "Scheduler tasks to RDS PostgreSQL",
     });
 
     // ---------------------------------------------------------------------
-    // 2) Shared ExecutionRole — ECR pull + Logs put + Secrets/SSM read.
+    // 2) Shared ExecutionRole - ECR pull + Logs put + Secrets/SSM read.
     // ---------------------------------------------------------------------
     const executionRole = new iam.Role(this, "TaskExecRole", {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
@@ -89,20 +89,20 @@ export class SchedulerStack extends cdk.Stack {
 
     const autoProberTaskRole = new iam.Role(this, "AutoProberTaskRole", {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-      description: "AutoProber task role — Bedrock + DB",
+      description: "AutoProber task role - Bedrock + DB",
       inlinePolicies: { bedrock: sharedTaskPolicy },
     });
 
     const insightsTaskRole = new iam.Role(this, "InsightsTaskRole", {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
-      description: "Insights task role — Bedrock + DB + AgentCore Memory (optional)",
+      description: "Insights task role - Bedrock + DB + AgentCore Memory (optional)",
       inlinePolicies: { bedrock: sharedTaskPolicy },
     });
-    // Insights는 향후 AgentCore Memory를 인사이트 컨텍스트로 활용할 가능성 있음 — 정책 attach.
+    // Insights는 향후 AgentCore Memory를 인사이트 컨텍스트로 활용할 가능성 있음 - 정책 attach.
     insightsTaskRole.addManagedPolicy(props.agentCoreMemoryAccessPolicy);
 
     // ---------------------------------------------------------------------
-    // 4) TaskDefinition 빌더 — backend 이미지 + command override 패턴.
+    // 4) TaskDefinition 빌더 - backend 이미지 + command override 패턴.
     // ---------------------------------------------------------------------
     const buildTaskDef = (
       id: string,
@@ -203,7 +203,7 @@ export class SchedulerStack extends cdk.Stack {
       {
         id: "AwsSolutions-IAM4",
         reason:
-          "ExecutionRole uses AWS-managed AmazonECSTaskExecutionRolePolicy — the standard ECS pattern for ECR pull + CloudWatch Logs + Secrets fetch.",
+          "ExecutionRole uses AWS-managed AmazonECSTaskExecutionRolePolicy - the standard ECS pattern for ECR pull + CloudWatch Logs + Secrets fetch.",
         appliesTo: [
           "Policy::arn:<AWS::Partition>:iam::aws:policy/service-role/AmazonECSTaskExecutionRolePolicy",
         ],

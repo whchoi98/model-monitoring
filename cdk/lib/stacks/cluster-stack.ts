@@ -1,4 +1,4 @@
-// ClusterStack — ECS Cluster + ECR Repos + 로그용 KMS Key.
+// ClusterStack - ECS Cluster + ECR Repos + 로그용 KMS Key.
 //
 // 책임:
 //   - ECS Fargate 워크로드를 호스팅할 Cluster (Container Insights 활성).
@@ -28,7 +28,7 @@ export class ClusterStack extends cdk.Stack {
     super(scope, id, props);
 
     // ---------------------------------------------------------------------
-    // KMS Key — CloudWatch Logs / S3 access logs / Secrets 암호화 공용.
+    // KMS Key - CloudWatch Logs / S3 access logs / Secrets 암호화 공용.
     // ---------------------------------------------------------------------
     this.logKey = new kms.Key(this, "LogKey", {
       alias: "alias/bedrock-monitor/logs",
@@ -60,7 +60,7 @@ export class ClusterStack extends cdk.Stack {
     );
 
     // ---------------------------------------------------------------------
-    // ECS Cluster — Container Insights ON.
+    // ECS Cluster - Container Insights ON.
     // ---------------------------------------------------------------------
     this.cluster = new ecs.Cluster(this, "Cluster", {
       clusterName: "bedrock-monitor",
@@ -70,7 +70,7 @@ export class ClusterStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // ECR Repositories — immutable tag + scan on push + lifecycle.
+    // ECR Repositories - immutable tag + scan on push + lifecycle.
     // ---------------------------------------------------------------------
     this.backendRepo = this.createImageRepo("BackendRepo", "bedrock-monitor-backend");
     this.frontendRepo = this.createImageRepo("FrontendRepo", "bedrock-monitor-frontend");

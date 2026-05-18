@@ -1,9 +1,9 @@
-// FargateService 공통 Construct — frontend / backend Service 공통 패턴을 캡슐화.
+// FargateService 공통 Construct - frontend / backend Service 공통 패턴을 캡슐화.
 //
 // 책임:
 //   - TaskDefinition (vCPU 512, 메모리 1024) + 컨테이너 단일 정의
 //   - awsvpc 모드 Service
-//   - per-Service SG (ingress는 본 construct 외부에서 부여 — ALB가 Phase 7에서 추가)
+//   - per-Service SG (ingress는 본 construct 외부에서 부여 - ALB가 Phase 7에서 추가)
 //   - CloudWatch Logs (logGroup은 본 construct에서 생성, 보존 정책은 Phase 11에서 조정)
 //   - Application Target Group (target_type=ip)
 //   - AutoScaling 1~3 (CPU 70% 트리거)
@@ -51,7 +51,7 @@ export class FargateServiceConstruct extends Construct {
     super(scope, id);
 
     // ---------------------------------------------------------------------
-    // 로그 그룹 — 보존 정책은 ObservabilityStack(Phase 11)에서 LogRetention으로 조정.
+    // 로그 그룹 - 보존 정책은 ObservabilityStack(Phase 11)에서 LogRetention으로 조정.
     // ---------------------------------------------------------------------
     this.logGroup = new logs.LogGroup(this, "LogGroup", {
       logGroupName: `/ecs/${props.serviceName}`,
@@ -60,7 +60,7 @@ export class FargateServiceConstruct extends Construct {
     });
 
     // ---------------------------------------------------------------------
-    // IAM Roles — TaskExecutionRole (이미지 pull, 로그 쓰기) + TaskRole (앱 권한).
+    // IAM Roles - TaskExecutionRole (이미지 pull, 로그 쓰기) + TaskRole (앱 권한).
     // ---------------------------------------------------------------------
     this.executionRole = new iam.Role(this, "ExecRole", {
       assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
@@ -86,7 +86,7 @@ export class FargateServiceConstruct extends Construct {
     }
 
     // ---------------------------------------------------------------------
-    // TaskDefinition — single container.
+    // TaskDefinition - single container.
     // ---------------------------------------------------------------------
     this.taskDefinition = new ecs.FargateTaskDefinition(this, "TaskDef", {
       cpu: props.cpu ?? 512,
@@ -123,7 +123,7 @@ export class FargateServiceConstruct extends Construct {
     });
 
     // ---------------------------------------------------------------------
-    // Service SG — ingress 없음 (Phase 7 EdgeStack이 ALB SG로부터 추가).
+    // Service SG - ingress 없음 (Phase 7 EdgeStack이 ALB SG로부터 추가).
     // ---------------------------------------------------------------------
     this.securityGroup = new ec2.SecurityGroup(this, "Sg", {
       vpc: props.vpc,
@@ -149,7 +149,7 @@ export class FargateServiceConstruct extends Construct {
     });
 
     // ---------------------------------------------------------------------
-    // Application Target Group — Phase 7에서 ALB listener에 연결.
+    // Application Target Group - Phase 7에서 ALB listener에 연결.
     // ---------------------------------------------------------------------
     this.targetGroup = new elbv2.ApplicationTargetGroup(this, "Tg", {
       vpc: props.vpc,
@@ -170,7 +170,7 @@ export class FargateServiceConstruct extends Construct {
     this.service.attachToApplicationTargetGroup(this.targetGroup);
 
     // ---------------------------------------------------------------------
-    // AutoScaling — CPU 70% 트리거, 1~maxCapacity.
+    // AutoScaling - CPU 70% 트리거, 1~maxCapacity.
     // ---------------------------------------------------------------------
     const scaling = this.service.autoScaleTaskCount({
       minCapacity: props.desiredCount ?? 1,
