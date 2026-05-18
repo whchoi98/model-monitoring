@@ -9,7 +9,7 @@
 // 주요 흐름:
 //   - DataStack의 dbSecurityGroup에 backend SG로부터 5432 ingress 추가 (cross-stack).
 //   - AgentCoreStack의 memoryAccessPolicy를 BackendTaskRole에 attach.
-//   - ALB SG → backend/frontend SG ingress는 본 스택 내에서 추가 (cycle 없음).
+//   - ALB SG  to  backend/frontend SG ingress는 본 스택 내에서 추가 (cycle 없음).
 //   - 컨테이너 이미지: ECR 'latest' tag (배포 시점에 사전 push 필요).
 import * as cdk from "aws-cdk-lib";
 import * as acm from "aws-cdk-lib/aws-certificatemanager";
@@ -30,7 +30,7 @@ export interface AppServicesStackProps extends cdk.StackProps {
   readonly appSubnets: ec2.SubnetSelection;
   /** ALB가 internet-facing이면 Public 서브넷 필요. 미주입 시 ALB는 internal scheme으로 fallback. */
   readonly publicSubnets?: ec2.SubnetSelection;
-  /** ALB ingress를 CloudFront managed prefix list로 한정 (CF→ALB 보안 패턴). 미주입 시 internal ALB. */
+  /** ALB ingress를 CloudFront managed prefix list로 한정 (CF to ALB 보안 패턴). 미주입 시 internal ALB. */
   readonly cloudFrontPrefixListId?: string;
   readonly cluster: ecs.ICluster;
   readonly backendRepo: ecr.IRepository;
@@ -150,8 +150,8 @@ export class AppServicesStack extends cdk.Stack {
 
     // ---------------------------------------------------------------------
     // ALB - internet-facing 모드(prefix list 패턴) 또는 internal 모드.
-    //   prefix list ID 제공 → internet-facing + Public 서브넷 + CF managed prefix list ingress.
-    //   미제공 → internal scheme + VPC Origin 가정 (v2 원래 design).
+    //   prefix list ID 제공  to  internet-facing + Public 서브넷 + CF managed prefix list ingress.
+    //   미제공  to  internal scheme + VPC Origin 가정 (v2 원래 design).
     // ---------------------------------------------------------------------
     const useInternetFacing = Boolean(props.cloudFrontPrefixListId && props.publicSubnets);
 
@@ -173,22 +173,22 @@ export class AppServicesStack extends cdk.Stack {
     this.albSecurityGroup.addEgressRule(
       this.backend.securityGroup,
       ec2.Port.tcp(8000),
-      "ALB → Backend",
+      "ALB  to  Backend",
     );
     this.albSecurityGroup.addEgressRule(
       this.frontend.securityGroup,
       ec2.Port.tcp(3000),
-      "ALB → Frontend",
+      "ALB  to  Frontend",
     );
     this.backend.securityGroup.addIngressRule(
       this.albSecurityGroup,
       ec2.Port.tcp(8000),
-      "Internal ALB → Backend",
+      "Internal ALB  to  Backend",
     );
     this.frontend.securityGroup.addIngressRule(
       this.albSecurityGroup,
       ec2.Port.tcp(3000),
-      "Internal ALB → Frontend",
+      "Internal ALB  to  Frontend",
     );
 
     // ALB access logs S3 bucket.
@@ -230,7 +230,7 @@ export class AppServicesStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // SG cross-stack ingress - backend SG → RDS SG :5432.
+    // SG cross-stack ingress - backend SG  to  RDS SG :5432.
     // dbSecurityGroup.addIngressRule(...)는 Data 스택을 mutate하여 순환 참조를
     // 만든다. 본 스택 안에 standalone CfnSecurityGroupIngress로 표현해
     // 두 SG ID만 import value로 참조하도록 분리.

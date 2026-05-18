@@ -13,7 +13,21 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import User
 
-SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "bedrock-monitor-secret-change-me")
+_INSECURE_PLACEHOLDERS = {
+    "bedrock-monitor-secret-change-me",
+    "placeholder-replace-with-secure-string-after-deploy",
+    "",
+}
+
+SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "")
+if SECRET_KEY in _INSECURE_PLACEHOLDERS or len(SECRET_KEY) < 32:
+    # 운영 환경에서 publicly-known key로 토큰을 서명하지 않도록 즉시 실패한다.
+    # ECS Task가 SSM SecureString을 주입하지 않으면 (예: 권한 누락) 여기서 멈춤.
+    raise RuntimeError(
+        "JWT_SECRET_KEY env var가 안전한 값으로 설정되지 않았습니다. "
+        "최소 32자 이상이며 placeholder가 아닌 값을 SSM SecureString으로 주입하세요."
+    )
+
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_HOURS = 24
 

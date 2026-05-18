@@ -88,7 +88,8 @@ export class ClusterStack extends cdk.Stack {
   private createImageRepo(id: string, repoName: string): ecr.Repository {
     return new ecr.Repository(this, id, {
       repositoryName: repoName,
-      imageTagMutability: ecr.TagMutability.IMMUTABLE,
+      // MUTABLE: 'latest' tag을 새 이미지로 push 가능하도록. 운영 정착 시 IMMUTABLE + 버전 tag으로 전환.
+      imageTagMutability: ecr.TagMutability.MUTABLE,
       imageScanOnPush: true,
       removalPolicy: cdk.RemovalPolicy.RETAIN,
       lifecycleRules: [
