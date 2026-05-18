@@ -124,17 +124,16 @@ describe("AppServicesStack", () => {
     }));
   });
 
-  it("HTTPS:443 listener가 1개 존재하고 HTTP:80은 없다", () => {
-    template.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 1);
+  it("HTTPS:443 + HTTP:80 listener 둘 다 존재 (cert 정착 전 임시)", () => {
+    template.resourceCountIs("AWS::ElasticLoadBalancingV2::Listener", 2);
     template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike({
       Port: 443,
       Protocol: "HTTPS",
     }));
-    template.resourcePropertiesCountIs(
-      "AWS::ElasticLoadBalancingV2::Listener",
-      { Port: 80 },
-      0,
-    );
+    template.hasResourceProperties("AWS::ElasticLoadBalancingV2::Listener", Match.objectLike({
+      Port: 80,
+      Protocol: "HTTP",
+    }));
   });
 
   it("Listener Rule /api/* → priority 10 (backend TG forward)", () => {

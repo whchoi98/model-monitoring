@@ -44,9 +44,9 @@ describe("EdgeStack (VPC Origin + Internal ALB)", () => {
     template.resourceCountIs("AWS::CloudFront::Distribution", 1);
   });
 
-  it("CloudFront VpcOrigin이 https-only protocol을 사용한다", () => {
+  it("CloudFront VpcOrigin이 http-only protocol을 사용한다 (cert 정착 전 임시)", () => {
     template.hasResourceProperties("AWS::CloudFront::VpcOrigin", Match.objectLike({
-      VpcOriginEndpointConfig: Match.objectLike({ OriginProtocolPolicy: "https-only" }),
+      VpcOriginEndpointConfig: Match.objectLike({ OriginProtocolPolicy: "http-only" }),
     }));
   });
 

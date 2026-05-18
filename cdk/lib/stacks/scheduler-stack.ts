@@ -79,9 +79,12 @@ export class SchedulerStack extends cdk.Stack {
           sid: "BedrockInvokeModel",
           effect: iam.Effect.ALLOW,
           actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+          // global.* inference profile은 cross-region 라우팅이라 region-less foundation-model
+          // ARN 권한도 필요.
           resources: [
-            `arn:aws:bedrock:${this.region}::foundation-model/*`,
+            `arn:aws:bedrock:*::foundation-model/*`,
             `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+            `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
           ],
         }),
       ],
@@ -211,10 +214,11 @@ export class SchedulerStack extends cdk.Stack {
       {
         id: "AwsSolutions-IAM5",
         reason:
-          "Bedrock foundation-model wildcard is region-scoped (matches FR-1 monitored models + Sonnet 4.6 chat/insights model). TaskExecutionRole DefaultPolicy wildcards target dynamic ECR/Logs/Secrets resources bounded by the role's trust.",
+          "global.* inference profile은 cross-region 라우팅이므로 region-less / region-wildcard ARN 필요. TaskExecutionRole DefaultPolicy wildcards는 ECR/Logs/Secrets 동적 리소스용 (role trust로 제한).",
         appliesTo: [
-          `Resource::arn:aws:bedrock:${this.region}::foundation-model/*`,
+          `Resource::arn:aws:bedrock:*::foundation-model/*`,
           `Resource::arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+          `Resource::arn:aws:bedrock:*:${this.account}:inference-profile/*`,
           "Resource::*",
         ],
       },

@@ -44,8 +44,12 @@ export class EdgeStack extends cdk.Stack {
     // CloudFront VPC Origin -> Internal ALB.
     //   VPC Origin은 ALB와 같은 리전에 위치해야 한다 (현재는 ap-northeast-2).
     // ---------------------------------------------------------------------
+    // 운영 cert 정착 전 임시 HTTP origin - ALB는 internal scheme + Private Subnet이고
+    // SG가 VPC CIDR만 허용하므로 외부 노출 없음. CloudFront VPC Origin ENI만 통신 가능.
+    // Cert 발급 후 HTTPS_ONLY + httpPort 제거로 원복.
     const albOrigin = origins.VpcOrigin.withApplicationLoadBalancer(props.alb, {
-      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
+      protocolPolicy: cloudfront.OriginProtocolPolicy.HTTP_ONLY,
+      httpPort: 80,
       readTimeout: cdk.Duration.seconds(60),
       keepaliveTimeout: cdk.Duration.seconds(60),
     });

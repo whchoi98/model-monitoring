@@ -71,10 +71,12 @@ export class AppServicesStack extends cdk.Stack {
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
         ],
-        // 9개 모니터링 대상 + 챗봇용 Sonnet 4.6 - 광범위하게 anthropic / amazon 모델로 한정.
+        // global.* inference profile은 cross-region 라우팅이라 region-less foundation-model
+        // ARN (arn:aws:bedrock:::foundation-model/*) 권한도 필요. 모든 region scope 허용.
         resources: [
-          `arn:aws:bedrock:${this.region}::foundation-model/*`,
+          `arn:aws:bedrock:*::foundation-model/*`,
           `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+          `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
         ],
       }),
       new iam.PolicyStatement({
@@ -163,6 +165,14 @@ export class AppServicesStack extends cdk.Stack {
       ec2.Port.tcp(443),
       "VPC internal HTTPS to ALB",
     );
+    // NOTE: NFR-1 (HTTP listener 금지) 일시 완화 - 운영 cert 정착 전까지 CloudFront
+    // VPC Origin이 HTTP로 origin 호출하도록 80도 허용. ALB는 internal + private
+    // subnet이라 외부 인터넷에서 도달 불가.
+    this.albSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.tcp(80),
+      "VPC internal HTTP to ALB (temporary until cert in place)",
+    );
     this.albSecurityGroup.addEgressRule(
       this.backend.securityGroup,
       ec2.Port.tcp(8000),
@@ -216,6 +226,19 @@ export class AppServicesStack extends cdk.Stack {
       certificates: [albCert],
       defaultAction: elbv2.ListenerAction.forward([this.frontendTargetGroup]),
     });
+    // HTTP:80 listener - 운영 cert 정착 전까지 CloudFront origin HTTP 호출을 받기 위한 임시.
+    // 외부 도달 불가 (ALB internal scheme + Private Subnet + SG VPC CIDR 한정).
+    const httpListener = this.alb.addListener("HttpListener", {
+      port: 80,
+      protocol: elbv2.ApplicationProtocol.HTTP,
+      defaultAction: elbv2.ListenerAction.forward([this.frontendTargetGroup]),
+    });
+    httpListener.addAction("ApiRouteHttp", {
+      priority: 10,
+      conditions: [elbv2.ListenerCondition.pathPatterns(["/api/*"])],
+      action: elbv2.ListenerAction.forward([this.backendTargetGroup]),
+    });
+
     httpsListener.addAction("ApiRoute", {
       priority: 10,
       conditions: [elbv2.ListenerCondition.pathPatterns(["/api/*"])],
@@ -250,10 +273,11 @@ export class AppServicesStack extends cdk.Stack {
         {
           id: "AwsSolutions-IAM5",
           reason:
-            "Bedrock foundation-model wildcard is region-scoped and intentionally covers monitored models + chat model (FR-1 / FR-6).",
+            "global.* inference profile는 cross-region 라우팅을 사용하므로 region-less foundation-model ARN과 region wildcard inference-profile ARN을 모두 허용. 다른 계정/서비스는 IAM trust로 제한됨.",
           appliesTo: [
-            `Resource::arn:aws:bedrock:${this.region}::foundation-model/*`,
+            `Resource::arn:aws:bedrock:*::foundation-model/*`,
             `Resource::arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
+            `Resource::arn:aws:bedrock:*:${this.account}:inference-profile/*`,
           ],
         },
         {

@@ -39,6 +39,15 @@ _REGION_MAP: dict[str, str] = {
 _client_cache: dict[str, object] = {}
 
 
+# Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
+_REASONING_MODEL_PATTERNS = ("opus-4-7",)
+
+
+def _is_reasoning_model(model_id: str) -> bool:
+    """temperature 파라미터를 거부하는 reasoning model 여부."""
+    return any(p in model_id for p in _REASONING_MODEL_PATTERNS)
+
+
 def _get_region_for_model(model_id: str) -> str:
     """Derive the AWS region from a model ID prefix."""
     prefix = model_id.split(".")[0]
@@ -73,10 +82,16 @@ def _probe_single_model(
     server_latency_ms: float | None = None
 
     try:
+        # Claude Opus 4.7 등 reasoning model은 temperature 파라미터를 거부한다.
+        # 모델 ID 기반으로 inferenceConfig 동적 구성.
+        inference_config: dict = {"maxTokens": max_tokens}
+        if not _is_reasoning_model(model_id):
+            inference_config["temperature"] = temperature
+
         response = client.converse_stream(
             modelId=model_id,
             messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig={"maxTokens": max_tokens, "temperature": temperature},
+            inferenceConfig=inference_config,
         )
 
         stream = response["stream"]
