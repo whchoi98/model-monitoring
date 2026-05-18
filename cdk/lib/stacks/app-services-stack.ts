@@ -149,27 +149,20 @@ export class AppServicesStack extends cdk.Stack {
     this.frontendService = this.frontend.service;
 
     // ---------------------------------------------------------------------
-    // ALB - internet-facing 모드(prefix list 패턴) 또는 internal 모드.
-    //   prefix list ID 제공  to  internet-facing + Public 서브넷 + CF managed prefix list ingress.
-    //   미제공  to  internal scheme + VPC Origin 가정 (v2 원래 design).
+    // ALB - internal scheme (Private Subnet). CloudFront VPC Origin이 ENI를 만들어 접근.
+    //   사용자 요구: "CF - Prefix List SG - ALB (Private Subnet)" 구조.
+    //   ALB SG는 VPC CIDR HTTPS:443 허용 (VPC Origin ENI도 VPC 내부 IP를 가짐).
     // ---------------------------------------------------------------------
-    const useInternetFacing = Boolean(props.cloudFrontPrefixListId && props.publicSubnets);
-
     this.albSecurityGroup = new ec2.SecurityGroup(this, "AlbSg", {
       vpc: props.vpc,
-      description: useInternetFacing
-        ? "Internet-facing ALB SG - inbound only from CloudFront managed prefix list"
-        : "Internal ALB SG - inbound from CloudFront VPC Origin only",
+      description: "Internal ALB SG - VPC HTTPS 443 (CloudFront VPC Origin reaches via ENI)",
       allowAllOutbound: false,
     });
-
-    if (useInternetFacing && props.cloudFrontPrefixListId) {
-      this.albSecurityGroup.addIngressRule(
-        ec2.Peer.prefixList(props.cloudFrontPrefixListId),
-        ec2.Port.tcp(443),
-        "CloudFront managed prefix list to ALB 443",
-      );
-    }
+    this.albSecurityGroup.addIngressRule(
+      ec2.Peer.ipv4(props.vpc.vpcCidrBlock),
+      ec2.Port.tcp(443),
+      "VPC internal HTTPS to ALB",
+    );
     this.albSecurityGroup.addEgressRule(
       this.backend.securityGroup,
       ec2.Port.tcp(8000),
@@ -203,8 +196,8 @@ export class AppServicesStack extends cdk.Stack {
 
     this.alb = new elbv2.ApplicationLoadBalancer(this, "InternalAlb", {
       vpc: props.vpc,
-      internetFacing: useInternetFacing,
-      vpcSubnets: useInternetFacing && props.publicSubnets ? props.publicSubnets : props.appSubnets,
+      internetFacing: false,
+      vpcSubnets: props.appSubnets, // 항상 Private Subnet
       securityGroup: this.albSecurityGroup,
       dropInvalidHeaderFields: true,
     });

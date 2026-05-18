@@ -47,17 +47,37 @@ async def lifespan(app: FastAPI):
 
 
 def _seed_default_admin():
-    """Create a default admin user if the users table is empty."""
+    """Create a default admin user if the users table is empty.
+
+    Password는 SEED_ADMIN_PASSWORD 환경변수에서만 읽는다 (SSM SecureString 권장).
+    환경변수가 없거나 너무 짧으면 시드 자체를 skip하고 운영자가 수동으로 사용자를
+    추가하도록 한다. 절대로 코드에 평문 비밀번호를 두지 않는다.
+    """
+    import os
     from auth import hash_password
     from models import User
+
+    seed_password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
+    seed_username = os.environ.get("SEED_ADMIN_USERNAME", "admin").strip()
+
+    if len(seed_password) < 12:
+        logger.warning(
+            "SEED_ADMIN_PASSWORD 미설정 또는 12자 미만 - admin 시드 skip. "
+            "운영자가 별도 절차로 첫 사용자를 생성해야 합니다."
+        )
+        return
 
     db = SessionLocal()
     try:
         if db.query(User).count() == 0:
-            admin = User(username="admin", password_hash=hash_password("!Chldngud16"), approved=1)
+            admin = User(
+                username=seed_username,
+                password_hash=hash_password(seed_password),
+                approved=1,
+            )
             db.add(admin)
             db.commit()
-            logger.info("Default admin user created (admin / admin1234)")
+            logger.info("Default admin user '%s' created from env vars.", seed_username)
     except Exception:
         logger.exception("Failed to seed default admin user")
     finally:

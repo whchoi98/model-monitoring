@@ -49,10 +49,14 @@ export class NetworkStack extends cdk.Stack {
         );
       }
 
+      const existingVpcCidr =
+        (this.node.tryGetContext("existingVpcCidr") as string | undefined) ?? "10.100.0.0/16";
+
       this.vpc = ec2.Vpc.fromVpcAttributes(this, "Vpc", {
         vpcId: existingVpcId,
         // AZ 정보는 fromLookup이 더 정확하나, 명시 모드에선 stack region의 AZ 2개를 가정.
         availabilityZones: [`${this.region}a`, `${this.region}b`],
+        vpcCidrBlock: existingVpcCidr,
         privateSubnetIds: [...appSubnetIds, ...dataSubnetIds],
         publicSubnetIds: publicSubnetIds.length > 0 ? publicSubnetIds : undefined,
       });

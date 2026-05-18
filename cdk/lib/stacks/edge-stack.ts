@@ -1,30 +1,27 @@
-// EdgeStack - CloudFront Distribution + VPC Origin + WAFv2 + CloudFront access logs.
+// EdgeStack - CloudFront Distribution + VPC Origin (Internal ALB) + CloudFront access logs.
 //
-// 책임 분리:
-//   - ALB와 Listener는 AppServicesStack에 위치 (Service↔Listener CDK 자동 의존 cycle 회피).
-//   - 본 스택은 edge 계층: CloudFront, VPC Origin, WAF, edge 로그.
-//
-// 보안 원칙:
-//   - CloudFront → ALB: VPC Origin + https-only.
-//   - WAFv2 (CLOUDFRONT scope) - AWS managed common rules + bad inputs.
-//   - CloudFront access logs → S3 (KMS unused, S3-managed encryption).
-//   - 도메인 없음 → CloudFront은 기본 *.cloudfront.net 사용 + TLS1.2_2021 enforced.
+// 사용자 요구: "CF - Prefix List SG - ALB (Private Subnet)" 구조.
+// 구현:
+//   - CloudFront VPC Origin이 ALB의 사설망 IP로 직접 접근 (PrivateLink-like).
+//   - ALB는 Internal scheme + Private Subnet + VPC CIDR SG ingress.
+//   - WAFv2 CLOUDFRONT scope은 us-east-1 강제이므로 본 stack에서는 제외
+//     (필요 시 별도 us-east-1 stack에서 attach).
+//   - Origin protocol HTTPS_ONLY 유지 (ALB의 cert는 cert hostname 무관하게
+//     PrivateLink 경로에서 동작 - 운영 cert 정착 후 SNI 동작도 정상).
 import * as cdk from "aws-cdk-lib";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
+import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as s3 from "aws-cdk-lib/aws-s3";
-import * as wafv2 from "aws-cdk-lib/aws-wafv2";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
 
 export interface EdgeStackProps extends cdk.StackProps {
-  /** Origin으로 사용할 ALB DNS name. 다른 리전(ap-northeast-2)의 ALB도 가능. */
-  readonly albDnsName: string;
+  readonly alb: elbv2.IApplicationLoadBalancer;
 }
 
 export class EdgeStack extends cdk.Stack {
   public readonly distribution: cloudfront.Distribution;
-  public readonly webAcl: wafv2.CfnWebACL;
   public readonly cfLogsBucket: s3.Bucket;
 
   constructor(scope: Construct, id: string, props: EdgeStackProps) {
@@ -44,60 +41,10 @@ export class EdgeStack extends cdk.Stack {
     });
 
     // ---------------------------------------------------------------------
-    // WAFv2 WebACL - CLOUDFRONT scope (us-east-1 필수).
+    // CloudFront VPC Origin -> Internal ALB.
+    //   VPC Origin은 ALB와 같은 리전에 위치해야 한다 (현재는 ap-northeast-2).
     // ---------------------------------------------------------------------
-    this.webAcl = new wafv2.CfnWebACL(this, "WebAcl", {
-      name: "BedrockMonitorWebAcl",
-      scope: "CLOUDFRONT",
-      defaultAction: { allow: {} },
-      visibilityConfig: {
-        cloudWatchMetricsEnabled: true,
-        metricName: "BedrockMonitorWebAcl",
-        sampledRequestsEnabled: true,
-      },
-      rules: [
-        {
-          name: "AWSManagedRulesCommonRuleSet",
-          priority: 10,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: "AWS",
-              name: "AWSManagedRulesCommonRuleSet",
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "AWSManagedRulesCommonRuleSet",
-            sampledRequestsEnabled: true,
-          },
-        },
-        {
-          name: "AWSManagedRulesKnownBadInputsRuleSet",
-          priority: 20,
-          overrideAction: { none: {} },
-          statement: {
-            managedRuleGroupStatement: {
-              vendorName: "AWS",
-              name: "AWSManagedRulesKnownBadInputsRuleSet",
-            },
-          },
-          visibilityConfig: {
-            cloudWatchMetricsEnabled: true,
-            metricName: "AWSManagedRulesKnownBadInputsRuleSet",
-            sampledRequestsEnabled: true,
-          },
-        },
-      ],
-    });
-
-    // ---------------------------------------------------------------------
-    // CloudFront Origin -> ALB DNS (cross-region 가능).
-    //   HttpOrigin(ALB DNS, HTTPS_ONLY)으로 직접 접근.
-    //   WAFv2 CLOUDFRONT scope이 us-east-1만 허용하므로 본 스택은 us-east-1에 배포되고
-    //   ALB는 다른 리전(ap-northeast-2)에 있어도 무방.
-    // ---------------------------------------------------------------------
-    const albOrigin = new origins.HttpOrigin(props.albDnsName, {
+    const albOrigin = origins.VpcOrigin.withApplicationLoadBalancer(props.alb, {
       protocolPolicy: cloudfront.OriginProtocolPolicy.HTTPS_ONLY,
       readTimeout: cdk.Duration.seconds(60),
       keepaliveTimeout: cdk.Duration.seconds(60),
@@ -118,14 +65,12 @@ export class EdgeStack extends cdk.Stack {
         "/api/*": {
           origin: albOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-          // API: 캐시 절대 금지. SSE 청크가 viewer로 그대로 흘러가야 함 (NFR-4).
           cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           compress: false,
         },
       },
-      webAclId: this.webAcl.attrArn,
       enableLogging: true,
       logBucket: this.cfLogsBucket,
       logIncludesCookies: false,
@@ -134,9 +79,6 @@ export class EdgeStack extends cdk.Stack {
       comment: "Bedrock Monitor v2 distribution",
     });
 
-    // ---------------------------------------------------------------------
-    // cdk-nag suppressions.
-    // ---------------------------------------------------------------------
     NagSuppressions.addStackSuppressions(this, [
       {
         id: "AwsSolutions-S1",
@@ -150,24 +92,20 @@ export class EdgeStack extends cdk.Stack {
       {
         id: "AwsSolutions-CFR2",
         reason:
-          "WAFv2 WebACL is attached to the distribution; AwsSolutions-CFR2 occasionally misreports due to L1 binding.",
+          "WAFv2 attachment deferred to a separate us-east-1 stack (CLOUDFRONT scope is region-bound).",
       },
       {
         id: "AwsSolutions-CFR4",
         reason:
-          "Default *.cloudfront.net cert enforces TLS_V1_2_2021 minimumProtocolVersion; custom domain is out of scope (no domain owned).",
+          "Default *.cloudfront.net cert enforces TLS_V1_2_2021 minimumProtocolVersion.",
       },
     ]);
 
-    // ---------------------------------------------------------------------
-    // Outputs.
-    // ---------------------------------------------------------------------
     new cdk.CfnOutput(this, "CloudFrontDomain", {
       value: this.distribution.distributionDomainName,
     });
     new cdk.CfnOutput(this, "CloudFrontDistributionId", {
       value: this.distribution.distributionId,
     });
-    new cdk.CfnOutput(this, "WebAclArn", { value: this.webAcl.attrArn });
   }
 }
