@@ -16,20 +16,23 @@ interface Props {
   data: TrendPoint[];
   metric: "ttft_ms" | "total_latency_ms" | "tps";
   title: string;
+  /** 특정 모델 이름이 주어지면 해당 모델만 그래프에 표시. */
+  selectedModel?: string | null;
 }
 
 const MODEL_COLORS: Record<string, string> = {
-  "Claude Sonnet 4.5 (US)": "#3b82f6",
-  "Claude Haiku 4.5 (US)": "#10b981",
-  "Claude Opus 4.5 (US)": "#8b5cf6",
-  "Claude Opus 4.6 (US)": "#f59e0b",
+  // Global
+  "Claude Opus 4.7 (Global)": "#f97316",
+  "Claude Opus 4.6 (Global)": "#f59e0b",
+  "Claude Sonnet 4.6 (Global)": "#3b82f6",
   "Claude Haiku 4.5 (Global)": "#06b6d4",
-  "Claude Sonnet 4.5 (Global)": "#6366f1",
-  "Claude Opus 4.5 (Global)": "#ec4899",
-  "Claude Opus 4.6 (Global)": "#f97316",
+  "Nova 2.0 Lite (Global)": "#10b981",
+  // US (Claude Platform on AWS)
+  "Claude Opus 4.7 (US)": "#ef4444",
+  "Claude Opus 4.6 (US)": "#ec4899",
+  "Claude Sonnet 4.6 (US)": "#8b5cf6",
+  "Claude Haiku 4.5 (US)": "#6366f1",
   "Nova 2.0 Lite (US)": "#84cc16",
-  "Claude Sonnet 4.6 (US)": "#14b8a6",
-  "Claude Sonnet 4.6 (Global)": "#ef4444",
 };
 
 function getColor(modelName: string): string {
@@ -42,14 +45,26 @@ function formatUnit(value: number, metric: string): string {
   return `${value.toFixed(0)} ms`;
 }
 
-export default function TrendChart({ data, metric, title }: Props) {
+export default function TrendChart({ data, metric, title, selectedModel }: Props) {
   if (data.length === 0) return null;
 
-  // Get unique model names
-  const modelNames = Array.from(new Set(data.map((d) => d.model_name)));
+  const filtered = selectedModel
+    ? data.filter((d) => d.model_name === selectedModel)
+    : data;
 
-  // Get unique timestamps and build pivot table
-  const timestamps = Array.from(new Set(data.map((d) => d.timestamp))).sort();
+  if (filtered.length === 0) {
+    return (
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+        <h3 className="text-sm font-semibold text-gray-200 mb-2">{title}</h3>
+        <p className="text-xs text-gray-500">
+          선택한 모델({selectedModel})의 추세 데이터가 없습니다.
+        </p>
+      </div>
+    );
+  }
+
+  const modelNames = Array.from(new Set(filtered.map((d) => d.model_name)));
+  const timestamps = Array.from(new Set(filtered.map((d) => d.timestamp))).sort();
 
   const chartData = timestamps.map((ts) => {
     const point: Record<string, string | number | null> = {
@@ -57,7 +72,7 @@ export default function TrendChart({ data, metric, title }: Props) {
       time: new Date(ts).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
     };
     for (const name of modelNames) {
-      const match = data.find((d) => d.timestamp === ts && d.model_name === name);
+      const match = filtered.find((d) => d.timestamp === ts && d.model_name === name);
       point[name] = match ? match[metric] : null;
     }
     return point;
@@ -65,7 +80,14 @@ export default function TrendChart({ data, metric, title }: Props) {
 
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-      <h3 className="text-sm font-semibold text-gray-200 mb-4">{title}</h3>
+      <div className="flex items-center justify-between mb-4">
+        <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
+        {selectedModel && (
+          <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            🔍 {selectedModel}
+          </span>
+        )}
+      </div>
       <ResponsiveContainer width="100%" height={300}>
         <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
@@ -78,14 +100,14 @@ export default function TrendChart({ data, metric, title }: Props) {
             tick={{ fill: "#6b7280", fontSize: 11 }}
             stroke="#374151"
             tickFormatter={(v) => {
-              if (metric === "total_latency_ms") return `${(v / 1000).toFixed(0)}s`;
-              if (metric === "tps") return `${v}`;
-              return `${v}`;
+              if (metric === "tps") return v.toFixed(0);
+              if (metric === "total_latency_ms") return `${(v / 1000).toFixed(1)}s`;
+              return `${v.toFixed(0)}`;
             }}
           />
           <Tooltip
             contentStyle={{
-              backgroundColor: "#111827",
+              backgroundColor: "#0f172a",
               border: "1px solid #374151",
               borderRadius: "8px",
               fontSize: "12px",

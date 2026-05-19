@@ -7,6 +7,10 @@ import { useState } from "react";
 
 interface Props {
   results: ProbeResult[];
+  /** 모델 카드 클릭 시 호출. 클릭한 모델 이름 (또는 toggle off 시 null). */
+  onSelectModel?: (modelName: string | null) => void;
+  /** 현재 선택된 모델 이름 - 카드 highlight + 다시 클릭 시 해제. */
+  selectedModel?: string | null;
 }
 
 function MetricTooltip({ text }: { text: string }) {
@@ -79,7 +83,7 @@ function formatTime(timestamp: string | undefined, t: Translations): string {
   return t.hoursAgo(Math.floor(diffMin / 60));
 }
 
-export default function ModelStatusGrid({ results }: Props) {
+export default function ModelStatusGrid({ results, onSelectModel, selectedModel }: Props) {
   const t = useT();
 
   if (results.length === 0) return null;
@@ -88,13 +92,37 @@ export default function ModelStatusGrid({ results }: Props) {
     <div>
       <h2 className="text-lg font-semibold text-gray-100 mb-4">{t.modelStatus}</h2>
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {results.map((r) => (
+        {results.map((r) => {
+          const isSelected = selectedModel === r.model_name;
+          const clickable = Boolean(onSelectModel);
+          return (
           <div
             key={r.model_id}
+            onClick={
+              clickable
+                ? () => onSelectModel?.(isSelected ? null : r.model_name)
+                : undefined
+            }
+            role={clickable ? "button" : undefined}
+            tabIndex={clickable ? 0 : undefined}
+            onKeyDown={
+              clickable
+                ? (e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      onSelectModel?.(isSelected ? null : r.model_name);
+                    }
+                  }
+                : undefined
+            }
             className={`rounded-xl border p-4 transition-colors ${
-              r.status === "success"
-                ? "bg-gray-900/50 border-gray-800 hover:border-gray-700"
-                : "bg-rose-950/20 border-rose-900/30 hover:border-rose-800/40"
+              clickable ? "cursor-pointer" : ""
+            } ${
+              isSelected
+                ? "bg-blue-500/10 border-blue-500/60 ring-2 ring-blue-500/40"
+                : r.status === "success"
+                  ? "bg-gray-900/50 border-gray-800 hover:border-gray-700"
+                  : "bg-rose-950/20 border-rose-900/30 hover:border-rose-800/40"
             }`}
           >
             {/* Header */}
@@ -158,8 +186,24 @@ export default function ModelStatusGrid({ results }: Props) {
               {formatTime(r.timestamp, t)}
             </div>
           </div>
-        ))}
+          );
+        })}
       </div>
+      {selectedModel && onSelectModel && (
+        <div className="mt-3 text-xs text-gray-400 flex items-center gap-2">
+          <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+            🔍 {selectedModel}
+          </span>
+          <span>이 모델만 추세 그래프에 표시됩니다.</span>
+          <button
+            type="button"
+            onClick={() => onSelectModel(null)}
+            className="text-gray-500 hover:text-gray-200 underline"
+          >
+            해제
+          </button>
+        </div>
+      )}
     </div>
   );
 }

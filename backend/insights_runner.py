@@ -101,21 +101,13 @@ def summarize_with_bedrock(window_label: str, stats: Dict[str, Any]) -> str:
     )
 
 
-def main() -> int:
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
-    )
-
-    parser = argparse.ArgumentParser(description="Insight 도출 잡 — 한 번 실행 후 종료")
-    parser.add_argument("--window", default="6h", help="분석 윈도우 (예: 6h, 24h, 3d)")
-    args = parser.parse_args()
-
+def run_once(window_spec: str = "6h") -> int:
+    """한 번 실행하고 종료. 반환값: 생성된 insight ID (0 = skip, -1 = 실패)."""
     try:
-        window = parse_window(args.window)
+        window = parse_window(window_spec)
     except ValueError as exc:
         logger.error("%s", exc)
-        return 2
+        return -1
 
     now = datetime.now(timezone.utc)
     cutoff = now - window
@@ -132,17 +124,17 @@ def main() -> int:
             .all()
         )
         if not runs:
-            logger.info("최근 %s 동안 auto run 없음 — insight skip", args.window)
+            logger.info("최근 %s 동안 auto run 없음 - insight skip", window_spec)
             return 0
 
         run_ids = [r.id for r in runs]
         rows = db.query(ProbeResult).filter(ProbeResult.run_id.in_(run_ids)).all()
         if not rows:
-            logger.info("ProbeResult 없음 — insight skip")
+            logger.info("ProbeResult 없음 - insight skip")
             return 0
 
         stats = compute_stats(rows)
-        summary = summarize_with_bedrock(args.window, stats)
+        summary = summarize_with_bedrock(window_spec, stats)
 
         insight = Insight(
             window_start=cutoff,
@@ -153,13 +145,28 @@ def main() -> int:
         db.add(insight)
         db.commit()
         db.refresh(insight)
-        logger.info("insights_runner: insight id=%d 저장 (window=%s)", insight.id, args.window)
+        logger.info("insights_runner: insight id=%d 저장 (window=%s)", insight.id, window_spec)
+        return insight.id
     except Exception:
         logger.exception("insights_runner 실패")
-        return 1
+        return -1
     finally:
         db.close()
-    return 0
+
+
+def main() -> int:
+    """CLI 진입점 - EventBridge Scheduler가 호출하는 Fargate task용."""
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s %(levelname)s %(name)s: %(message)s",
+    )
+
+    parser = argparse.ArgumentParser(description="Insight 도출 잡 - 한 번 실행 후 종료")
+    parser.add_argument("--window", default="6h", help="분석 윈도우 (예: 6h, 24h, 3d)")
+    args = parser.parse_args()
+
+    result = run_once(args.window)
+    return 0 if result >= 0 else 1
 
 
 if __name__ == "__main__":

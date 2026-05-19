@@ -382,3 +382,15 @@ export async function fetchInsights(limit: number = 10): Promise<Insight[]> {
   if (!res.ok) throw new Error(`fetchInsights failed: ${res.statusText}`);
   return res.json();
 }
+
+export async function regenerateInsight(
+  window: string = "6h",
+): Promise<{ triggered: boolean; message: string }> {
+  const res = await fetch(`${BASE}/api/insights/regenerate`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ window }),
+  });
+  if (!res.ok) throw new Error(`regenerateInsight failed: ${res.statusText}`);
+  return res.json();
+}

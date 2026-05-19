@@ -90,6 +90,13 @@ export class AppServicesStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     // backend 컨테이너 비밀/환경.
     // ---------------------------------------------------------------------
+    // SEED_ADMIN_PASSWORD는 외부에서 사전 생성된 SSM SecureString을 import (보안 정책).
+    const seedAdminPasswordParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "SeedAdminPasswordParam",
+      { parameterName: "/bedrock-monitor/seed-admin-password" },
+    );
+
     const backendSecrets: Record<string, ecs.Secret> = {
       // DATABASE_URL은 backend/database.py가 DB_USER/PASSWORD/HOST/PORT/NAME 으로 직접 조립한다.
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -99,6 +106,7 @@ export class AppServicesStack extends cdk.Stack {
       DB_NAME: ecs.Secret.fromSecretsManager(props.dbSecret, "dbname"),
       JWT_SECRET_KEY: ecs.Secret.fromSsmParameter(props.jwtSecretParam),
       AGENTCORE_MEMORY_ID: ecs.Secret.fromSsmParameter(props.agentCoreMemoryIdParam),
+      SEED_ADMIN_PASSWORD: ecs.Secret.fromSsmParameter(seedAdminPasswordParam),
     };
 
     const backendEnv: Record<string, string> = {

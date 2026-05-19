@@ -22,18 +22,26 @@ from models import ProbeResult, ProbeRun
 
 logger = logging.getLogger(__name__)
 
-# ap-northeast-2 (Seoul) 배포 — 모니터링 대상 5개 모델 (사용자 지정 4 + Nova 2 Lite).
+# 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
 AVAILABLE_MODELS: dict[str, str] = {
+    # Global cross-region inference profile (ap-northeast-2)
     "global.anthropic.claude-opus-4-7": "Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
     "global.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (Global)",
+    # US cross-region inference profile (us-east-1) - Claude Platform on AWS
+    "us.anthropic.claude-opus-4-7": "Claude Opus 4.7 (US)",
+    "us.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (US)",
+    "us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (US)",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (US)",
+    "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US)",
 }
 
-# 모든 모델은 stack 리전(ap-northeast-2)에서 호출.
+# 모델 prefix별 boto3 client 리전 - cross-region inference profile은 각 home region에서 호출해야 함.
 _REGION_MAP: dict[str, str] = {
     "global": "ap-northeast-2",
+    "us": "us-east-1",
 }
 
 _client_cache: dict[str, object] = {}

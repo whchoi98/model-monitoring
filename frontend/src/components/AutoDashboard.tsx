@@ -47,6 +47,8 @@ export default function AutoDashboard() {
   const [status, setStatus] = useState<AutoProbeStatus | null>(null);
   const [results, setResults] = useState<ProbeResult[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
+  // 카드 클릭 시 해당 모델만 추세 그래프에 표시.
+  const [selectedModel, setSelectedModel] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [nextCountdown, setNextCountdown] = useState("-");
@@ -171,13 +173,17 @@ export default function AutoDashboard() {
 
       {hasData ? (
         <>
-          {/* AI 인사이트 패널 (insights_runner 30분 잡 결과) */}
+          {/* 1) Model Status Grid - 카드 클릭으로 그래프 필터링 가능 */}
+          <ModelStatusGrid
+            results={results}
+            selectedModel={selectedModel}
+            onSelectModel={setSelectedModel}
+          />
+
+          {/* 2) AI 인사이트 패널 (insights_runner 10분 잡 결과 + 새로고침 버튼) */}
           <InsightsPanel />
 
-          {/* Model Status Grid */}
-          <ModelStatusGrid results={results} />
-
-          {/* Trend Charts */}
+          {/* 3) Trend Charts - selectedModel이 있으면 해당 모델만 표시 */}
           {trend.length > 0 && (
             <div className="space-y-4">
               {/* Time Range Selector */}
@@ -200,13 +206,13 @@ export default function AutoDashboard() {
                 </div>
               </div>
 
-              <TrendChart data={trend} metric="ttft_ms" title={t.ttftTrend} />
-              <TrendChart data={trend} metric="total_latency_ms" title={t.latencyTrend} />
-              <TrendChart data={trend} metric="tps" title={t.tpsTrend} />
+              <TrendChart data={trend} metric="ttft_ms" title={t.ttftTrend} selectedModel={selectedModel} />
+              <TrendChart data={trend} metric="total_latency_ms" title={t.latencyTrend} selectedModel={selectedModel} />
+              <TrendChart data={trend} metric="tps" title={t.tpsTrend} selectedModel={selectedModel} />
             </div>
           )}
 
-          {/* Metric Descriptions Panel */}
+          {/* 4) Metric Descriptions Panel */}
           <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
             <h3 className="text-sm font-semibold text-gray-200 mb-3">{t.metricDescTitle}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

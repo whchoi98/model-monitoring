@@ -12,6 +12,7 @@ from sqlalchemy import text
 from database import create_tables, engine, SessionLocal
 from routers import models, probes, prompts, results
 from routers import auto_probe
+from routers import admin as admin_router
 from routers import auth as auth_router
 from routers import chat as chat_router
 from routers import insights as insights_router
@@ -69,7 +70,8 @@ def _seed_default_admin():
 
     db = SessionLocal()
     try:
-        if db.query(User).count() == 0:
+        existing = db.query(User).filter(User.username == seed_username).first()
+        if existing is None:
             admin = User(
                 username=seed_username,
                 password_hash=hash_password(seed_password),
@@ -78,6 +80,12 @@ def _seed_default_admin():
             db.add(admin)
             db.commit()
             logger.info("Default admin user '%s' created from env vars.", seed_username)
+        else:
+            # idempotent: env가 진실의 원천. 이전 비밀번호(예: v1 하드코딩 잔재) 위에 덮어쓴다.
+            existing.password_hash = hash_password(seed_password)
+            existing.approved = 1
+            db.commit()
+            logger.info("Default admin user '%s' password rotated from env vars.", seed_username)
     except Exception:
         logger.exception("Failed to seed default admin user")
     finally:
@@ -109,6 +117,7 @@ app.include_router(auto_probe.router)
 app.include_router(auth_router.router)
 app.include_router(chat_router.router)
 app.include_router(insights_router.router)
+app.include_router(admin_router.router)
 
 
 @app.get("/api/health", tags=["health"])
