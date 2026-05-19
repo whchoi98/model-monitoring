@@ -128,6 +128,7 @@ export const ko: Translations = {
   trendRange: "조회 기간",
   metricDescTitle: "지표 설명",
   trendRangeLabel: (hours: number) => {
+    if (hours < 1) return `${Math.round(hours * 60)}분`;
     if (hours < 24) return `${hours}시간`;
     return `${hours / 24}일`;
   },
@@ -247,6 +248,7 @@ export const en: Translations = {
   trendRange: "Time Range",
   metricDescTitle: "Metric Descriptions",
   trendRangeLabel: (hours: number) => {
+    if (hours < 1) return `${Math.round(hours * 60)}m`;
     if (hours < 24) return `${hours}h`;
     return `${hours / 24}d`;
   },

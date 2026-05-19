@@ -85,6 +85,7 @@ class Insight(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     window_start = Column(DateTime(timezone=True), nullable=False)
     window_end = Column(DateTime(timezone=True), nullable=False)
-    summary_md = Column(Text, nullable=False)  # 마크다운 요약 본문
+    summary_md = Column(Text, nullable=False)  # 한국어 마크다운 요약 (default)
+    summary_md_en = Column(Text, nullable=True)  # 영문 마크다운 요약 (i18n 'en' 모드)
     model_breakdown = Column(JSON, nullable=True)  # 모델별 stats 스냅샷
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))

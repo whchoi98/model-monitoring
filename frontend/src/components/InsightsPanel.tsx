@@ -1,17 +1,20 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import { fetchLatestInsight, regenerateInsight } from "@/lib/api";
+import { fetchLatestInsight, fetchMe, getToken, regenerateInsight } from "@/lib/api";
 import { Insight } from "@/lib/types";
+import { useLang } from "@/lib/i18n-context";
 import MessageMarkdown from "./chat/MessageMarkdown";
 
 // 대시보드용 위젯 - 가장 최근 인사이트 + 즉시 재생성 버튼.
-// insights_runner가 10분마다 자동 갱신. 사용자가 즉시 재생성 원할 시 새로고침 버튼.
+// 인사이트 조회는 누구나, 재생성은 인증 사용자만 (Bedrock 비용 abuse 방지).
 export default function InsightsPanel() {
+  const { lang } = useLang();
   const [insight, setInsight] = useState<Insight | null>(null);
   const [loading, setLoading] = useState(true);
   const [regenerating, setRegenerating] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
+  const [authed, setAuthed] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -30,8 +33,22 @@ export default function InsightsPanel() {
     return () => clearInterval(id);
   }, [load]);
 
+  // 로그인 상태 - 재생성 버튼은 인증 사용자만 활성화.
+  useEffect(() => {
+    if (!getToken()) {
+      setAuthed(false);
+      return;
+    }
+    fetchMe().then(() => setAuthed(true)).catch(() => setAuthed(false));
+  }, []);
+
   const handleRegenerate = async () => {
     if (regenerating) return;
+    if (!authed) {
+      setStatusMsg("재생성은 로그인 후 사용할 수 있습니다.");
+      setTimeout(() => setStatusMsg(null), 4000);
+      return;
+    }
     setRegenerating(true);
     setStatusMsg("인사이트 생성 요청 중...");
     try {
@@ -79,9 +96,13 @@ export default function InsightsPanel() {
           <button
             type="button"
             onClick={handleRegenerate}
-            disabled={regenerating}
-            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600/80 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-            title="현재 데이터로 즉시 새 인사이트를 생성합니다 (10초~30초 소요)"
+            disabled={regenerating || !authed}
+            className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600/80 hover:bg-blue-500 text-white disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+            title={
+              authed
+                ? "현재 데이터로 즉시 새 인사이트를 생성합니다 (10~30초 소요)"
+                : "로그인 후 사용 가능합니다"
+            }
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -108,14 +129,20 @@ export default function InsightsPanel() {
       )}
 
       {loading ? (
-        <div className="text-xs text-gray-500">로딩 중...</div>
+        <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
       ) : insight ? (
         <div className="max-h-72 overflow-y-auto">
-          <MessageMarkdown text={insight.summary_md} />
+          <MessageMarkdown
+            text={
+              lang === "en" && insight.summary_md_en
+                ? insight.summary_md_en
+                : insight.summary_md
+            }
+          />
         </div>
       ) : (
         <div className="text-xs text-gray-500">
-          아직 생성된 인사이트가 없습니다. &quot;새로고침&quot; 버튼으로 즉시 생성하거나 10분 주기 잡을 기다리세요.
+          아직 생성된 인사이트가 없습니다. &quot;새로고침&quot; 버튼으로 즉시 생성하거나 5분 주기 잡을 기다리세요.
         </div>
       )}
     </div>

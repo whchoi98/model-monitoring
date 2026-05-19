@@ -120,6 +120,7 @@ export interface Insight {
   window_start: string;
   window_end: string;
   summary_md: string;
+  summary_md_en?: string | null;
   model_breakdown: Record<string, unknown> | null;
   created_at: string;
 }

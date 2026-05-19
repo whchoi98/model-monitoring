@@ -32,6 +32,7 @@ class InsightResponse(BaseModel):
     window_start: str
     window_end: str
     summary_md: str
+    summary_md_en: Optional[str] = None
     model_breakdown: Optional[dict] = None
     created_at: str
 
@@ -44,6 +45,7 @@ def _serialize(row: Insight) -> InsightResponse:
         window_start=row.window_start.isoformat() if row.window_start else "",
         window_end=row.window_end.isoformat() if row.window_end else "",
         summary_md=row.summary_md,
+        summary_md_en=getattr(row, "summary_md_en", None),
         model_breakdown=row.model_breakdown,
         created_at=row.created_at.isoformat() if row.created_at else "",
     )

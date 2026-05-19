@@ -38,6 +38,7 @@ async def lifespan(app: FastAPI):
     with engine.connect() as conn:
         conn.execute(text("ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS is_auto INTEGER DEFAULT 0"))
         conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approved INTEGER DEFAULT 0"))
+        conn.execute(text("ALTER TABLE insights ADD COLUMN IF NOT EXISTS summary_md_en TEXT"))
         conn.commit()
 
     # Seed default admin user if no users exist
@@ -61,10 +62,10 @@ def _seed_default_admin():
     seed_password = os.environ.get("SEED_ADMIN_PASSWORD", "").strip()
     seed_username = os.environ.get("SEED_ADMIN_USERNAME", "admin").strip()
 
-    if len(seed_password) < 12:
+    if len(seed_password) < 8:
         logger.warning(
-            "SEED_ADMIN_PASSWORD 미설정 또는 12자 미만 - admin 시드 skip. "
-            "운영자가 별도 절차로 첫 사용자를 생성해야 합니다."
+            "SEED_ADMIN_PASSWORD 미설정 또는 8자 미만 - admin 시드 skip. "
+            "운영자가 SSM SecureString에 충분히 강한 비밀번호를 설정해야 합니다."
         )
         return
 

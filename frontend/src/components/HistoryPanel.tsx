@@ -11,11 +11,17 @@ interface HistoryPanelProps {
   onClose: () => void;
 }
 
-type TimeRange = "1h" | "6h" | "24h" | "7d" | "30d";
+type TimeRange = "5m" | "15m" | "30m" | "1h" | "6h" | "24h" | "7d" | "30d";
 
 function getStartTime(range: TimeRange): string {
   const now = new Date();
   switch (range) {
+    case "5m":
+      return new Date(now.getTime() - 5 * 60 * 1000).toISOString();
+    case "15m":
+      return new Date(now.getTime() - 15 * 60 * 1000).toISOString();
+    case "30m":
+      return new Date(now.getTime() - 30 * 60 * 1000).toISOString();
     case "1h":
       return new Date(now.getTime() - 3600 * 1000).toISOString();
     case "6h":
@@ -86,7 +92,11 @@ function getRegionBadge(name: string, t: Translations) {
 }
 
 function getTimeRanges(t: Translations): { value: TimeRange; label: string }[] {
+  // i18n에 5m/15m/30m 키가 없어 fallback 문자열 사용 (한/영 모두 자연스러움).
   return [
+    { value: "5m", label: "5m" },
+    { value: "15m", label: "15m" },
+    { value: "30m", label: "30m" },
     { value: "1h", label: t.range1h },
     { value: "6h", label: t.range6h },
     { value: "24h", label: t.range24h },

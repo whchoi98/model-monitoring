@@ -74,31 +74,54 @@ def compute_stats(rows: List[ProbeResult]) -> Dict[str, Any]:
     return out
 
 
-SUMMARY_SYSTEM = (
+SUMMARY_SYSTEM_KO = (
     "당신은 AWS Bedrock LLM 성능 데이터를 분석하는 한국어 어시스턴트입니다. "
     "수치는 그대로 인용하고, 추측하지 마세요. 마크다운 표를 활용해 핵심을 한눈에 보여주세요."
 )
 
+SUMMARY_SYSTEM_EN = (
+    "You are an English-speaking analyst summarizing AWS Bedrock LLM performance data. "
+    "Cite numbers verbatim, do not speculate. Use markdown tables so operators can scan at a glance."
+)
 
-def summarize_with_bedrock(window_label: str, stats: Dict[str, Any]) -> str:
-    """Sonnet 4.6 호출 — 블로킹 converse() 사용 (배치 잡)."""
+
+def _summarize(window_label: str, stats: Dict[str, Any], lang: str) -> str:
+    """Sonnet 4.6 블로킹 호출 - lang in {'ko','en'} 별로 system prompt + user prompt 다르게."""
     from agent.bedrock import converse_blocking, INSIGHTS_MODEL_ID
 
-    user_text = (
-        f"다음은 최근 {window_label} 동안의 Bedrock 모델 모니터링 통계입니다.\n"
-        f"각 모델의 성능과 에러율을 한국어로 요약하고, 눈에 띄는 이상 징후가 있다면 짚어 주세요.\n\n"
-        "```json\n"
-        f"{json.dumps(stats, ensure_ascii=False, indent=2)}\n"
-        "```\n\n"
-        "출력 형식: 마크다운. 첫 줄에 한 문장 요약, 이어서 모델별 표."
-    )
+    if lang == "en":
+        user_text = (
+            f"Below are AWS Bedrock LLM monitoring statistics for the last {window_label} window.\n"
+            "Summarize per-model performance and error rates in English. Call out anomalies.\n\n"
+            "```json\n"
+            f"{json.dumps(stats, ensure_ascii=False, indent=2)}\n"
+            "```\n\n"
+            "Output: markdown. First line is a one-sentence summary, followed by a per-model table."
+        )
+        system = SUMMARY_SYSTEM_EN
+    else:
+        user_text = (
+            f"다음은 최근 {window_label} 동안의 Bedrock 모델 모니터링 통계입니다.\n"
+            "각 모델의 성능과 에러율을 한국어로 요약하고, 눈에 띄는 이상 징후가 있다면 짚어 주세요.\n\n"
+            "```json\n"
+            f"{json.dumps(stats, ensure_ascii=False, indent=2)}\n"
+            "```\n\n"
+            "출력 형식: 마크다운. 첫 줄에 한 문장 요약, 이어서 모델별 표."
+        )
+        system = SUMMARY_SYSTEM_KO
+
     return converse_blocking(
         messages=[{"role": "user", "content": [{"text": user_text}]}],
         model_id=INSIGHTS_MODEL_ID,
-        system=SUMMARY_SYSTEM,
+        system=system,
         max_tokens=2048,
         temperature=0.1,
     )
+
+
+def summarize_with_bedrock(window_label: str, stats: Dict[str, Any]) -> str:
+    """KO 요약 - 기존 인터페이스 유지 (legacy callers)."""
+    return _summarize(window_label, stats, "ko")
 
 
 def run_once(window_spec: str = "6h") -> int:
@@ -134,12 +157,20 @@ def run_once(window_spec: str = "6h") -> int:
             return 0
 
         stats = compute_stats(rows)
-        summary = summarize_with_bedrock(window_spec, stats)
+        # 한국어와 영어 두 요약을 한 번에 생성 (UI 언어 토글 즉시 반영용).
+        summary_ko = _summarize(window_spec, stats, "ko")
+        try:
+            summary_en = _summarize(window_spec, stats, "en")
+        except Exception:
+            # 영어 요약 실패해도 한국어는 살린다.
+            logger.exception("EN insight generation failed; KO만 저장")
+            summary_en = None
 
         insight = Insight(
             window_start=cutoff,
             window_end=now,
-            summary_md=summary,
+            summary_md=summary_ko,
+            summary_md_en=summary_en,
             model_breakdown=stats,
         )
         db.add(insight)

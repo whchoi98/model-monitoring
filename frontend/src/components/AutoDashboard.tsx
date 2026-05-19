@@ -39,7 +39,8 @@ function formatCountdown(nextRunTime: string | null, t: Translations): string {
   return `${min}${t.minutes} ${sec < 10 ? "0" : ""}${sec}${t.seconds}`;
 }
 
-const TREND_RANGE_HOURS = [168, 120, 72, 24, 12, 6, 3, 1];
+// 시간 단위 + 분 단위 (fractional hours: 0.5h=30m, 0.25h=15m, 0.0833h≈5m).
+const TREND_RANGE_HOURS = [168, 120, 72, 24, 12, 6, 3, 1, 0.5, 0.25, 1 / 12];
 
 export default function AutoDashboard() {
   const t = useT();
@@ -71,10 +72,12 @@ export default function AutoDashboard() {
     }
   }, [trendHours]);
 
-  // Initial load
+  // Initial load + trendHours 변경 시 즉시 reload (loadData identity 의존이 아니라
+  // 명시적으로 trendHours를 트리거로 사용해 조회기간 클릭 즉시 그래프가 갱신되도록 보장).
   useEffect(() => {
     loadData();
-  }, [loadData]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [trendHours]);
 
   // Auto-refresh every 30 seconds
   const { countdown, enabled, setEnabled } = useAutoRefresh(loadData, 30000);
@@ -201,6 +204,38 @@ export default function AutoDashboard() {
                       }`}
                     >
                       {t.trendRangeLabel(hours)}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Model Selector - 모델 칩, 선택 시 해당 그래프만 표시 */}
+              <div className="flex items-start gap-3 flex-wrap">
+                <span className="text-xs font-medium text-gray-400 pt-1 shrink-0">모델</span>
+                <div className="flex gap-1 flex-wrap">
+                  <button
+                    onClick={() => setSelectedModel(null)}
+                    className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                      selectedModel === null
+                        ? "bg-blue-600 text-white"
+                        : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                    }`}
+                  >
+                    전체
+                  </button>
+                  {results.map((r) => (
+                    <button
+                      key={r.model_id}
+                      onClick={() =>
+                        setSelectedModel(selectedModel === r.model_name ? null : r.model_name)
+                      }
+                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                        selectedModel === r.model_name
+                          ? "bg-blue-600 text-white"
+                          : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                      }`}
+                    >
+                      {r.model_name}
                     </button>
                   ))}
                 </div>

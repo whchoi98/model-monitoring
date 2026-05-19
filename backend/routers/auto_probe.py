@@ -52,7 +52,8 @@ def get_latest(db: Session = Depends(get_db)):
 
 @router.get("/trend")
 def get_trend(
-    hours: int = Query(default=24, ge=1, le=168),
+    # hours를 float으로 받아 0.0833(=5m), 0.25(=15m), 0.5(=30m)도 지원.
+    hours: float = Query(default=24, gt=0, le=168),
     db: Session = Depends(get_db),
 ):
     """Return time-series data from auto-probe runs within the given time window."""
