@@ -27,12 +27,13 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Sonnet 4.6 (Global)": "#3b82f6",
   "Claude Haiku 4.5 (Global)": "#06b6d4",
   "Nova 2.0 Lite (Global)": "#10b981",
-  // US (Claude Platform on AWS)
+  // US (Claude Platform on AWS - 3P Anthropic)
   "Claude Opus 4.7 (US)": "#ef4444",
   "Claude Opus 4.6 (US)": "#ec4899",
   "Claude Sonnet 4.6 (US)": "#8b5cf6",
   "Claude Haiku 4.5 (US)": "#6366f1",
-  "Nova 2.0 Lite (US)": "#84cc16",
+  // US 1P (Amazon Nova family)
+  "Nova 2.0 Lite (US, 1P)": "#84cc16",
 };
 
 function getColor(modelName: string): string {

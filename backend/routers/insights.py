@@ -15,8 +15,9 @@ from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
+from auth import get_current_user
 from database import get_db
-from models import Insight
+from models import Insight, User
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/insights", tags=["insights"])
@@ -88,13 +89,18 @@ def _run_regenerate(window: str):
 
 
 @router.post("/regenerate", response_model=RegenerateResponse)
-def regenerate(body: RegenerateRequest):
+def regenerate(
+    body: RegenerateRequest,
+    user: User = Depends(get_current_user),
+):
     """현재 시점 기준으로 새 인사이트를 backend 프로세스 내부 thread로 생성한다.
 
+    - 인증된 사용자만 호출 가능 (Bedrock 비용 abuse + DB write 방지).
     - Backend는 이미 Bedrock InvokeModel + DB 접근 권한을 갖고 있어 추가 IAM 불필요.
     - Lock으로 동시 요청 직렬화 (Bedrock 중복 호출 회피).
     - 응답은 즉시 (triggered=True) 반환. 클라이언트는 잠시 후 /api/insights/latest 재조회.
     """
+    logger.info("insight regenerate requested by user='%s' window='%s'", user.username, body.window)
     global _is_regenerating
     with _regenerate_lock:
         if _is_regenerating:

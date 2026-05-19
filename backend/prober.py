@@ -31,11 +31,14 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
     "global.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (Global)",
     # US cross-region inference profile (us-east-1) - Claude Platform on AWS
+    # Anthropic 3P 모델
     "us.anthropic.claude-opus-4-7": "Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (US)",
     "us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (US)",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (US)",
-    "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US)",
+    # Amazon 1P (Nova) 모델 - Claude Platform on AWS 채널의 1P 옵션.
+    # Nova Premier는 provider에 의해 Legacy로 마킹되어 접근 불가 - 제외.
+    "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US, 1P)",
 }
 
 # 모델 prefix별 boto3 client 리전 - cross-region inference profile은 각 home region에서 호출해야 함.

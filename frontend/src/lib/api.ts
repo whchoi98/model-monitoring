@@ -388,7 +388,7 @@ export async function regenerateInsight(
 ): Promise<{ triggered: boolean; message: string }> {
   const res = await fetch(`${BASE}/api/insights/regenerate`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ window }),
   });
   if (!res.ok) throw new Error(`regenerateInsight failed: ${res.statusText}`);
