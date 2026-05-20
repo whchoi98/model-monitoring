@@ -1,122 +1,149 @@
 # Changelog
 
-[![English](https://img.shields.io/badge/lang-English-blue)](#english)
-[![한국어](https://img.shields.io/badge/lang-한국어-red)](#한국어)
+이 프로젝트의 주요 변경 사항을 기록합니다.
+
+작성 규칙:
+- 최신 변경 사항이 위에, 과거 변경이 아래에 옵니다.
+- 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
+- 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
+
+## v2.1.0 — 2026-05-20
+
+### Added
+- **Output Analysis 페이지** (`/analysis`): Stop reason 분포 (end_turn / max_tokens / stop_sequence / tool_use / guardrail_intervened / content_filtered) + Output token 길이 분포 (median/p50/p95/std + 7-bin histogram). 모델 가로 비교 + 카테고리/시간 윈도우 필터 + 해석 가이드 박스.
+- **Backend `/api/analysis/*`**: `stop-reasons`, `output-length` 두 엔드포인트. `_normalize_stop_reason()` vendor 차이 흡수.
+- **`ProbeResult.stop_reason` 컬럼** + lifespan `ALTER TABLE ADD COLUMN IF NOT EXISTS`. Bedrock `messageStop.stopReason` + Anthropic `final_message.stop_reason` 양쪽 capture.
+- **모델 catalogue 확장 9 → 13개**: Claude Opus 4.5 / Sonnet 4.5 × Global/US 추가.
+- **Admin user management endpoints**: `GET /api/admin/users`, `DELETE /api/admin/users/{username}`, `POST /api/admin/users/{username}/approve`. admin 전용 (`username == "admin"`).
+- **챗봇 초기 추천 풍선말 6개**: 효율성/비용/분석/신뢰성/출력 길이/에러 진단 등 신기능 인사이트 질문으로 갱신.
+- **헤더에 `APP_VERSION` 표시** (v2.1.0). `frontend/src/lib/version.ts`가 single source of truth.
+
+### Changed
+- **회원가입 `username` → `EmailStr` 검증 강제** (Pydantic + `email-validator>=2.1.0`). 이메일 형식 아닌 입력은 422. LoginForm `type="email"` + 안내.
+- **모델명 라벨 통일**: `AVAILABLE_MODELS` 13개 모두 `"Bedrock <family> (<channel>)"` prefix. Frontend `MODEL_COLORS`, `FAMILY_ORDER` 통일. 옛 row는 lifespan rename으로 자동 변환.
+- **`/api/auto-probe/status`** DB-sourced: backend in-process state 대신 `ProbeRun(is_auto=1)` 최근 row 기준 (Fargate task 분리 이후 일관성).
+
+### Fixed
+- **`_probe_single_model` retry-raise 버그**: retry 소진 시 `raise`로 함수 종료 → ProbeResult row 미저장 → 카드 누락. `raise` → `break` + outer try에서 처리로 수정.
+- **ECR `:latest` 태그 함정**: ECS Fargate가 cached container를 실행 → 새 코드 silent 반영 안 됨. 모든 task def를 immutable `v<timestamp>` tag로 전환.
+- **EventBridge Scheduler IAM role의 `ecs:RunTask` Resource가 task def revision pinned**: 새 revision으로 schedule update 시 silent fail (autoprober 정지). Resource를 task def family `:*` wildcard로 변경.
+
+### Security
+- 회원가입 시 username 이메일 형식 강제.
+- Admin endpoint `_ensure_admin` gate + 자기 자신 삭제 차단.
+
+### Infra
+- `ecr-image-tag-management` 권장 절차: immutable tag → register-task-definition → update-service + autoprober schedule 동시 갱신.
+- AutoProber + Insights 모두 `rate(5 minutes)` 주기.
+- **ECR repository 변경** — `bedrock-monitor-backend` → `bedrock-monitor-backend-v2` (Fargate image cache silent bug 우회, ADR-018). 새 repo는 `IMMUTABLE` tag mutability.
+- ECS Fargate silent failure 완전 우회를 위해 image URI에 `@sha256:<digest>` 직접 명시 (task def `containerDefinitions[].image` 필드).
+
+### Removed
+- **Opus 4.5 (Global/US), Sonnet 4.5 (Global/US)** — 사용자 요청으로 모니터링 대상에서 제외 (2026-05-20). backend `AVAILABLE_MODELS` 정리 + lifespan `DELETE FROM probe_results WHERE model_name LIKE '%Opus 4.5%' OR LIKE '%Sonnet 4.5%'` 자동 적용. 모니터링 대상 9개 Bedrock + 3개 Anthropic CP = 12개.
+
+### Fixed
+- Frontend `AutoDashboard.tsx`에 `Opus 4.5`/`Sonnet 4.5` hard-filter 추가 — backend silent bug로 옛 row가 응답에 포함되어도 UI 숨김. 방어적 패치.
+- `StreamingView.tsx` MODEL_COLORS에서 4.5 reference 정리 + Opus 4.7 / Sonnet 4.6 추가.
+
+### Docs
+- README, CLAUDE.md를 v2.1.0 기준으로 재작성.
+- ADR-010~018 신규 작성 (immutable tag, scheduler IAM wildcard, model catalog, output analysis, admin endpoints, status DB-sourced, frontend route split, model catalog reduction, ECR repo swap).
 
 ---
 
-# English
-
-All notable changes to this project will be documented in this file.
-The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
-and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
-
-## [Unreleased]
-
-## [1.1.0] - 2026-04-16
+## v2.X — 진행 중 (2026-05-19)
 
 ### Added
-
-- Add Claude Opus 4.7 (US and Global) to monitored models, bringing total to 13
-- Add Claude Sonnet 4.6 (US and Global) to monitored models
-- Add custom domain support (llm-monitor.whchoi.net)
-- Add Claude Code project structure: hooks, skills, commands, agents, and test suite
-- Add bilingual architecture documentation (English/Korean)
-- Add developer onboarding guide and API reference
-- Add project structure validation tests (49 tests)
+- **Claude Platform on AWS (Path 3 External) 채널 통합**: vendor endpoint `aws-external-anthropic.us-east-2.api.aws` 호출 + `anthropic-workspace-id` 헤더. Anthropic SDK base_url override 패턴. SSM SecureString 2종 (`/bedrock-monitor/anthropic-api-key`, `/bedrock-monitor/anthropic-workspace-id`). 3개 Anthropic 직접 API 모델 자동 등록.
+- **Prompts 탭 (`/prompts`)**: 별도 라우트 페이지. 프롬프트 세트 CRUD + Bedrock Simple Prompt Optimization (`bedrock-agent-runtime.optimize_prompt`) 통합. 9개 모니터링 모델로 타겟 매핑.
+- **그래프 다중 선택**: 모델 칩/카드 toggle → N개 동시 비교. `selectedModels: Set<string>` 패턴.
+- **카드 family-grouped grid**: Opus 4.7 / 4.6 / Sonnet 4.6 / Haiku 4.5 / Nova 2.0 Lite 각각 별도 row를 차지하도록 그룹화.
+- **상단 헤더 로그인 버튼** (미인증 시 모달 노출).
+- **챗봇 아이콘 친근한 로봇 얼굴** (안테나/눈/입/헤드폰), 위치 `bottom-24`.
+- **채널 설명 패널**: Bedrock vs Anthropic CP on AWS 호출 채널 + endpoint URL.
+- **모델 카드 inference profile ID 표시**.
+- **이력조회 정렬 통일** (family/channel 순서).
+- **추천 검색어 + Follow-up 풍선말** (FloatingChat + InsightsPanel).
+- **AI Insights bilingual (KO/EN)** + 미인증 사용자 새로고침/검색 시 로그인 모달.
 
 ### Changed
+- 모델 라벨 통일: 1P는 `Anthropic ... (US)`, 나머지는 `Bedrock ... (Global|US)` 접두사. `lib/sortModels.ts` 공유 유틸 추출.
+- AI 인사이트 위치를 그래프 밑으로 이동.
+- 인사이트 본문 스크롤 박스 제거 (전체 출력).
+- 트렌드 그래프 색상 13개 모두 다른 색 (Bedrock 주황·핑크·인디고·시안 + Anthropic 보라 계열).
+- `next.config.mjs` HTML route → `cache-control: no-store, no-cache, must-revalidate, max-age=0`, `_next/static/*` → `public, max-age=31536000, immutable`.
+- 5분 주기 Insights 잡 (이전 30분).
 
-- Sort dashboard model cards by newest version first (Opus 4.7 > 4.6 > 4.5), grouped by region (Global first)
-- Sort history panel statistics cards with the same version-first ordering
-- Update architecture diagram to include CloudFront, ALB, and cross-region inference
+### Removed
+- `Nova Pro (US)` / `Nova Lite (US)` / `Nova 2.0 Lite (Global)` 모니터링 대상 제외 — `Nova 2.0 Lite (US)`만 유지.
+- DB row 자동 삭제 마이그레이션 (lifespan).
 
 ### Fixed
-
-- Fix Claude Opus 4.7 probe failure caused by deprecated `temperature` parameter
-- Fix XSS vulnerability in approval email and approval result HTML by escaping user input
-- Fix CORS misconfiguration: restrict `allow_origins` from wildcard (`*`) to explicit domains
+- ECS Task Definition rev 9 INACTIVE 상태 → manual register rev 10. CDK가 secret 추가 후 ACTIVE 보장 안 되는 문제 회피.
+- SSM `/bedrock-monitor/anthropic-workspace-id` 미존재 시 ECS task가 secret fetch 실패 → 사용자에게 SSM 저장 가이드.
+- Frontend Docker build가 `cdk/` 작업 디렉토리에서 실행되어 옛 image SHA 그대로 push되는 문제 → 절대경로 + `--no-cache` 빌드 + 명시적 `docker rmi`.
+- Frontend `created_at` PromptSet 타입 에러로 npm build 실패 → 참조 제거.
+- backend ECS Task ExecutionRole에 `anthropic-workspace-id` SSM read 권한 부족 → inline policy `AnthropicWorkspaceIdAccess`.
+- backend TaskRole에 `bedrock:OptimizePrompt` 권한 부족 → inline policy `BedrockOptimizePrompt`.
+- `data-stack.ts`의 JWT_SECRET_KEY plaintext placeholder → `fromSecureStringParameterAttributes` 사전 생성 import.
 
 ### Security
+- ANTHROPIC_API_KEY / ANTHROPIC_WORKSPACE_ID: ECS Secret (SSM SecureString) 주입.
+- JWT_SECRET_KEY: SecureString import 패턴으로 통일.
+- 노출된 자격증명 회수·재발급 권고 (사용자 측 실행).
 
-- Remove hardcoded admin password from source code, load from `DEFAULT_ADMIN_PASSWORD` environment variable
-- Remove hardcoded database URL fallback from `database.py`, require `DATABASE_URL` environment variable
-- Replace weak default JWT secret key with cryptographically random 48-byte token
-- Add HTML escaping for all user-controlled input rendered in HTML responses
+### Infra
+- CDK context 영구화: `existingVpcId=vpc-0dfa5610180dfa628`, `appSubnetIds`, `dataSubnetIds`, `albCertificateArn` cdk.json에 박음.
+- 카드 정렬 + i18n 채널 설명 + endpoint URL.
 
-## [1.0.0] - 2026-02-14
-
-### Added
-
-- Auto-probing: 5-minute interval background thread probing 9 Bedrock models with concurrency=3
-- Real-time dashboard with model status grid and TTFT/latency/TPS trend charts
-- Manual probe execution via SSE streaming with JWT authentication
-- User authentication with email-based admin approval flow via AWS SES
-- Korean/English language toggle for all UI text
-- History panel with card layout, time range selector, and percentile statistics
-- PostgreSQL database with SQLAlchemy ORM for probe result storage
-- One-click deployment script (`deploy.sh`) with systemd service registration
-- AWS CloudFormation template for infrastructure provisioning
-
-[Unreleased]: https://github.com/whchoi98/model-monitoring/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/whchoi98/model-monitoring/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/whchoi98/model-monitoring/releases/tag/v1.0.0
+### Docs
+- 이 문서(`CHANGELOG.md`) 최초 생성.
 
 ---
 
-# 한국어
+## v2 — 기존 (git history 요약)
 
-이 프로젝트의 모든 주요 변경 사항은 이 파일에 기록됩니다.
-이 문서는 [Keep a Changelog](https://keepachangelog.com/en/1.1.0/)를 기반으로 하며,
-[Semantic Versioning](https://semver.org/spec/v2.0.0.html)을 따릅니다.
+### v2-Phase 11~13
+- ObservabilityStack (알람·대시보드).
+- 8 stacks 전체 architecture + 9 ADRs + runbooks 문서화.
+- Seoul region 적응 + 기존 VPC + CloudFront prefix list 패턴.
 
-## [Unreleased]
+### v2-Phase 10
+- FloatingChat (popup/iframe duality).
+- InsightsPanel (AI 인사이트 위젯).
 
-## [1.1.0] - 2026-04-16
+### v2-Phase 9
+- SchedulerStack (AutoProber + Insights EventBridge 잡).
 
-### Added
+### v2-Phase 8
+- Auto-prober를 Fargate Task로 분리 (one-shot runner).
+- agent/insights/chat 모듈 분리.
 
-- Claude Opus 4.7 (US 및 Global) 모니터링 모델 추가, 총 13개로 확대
-- Claude Sonnet 4.6 (US 및 Global) 모니터링 모델 추가
-- 커스텀 도메인 지원 추가 (llm-monitor.whchoi.net)
-- Claude Code 프로젝트 구조 추가: hooks, skills, commands, agents, 테스트 스위트
-- 이중 언어 아키텍처 문서 추가 (영어/한국어)
-- 개발자 온보딩 가이드 및 API 레퍼런스 추가
-- 프로젝트 구조 검증 테스트 추가 (49개 테스트)
+### v2-Phase 7
+- EdgeStack 분리 (AppServices ALB + CloudFront/WAF Edge).
 
-### Changed
+### v2-Phase 6
+- AppServicesStack (frontend/backend Fargate services + Internal ALB).
 
-- 대시보드 모델 카드를 최신 버전순으로 정렬 (Opus 4.7 > 4.6 > 4.5), 리전별 그룹화 (Global 먼저)
-- 이력 통계 패널 카드에 동일한 버전순 정렬 적용
-- 아키텍처 다이어그램에 CloudFront, ALB, 크로스 리전 추론 반영
+### v2-Phase 5
+- AgentCoreStack (Memory + backend access policy). Runtime은 deferred.
 
-### Fixed
+### v2-Phase 4
+- ClusterStack (ECS, ECR, KMS log key).
 
-- Claude Opus 4.7에서 deprecated된 `temperature` 파라미터로 인한 프로브 실패 수정
-- 승인 이메일 및 승인 결과 HTML의 XSS 취약점 수정 (사용자 입력 이스케이프 처리)
-- CORS 설정 오류 수정: `allow_origins`를 와일드카드(`*`)에서 명시적 도메인으로 제한
+### v2-Phase 3
+- DataStack (RDS PostgreSQL).
+- NetworkStack을 NAT egress 모드로 revise.
 
-### Security
+### v2-Phase 2
+- NetworkStack (dual VPC mode + PrivateLink endpoints).
 
-- 소스 코드에서 하드코딩된 관리자 비밀번호 제거, `DEFAULT_ADMIN_PASSWORD` 환경변수로 전환
-- `database.py`에서 하드코딩된 데이터베이스 URL 폴백 제거, `DATABASE_URL` 환경변수 필수화
-- 약한 기본 JWT 시크릿 키를 암호학적으로 안전한 48바이트 랜덤 토큰으로 교체
-- HTML 응답에 렌더링되는 모든 사용자 입력에 HTML 이스케이프 적용
+---
 
-## [1.0.0] - 2026-02-14
+## v1 — Legacy (점진적으로 정리 중)
 
-### Added
-
-- 자동 프로빙: 5분 간격 백그라운드 스레드로 9개 Bedrock 모델을 동시성=3으로 프로빙
-- 실시간 대시보드: 모델 상태 그리드 + TTFT/응답시간/TPS 추이 차트
-- SSE 스트리밍 수동 프로브 실행 (JWT 인증 필요)
-- AWS SES를 통한 이메일 기반 관리자 승인 플로우의 사용자 인증 시스템
-- 모든 UI 텍스트에 대한 한국어/영어 언어 토글
-- 카드 레이아웃, 시간 범위 선택기, 백분위 통계가 포함된 이력 패널
-- SQLAlchemy ORM을 사용한 PostgreSQL 데이터베이스 프로브 결과 저장
-- systemd 서비스 등록이 포함된 원클릭 배포 스크립트 (`deploy.sh`)
-- 인프라 프로비저닝을 위한 AWS CloudFormation 템플릿
-
-[Unreleased]: https://github.com/whchoi98/model-monitoring/compare/v1.1.0...HEAD
-[1.1.0]: https://github.com/whchoi98/model-monitoring/compare/v1.0.0...v1.1.0
-[1.0.0]: https://github.com/whchoi98/model-monitoring/releases/tag/v1.0.0
+- EC2 + Docker Compose PostgreSQL + systemd 운영.
+- CloudFront → ALB → EC2 (Next.js 14 + FastAPI).
+- 자동 프로빙 5분 주기, 9 모델.
+- JWT + bcrypt 인증, SES 승인 이메일.
+- 한글 UI (`frontend/src/lib/i18n.ts`).

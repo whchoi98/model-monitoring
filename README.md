@@ -1,402 +1,405 @@
-# Bedrock LLM 모니터
+# Amazon Bedrock LLM Monitor
 
-AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로 모니터링하는 대시보드입니다.
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Version](https://img.shields.io/badge/version-2.1.0-blue.svg)](CHANGELOG.md)
+[![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
+[![English](https://img.shields.io/badge/lang-English-blue.svg)](#english)
+[![한국어](https://img.shields.io/badge/lang-한국어-red.svg)](#한국어)
 
-> ⚡ **v2 — CDK TypeScript + ECS Fargate + CloudFront VPC Origin + AgentCore + 챗봇**.
-> 설계: [`docs/architecture.md`](./docs/architecture.md) · 배포/롤백: [`docs/runbooks/`](./docs/runbooks/) · ADR: [`docs/decisions/`](./docs/decisions/) · 스펙: [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/)
+A real-time observability dashboard for Amazon Bedrock + Anthropic CP on AWS LLM channels — speed, throughput, reliability, cost, and output quality.
 
-![Stack](https://img.shields.io/badge/FastAPI-009688?style=flat&logo=fastapi&logoColor=white)
-![Stack](https://img.shields.io/badge/Next.js_14-000000?style=flat&logo=next.js&logoColor=white)
-![Stack](https://img.shields.io/badge/PostgreSQL-4169E1?style=flat&logo=postgresql&logoColor=white)
-![Stack](https://img.shields.io/badge/Tailwind_CSS-06B6D4?style=flat&logo=tailwindcss&logoColor=white)
+Amazon Bedrock + Anthropic CP on AWS LLM 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드입니다.
 
-### 대시보드 스크린샷
+---
+
+# English
+
+## Overview
+
+Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 12 LLM channels across Bedrock Global / US inference profiles and Anthropic CP on AWS. It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, and 30-day cost projections — all behind a Next.js dashboard with six analytical views.
+
+The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories. A built-in chatbot (Claude Sonnet 4.6 with four Bedrock tools) lets you query the time-series data conversationally.
 
 ![Dashboard](docs/images/dashboard.png)
 
-### 수동 프로브 스크린샷
+## Features
 
-![Manual Probe](docs/images/manual-probe.png)
+- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured-json, creative-writing) across all 12 monitored channels.
+- **Six analytical pages** — Dashboard (latency / TPS trends), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt).
+- **Multi-channel comparison** — Same model family invoked through Bedrock Global, Bedrock US, and Anthropic CP on AWS (Path 3 External) in parallel for true apples-to-apples evaluation.
+- **AI chatbot with tools** — Claude Sonnet 4.6 chatbot answers natural-language questions over the time-series store using four custom Bedrock tools; dynamic follow-up suggestions generated per turn.
+- **CDK-managed infrastructure** — Eight TypeScript stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability) with reusable L3 constructs, immutable ECR tags, and idempotent lifespan migrations.
 
----
+## Prerequisites
 
-## 주요 기능
+- AWS account with administrator credentials in `ap-northeast-2` (Seoul)
+- Node.js >= 20 and npm (CDK)
+- Python >= 3.11 (backend)
+- Docker (image build for backend and frontend)
+- PostgreSQL 16 (local development only)
+- ACM certificate for the internal ALB listener (issued in the deploy region)
+- An Anthropic API key + workspace ID for the CP on AWS channel
 
-| 기능 | 설명 |
-|------|------|
-| **자동 프로빙** | EventBridge Scheduler가 5분 간격으로 별도 Fargate Task를 트리거 → **12개 모델** (9 Bedrock Global/US + 3 Anthropic CP on AWS) 자동 프로빙. 6개 워크로드 카테고리(짧은 대화/추론/코드 생성/요약/구조화 JSON/창작)를 라운드로빈으로 회전. Opus 4.7 / 4.6 / Sonnet 4.6 / Haiku 4.5 / Nova 2.0 Lite (US) family |
-| **대시보드 + 5개 탭** | `/` 대시보드 / `/prompts` 프롬프트 / `/cost` 비용 / `/reliability` 신뢰성 / `/efficiency` 효율성 / `/analysis` **출력 분석 (v2.1.0 신규)** |
-| **수동 프로브** | 로그인 후 모델·프롬프트·동시성·반복 횟수를 지정하여 즉시 실행, SSE 스트리밍 결과 확인 |
-| **출력 분석 (v2.1.0 신규)** | Stop Reason 분포 (end_turn/max_tokens/guardrail 등) + Output Token 길이 분포 (median/p95/std + 7-bin histogram) |
-| **사용자 인증** | 회원가입은 이메일 형식 강제 → 관리자 SES 승인 → 로그인. JWT 토큰 24시간 |
-| **한글/영어 UI 토글** | 전체 인터페이스 KO/EN 양 언어 |
-| **챗봇 (FloatingChat)** | Claude Sonnet 4.6 + 4 tools + dynamic followups |
+## Installation
 
-## 모니터링 대상 모델
+```bash
+# 1. Clone the repository
+git clone https://github.com/whchoi98/model-monitoring.git
+cd model-monitoring
 
-| 리전 | 모델 |
-|------|------|
-| US | Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5, Nova 2.0 Lite |
-| Global | Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 |
+# 2. Verify the toolchain
+make verify
 
-## 측정 지표
+# 3. Pre-create the SSM SecureString secrets (one-time, manual)
+aws ssm put-parameter --name /bedrock-monitor/jwt-secret-key --type SecureString \
+  --value "$(openssl rand -base64 48)"
+aws ssm put-parameter --name /bedrock-monitor/anthropic-api-key --type SecureString \
+  --value "<your Anthropic API key>"
+aws ssm put-parameter --name /bedrock-monitor/anthropic-workspace-id --type SecureString \
+  --value "<your Anthropic workspace ID>"
+aws ssm put-parameter --name /bedrock-monitor/seed-admin-password --type SecureString \
+  --value "<initial admin password>"
 
-| 지표 | 단위 | 설명 |
-|------|------|------|
-| **TTFT** | ms | 요청 전송 후 첫 번째 토큰이 도착하기까지의 시간 |
-| **총 응답시간** | ms | 요청 전송부터 마지막 토큰 수신까지의 전체 소요 시간 |
-| **서버 처리시간** | ms | Bedrock 서버가 보고한 내부 처리 시간 |
-| **TPS** | tok/s | 초당 생성 토큰 수 (첫 토큰 이후 출력 처리량) |
-| **입력/출력 토큰** | 개 | 프롬프트 소비 토큰 수 및 모델 생성 토큰 수 |
+# 4. Build and push container images to ECR (immutable tag — never use :latest in production)
+REGION=ap-northeast-2
+ACCT=$(aws sts get-caller-identity --query Account --output text)
+TAG="v$(date +%s)"
 
----
+aws ecr get-login-password --region $REGION \
+  | docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
 
-## 아키텍처
+docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-backend:$TAG backend/
+docker tag bedrock-monitor-backend:$TAG \
+  $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
+docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 
+docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-frontend:$TAG frontend/
+docker tag bedrock-monitor-frontend:$TAG \
+  $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
+docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
+
+# 5. Deploy the eight CDK stacks
+cd cdk
+npx cdk deploy --all \
+  -c albCertificateArn="arn:aws:acm:ap-northeast-2:ACCOUNT:certificate/UUID" \
+  -c alarmEmail="ops@example.com"
 ```
-┌─────────────┐     ┌──────────────┐     ┌────────────┐
-│  Next.js 14 │────▶│  FastAPI      │────▶│ PostgreSQL │
-│  (포트 3000)│◀────│  (포트 8000)  │◀────│ (포트 5432)│
-└─────────────┘ SSE └──────┬───────┘     └────────────┘
-                           │
-                    ┌──────▼───────┐
-                    │ AWS Bedrock  │
-                    │ (us-east-1)  │
-                    └──────────────┘
+
+See `docs/runbooks/deploy.md` for the full step-by-step procedure including post-deploy verification.
+
+## Usage
+
+```bash
+# Verify the dashboard endpoint
+curl https://<your-cloudfront-domain>/api/auto-probe/status
+# {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
+
+# Inspect the latest 12-model probe results
+curl https://<your-cloudfront-domain>/api/auto-probe/latest
+
+# Filter by workload category
+curl https://<your-cloudfront-domain>/api/auto-probe/latest?category=code-gen
+
+# Authenticate and run a manual probe (SSE stream)
+TOKEN=$(curl -sX POST https://<your-cloudfront-domain>/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<your seed password>"}' | jq -r .access_token)
+
+curl -N -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -X POST https://<your-cloudfront-domain>/api/probes/run \
+  -d '{"model_ids":["global.anthropic.claude-haiku-4-5-20251001-v1:0"],"prompt":"hello","max_tokens":50}'
 ```
 
-- **Frontend** — Next.js 14 + React 18 + Tailwind CSS + Recharts
-- **Backend** — FastAPI + SQLAlchemy ORM + SSE 스트리밍
-- **Database** — PostgreSQL 16 (Docker)
-- **자동 프로버** — Python 백그라운드 스레드 (5분 간격, 동시성 3)
+## Configuration
 
----
+| Variable | Description | Default |
+|----------|-------------|---------|
+| `JWT_SECRET_KEY` | JWT signing key (32+ characters; placeholders rejected) | (required, from SSM) |
+| `SEED_ADMIN_USERNAME` | Initial admin username for first-boot seeding | `admin` |
+| `SEED_ADMIN_PASSWORD` | Initial admin password (8+ characters) | (required, from SSM) |
+| `PUBLIC_BASE_URL` | Public base URL used in approval-email links | `https://<your-cloudfront-domain>` |
+| `DATABASE_URL` | PostgreSQL connection string (built from injected env in CDK) | (CDK-injected) |
+| `ANTHROPIC_API_KEY` | Anthropic CP on AWS envelope key (AEAAQ…) | (required, from SSM) |
+| `ANTHROPIC_WORKSPACE_ID` | Anthropic CP workspace ID header | (required, from SSM) |
+| `ANTHROPIC_AWS_REGION` | CP on AWS endpoint region | `us-east-2` |
 
-## 디렉토리 구조
+## Project Structure
 
 ```
 model-monitoring/
-├── backend/
-│   ├── main.py              # FastAPI 엔트리포인트 + lifespan
-│   ├── auto_prober.py       # 자동 프로빙 백그라운드 스레드
-│   ├── prober.py            # 코어 프로브 로직 (Bedrock converse_stream)
-│   ├── models.py            # SQLAlchemy ORM 모델
-│   ├── schemas.py           # Pydantic 스키마
-│   ├── database.py          # DB 연결 설정
-│   ├── requirements.txt     # Python 의존성
-│   └── routers/
-│       ├── auto_probe.py    # 자동 프로빙 API (/api/auto-probe/*)
-│       ├── probes.py        # 수동 프로브 API (/api/probes/*)
-│       ├── results.py       # 결과 조회 API (/api/results/*)
-│       ├── models.py        # 모델 목록 API (/api/models)
-│       └── prompts.py       # 프롬프트 세트 API (/api/prompts/*)
-├── frontend/
-│   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx     # 메인 페이지 (대시보드/수동 프로브 탭)
-│   │   │   └── layout.tsx   # 루트 레이아웃 (한글)
-│   │   ├── components/
-│   │   │   ├── AutoDashboard.tsx    # 자동 프로빙 대시보드
-│   │   │   ├── ModelStatusGrid.tsx  # 모델별 상태 카드 그리드
-│   │   │   ├── TrendChart.tsx       # 시계열 추이 차트
-│   │   │   └── ...                  # 기타 컴포넌트
-│   │   ├── hooks/
-│   │   │   ├── useAutoRefresh.ts    # 자동 새로고침 훅 (30초)
-│   │   │   └── useProbeStream.ts    # SSE 스트리밍 훅
-│   │   └── lib/
-│   │       ├── api.ts       # API 클라이언트
-│   │       ├── i18n.ts      # 한글 번역 사전 + 지표 설명
-│   │       └── types.ts     # TypeScript 인터페이스
-│   ├── package.json
-│   └── tailwind.config.ts
-├── docker-compose.yml       # PostgreSQL 컨테이너
-├── deploy.sh                # 원클릭 배포 스크립트
-├── cloudformation.yaml      # AWS CloudFormation 템플릿
-└── README.md
+├── backend/                      # FastAPI + SQLAlchemy + auto-prober
+│   ├── main.py                   # entrypoint, lifespan, DB migration with advisory_lock
+│   ├── prober.py                 # 12-model AVAILABLE_MODELS, retry, Bedrock + Anthropic CP
+│   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
+│   ├── pricing.py                # token unit price table
+│   └── routers/                  # 14 router modules (auth, admin, analysis, cost, …)
+├── frontend/                     # Next.js 14 standalone + 6 routes
+│   ├── src/app/                  # /, /prompts, /cost, /reliability, /efficiency, /analysis
+│   ├── src/components/           # 30+ React components (dashboard, panels, chat)
+│   └── src/lib/                  # api client, i18n, sortModels, pricing mirror, version
+├── cdk/                          # 8 CDK TypeScript stacks
+│   ├── lib/stacks/               # Network, Data, Cluster, AgentCore, AppServices, …
+│   └── lib/constructs/           # reusable FargateServiceConstruct (L3)
+├── docs/
+│   ├── architecture.md           # full system design
+│   ├── decisions/                # ADR-001 through ADR-018
+│   ├── runbooks/                 # deploy, rollback procedures
+│   └── CHANGELOG.md              # Keep-a-Changelog format
+└── Makefile                      # `make verify` runs CDK lint + tests + ruff + tsc
 ```
 
----
-
-## 사전 요구사항
-
-- **OS**: Amazon Linux 2023 (또는 동등한 Linux)
-- **Python**: 3.9+
-- **Node.js**: 18+
-- **Docker**: PostgreSQL 컨테이너 실행용
-- **AWS 자격 증명**: Bedrock 모델 호출 권한이 있는 IAM Role 또는 자격 증명
-  - 필요 권한: `bedrock:InvokeModelWithResponseStream`
-  - 리전: `us-east-1`
-
----
-
-## 설치 및 실행
-
-### 방법 1: 자동 배포 (권장)
+## Testing
 
 ```bash
-git clone <repository-url>
+# Full verification (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 7 pytest + frontend tsc)
+make verify
+
+# Backend tests only
+cd backend && pytest -q
+
+# CDK tests only
+cd cdk && npm test
+
+# Frontend typecheck
+cd frontend && npx tsc --noEmit
+```
+
+## API Documentation
+
+The FastAPI backend exposes auto-generated OpenAPI documentation at:
+
+```
+https://<your-cloudfront-domain>/docs    # Swagger UI
+https://<your-cloudfront-domain>/openapi.json
+```
+
+Key endpoint groups:
+
+| Group | Path prefix | Authentication |
+|-------|-------------|----------------|
+| Auth | `/api/auth/*` | login/register public, `/me` requires JWT |
+| Auto-probe | `/api/auto-probe/*` | public |
+| Results | `/api/results/*` | public |
+| Manual probe | `/api/probes/run` | JWT required |
+| Cost / Reliability / Efficiency / Analysis | `/api/{cost,reliability,efficiency,analysis}/*` | public |
+| Chat | `/api/chat/*` | JWT required |
+| Insights | `/api/insights/*` | regenerate requires JWT |
+| Admin | `/api/admin/*` | admin role only |
+
+## Contributing
+
+1. **Fork** the repository on GitHub.
+2. Create a **branch** from `main`: `git checkout -b feat/your-feature`.
+3. **Commit** with Conventional Commits style: `feat(scope): add X` / `fix(scope): handle Y`.
+4. **Push** the branch: `git push origin feat/your-feature`.
+5. Open a **Pull Request** against `main` with a summary and test evidence (`make verify` output).
+
+Run `make verify` before pushing — CI uses the same target as the merge gate.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## Contact
+
+- Maintainer: **WooHyung Choi** ([@whchoi98](https://github.com/whchoi98))
+- Issues: [github.com/whchoi98/model-monitoring/issues](https://github.com/whchoi98/model-monitoring/issues)
+- Email: whchoi98@gmail.com
+
+---
+
+# 한국어
+
+## 개요
+
+Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일과 Anthropic CP on AWS를 포함한 12개 LLM 채널을 지속적으로 프로빙하여 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측을 한 대시보드에서 제공하는 운영 등급 관측 플랫폼입니다.
+
+이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 워크로드 카테고리를 라운드로빈하여 모든 채널을 프로빙합니다. Claude Sonnet 4.6 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
+
+![대시보드](docs/images/dashboard.png)
+
+## 주요 기능
+
+- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, 구조화 JSON, 창작)를 라운드로빈으로 12개 모니터링 채널에 호출합니다.
+- **6개 분석 페이지** — 대시보드(지연/TPS 추이), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt).
+- **다중 채널 비교** — 동일 모델 family를 Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External) 세 채널로 병렬 호출하여 정확한 동일 조건 비교를 제공합니다.
+- **AI 챗봇 + 도구** — Claude Sonnet 4.6 챗봇이 4개의 Bedrock 커스텀 도구를 사용해 시계열 데이터에 대한 자연어 질의에 응답하며, 매 턴마다 동적 후속 질문을 생성합니다.
+- **CDK 기반 인프라** — TypeScript로 작성된 8개 스택(Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)과 재사용 가능한 L3 construct, 불변 ECR tag, 멱등 lifespan 마이그레이션을 제공합니다.
+
+## 사전 요구 사항
+
+- `ap-northeast-2` (서울) 리전 관리자 권한이 있는 AWS 계정
+- Node.js 20 이상 + npm (CDK 용)
+- Python 3.11 이상 (백엔드)
+- Docker (backend / frontend 이미지 빌드)
+- PostgreSQL 16 (로컬 개발 시에만 필요)
+- 배포 리전에서 발급된 ACM 인증서 (내부 ALB 리스너용)
+- CP on AWS 채널을 위한 Anthropic API key + workspace ID
+
+## 설치 방법
+
+```bash
+# 1. 저장소 클론
+git clone https://github.com/whchoi98/model-monitoring.git
 cd model-monitoring
-chmod +x deploy.sh
-./deploy.sh
+
+# 2. 툴체인 검증
+make verify
+
+# 3. SSM SecureString 시크릿 사전 생성 (최초 1회, 수동)
+aws ssm put-parameter --name /bedrock-monitor/jwt-secret-key --type SecureString \
+  --value "$(openssl rand -base64 48)"
+aws ssm put-parameter --name /bedrock-monitor/anthropic-api-key --type SecureString \
+  --value "<Anthropic API key>"
+aws ssm put-parameter --name /bedrock-monitor/anthropic-workspace-id --type SecureString \
+  --value "<Anthropic workspace ID>"
+aws ssm put-parameter --name /bedrock-monitor/seed-admin-password --type SecureString \
+  --value "<초기 관리자 비밀번호>"
+
+# 4. 컨테이너 이미지 빌드 + ECR push (불변 태그 — production에서 :latest 금지)
+REGION=ap-northeast-2
+ACCT=$(aws sts get-caller-identity --query Account --output text)
+TAG="v$(date +%s)"
+
+aws ecr get-login-password --region $REGION \
+  | docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
+
+docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-backend:$TAG backend/
+docker tag bedrock-monitor-backend:$TAG \
+  $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
+docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
+
+docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-frontend:$TAG frontend/
+docker tag bedrock-monitor-frontend:$TAG \
+  $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
+docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
+
+# 5. CDK 8개 스택 배포
+cd cdk
+npx cdk deploy --all \
+  -c albCertificateArn="arn:aws:acm:ap-northeast-2:ACCOUNT:certificate/UUID" \
+  -c alarmEmail="ops@example.com"
 ```
 
-`deploy.sh`가 아래 작업을 순서대로 수행합니다:
-1. 시스템 패키지 설치 (Python, Docker)
-2. Docker로 PostgreSQL 기동
-3. Backend Python 의존성 설치
-4. Frontend 빌드 (`npm install` + `npm run build`)
-5. systemd 서비스 등록 및 시작
+배포 후 검증을 포함한 전체 절차는 `docs/runbooks/deploy.md`를 참고하세요.
 
-### 방법 2: 수동 설치
-
-#### 1. PostgreSQL 기동
+## 사용법
 
 ```bash
-docker compose up -d
+# 대시보드 엔드포인트 동작 확인
+curl https://<your-cloudfront-domain>/api/auto-probe/status
+# {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
+
+# 최신 12개 모델 프로빙 결과 조회
+curl https://<your-cloudfront-domain>/api/auto-probe/latest
+
+# 워크로드 카테고리별 필터링
+curl https://<your-cloudfront-domain>/api/auto-probe/latest?category=code-gen
+
+# 로그인 후 수동 프로브 실행 (SSE 스트리밍)
+TOKEN=$(curl -sX POST https://<your-cloudfront-domain>/api/auth/login \
+  -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<seed 비밀번호>"}' | jq -r .access_token)
+
+curl -N -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' \
+  -X POST https://<your-cloudfront-domain>/api/probes/run \
+  -d '{"model_ids":["global.anthropic.claude-haiku-4-5-20251001-v1:0"],"prompt":"안녕","max_tokens":50}'
 ```
 
-PostgreSQL이 준비될 때까지 대기:
+## 환경 설정
+
+| 변수명 | 설명 | 기본값 |
+|--------|------|--------|
+| `JWT_SECRET_KEY` | JWT 서명 키 (32자 이상; placeholder 거부) | (필수, SSM 주입) |
+| `SEED_ADMIN_USERNAME` | 최초 부팅 시 시드되는 관리자 username | `admin` |
+| `SEED_ADMIN_PASSWORD` | 초기 관리자 비밀번호 (8자 이상) | (필수, SSM 주입) |
+| `PUBLIC_BASE_URL` | 승인 이메일 링크 기준 URL | `https://<your-cloudfront-domain>` |
+| `DATABASE_URL` | PostgreSQL 접속 문자열 (CDK에서 환경변수로 조립) | (CDK 주입) |
+| `ANTHROPIC_API_KEY` | Anthropic CP on AWS envelope key (AEAAQ…) | (필수, SSM 주입) |
+| `ANTHROPIC_WORKSPACE_ID` | Anthropic CP workspace ID 헤더 | (필수, SSM 주입) |
+| `ANTHROPIC_AWS_REGION` | CP on AWS endpoint 리전 | `us-east-2` |
+
+## 프로젝트 구조
+
+```
+model-monitoring/
+├── backend/                      # FastAPI + SQLAlchemy + auto-prober
+│   ├── main.py                   # 엔트리포인트, lifespan, advisory_lock 기반 DB 마이그레이션
+│   ├── prober.py                 # 12개 모델 AVAILABLE_MODELS, retry, Bedrock + Anthropic CP
+│   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
+│   ├── pricing.py                # 토큰 단가 테이블
+│   └── routers/                  # 14개 라우터 (auth, admin, analysis, cost, …)
+├── frontend/                     # Next.js 14 standalone + 6 라우트
+│   ├── src/app/                  # /, /prompts, /cost, /reliability, /efficiency, /analysis
+│   ├── src/components/           # 30+ React 컴포넌트 (대시보드, 패널, 챗)
+│   └── src/lib/                  # API 클라이언트, i18n, sortModels, pricing 미러, version
+├── cdk/                          # 8개 CDK TypeScript 스택
+│   ├── lib/stacks/               # Network, Data, Cluster, AgentCore, AppServices, …
+│   └── lib/constructs/           # 재사용 가능한 FargateServiceConstruct (L3)
+├── docs/
+│   ├── architecture.md           # 전체 시스템 설계
+│   ├── decisions/                # ADR-001 ~ ADR-018
+│   ├── runbooks/                 # 배포 / 롤백 절차
+│   └── CHANGELOG.md              # Keep a Changelog 형식
+└── Makefile                      # `make verify` — CDK lint + tests + ruff + tsc 일괄 실행
+```
+
+## 테스트
 
 ```bash
-docker exec monitoring-postgres pg_isready -U postgres
+# 전체 검증 (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 7 pytest + frontend tsc)
+make verify
+
+# 백엔드 테스트
+cd backend && pytest -q
+
+# CDK 테스트
+cd cdk && npm test
+
+# 프론트엔드 타입 체크
+cd frontend && npx tsc --noEmit
 ```
 
-#### 2. Backend 설치 및 실행
+## API 문서
 
-```bash
-cd backend
-pip install -r requirements.txt
-uvicorn main:app --host 0.0.0.0 --port 8000
+FastAPI 백엔드는 자동 생성된 OpenAPI 문서를 제공합니다:
+
+```
+https://<your-cloudfront-domain>/docs    # Swagger UI
+https://<your-cloudfront-domain>/openapi.json
 ```
 
-서버 시작 시 자동으로:
-- DB 테이블 생성
-- `is_auto` 컬럼 마이그레이션
-- 자동 프로버 스레드 시작 (5분 간격)
+주요 엔드포인트 그룹:
 
-#### 3. Frontend 설치 및 실행
+| 그룹 | 경로 prefix | 인증 |
+|------|-------------|------|
+| 인증 | `/api/auth/*` | login/register 공개, `/me` JWT 필요 |
+| 자동 프로빙 | `/api/auto-probe/*` | 공개 |
+| 결과 조회 | `/api/results/*` | 공개 |
+| 수동 프로빙 | `/api/probes/run` | JWT 필요 |
+| 비용 / 신뢰성 / 효율성 / 분석 | `/api/{cost,reliability,efficiency,analysis}/*` | 공개 |
+| 챗봇 | `/api/chat/*` | JWT 필요 |
+| 인사이트 | `/api/insights/*` | 재생성 시 JWT 필요 |
+| 관리자 | `/api/admin/*` | admin 전용 |
 
-```bash
-cd frontend
-npm install
-npm run build
-npm start          # 프로덕션 (포트 3000)
-# 또는
-npm run dev        # 개발 모드 (HMR)
-```
+## 기여 방법
 
-#### 4. systemd 서비스 등록 (선택)
+1. GitHub에서 저장소를 **Fork**합니다.
+2. `main`에서 **브랜치**를 생성합니다: `git checkout -b feat/your-feature`.
+3. Conventional Commits 형식으로 **커밋**합니다: `feat(scope): add X` / `fix(scope): handle Y`.
+4. 브랜치를 **Push**합니다: `git push origin feat/your-feature`.
+5. `main`을 향한 **Pull Request**를 등록하고 요약과 테스트 증거(`make verify` 출력)를 첨부합니다.
 
-프로덕션 환경에서는 systemd로 관리하는 것을 권장합니다:
+Push 전에 `make verify`를 실행하세요. CI에서도 동일한 target을 머지 게이트로 사용합니다.
 
-```bash
-# /etc/systemd/system/monitor-backend.service
-[Unit]
-Description=Bedrock Monitor Backend (FastAPI)
-After=network.target docker.service
-Requires=docker.service
+## 라이선스
 
-[Service]
-Type=simple
-User=ec2-user
-WorkingDirectory=/home/ec2-user/model-monitoring/backend
-ExecStart=/usr/bin/python3 -m uvicorn main:app --host 0.0.0.0 --port 8000
-Restart=always
-RestartSec=5
+이 프로젝트는 [MIT 라이선스](LICENSE) 하에 배포됩니다.
 
-[Install]
-WantedBy=multi-user.target
-```
+## 연락처
 
-```bash
-# /etc/systemd/system/monitor-frontend.service
-[Unit]
-Description=Bedrock Monitor Frontend (Next.js)
-After=network.target monitor-backend.service
-
-[Service]
-Type=simple
-User=ec2-user
-WorkingDirectory=/home/ec2-user/model-monitoring/frontend
-ExecStart=/usr/bin/node node_modules/.bin/next start -p 3000
-Restart=always
-RestartSec=5
-
-[Install]
-WantedBy=multi-user.target
-```
-
-```bash
-sudo systemctl daemon-reload
-sudo systemctl enable --now monitor-backend
-sudo systemctl enable --now monitor-frontend
-```
-
----
-
-## 접속
-
-| 서비스 | URL |
-|--------|-----|
-| Frontend 대시보드 | `http://localhost:3000` |
-| Backend API | `http://localhost:8000` |
-| API 문서 (Swagger) | `http://localhost:8000/docs` |
-| Health Check | `http://localhost:8000/api/health` |
-
----
-
-## 인증
-
-수동 프로브 기능은 로그인이 필요합니다. 대시보드(자동 프로빙)는 인증 없이 접근 가능합니다.
-
-### 기본 계정
-
-서버 최초 기동 시 사용자가 없으면 기본 관리자 계정이 자동 생성됩니다 (즉시 승인 상태).
-
-> 환경변수 `JWT_SECRET_KEY`를 설정하여 토큰 서명 키를 변경하세요.
-
-### 인증 방식
-
-- **JWT Bearer Token** 기반 (24시간 유효)
-- 로그인: `POST /api/auth/login` → `access_token` 발급
-- 보호 대상 API: `/api/probes/run`, `/api/prompts` (POST/DELETE)
-- 프론트엔드에서 수동 프로브 탭 클릭 시 로그인 폼이 표시됨
-
-### 회원가입 (수동 승인 방식)
-
-1. 사용자가 프론트엔드 또는 API로 회원가입
-2. 계정은 **승인 대기 상태**(`approved=0`)로 생성
-3. 관리자 이메일(`whchoi98@gmail.com`)로 **승인 요청 알림** 발송 (AWS SES)
-4. 관리자가 이메일의 **"승인하기"** 버튼 클릭 → 즉시 승인 (`approved=1`)
-5. 승인 전에는 로그인 불가 (403 응답)
-
-> SES 샌드박스 환경에서는 관리자 이메일 주소가 사전에 SES에서 인증되어 있어야 합니다.
-
-```bash
-# CLI로 회원가입
-curl -X POST http://localhost:8000/api/auth/register \
-  -H "Content-Type: application/json" \
-  -d '{"username":"myuser","password":"mypassword"}'
-```
-
----
-
-## API 엔드포인트
-
-### 인증
-
-| 메서드 | 경로 | 인증 | 설명 |
-|--------|------|------|------|
-| POST | `/api/auth/login` | - | 로그인 → JWT 토큰 발급 (승인된 계정만) |
-| POST | `/api/auth/register` | - | 회원가입 (승인 대기 상태로 생성, 관리자 이메일 발송) |
-| GET | `/api/auth/approve?token=` | - | 이메일 승인 링크 (관리자 클릭용) |
-| GET | `/api/auth/me` | Bearer | 현재 사용자 정보 |
-
-### 자동 프로빙
-
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/api/auto-probe/status` | 자동 프로버 상태 (실행 여부, 마지막/다음 실행 시각) |
-| GET | `/api/auto-probe/latest` | 가장 최근 자동 프로빙 결과 (모델별 1건) |
-| GET | `/api/auto-probe/trend?hours=24` | 시계열 데이터 (기본 24시간) |
-| POST | `/api/auto-probe/trigger` | 즉시 1회 프로빙 실행 |
-
-### 수동 프로브 (인증 필요)
-
-| 메서드 | 경로 | 인증 | 설명 |
-|--------|------|------|------|
-| POST | `/api/probes/run` | Bearer | SSE 스트리밍 프로브 실행 |
-| GET | `/api/models` | - | 사용 가능한 모델 목록 |
-
-### 결과 조회
-
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/api/results` | 결과 조회 (필터: model_id, run_id, limit, offset) |
-| GET | `/api/results/latest` | 최신 결과 |
-| GET | `/api/results/stats` | 통계 (avg, p50, p95, p99) |
-
-### 프롬프트 세트
-
-| 메서드 | 경로 | 설명 |
-|--------|------|------|
-| GET | `/api/prompts` | 프롬프트 세트 목록 |
-| POST | `/api/prompts` | 프롬프트 세트 생성 |
-| DELETE | `/api/prompts/{id}` | 프롬프트 세트 삭제 |
-
----
-
-## 운영 가이드
-
-### 서비스 관리
-
-```bash
-# 상태 확인
-sudo systemctl status monitor-backend
-sudo systemctl status monitor-frontend
-
-# 재시작
-sudo systemctl restart monitor-backend
-sudo systemctl restart monitor-frontend
-
-# 로그 확인
-journalctl -u monitor-backend -f
-journalctl -u monitor-frontend -f
-```
-
-### 자동 프로빙 동작 확인
-
-```bash
-# 프로버 상태
-curl http://localhost:8000/api/auto-probe/status
-
-# 최신 결과
-curl http://localhost:8000/api/auto-probe/latest
-
-# 수동 트리거
-curl -X POST http://localhost:8000/api/auto-probe/trigger
-```
-
-### DB 직접 조회
-
-```bash
-docker exec -it monitoring-postgres psql -U postgres -d monitoring
-
-# 자동 프로빙 실행 횟수
-SELECT COUNT(*) FROM probe_runs WHERE is_auto = 1;
-
-# 최근 결과
-SELECT model_name, ttft_ms, total_latency_ms, tps, status
-FROM probe_results
-ORDER BY timestamp DESC LIMIT 9;
-```
-
-### Frontend 재빌드
-
-코드 수정 후:
-
-```bash
-cd frontend
-npm run build
-sudo systemctl restart monitor-frontend
-```
-
----
-
-## 설정 변경
-
-| 항목 | 파일 | 변수 |
-|------|------|------|
-| 프로빙 주기 | `backend/auto_prober.py` | `PROBE_INTERVAL` (기본 300초) |
-| 프로빙 프롬프트 | `backend/auto_prober.py` | `PROBE_PROMPT` |
-| 모델 목록 | `backend/prober.py` | `AVAILABLE_MODELS` |
-| DB 접속 정보 | `backend/database.py` | `DATABASE_URL` |
-| 자동 새로고침 주기 | `frontend/src/hooks/useAutoRefresh.ts` | `intervalMs` (기본 30000ms) |
-| JWT 서명 키 | 환경변수 `JWT_SECRET_KEY` | 기본값: `bedrock-monitor-secret-change-me` |
-| 토큰 유효기간 | `backend/auth.py` | `ACCESS_TOKEN_EXPIRE_HOURS` (기본 24시간) |
-
-<!-- harness-eval-badge:start -->
-![Harness Score](https://img.shields.io/badge/harness-6.9%2F10-orange)
-![Harness Grade](https://img.shields.io/badge/grade-C-orange)
-![Last Eval](https://img.shields.io/badge/eval-2026--05--20-blue)
-<!-- harness-eval-badge:end -->
+- 메인테이너: **최우형 (WooHyung Choi)** ([@whchoi98](https://github.com/whchoi98))
+- 이슈: [github.com/whchoi98/model-monitoring/issues](https://github.com/whchoi98/model-monitoring/issues)
+- 이메일: whchoi98@gmail.com
