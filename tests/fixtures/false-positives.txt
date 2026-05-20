@@ -1,0 +1,5 @@
+# False positive samples — these should NOT trigger the secret scanner
+AWS_ACCESS_KEY_ID=your-key-here
+password=changeme
+sk_test (not long enough)
+example-api-key-placeholder

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 import threading
 
@@ -63,19 +64,21 @@ def _send_approval_email(username: str, approve_url: str):
     """Send approval notification to admin via SES (fire-and-forget)."""
     def _send():
         try:
+            safe_username = html.escape(username)
+            safe_url = html.escape(approve_url)
             ses = boto3.client("ses", region_name="us-east-1")
             ses.send_email(
                 Source=ADMIN_EMAIL,
                 Destination={"ToAddresses": [ADMIN_EMAIL]},
                 Message={
-                    "Subject": {"Data": f"[Bedrock Monitor] 회원가입 승인 요청: {username}", "Charset": "UTF-8"},
+                    "Subject": {"Data": f"[Bedrock Monitor] 회원가입 승인 요청: {safe_username}", "Charset": "UTF-8"},
                     "Body": {
                         "Html": {
                             "Data": (
                                 f"<h2>새 회원가입 승인 요청</h2>"
-                                f"<p>아이디: <strong>{username}</strong></p>"
+                                f"<p>아이디: <strong>{safe_username}</strong></p>"
                                 f"<p>아래 버튼을 클릭하면 해당 계정이 승인됩니다.</p>"
-                                f'<p><a href="{approve_url}" style="display:inline-block;padding:12px 24px;'
+                                f'<p><a href="{safe_url}" style="display:inline-block;padding:12px 24px;'
                                 f'background:#2563eb;color:#fff;text-decoration:none;border-radius:8px;'
                                 f'font-weight:bold;">승인하기</a></p>'
                                 f"<p style=\"color:#888;font-size:12px;\">이 링크는 7일간 유효합니다.</p>"
@@ -160,9 +163,11 @@ def approve_user(token: str, db: Session = Depends(get_db)):
             status_code=404,
         )
 
+    safe_name = html.escape(user.username)
+
     if user.approved == 1:
         return HTMLResponse(
-            content=_result_html("이미 승인됨", f"<strong>{user.username}</strong> 계정은 이미 승인되었습니다.", success=True),
+            content=_result_html("이미 승인됨", f"<strong>{safe_name}</strong> 계정은 이미 승인되었습니다.", success=True),
         )
 
     user.approved = 1
@@ -170,7 +175,7 @@ def approve_user(token: str, db: Session = Depends(get_db)):
     logger.info("User '%s' (id=%d) approved via email link", user.username, user.id)
 
     return HTMLResponse(
-        content=_result_html("승인 완료", f"<strong>{user.username}</strong> 계정이 승인되었습니다. 이제 로그인할 수 있습니다.", success=True),
+        content=_result_html("승인 완료", f"<strong>{safe_name}</strong> 계정이 승인되었습니다. 이제 로그인할 수 있습니다.", success=True),
     )
 
 
