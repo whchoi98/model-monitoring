@@ -4,13 +4,14 @@ import { ProbeResult } from "@/lib/types";
 import { Translations } from "@/lib/i18n";
 import { useT } from "@/lib/i18n-context";
 import { useState } from "react";
+import { groupByFamily } from "@/lib/sortModels";
 
 interface Props {
   results: ProbeResult[];
-  /** 모델 카드 클릭 시 호출. 클릭한 모델 이름 (또는 toggle off 시 null). */
-  onSelectModel?: (modelName: string | null) => void;
-  /** 현재 선택된 모델 이름 - 카드 highlight + 다시 클릭 시 해제. */
-  selectedModel?: string | null;
+  /** 모델 카드 클릭 시 호출 (다중 선택 토글). */
+  onToggleModel?: (modelName: string) => void;
+  /** 현재 선택된 모델 set - 카드 highlight + 다시 클릭 시 해제. */
+  selectedModels?: Set<string>;
 }
 
 function MetricTooltip({ text }: { text: string }) {
@@ -64,6 +65,14 @@ function getStatusBadge(status: string, t: Translations) {
       </span>
     );
   }
+  if (status === "overloaded") {
+    return (
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
+        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
+        {t.overloaded ?? "Overloaded"}
+      </span>
+    );
+  }
   return (
     <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
       <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
@@ -83,24 +92,28 @@ function formatTime(timestamp: string | undefined, t: Translations): string {
   return t.hoursAgo(Math.floor(diffMin / 60));
 }
 
-export default function ModelStatusGrid({ results, onSelectModel, selectedModel }: Props) {
+export default function ModelStatusGrid({ results, onToggleModel, selectedModels }: Props) {
   const t = useT();
 
   if (results.length === 0) return null;
 
+  const groups = groupByFamily(results);
+
   return (
     <div>
       <h2 className="text-lg font-semibold text-gray-100 mb-4">{t.modelStatus}</h2>
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-        {results.map((r) => {
-          const isSelected = selectedModel === r.model_name;
-          const clickable = Boolean(onSelectModel);
+      <div className="space-y-4">
+        {groups.map((grp, gi) => (
+          <div key={gi} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {grp.map((r) => {
+          const isSelected = Boolean(selectedModels?.has(r.model_name));
+          const clickable = Boolean(onToggleModel);
           return (
           <div
             key={r.model_id}
             onClick={
               clickable
-                ? () => onSelectModel?.(isSelected ? null : r.model_name)
+                ? () => onToggleModel?.(r.model_name)
                 : undefined
             }
             role={clickable ? "button" : undefined}
@@ -110,7 +123,7 @@ export default function ModelStatusGrid({ results, onSelectModel, selectedModel 
                 ? (e) => {
                     if (e.key === "Enter" || e.key === " ") {
                       e.preventDefault();
-                      onSelectModel?.(isSelected ? null : r.model_name);
+                      onToggleModel?.(r.model_name);
                     }
                   }
                 : undefined
@@ -122,14 +135,22 @@ export default function ModelStatusGrid({ results, onSelectModel, selectedModel 
                 ? "bg-blue-500/10 border-blue-500/60 ring-2 ring-blue-500/40"
                 : r.status === "success"
                   ? "bg-gray-900/50 border-gray-800 hover:border-gray-700"
-                  : "bg-rose-950/20 border-rose-900/30 hover:border-rose-800/40"
+                  : r.status === "overloaded"
+                    ? "bg-amber-950/20 border-amber-900/40 hover:border-amber-800/50"
+                    : "bg-rose-950/20 border-rose-900/30 hover:border-rose-800/40"
             }`}
           >
             {/* Header */}
-            <div className="flex items-center justify-between mb-3">
-              <h3 className="text-sm font-semibold text-gray-200 truncate pr-2">
-                {r.model_name}
-              </h3>
+            <div className="flex items-start justify-between mb-3 gap-2">
+              <div className="min-w-0 flex-1">
+                <h3 className="text-sm font-semibold text-gray-200 truncate">
+                  {r.model_name}
+                </h3>
+                {/* 실제 호출되는 inference model ID */}
+                <code className="block text-[10px] text-gray-500 truncate mt-0.5" title={r.model_id}>
+                  {r.model_id}
+                </code>
+              </div>
               {getStatusBadge(r.status, t)}
             </div>
 
@@ -175,6 +196,13 @@ export default function ModelStatusGrid({ results, onSelectModel, selectedModel 
                   </span>
                 </div>
               </div>
+            ) : r.status === "overloaded" ? (
+              <div className="text-xs text-amber-300/90 leading-relaxed">
+                {t.overloadedHint ?? "Vendor temporarily overloaded — auto-retried 2× with 2/4/8s backoff. Next cycle auto-retries in 5 min."}
+                <div className="text-[10px] text-amber-500/60 mt-1 truncate" title={r.error_message ?? ""}>
+                  {r.error_message}
+                </div>
+              </div>
             ) : (
               <div className="text-xs text-rose-400/80 truncate">
                 {r.error_message || "Unknown error"}
@@ -188,19 +216,24 @@ export default function ModelStatusGrid({ results, onSelectModel, selectedModel 
           </div>
           );
         })}
+          </div>
+        ))}
       </div>
-      {selectedModel && onSelectModel && (
-        <div className="mt-3 text-xs text-gray-400 flex items-center gap-2">
+      {selectedModels && selectedModels.size > 0 && onToggleModel && (
+        <div className="mt-3 text-xs text-gray-400 flex items-center gap-2 flex-wrap">
           <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-            🔍 {selectedModel}
+            🔍 {selectedModels.size}개 모델 선택됨
           </span>
-          <span>이 모델만 추세 그래프에 표시됩니다.</span>
+          <span>선택한 모델만 추세 그래프에 표시됩니다.</span>
           <button
             type="button"
-            onClick={() => onSelectModel(null)}
+            onClick={() => {
+              // 모두 해제 - 부모에 각 모델을 toggle 호출하면 됨.
+              selectedModels.forEach((n) => onToggleModel(n));
+            }}
             className="text-gray-500 hover:text-gray-200 underline"
           >
-            해제
+            모두 해제
           </button>
         </div>
       )}

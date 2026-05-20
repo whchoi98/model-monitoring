@@ -1,0 +1,1 @@
+{"version":"1.0","project":"model-monitoring","evaluations":[{"score":6.9,"grade":"C","mode":"full","dimensions":{"correctness":8,"safety":3,"completeness":6,"consistency":8,"actionability":8,"testability":7,"costEfficiency":6,"contractBasedTesting":7,"agentCommunication":8,"contextManagement":8,"feedbackLoopMaturity":9,"evolvability":8},"id":"eval-2026-05-20-001"}]}

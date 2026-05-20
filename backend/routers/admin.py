@@ -67,3 +67,75 @@ def reset_monitoring_data(
         },
         message="모니터링 데이터를 모두 삭제했습니다. 다음 auto-probe 사이클부터 새로 시작합니다.",
     )
+
+
+# ───────────────────────────────────────────────────────────────────────
+# User management (admin only)
+# ───────────────────────────────────────────────────────────────────────
+
+
+class UserRow(BaseModel):
+    id: int
+    username: str
+    approved: int
+
+
+class UserListResponse(BaseModel):
+    users: list[UserRow]
+
+
+@router.get("/users", response_model=UserListResponse)
+def list_users(
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """모든 사용자 목록 (admin 전용)."""
+    _ensure_admin(user)
+    rows = db.query(User).order_by(User.id).all()
+    return UserListResponse(users=[
+        UserRow(id=u.id, username=u.username, approved=u.approved or 0)
+        for u in rows
+    ])
+
+
+class UserActionResponse(BaseModel):
+    ok: bool
+    message: str
+
+
+@router.delete("/users/{username}", response_model=UserActionResponse)
+def delete_user(
+    username: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """username으로 user 삭제 (admin 전용). 본인 admin 계정은 삭제 금지."""
+    _ensure_admin(user)
+    if username == user.username:
+        raise HTTPException(status_code=400, detail="자기 자신은 삭제할 수 없습니다.")
+    target = db.query(User).filter(User.username == username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail=f"user '{username}' not found")
+    db.delete(target)
+    db.commit()
+    logger.warning("admin '%s' deleted user '%s'", user.username, username)
+    return UserActionResponse(ok=True, message=f"user '{username}' deleted")
+
+
+@router.post("/users/{username}/approve", response_model=UserActionResponse)
+def approve_user(
+    username: str,
+    db: Session = Depends(get_db),
+    user: User = Depends(get_current_user),
+):
+    """username을 즉시 승인 (admin 전용). 이메일 발송 실패 등으로 승인 link 도달 안 한 경우 사용."""
+    _ensure_admin(user)
+    target = db.query(User).filter(User.username == username).first()
+    if not target:
+        raise HTTPException(status_code=404, detail=f"user '{username}' not found")
+    if target.approved == 1:
+        return UserActionResponse(ok=True, message=f"user '{username}' is already approved")
+    target.approved = 1
+    db.commit()
+    logger.info("admin '%s' approved user '%s'", user.username, username)
+    return UserActionResponse(ok=True, message=f"user '{username}' approved")

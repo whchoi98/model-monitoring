@@ -24,12 +24,13 @@ AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로
 
 | 기능 | 설명 |
 |------|------|
-| **자동 프로빙** | 5분 간격으로 9개 모델을 자동 프로빙하여 결과를 DB에 저장 |
-| **대시보드** | 모델별 상태 카드(3×3 그리드) + TTFT / 응답시간 / TPS 추이 차트 |
+| **자동 프로빙** | EventBridge Scheduler가 5분 간격으로 별도 Fargate Task를 트리거 → **12개 모델** (9 Bedrock Global/US + 3 Anthropic CP on AWS) 자동 프로빙. 6개 워크로드 카테고리(짧은 대화/추론/코드 생성/요약/구조화 JSON/창작)를 라운드로빈으로 회전. Opus 4.7 / 4.6 / Sonnet 4.6 / Haiku 4.5 / Nova 2.0 Lite (US) family |
+| **대시보드 + 5개 탭** | `/` 대시보드 / `/prompts` 프롬프트 / `/cost` 비용 / `/reliability` 신뢰성 / `/efficiency` 효율성 / `/analysis` **출력 분석 (v2.1.0 신규)** |
 | **수동 프로브** | 로그인 후 모델·프롬프트·동시성·반복 횟수를 지정하여 즉시 실행, SSE 스트리밍 결과 확인 |
-| **사용자 인증** | 수동 프로브는 ID/비밀번호 로그인 필요 (JWT 토큰 기반). 대시보드는 공개 |
-| **한글 UI** | 전체 인터페이스 한글화 + 지표별 설명 툴팁 |
-| **이력 조회** | 과거 프로브 실행 이력 및 결과 조회 |
+| **출력 분석 (v2.1.0 신규)** | Stop Reason 분포 (end_turn/max_tokens/guardrail 등) + Output Token 길이 분포 (median/p95/std + 7-bin histogram) |
+| **사용자 인증** | 회원가입은 이메일 형식 강제 → 관리자 SES 승인 → 로그인. JWT 토큰 24시간 |
+| **한글/영어 UI 토글** | 전체 인터페이스 KO/EN 양 언어 |
+| **챗봇 (FloatingChat)** | Claude Sonnet 4.6 + 4 tools + dynamic followups |
 
 ## 모니터링 대상 모델
 
@@ -393,3 +394,9 @@ sudo systemctl restart monitor-frontend
 | 자동 새로고침 주기 | `frontend/src/hooks/useAutoRefresh.ts` | `intervalMs` (기본 30000ms) |
 | JWT 서명 키 | 환경변수 `JWT_SECRET_KEY` | 기본값: `bedrock-monitor-secret-change-me` |
 | 토큰 유효기간 | `backend/auth.py` | `ACCESS_TOKEN_EXPIRE_HOURS` (기본 24시간) |
+
+<!-- harness-eval-badge:start -->
+![Harness Score](https://img.shields.io/badge/harness-6.9%2F10-orange)
+![Harness Grade](https://img.shields.io/badge/grade-C-orange)
+![Last Eval](https://img.shields.io/badge/eval-2026--05--20-blue)
+<!-- harness-eval-badge:end -->

@@ -19,26 +19,74 @@ CDK lint + typecheck + 63 tests + cdk-nag clean + ruff + pytest 7 + frontend tsc
 
 CDK가 ECR repo를 만든 직후 image push가 필요. 첫 deploy는 두 단계:
 
+> **중요 (ADR-010)**: `:latest` tag는 **로컬 dev 전용**. Production task definition에는 **immutable tag (`v<timestamp>` 또는 `v<git-sha>`)** 만 사용. `:latest`로 push하면 Docker layer dedupe + ECS image cache 콤보로 새 코드가 production에 silent 반영 안 되는 사고가 발생.
+
 ```bash
 # (a) ECR repo만 먼저 생성.
 cd cdk && npx cdk deploy BedrockMonitor-Cluster
 
-# (b) 로그인 → 빌드 → push.
+# (b) 로그인 → 빌드 → push. 항상 immutable tag 사용.
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
-REGION=us-east-1
+REGION=ap-northeast-2
+TAG="v$(date +%s)"   # 또는 v$(git rev-parse --short HEAD)
 aws ecr get-login-password --region $REGION \
   | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com
 
-docker build -t bedrock-monitor-backend:latest backend/
-docker tag bedrock-monitor-backend:latest \
-  $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:latest
-docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:latest
+# Backend — 2026-05-20부터 ECR repository: bedrock-monitor-backend-v2 사용 (ADR-018)
+docker build --no-cache --pull --platform linux/arm64 \
+  -t bedrock-monitor-backend:$TAG backend/
+docker tag bedrock-monitor-backend:$TAG \
+  $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
+docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 
-docker build -t bedrock-monitor-frontend:latest frontend/
-docker tag bedrock-monitor-frontend:latest \
-  $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:latest
-docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:latest
+# Frontend
+docker build --no-cache --pull --platform linux/arm64 \
+  -t bedrock-monitor-frontend:$TAG frontend/
+docker tag bedrock-monitor-frontend:$TAG \
+  $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
+docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
 ```
+
+### 2-1. Task Definition을 새 tag로 update (incremental redeploy)
+
+`:latest`를 사용하지 않으므로 push 후 task definition을 새 revision으로 register하는 단계가 추가된다:
+
+```bash
+# Backend
+aws ecs describe-task-definition --task-definition BedrockMonitorAppServicesBackendTaskDef* \
+  --region $REGION > /tmp/td-be.json
+python3 -c "
+import json
+td = json.load(open('/tmp/td-be.json'))['taskDefinition']
+out = {k:v for k,v in td.items() if k in ['family','containerDefinitions','volumes','taskRoleArn','executionRoleArn','networkMode','cpu','memory','requiresCompatibilities','runtimePlatform']}
+for c in out['containerDefinitions']:
+    if 'bedrock-monitor-backend' in c.get('image',''):
+        c['image'] = '${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/bedrock-monitor-backend:${TAG}'
+open('/tmp/td-be-new.json','w').write(json.dumps(out))
+"
+BE_ARN=$(aws ecs register-task-definition --region $REGION \
+  --cli-input-json file:///tmp/td-be-new.json \
+  --query 'taskDefinition.taskDefinitionArn' --output text)
+aws ecs update-service --cluster bedrock-monitor --service backend \
+  --task-definition "$BE_ARN" --region $REGION
+
+# Autoprober schedule도 동일하게 (별도 Fargate Task)
+aws ecs describe-task-definition --task-definition BedrockMonitorSchedulerAutoProberTaskDef* \
+  --region $REGION > /tmp/td-ap.json
+# ... (위와 동일하게 image 교체 + register) ...
+AP_ARN=...
+aws scheduler get-schedule --name "<AutoProberSchedule>" --region $REGION > /tmp/sched.json
+python3 -c "
+import json
+d = json.load(open('/tmp/sched.json'))
+d['Target']['EcsParameters']['TaskDefinitionArn'] = '$AP_ARN'
+for k in ('Arn','CreationDate','LastModificationDate'): d.pop(k,None)
+open('/tmp/sched-upd.json','w').write(json.dumps(d))
+"
+aws scheduler update-schedule --region $REGION --cli-input-json file:///tmp/sched-upd.json
+```
+
+> **ADR-011 주의**: Scheduler IAM role의 `ecs:RunTask` Resource가 task def revision pinned면 위 schedule update가 silent fail. 정책의 Resource를 task def family `:*` wildcard로 유지할 것.
 
 ## 3. 전체 CDK 배포
 

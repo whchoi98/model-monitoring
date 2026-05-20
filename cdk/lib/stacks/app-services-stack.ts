@@ -85,6 +85,13 @@ export class AppServicesStack extends cdk.Stack {
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
         resources: ["*"], // SES API에는 리소스 ARN scope이 제한적임.
       }),
+      new iam.PolicyStatement({
+        sid: "BedrockOptimizePrompt",
+        effect: iam.Effect.ALLOW,
+        // bedrock-agent-runtime의 OptimizePrompt API - foundation-model ARN 단위 권한.
+        actions: ["bedrock:OptimizePrompt"],
+        resources: [`arn:aws:bedrock:*::foundation-model/*`],
+      }),
     ];
 
     // ---------------------------------------------------------------------
@@ -97,6 +104,19 @@ export class AppServicesStack extends cdk.Stack {
       { parameterName: "/bedrock-monitor/seed-admin-password" },
     );
 
+    // Claude Platform on AWS (Path 3 External) - vendor endpoint.
+    // 사용자가 사전에 SSM SecureString으로 생성. 없어도 동작 (Bedrock 12개만 모니터링).
+    const anthropicApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "AnthropicApiKeyParam",
+      { parameterName: "/bedrock-monitor/anthropic-api-key" },
+    );
+    const anthropicWorkspaceIdParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "AnthropicWorkspaceIdParam",
+      { parameterName: "/bedrock-monitor/anthropic-workspace-id" },
+    );
+
     const backendSecrets: Record<string, ecs.Secret> = {
       // DATABASE_URL은 backend/database.py가 DB_USER/PASSWORD/HOST/PORT/NAME 으로 직접 조립한다.
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -107,6 +127,8 @@ export class AppServicesStack extends cdk.Stack {
       JWT_SECRET_KEY: ecs.Secret.fromSsmParameter(props.jwtSecretParam),
       AGENTCORE_MEMORY_ID: ecs.Secret.fromSsmParameter(props.agentCoreMemoryIdParam),
       SEED_ADMIN_PASSWORD: ecs.Secret.fromSsmParameter(seedAdminPasswordParam),
+      ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
+      ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
     };
 
     const backendEnv: Record<string, string> = {

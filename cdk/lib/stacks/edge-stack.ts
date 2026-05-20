@@ -57,15 +57,35 @@ export class EdgeStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     // CloudFront Distribution.
     // ---------------------------------------------------------------------
+    // Response Headers Policy - HTML 응답의 cache-control을 강제 override.
+    // Next.js 14가 SSR HTML에 자동으로 s-maxage=31536000을 박는데, middleware/dynamic 모두
+    // 덮어쓰지 못해 마지막 layer (CloudFront response)에서 강제로 no-store로 교체.
+    const htmlNoCachePolicy = new cloudfront.ResponseHeadersPolicy(this, "HtmlNoCachePolicy", {
+      responseHeadersPolicyName: "BedrockMonitorHtmlNoCache",
+      customHeadersBehavior: {
+        customHeaders: [
+          {
+            header: "Cache-Control",
+            value: "no-store, no-cache, must-revalidate, max-age=0",
+            override: true,
+          },
+        ],
+      },
+    });
+
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
+      // Default behavior - HTML 페이지 (/, /prompts 등). 캐시 + 응답 헤더 모두 no-store 강제.
       defaultBehavior: {
         origin: albOrigin,
         viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
-        cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+        cachePolicy: cloudfront.CachePolicy.CACHING_DISABLED,
+        originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+        responseHeadersPolicy: htmlNoCachePolicy,
         allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
         compress: true,
       },
       additionalBehaviors: {
+        // API - 절대 캐시 금지 (SSE 스트리밍 포함).
         "/api/*": {
           origin: albOrigin,
           viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
@@ -73,6 +93,14 @@ export class EdgeStack extends cdk.Stack {
           originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
           allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL,
           compress: false,
+        },
+        // Next.js 정적 자산 - hash-based filename이라 영구 immutable 캐시 안전.
+        "/_next/static/*": {
+          origin: albOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: cloudfront.CachePolicy.CACHING_OPTIMIZED,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_GET_HEAD_OPTIONS,
+          compress: true,
         },
       },
       enableLogging: true,

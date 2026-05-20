@@ -47,7 +47,16 @@ def _build_database_url() -> str:
 
 DATABASE_URL = _build_database_url()
 
-engine = create_engine(DATABASE_URL, pool_pre_ping=True, pool_size=10, max_overflow=20)
+# RDS t4g.micro max_connections ~85. backend task + scheduler tasks + DBA tools가 공유하므로
+# 각 task pool은 작게 (5+5=10). pool_recycle로 stale connection 자동 회수.
+engine = create_engine(
+    DATABASE_URL,
+    pool_pre_ping=True,
+    pool_size=5,
+    max_overflow=5,
+    pool_recycle=300,
+    pool_timeout=10,
+)
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 Base = declarative_base()
 

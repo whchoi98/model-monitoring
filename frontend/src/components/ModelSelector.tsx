@@ -15,10 +15,17 @@ interface ModelGroup {
 }
 
 function groupModels(models: ModelInfo[]): ModelGroup[] {
+  // 모니터링 채널 체계와 동일하게 그룹화:
+  //   - Anthropic (CP on AWS): anthropic: prefix (vendor endpoint)
+  //   - Bedrock Global Anthropic: global.anthropic.
+  //   - Bedrock US Anthropic: us.anthropic.
+  //   - Bedrock Nova (1P): us.amazon. / global.amazon.
   const groups: ModelGroup[] = [
-    { label: "Anthropic (US)", prefix: "us.anthropic", models: [] },
-    { label: "Anthropic (Global)", prefix: "global.anthropic", models: [] },
-    { label: "Amazon", prefix: "us.amazon", models: [] },
+    { label: "Anthropic (CP on AWS)", prefix: "anthropic:", models: [] },
+    { label: "Bedrock Anthropic (Global)", prefix: "global.anthropic", models: [] },
+    { label: "Bedrock Anthropic (US)", prefix: "us.anthropic", models: [] },
+    { label: "Bedrock Nova (US)", prefix: "us.amazon", models: [] },
+    { label: "Bedrock Nova (Global)", prefix: "global.amazon", models: [] },
     { label: "Other", prefix: "", models: [] },
   ];
 

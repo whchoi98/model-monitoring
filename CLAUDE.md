@@ -2,52 +2,47 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Bedrock LLM Monitor** — A real-time dashboard for monitoring response speed, throughput, and reliability of AWS Bedrock LLM models.
+**Amazon Bedrock LLM Monitor** (v2.1.0) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS LLM channels.
 
-**Bedrock LLM 모니터** — AWS Bedrock LLM 모델의 응답 속도, 처리량, 안정성을 실시간으로 모니터링하는 대시보드.
+**Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
-### v2 (현재) — CDK + ECS Fargate + AgentCore 챗봇
+### Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + RDS PostgreSQL 16 (t4g.micro, Single-AZ) + AgentCore Memory
 - **Frontend**: Next.js 14 standalone + React 18 + Tailwind + Recharts + react-markdown + FloatingChat
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
-- **Edge**: CloudFront VPC Origin → Internal ALB (HTTPS-only) → ECS Fargate × 2
-- **Scheduling**: EventBridge Scheduler → AutoProber(5min) + Insights(30min) Fargate Tasks
-- **AI**: Claude Sonnet 4.6 챗봇 (4 tools), 30분 인사이트 잡
+- **Edge**: CloudFront VPC Origin → Internal ALB (HTTPS-only) → ECS Fargate × 2 (backend, frontend)
+- **Scheduling**: EventBridge Scheduler → AutoProber + Insights Fargate Tasks (모두 `rate(5 minutes)`)
+- **AI**: Claude Sonnet 4.6 챗봇 (4 tools, dynamic followups), Haiku 4.5 인사이트 잡
 
 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/).
 
-### v1 (legacy, 본 문서 하단 — 점진적으로 정리 중)
-
-- **Backend**: FastAPI + SQLAlchemy ORM + PostgreSQL 16 (Docker)
-- **Frontend**: Next.js 14 + React 18 + Tailwind CSS + Recharts
-- **Infra**: EC2 (Amazon Linux 2023) + CloudFront + ALB + systemd
-
-### Dashboard Screenshot / 대시보드 스크린샷
-
-![Dashboard](docs/images/dashboard.png)
-
-### Manual Probe Screenshot / 수동 프로브 스크린샷
-
-![Manual Probe](docs/images/manual-probe.png)
-
 ---
 
-## Architecture / 아키텍처
+## Architecture / 아키텍처 (v2)
 
 ```
 CloudFront (d1ra694ytoup3r.cloudfront.net)
-    → ALB → EC2
-        ├── Next.js 14 (port 3000) — /api/* proxied to backend
-        ├── FastAPI (port 8000)
-        │   ├── Auto Prober Thread (5min interval, 9 models, concurrency=3)
-        │   └── PostgreSQL 16 (Docker, port 5432)
-        └── AWS Bedrock (us-east-1) — converse_stream API
+  ↓  VPC Origin (HTTPS)
+Internal ALB
+  ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
+  └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
+                ├── /             — Dashboard (status + 13 model cards + trend)
+                ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
+                ├── /cost         — 30-day projection + per-model + channel compare
+                ├── /reliability  — Family/channel success rate + error buckets
+                ├── /efficiency   — 0-100 Token Efficiency Score (weighted)
+                └── /analysis     — Stop reason 분포 + Output length 분포
+
+EventBridge Scheduler (rate 5 min)
+  ├── AutoProber Fargate Task  → 1 cycle = 13 models × 1 workload preset (round-robin 6 categories)
+  └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
+
+Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS
+                                  (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
 ```
 
-**EN**: The frontend proxies all `/api/*` requests to the FastAPI backend via Next.js rewrites. The backend runs a background daemon thread that automatically probes 9 Bedrock models every 5 minutes and stores results in PostgreSQL. CloudFront serves as the public entry point through an ALB.
-
-**KO**: 프론트엔드는 Next.js rewrite를 통해 모든 `/api/*` 요청을 FastAPI 백엔드로 프록시합니다. 백엔드는 백그라운드 데몬 스레드로 5분마다 9개 Bedrock 모델을 자동 프로빙하여 결과를 PostgreSQL에 저장합니다. CloudFront가 ALB를 통해 퍼블릭 진입점 역할을 합니다.
+`/api/auto-probe/status`는 in-process state가 아닌 **DB의 최근 `ProbeRun(is_auto=1)` row를 source of truth**로 사용 (Fargate task 분리 이후 일관성 확보).
 
 ---
 
@@ -56,47 +51,63 @@ CloudFront (d1ra694ytoup3r.cloudfront.net)
 ```
 model-monitoring/
 ├── backend/
-│   ├── main.py              # FastAPI entrypoint + lifespan / FastAPI 엔트리포인트 + lifespan
-│   ├── auto_prober.py       # Background auto-probing thread / 백그라운드 자동 프로빙 스레드
-│   ├── prober.py            # Core probe logic (Bedrock converse_stream) / 코어 프로브 로직
-│   ├── auth.py              # JWT + bcrypt auth utilities / JWT + bcrypt 인증 유틸리티
-│   ├── models.py            # SQLAlchemy ORM models / SQLAlchemy ORM 모델
-│   ├── schemas.py           # Pydantic response schemas / Pydantic 응답 스키마
-│   ├── database.py          # DB connection config / DB 연결 설정
-│   ├── requirements.txt     # Python dependencies / Python 의존성
+│   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
+│   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
+│   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (13개), retry, stop_reason capture
+│   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
+│   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
+│   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
+│   ├── schemas.py           # Pydantic; ProbeResultResponse.stop_reason Optional
+│   ├── database.py          # pool_size=5, max_overflow=5, pool_recycle=300, pool_timeout=10
+│   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   └── routers/
-│       ├── auth.py          # /api/auth/* — login, register, approve, me
-│       ├── auto_probe.py    # /api/auto-probe/* — status, latest, trend, trigger
-│       ├── probes.py        # /api/probes/run — SSE streaming probe (auth required)
-│       ├── results.py       # /api/results/* — query stored results
-│       ├── models.py        # /api/models — available model list
-│       └── prompts.py       # /api/prompts/* — prompt set CRUD (auth required)
+│       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
+│       ├── admin.py         # /api/admin/* — reset-monitoring-data, users CRUD (admin only)
+│       ├── auto_probe.py    # /api/auto-probe/* — status(DB-sourced), latest, trend, categories, trigger
+│       ├── probes.py        # /api/probes/run — SSE streaming probe (auth)
+│       ├── results.py       # /api/results/* — stored results query + stats
+│       ├── models.py        # /api/models — AVAILABLE_MODELS list
+│       ├── prompts.py       # /api/prompts/* — prompt set CRUD + Bedrock OptimizePrompt (auth)
+│       ├── chat.py          # /api/chat/stream — Sonnet 4.6 + 4 tools + dynamic followups
+│       ├── insights.py      # /api/insights/* — list/latest/stream-regenerate
+│       ├── cost.py          # /api/cost/* — summary, channel-compare, trend
+│       ├── reliability.py   # /api/reliability/multi-channel — family/channel grouped
+│       ├── efficiency.py    # /api/efficiency/score — 0-100 weighted score per category
+│       └── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0 신규)
 ├── frontend/
 │   ├── src/
-│   │   ├── app/
-│   │   │   ├── page.tsx         # Main page with tabs (Dashboard / Manual Probe)
-│   │   │   └── layout.tsx       # Root layout (lang="ko", Korean metadata)
+│   │   ├── app/             # App Router pages (force-dynamic)
+│   │   │   ├── page.tsx           # Dashboard (status + 13 cards + trend + workload filter)
+│   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
+│   │   │   ├── cost/page.tsx
+│   │   │   ├── reliability/page.tsx
+│   │   │   ├── efficiency/page.tsx
+│   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
-│   │   │   ├── AutoDashboard.tsx    # Auto-probe dashboard (status + grid + charts)
-│   │   │   ├── ModelStatusGrid.tsx  # 3x3 model status cards with color-coded metrics
-│   │   │   ├── TrendChart.tsx       # Recharts LineChart (TTFT / latency / TPS)
-│   │   │   ├── LoginForm.tsx        # Login + register form with approval-pending state
-│   │   │   ├── ProbeRunner.tsx      # Manual probe execution UI
-│   │   │   ├── ResultsTable.tsx     # Probe results table
-│   │   │   └── ...
-│   │   ├── hooks/
-│   │   │   ├── useAutoRefresh.ts    # 30s auto-refresh with countdown
-│   │   │   └── useProbeStream.ts    # SSE streaming hook for manual probes
+│   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 13 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 16개 (13 Bedrock + 3 Anthropic CP)
+│   │   │   ├── CostDashboardPanel.tsx
+│   │   │   ├── ReliabilityPanel.tsx
+│   │   │   ├── EfficiencyPanel.tsx
+│   │   │   ├── AnalysisPanel.tsx        # v2.1.0 신규
+│   │   │   ├── InsightsPanel.tsx        # SSE stream-regenerate
+│   │   │   ├── PromptsPanel.tsx         # OptimizePrompt
+│   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
+│   │   ├── hooks/                       # useAutoRefresh, useProbeStream, useChatStream
 │   │   └── lib/
-│   │       ├── api.ts       # API client (auth token mgmt, all fetch functions)
-│   │       ├── i18n.ts      # Korean translations + metric descriptions
-│   │       └── types.ts     # TypeScript interfaces
-│   ├── next.config.ts       # API rewrites: /api/* → localhost:8000
-│   ├── package.json
-│   └── tailwind.config.ts
-├── docker-compose.yml       # PostgreSQL container
-├── deploy.sh                # One-click deployment script / 원클릭 배포 스크립트
-└── cloudformation.yaml      # AWS CloudFormation template
+│   │       ├── api.ts                   # 모든 fetch 함수 (auth token mgmt)
+│   │       ├── i18n.ts + i18n-context.tsx  # KO/EN
+│   │       ├── sortModels.ts            # FAMILY_ORDER 7 entries, groupByFamily
+│   │       ├── pricing.ts               # backend/pricing.py mirror
+│   │       └── version.ts               # APP_VERSION (single source of truth)
+│   └── next.config.mjs / middleware.ts
+├── cdk/                                  # 8 stacks (TypeScript)
+└── docs/
+    ├── architecture.md
+    ├── decisions/ADR-001~016.md
+    └── runbooks/deploy.md, rollback.md, ...
 ```
 
 ---
@@ -104,211 +115,148 @@ model-monitoring/
 ## Key Commands / 주요 명령어
 
 ```bash
-# Backend start / 백엔드 시작
+# Local dev
 cd backend && python -m uvicorn main:app --host 0.0.0.0 --port 8000
-
-# Frontend dev mode / 프론트엔드 개발 모드
 cd frontend && npm run dev
 
-# Frontend production build / 프론트엔드 프로덕션 빌드
-cd frontend && npm run build && npm start
+# Container build/push (production) — IMMUTABLE TAG REQUIRED
+REGION=ap-northeast-2; ACCT=061525506239
+TAG="v$(date +%s)"   # NEVER use :latest in production task def
+docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-backend:$TAG backend/
+aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
+docker tag bedrock-monitor-backend:$TAG $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:$TAG
+docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:$TAG
 
-# PostgreSQL start / PostgreSQL 시작
-docker compose up -d
-docker exec monitoring-postgres pg_isready -U postgres
+# Register new task def with explicit tag + update service
+# (see docs/runbooks/deploy.md for full procedure including autoprober schedule)
 
-# Service management (production) / 서비스 관리 (프로덕션)
-sudo systemctl restart monitor-backend
-sudo systemctl restart monitor-frontend
-journalctl -u monitor-backend -f
-journalctl -u monitor-frontend -f
+# Verify
+curl https://d1ra694ytoup3r.cloudfront.net/api/auto-probe/status
+curl https://d1ra694ytoup3r.cloudfront.net/api/auto-probe/latest
 
-# Auto-probe status check / 자동 프로빙 상태 확인
-curl http://localhost:8000/api/auto-probe/status
-curl http://localhost:8000/api/auto-probe/latest
-curl -X POST http://localhost:8000/api/auto-probe/trigger
-
-# DB direct access / DB 직접 접속
-docker exec -it monitoring-postgres psql -U postgres -d monitoring
+# Admin operations (need SEED_ADMIN_PASSWORD)
+TOKEN=$(curl -sX POST https://d1ra694ytoup3r.cloudfront.net/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"<pw>"}' | jq -r .access_token)
+curl https://d1ra694ytoup3r.cloudfront.net/api/admin/users -H "Authorization: Bearer $TOKEN"
+curl -X DELETE "https://d1ra694ytoup3r.cloudfront.net/api/admin/users/<username>" -H "Authorization: Bearer $TOKEN"
+curl -X POST "https://d1ra694ytoup3r.cloudfront.net/api/admin/users/<username>/approve" -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
 
-## Monitored Models (9 total) / 모니터링 대상 모델 (총 9개)
+## Monitored Models (12 total) / 모니터링 대상 모델 (총 12개)
 
-| Region / 리전 | Models / 모델 |
-|----------------|---------------|
-| US | Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5, Nova 2.0 Lite |
-| Global | Claude Opus 4.6, Claude Opus 4.5, Claude Sonnet 4.5, Claude Haiku 4.5 |
+| Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
+|--------|--------------------------------------|------------------------------|---------------------|
+| Claude Opus 4.7 | ✅ | ✅ | ✅ |
+| Claude Opus 4.6 | ✅ | ✅ | — |
+| Claude Sonnet 4.6 | ✅ | ✅ | ✅ |
+| Claude Haiku 4.5 | ✅ | ✅ | ✅ |
+| Amazon Nova 2.0 Lite | — | ✅ | — |
 
-**EN**: Model list is defined in `backend/prober.py` → `AVAILABLE_MODELS` dict. US models have "(US)" suffix, Global models have "(Global)" suffix in display names.
+**제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 
-**KO**: 모델 목록은 `backend/prober.py` → `AVAILABLE_MODELS` 딕셔너리에 정의되어 있습니다. US 모델은 "(US)", Global 모델은 "(Global)" 접미사가 표시됩니다.
+**라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Bedrock Global → Bedrock US** (`channelRank` 함수).
+
+---
+
+## Workload Preset (6 categories, round-robin) / 워크로드 프리셋
+
+매 cycle마다 다음 카테고리 하나를 선택 — 같은 카테고리는 30분(5분 × 6)마다 회전. `probe_results.category` 컬럼으로 필터링.
+
+| id | label_ko | 용도 |
+|----|----------|------|
+| chat-short | 짧은 대화 | TTFT-sensitive 짧은 응답 |
+| reasoning | 추론 | 복잡 추론 (max_tokens 큼) |
+| code-gen | 코드 생성 | 코드 출력 |
+| summarize | 요약 | 긴 입력 → 짧은 출력 |
+| structured-json | 구조화 JSON | JSON schema 강제 |
+| creative-writing | 창작 | 긴 출력 |
 
 ---
 
 ## Metrics / 측정 지표
 
-| Metric / 지표 | Unit / 단위 | EN Description | KO 설명 |
-|----------------|-------------|----------------|---------|
-| **TTFT** | ms | Time from request to first token arrival. Represents perceived initial response speed. | 요청 전송 후 첫 번째 토큰이 도착하기까지의 시간. 사용자가 체감하는 초기 응답 속도. |
-| **Total Latency / 총 응답시간** | ms | End-to-end time from request to last token. Client-measured total latency. | 요청 전송부터 마지막 토큰 수신까지의 전체 소요 시간. |
-| **Server Latency / 서버 처리시간** | ms | Internal processing time reported by Bedrock. Difference from total latency = network overhead. | Bedrock 서버가 보고한 내부 처리 시간. 총 응답시간과의 차이가 네트워크 오버헤드. |
-| **TPS** | tok/s | Tokens per second. Output throughput from first to last token. | 초당 생성 토큰 수. 첫 토큰 이후부터 마지막 토큰까지의 출력 처리량. |
-| **Input Tokens / 입력 토큰** | count / 개 | Tokens consumed by the prompt. Basis for cost calculation. | 프롬프트가 소비한 토큰 수. 비용 산정 기준. |
-| **Output Tokens / 출력 토큰** | count / 개 | Tokens generated by the model. Used for cost and TPS calculation. | 모델이 생성한 응답 토큰 수. 비용 및 TPS 계산에 사용. |
+| Metric | Unit | 설명 |
+|--------|------|------|
+| TTFT | ms | 요청 → 첫 토큰 |
+| Total Latency | ms | 요청 → 마지막 토큰 (클라이언트 측) |
+| Server Latency | ms | Bedrock 보고 내부 처리 (network overhead 제외) |
+| TPS | tok/s | 첫 토큰 이후 출력 처리량 |
+| Input/Output Tokens | count | 비용 산정, 효율성 지표 |
+| Stop Reason | enum | end_turn / max_tokens / tool_use / stop_sequence / guardrail_intervened / content_filtered (v2.1.0 신규) |
 
 ---
 
-## Authentication System / 인증 시스템
+## Authentication / 인증
 
-**EN**:
-- **JWT Bearer Token** (24h expiry), signing key configurable via `JWT_SECRET_KEY` env var
-- **Password hashing**: bcrypt via passlib (`bcrypt>=4.0,<4.1` pinned for compatibility)
-- **Registration flow**: register → pending (approved=0) → admin notified via SES email → admin clicks approve link → approved (approved=1) → login allowed
-- **Admin email**: `whchoi98@gmail.com` (configured in `backend/auth.py` → `ADMIN_EMAIL`)
-- **Public base URL**: `https://d1ra694ytoup3r.cloudfront.net` (used in approval email links)
-- **Protected endpoints**: `/api/probes/run`, `/api/prompts` (POST/DELETE), `/api/auth/me`
-- **Public endpoints**: `/api/auto-probe/*`, `/api/results/*`, `/api/models`
-- Admin account is auto-seeded on first startup in `main.py` lifespan
-
-**KO**:
-- **JWT Bearer Token** (24시간 유효), `JWT_SECRET_KEY` 환경변수로 서명 키 설정
-- **비밀번호 해싱**: passlib을 통한 bcrypt (호환성을 위해 `bcrypt>=4.0,<4.1` 고정)
-- **회원가입 흐름**: 가입 → 승인 대기(approved=0) → 관리자에게 SES 이메일 알림 → 관리자가 승인 링크 클릭 → 승인(approved=1) → 로그인 가능
-- **관리자 이메일**: `whchoi98@gmail.com` (`backend/auth.py` → `ADMIN_EMAIL`에서 설정)
-- **퍼블릭 베이스 URL**: `https://d1ra694ytoup3r.cloudfront.net` (승인 이메일 링크에 사용)
-- **인증 필요 엔드포인트**: `/api/probes/run`, `/api/prompts` (POST/DELETE), `/api/auth/me`
-- **공개 엔드포인트**: `/api/auto-probe/*`, `/api/results/*`, `/api/models`
-- 최초 기동 시 `main.py` lifespan에서 관리자 계정 자동 생성
-
----
-
-## API Endpoints / API 엔드포인트
-
-### Auth / 인증
-
-| Method | Path | Auth | EN Description | KO 설명 |
-|--------|------|------|----------------|---------|
-| POST | `/api/auth/login` | - | Login → JWT token (approved accounts only) | 로그인 → JWT 토큰 발급 (승인된 계정만) |
-| POST | `/api/auth/register` | - | Register (pending state, sends admin email) | 회원가입 (승인 대기 상태, 관리자 이메일 발송) |
-| GET | `/api/auth/approve?token=` | - | One-click approval link (for admin) | 이메일 승인 링크 (관리자 클릭용) |
-| GET | `/api/auth/me` | Bearer | Current user info | 현재 사용자 정보 |
-
-### Auto Probe / 자동 프로빙
-
-| Method | Path | EN Description | KO 설명 |
-|--------|------|----------------|---------|
-| GET | `/api/auto-probe/status` | Prober status (running, last/next time) | 프로버 상태 (실행 여부, 마지막/다음 실행 시각) |
-| GET | `/api/auto-probe/latest` | Latest results per model | 모델별 최신 결과 |
-| GET | `/api/auto-probe/trend?hours=24` | Time-series data (default 24h) | 시계열 데이터 (기본 24시간) |
-| POST | `/api/auto-probe/trigger` | Trigger immediate probe cycle | 즉시 1회 프로빙 실행 |
-
-### Manual Probe / 수동 프로브 (Auth Required / 인증 필요)
-
-| Method | Path | EN Description | KO 설명 |
-|--------|------|----------------|---------|
-| POST | `/api/probes/run` | SSE streaming probe execution | SSE 스트리밍 프로브 실행 |
-| GET | `/api/models` | Available model list | 사용 가능한 모델 목록 |
-
-### Results / 결과 조회
-
-| Method | Path | EN Description | KO 설명 |
-|--------|------|----------------|---------|
-| GET | `/api/results` | Query results (filter: model_id, run_id, limit, offset) | 결과 조회 (필터 지원) |
-| GET | `/api/results/latest` | Latest results | 최신 결과 |
-| GET | `/api/results/stats` | Statistics (avg, p50, p95, p99) | 통계 (avg, p50, p95, p99) |
-
-### Prompt Sets / 프롬프트 세트
-
-| Method | Path | EN Description | KO 설명 |
-|--------|------|----------------|---------|
-| GET | `/api/prompts` | List prompt sets | 프롬프트 세트 목록 |
-| POST | `/api/prompts` | Create prompt set (auth required) | 프롬프트 세트 생성 (인증 필요) |
-| DELETE | `/api/prompts/{id}` | Delete prompt set (auth required) | 프롬프트 세트 삭제 (인증 필요) |
-
----
-
-## Database / 데이터베이스
-
-- PostgreSQL 16 via Docker (`docker-compose.yml`)
-- Connection / 접속: `postgresql://postgres:postgres@localhost:5432/monitoring`
-- Tables / 테이블: `probe_runs`, `probe_results`, `prompt_sets`, `users`
-- Migrations run in `main.py` lifespan via `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
-- 마이그레이션은 `main.py` lifespan에서 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`로 실행
-
-```bash
-# Direct DB access / DB 직접 접속
-docker exec -it monitoring-postgres psql -U postgres -d monitoring
-
-# Check auto-probe run count / 자동 프로빙 실행 횟수 확인
-SELECT COUNT(*) FROM probe_runs WHERE is_auto = 1;
-
-# Recent results / 최근 결과
-SELECT model_name, ttft_ms, total_latency_ms, tps, status
-FROM probe_results ORDER BY timestamp DESC LIMIT 9;
-```
+- **JWT Bearer** (24h), `JWT_SECRET_KEY` 32자 이상 강제
+- **Password**: passlib bcrypt (`bcrypt>=4.0,<4.1` 고정)
+- **Register**: `username`은 **EmailStr** 검증 강제 (v2.1.0). approved=0 → admin SES → approved=1 → login
+- **Admin email**: `whchoi98@gmail.com` (`backend/auth.py:ADMIN_EMAIL`)
+  - SES region: `us-east-1`. **Sandbox 모드 시 sender/recipient 둘 다 verified identity 필요**
+- **Public**: `/api/auto-probe/*`, `/api/results/*`, `/api/models`
+- **Auth required**: `/api/probes/run`, `/api/prompts` (POST/DELETE), `/api/insights/stream-regenerate`, `/api/chat/*`
+- **Admin only**: `/api/admin/*` (username == "admin"). admin 비밀번호는 `SEED_ADMIN_PASSWORD` env var (8자 이상)
 
 ---
 
 ## Important Constraints / 중요 제약사항
 
-### Python 3.9 Compatibility / Python 3.9 호환성
-**EN**: Do NOT use `X | Y` union syntax in type hints used by FastAPI dependencies. Use `Optional[X]` from typing instead. `from __future__ import annotations` breaks FastAPI's runtime type evaluation.
+### ECR Image Tag Policy (v2.1.0 강화)
 
-**KO**: FastAPI 의존성에서 사용하는 타입 힌트에 `X | Y` 유니온 문법을 사용하지 마세요. `typing`의 `Optional[X]`을 사용하세요. `from __future__ import annotations`는 FastAPI의 런타임 타입 평가를 깨뜨립니다.
+**`:latest` 태그는 production task definition에서 절대 사용 금지.** ECR이 같은 digest로 새 push를 layer-dedupe하면 ECS는 manifest digest만 보고 "동일 image"로 판단해 옛 container를 cache. 새 코드가 production에 silent 반영 안 되는 함정.
 
-### bcrypt Version / bcrypt 버전
-**EN**: Must be `>=4.0,<4.1`. Version 5.x is incompatible with passlib.
+**규칙**: 모든 backend image는 `v<timestamp>` 같은 immutable tag + image URI에 `@sha256:<digest>` 직접 명시. CDK 코드도 동일하게.
 
-**KO**: 반드시 `>=4.0,<4.1`이어야 합니다. 5.x 버전은 passlib과 호환되지 않습니다.
+### ECR Repository (현재 사용 중)
 
-### Next.js API Proxy / Next.js API 프록시
-**EN**: All `/api/*` requests from the frontend are rewritten to `http://localhost:8000` via `next.config.ts` rewrites.
+| Image | Repository | 사유 |
+|-------|------------|------|
+| backend | `bedrock-monitor-backend-v2` | **신규** (2026-05-20). 옛 `bedrock-monitor-backend`에 ECS Fargate silent image cache bug 발생 — repository path 변경으로 우회 (ADR-018) |
+| frontend | `bedrock-monitor-frontend` | 변경 없음 |
+| autoprober (별도 task) | backend image 공용 — `bedrock-monitor-backend-v2` |
 
-**KO**: 프론트엔드의 모든 `/api/*` 요청은 `next.config.ts`의 rewrites를 통해 `http://localhost:8000`으로 전달됩니다.
+### EventBridge Scheduler IAM
 
-### Korean UI / 한글 UI
-**EN**: All user-facing text is in Korean. Translations are in `frontend/src/lib/i18n.ts`.
+Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** 사용 (revision 번호 박지 말 것). 박으면 새 revision으로 schedule을 update해도 권한 거부로 silent fail. EventBridge metric이 empty라 디버깅 어려움.
 
-**KO**: 모든 사용자 화면 텍스트는 한글입니다. 번역은 `frontend/src/lib/i18n.ts`에 있습니다.
+### `:latest` 함정 디버깅 표지
+- `/api/auto-probe/status`에 `last_run_time`이 N시간 전 → autoprober task 실행 실패
+- Scheduler IAM policy → `ecs:RunTask` Resource에 task def `:*` 있는지 확인
+- 또는 `aws logs tail /ecs/autoprober` 5분 이내 entries 0개
 
-### Auto-prober / 자동 프로버
-**EN**: Runs as a daemon thread inside the FastAPI process. Not a separate service. Singleton instance at `backend/auto_prober.py`.
+### Python 3.11 + FastAPI
+- FastAPI 의존성 typehint에 `X | Y`는 OK (Python 3.10+). 그러나 `from __future__ import annotations`는 FastAPI의 runtime type resolution을 깨뜨림 — 사용 금지.
 
-**KO**: FastAPI 프로세스 내부의 데몬 스레드로 실행됩니다. 별도 서비스가 아닙니다. `backend/auto_prober.py`에 싱글톤 인스턴스.
+### bcrypt 4.0.x 고정
+- 5.x는 passlib과 호환 안 됨.
+
+### Korean UI Default
+- 사용자 화면 텍스트는 `frontend/src/lib/i18n.ts` KO/EN 두 언어 지원. 기본 KO. 헤더 우측 토글.
+
+### DB 마이그레이션 패턴 (`main.py` lifespan)
+- `engine.begin()` (자동 commit/rollback + connection return)
+- `SET statement_timeout = '30000'` + `pg_advisory_lock(917350001)` (다중 task 동시 마이그레이션 deadlock 방지)
+- 모든 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+- 신규 v2.1.0: `probe_results.stop_reason TEXT`
+
+### Auto-Prober는 daemon thread 아님
+- v1: backend 프로세스 안의 thread. v2: **별도 Fargate Task** (EventBridge Scheduler가 5분마다 RunTask). backend의 `auto_prober.py`는 `run_cycle()` 함수만 export, daemon 로직 없음. `auto_prober_runner.py`가 CLI entrypoint.
 
 ---
 
 ## Environment Variables / 환경 변수
 
-| Variable / 변수 | Default / 기본값 | EN Description | KO 설명 |
-|------------------|-------------------|----------------|---------|
-| `JWT_SECRET_KEY` | `bedrock-monitor-secret-change-me` | JWT signing key | JWT 서명 키 |
-| `PUBLIC_BASE_URL` | `https://d1ra694ytoup3r.cloudfront.net` | Base URL for approval email links | 승인 이메일 링크 베이스 URL |
-| `DATABASE_URL` | `postgresql://postgres:postgres@localhost:5432/monitoring` | PostgreSQL connection string | PostgreSQL 접속 문자열 |
-
----
-
-## Service Management / 서비스 관리
-
-```bash
-# Check status / 상태 확인
-sudo systemctl status monitor-backend
-sudo systemctl status monitor-frontend
-
-# Restart / 재시작
-sudo systemctl restart monitor-backend
-sudo systemctl restart monitor-frontend
-
-# View logs / 로그 확인
-journalctl -u monitor-backend -f
-journalctl -u monitor-frontend -f
-```
-
-**EN**: Service files are located at `/etc/systemd/system/monitor-backend.service` and `/etc/systemd/system/monitor-frontend.service`.
-
-**KO**: 서비스 파일 위치: `/etc/systemd/system/monitor-backend.service`, `/etc/systemd/system/monitor-frontend.service`.
+| Variable | Default / 기본값 | 설명 |
+|----------|------------------|------|
+| `JWT_SECRET_KEY` | (필수, 32자 이상) | placeholder 거부 |
+| `SEED_ADMIN_USERNAME` | `admin` | 시드 admin username |
+| `SEED_ADMIN_PASSWORD` | (필수, 8자 이상) | admin 시드 비번 (변경 시 자동 rotate) |
+| `PUBLIC_BASE_URL` | `https://d1ra694ytoup3r.cloudfront.net` | 승인 이메일 링크 base |
+| `DATABASE_URL` / `DB_*` | (CDK 주입) | RDS 연결 |
+| `ANTHROPIC_API_KEY` | (CDK 주입, secret) | CP on AWS envelope key |
+| `ANTHROPIC_WORKSPACE_ID` | (CDK 주입, secret) | CP on AWS workspace |
+| `ANTHROPIC_AWS_REGION` | `us-east-2` | CP on AWS endpoint region |
 
 ---
 
@@ -316,3 +264,5 @@ journalctl -u monitor-frontend -f
 
 - Remote: `https://github.com/whchoi98/model-monitoring.git`
 - Branch: `main`
+- 운영 환경: ap-northeast-2 (Seoul). RDS / ECS / ALB / EventBridge 모두 Seoul.
+- CloudFront distribution ID: `E2DYR3UEOBPIYR`. Invalidation `/*` 자주 호출.

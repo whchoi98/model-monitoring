@@ -9,7 +9,7 @@ import boto3
 from botocore.exceptions import ClientError
 from fastapi import APIRouter, Depends, HTTPException, status
 from fastapi.responses import HTMLResponse
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, EmailStr, Field
 from sqlalchemy.orm import Session
 
 from auth import (
@@ -30,12 +30,14 @@ router = APIRouter(prefix="/api/auth", tags=["auth"])
 
 
 class LoginRequest(BaseModel):
-    username: str = Field(min_length=2, max_length=50)
+    # 로그인은 기존 username(이메일 형식 도입 이전 계정 포함)도 받아야 하므로 EmailStr 강제 안 함.
+    username: str = Field(min_length=2, max_length=100)
     password: str = Field(min_length=4, max_length=100)
 
 
 class RegisterRequest(BaseModel):
-    username: str = Field(min_length=2, max_length=50)
+    # 회원가입은 반드시 이메일 형식 — 관리자 승인 알림 + 향후 사용자 알림에 사용.
+    username: EmailStr
     password: str = Field(min_length=4, max_length=100)
 
 

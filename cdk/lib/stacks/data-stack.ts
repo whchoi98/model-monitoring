@@ -98,15 +98,23 @@ export class DataStack extends cdk.Stack {
     this.dbSecret = this.db.secret;
 
     // ---------------------------------------------------------------------
-    // JWT_SECRET_KEY - placeholder. 배포 후 운영자가 수동으로 값 갱신.
+    // JWT_SECRET_KEY - 사전 생성된 SSM SecureString을 import (SEED_ADMIN_PASSWORD와 동일 패턴).
+    //
+    // CloudFormation은 SecureString 직접 생성 불가 + plaintext placeholder는
+    // 운영자가 교체 잊을 시 JWT 위조 가능 (Kiro review high).
+    // → 배포 전에 운영자가 반드시 SecureString을 만들어 두어야 한다.
+    //
+    // 사전 생성 명령 (1회):
+    //   aws ssm put-parameter --region <region> \
+    //     --name /bedrock-monitor/jwt-secret-key \
+    //     --type SecureString \
+    //     --value "$(openssl rand -base64 48)"
     // ---------------------------------------------------------------------
-    this.jwtSecretParam = new ssm.StringParameter(this, "JwtSecret", {
-      parameterName: "/bedrock-monitor/jwt-secret-key",
-      // CloudFormation은 SecureString 직접 생성 불가 → 운영자가 배포 후 SecureString으로 교체 권장.
-      stringValue: "placeholder-replace-with-secure-string-after-deploy",
-      description:
-        "JWT signing key (placeholder - replace with SecureString via AWS CLI after deploy)",
-    });
+    this.jwtSecretParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "JwtSecret",
+      { parameterName: "/bedrock-monitor/jwt-secret-key" },
+    );
 
     // ---------------------------------------------------------------------
     // cdk-nag 억제.

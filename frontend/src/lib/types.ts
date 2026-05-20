@@ -20,6 +20,13 @@ export interface ProbeResult {
   output_text?: string;
   error_message?: string;
   iteration: number;
+  category?: string | null;
+}
+
+export interface WorkloadCategory {
+  id: string;
+  label_ko: string;
+  label_en: string;
 }
 
 export interface ModelStats {
@@ -89,6 +96,7 @@ export interface TrendPoint {
   total_latency_ms: number | null;
   tps: number | null;
   status: string;
+  category?: string | null;
 }
 
 // ---------------------------------------------------------------------------
@@ -112,6 +120,8 @@ export interface ChatStreamEvents {
   onWarning?: (message: string) => void;
   /** 정상/예외 모두에서 정확히 1회 호출됨 (backend의 final 이벤트). */
   onFinal?: (payload: { ok: boolean; error?: string; session_id?: string }) => void;
+  /** 대화 맥락 기반 동적 follow-up 3개 (응답 종료 직전 emit). */
+  onFollowups?: (suggestions: string[]) => void;
   onError?: (err: Error) => void;
 }
 

@@ -1,8 +1,9 @@
 // SchedulerStack - EventBridge Scheduler + AutoProber / Insights one-shot TaskDefinitions.
 //
 // 책임:
-//   - rate(5 minutes)  → AutoProber Fargate Task (auto_prober_runner --once)
-//   - rate(30 minutes) → Insights   Fargate Task (insights_runner --window 6h)
+//   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
+//   - rate(5 minutes) → Insights   Fargate Task (insights_runner --window 6h)
+//     (사용자 요청: 새로고침이 없을 때도 인사이트가 최근 데이터를 반영하도록 5분 주기로 단축)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
 //   - 두 task 모두 RDS:5432 egress가 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
 import * as cdk from "aws-cdk-lib";
@@ -104,6 +105,19 @@ export class SchedulerStack extends cdk.Stack {
     // Insights는 향후 AgentCore Memory를 인사이트 컨텍스트로 활용할 가능성 있음 - 정책 attach.
     insightsTaskRole.addManagedPolicy(props.agentCoreMemoryAccessPolicy);
 
+    // Claude Platform on AWS (Path 3 External) - vendor endpoint.
+    // AppServicesStack과 동일하게 사전 생성된 SSM SecureString을 import.
+    const anthropicApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "AnthropicApiKeyParam",
+      { parameterName: "/bedrock-monitor/anthropic-api-key" },
+    );
+    const anthropicWorkspaceIdParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "AnthropicWorkspaceIdParam",
+      { parameterName: "/bedrock-monitor/anthropic-workspace-id" },
+    );
+
     // ---------------------------------------------------------------------
     // 4) TaskDefinition 빌더 - backend 이미지 + command override 패턴.
     // ---------------------------------------------------------------------
@@ -146,6 +160,8 @@ export class SchedulerStack extends cdk.Stack {
           DB_NAME: ecs.Secret.fromSecretsManager(props.dbSecret, "dbname"),
           JWT_SECRET_KEY: ecs.Secret.fromSsmParameter(props.jwtSecretParam),
           AGENTCORE_MEMORY_ID: ecs.Secret.fromSsmParameter(props.agentCoreMemoryIdParam),
+          ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
+          ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
         },
         logging: ecs.LogDrivers.awsLogs({
           logGroup,

@@ -14,6 +14,10 @@
     ]
   },
   "context": {
+    "existingVpcId": "vpc-0dfa5610180dfa628",
+    "appSubnetIds": "subnet-095297380cd45e1eb,subnet-07b1e65682847dce9",
+    "dataSubnetIds": "subnet-01b8fb3c462210113,subnet-022000a208af56aae",
+    "albCertificateArn": "arn:aws:acm:ap-northeast-2:061525506239:certificate/1f5770a1-ae29-48fa-ae22-91de5b7d46da",
     "@aws-cdk/aws-lambda:recognizeLayerVersion": true,
     "@aws-cdk/core:checkSecretUsage": true,
     "@aws-cdk/core:target-partitions": ["aws"],

@@ -11,6 +11,7 @@ import logging
 import sys
 
 from auto_prober import run_cycle
+from prober import _discover_anthropic_models
 
 
 def main() -> int:
@@ -24,6 +25,12 @@ def main() -> int:
     args = parser.parse_args()
     if not args.once:
         parser.error("--once 필수")
+
+    # Anthropic 직접 API 모델 자동 발견 (ANTHROPIC_API_KEY 설정 시에만 동작)
+    try:
+        _discover_anthropic_models()
+    except Exception:
+        logging.exception("Anthropic model discovery failed (non-fatal)")
 
     try:
         run_id = run_cycle()

@@ -45,6 +45,8 @@ class ProbeResultResponse(BaseModel):
     output_text: Optional[str] = None
     error_message: Optional[str] = None
     iteration: int = 1
+    category: Optional[str] = None
+    stop_reason: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

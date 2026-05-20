@@ -49,6 +49,12 @@ class ProbeResult(Base):
     output_text = Column(Text, nullable=True)
     error_message = Column(Text, nullable=True)
     iteration = Column(Integer, default=1)
+    # Phase 3 Workload Preset - auto-prober가 회전한 카테고리 식별자 (예: "chat-short", "reasoning").
+    # nullable로 두어 기존 row 호환. 신규 row는 항상 채움.
+    category = Column(Text, nullable=True)
+    # Output Analysis - Bedrock messageStop.stopReason 또는 Anthropic final_message.stop_reason.
+    # 값: end_turn | max_tokens | stop_sequence | tool_use | guardrail_intervened | content_filtered | null
+    stop_reason = Column(Text, nullable=True)
 
     run = relationship("ProbeRun", back_populates="results")
 

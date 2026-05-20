@@ -63,11 +63,13 @@ def get_stats(
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
     run_id: Optional[int] = Query(None),
+    category: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
     """Get aggregated statistics (avg/p50/p95/p99) per model.
 
     Only successful probes are included in the statistics.
+    category 지정 시 그 workload preset 카테고리의 결과만 집계.
     """
     query = db.query(ProbeResult).filter(ProbeResult.status == "success")
 
@@ -77,6 +79,8 @@ def get_stats(
         query = query.filter(ProbeResult.timestamp <= end_time)
     if run_id:
         query = query.filter(ProbeResult.run_id == run_id)
+    if category:
+        query = query.filter(ProbeResult.category == category)
 
     results = query.all()
 

@@ -16,28 +16,41 @@ interface Props {
   data: TrendPoint[];
   metric: "ttft_ms" | "total_latency_ms" | "tps";
   title: string;
-  /** 특정 모델 이름이 주어지면 해당 모델만 그래프에 표시. */
-  selectedModel?: string | null;
+  /** 선택된 모델 set (빈 set이면 전체 표시). 다중 비교 지원. */
+  selectedModels?: Set<string>;
 }
 
+// Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.
+// 매칭 안 되면 family substring 기반 fallback.
 const MODEL_COLORS: Record<string, string> = {
-  // Global
-  "Claude Opus 4.7 (Global)": "#f97316",
-  "Claude Opus 4.6 (Global)": "#f59e0b",
-  "Claude Sonnet 4.6 (Global)": "#3b82f6",
-  "Claude Haiku 4.5 (Global)": "#06b6d4",
-  "Nova 2.0 Lite (Global)": "#10b981",
-  // US (Claude Platform on AWS - 3P Anthropic)
-  "Claude Opus 4.7 (US)": "#ef4444",
-  "Claude Opus 4.6 (US)": "#ec4899",
-  "Claude Sonnet 4.6 (US)": "#8b5cf6",
-  "Claude Haiku 4.5 (US)": "#6366f1",
-  // US 1P (Amazon Nova family)
-  "Nova 2.0 Lite (US, 1P)": "#84cc16",
+  "Bedrock Claude Opus 4.7 (Global)": "#f97316",
+  "Bedrock Claude Opus 4.7 (US)": "#ef4444",
+  "Bedrock Claude Opus 4.6 (Global)": "#f59e0b",
+  "Bedrock Claude Opus 4.6 (US)": "#ec4899",
+  "Bedrock Claude Sonnet 4.6 (Global)": "#3b82f6",
+  "Bedrock Claude Sonnet 4.6 (US)": "#8b5cf6",
+  "Bedrock Claude Haiku 4.5 (Global)": "#06b6d4",
+  "Bedrock Claude Haiku 4.5 (US)": "#a855f7",
+  "Bedrock Nova 2.0 Lite (US)": "#84cc16",
+  "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
+  "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
+  "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
 };
 
+const FAMILY_FALLBACK: [string, string][] = [
+  ["Opus 4.7", "#ef4444"],
+  ["Opus 4.6", "#f59e0b"],
+  ["Sonnet 4.6", "#8b5cf6"],
+  ["Haiku 4.5", "#06b6d4"],
+  ["Nova", "#84cc16"],
+];
+
 function getColor(modelName: string): string {
-  return MODEL_COLORS[modelName] || "#9ca3af";
+  if (MODEL_COLORS[modelName]) return MODEL_COLORS[modelName];
+  for (const [fam, color] of FAMILY_FALLBACK) {
+    if (modelName.includes(fam)) return color;
+  }
+  return "#9ca3af";
 }
 
 function formatUnit(value: number, metric: string): string {
@@ -46,19 +59,21 @@ function formatUnit(value: number, metric: string): string {
   return `${value.toFixed(0)} ms`;
 }
 
-export default function TrendChart({ data, metric, title, selectedModel }: Props) {
+export default function TrendChart({ data, metric, title, selectedModels }: Props) {
   if (data.length === 0) return null;
 
-  const filtered = selectedModel
-    ? data.filter((d) => d.model_name === selectedModel)
+  const hasSelection = selectedModels && selectedModels.size > 0;
+  const filtered = hasSelection
+    ? data.filter((d) => selectedModels!.has(d.model_name))
     : data;
 
   if (filtered.length === 0) {
+    const names = Array.from(selectedModels ?? []).join(", ");
     return (
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
         <h3 className="text-sm font-semibold text-gray-200 mb-2">{title}</h3>
         <p className="text-xs text-gray-500">
-          선택한 모델({selectedModel})의 추세 데이터가 없습니다.
+          선택한 모델({names})의 추세 데이터가 없습니다.
         </p>
       </div>
     );
@@ -83,9 +98,9 @@ export default function TrendChart({ data, metric, title, selectedModel }: Props
     <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
-        {selectedModel && (
+        {hasSelection && (
           <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-            🔍 {selectedModel}
+            🔍 {selectedModels!.size}개 선택
           </span>
         )}
       </div>

@@ -8,6 +8,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 from typing import AsyncIterator, Dict, Iterable, List, Optional
@@ -100,6 +101,9 @@ async def converse_stream_chat(
             text = delta.get("text")
             if text:
                 yield {"type": "text_delta", "text": text}
+                # async event loop tick - sync stream iter가 uvicorn send를 막지 않도록
+                # 매 yield 후 강제로 cede 해서 uvicorn이 chunk를 즉시 client로 flush.
+                await asyncio.sleep(0)
                 continue
             tool_input = delta.get("toolUse", {}).get("input")
             if tool_input is not None:
@@ -161,3 +165,31 @@ def converse_blocking(
         if text:
             chunks.append(text)
     return "".join(chunks)
+
+
+def converse_stream_text(
+    messages: List[Dict],
+    *,
+    model_id: str = INSIGHTS_MODEL_ID,
+    system: Optional[str] = None,
+    max_tokens: int = 2048,
+    temperature: float = 0.1,
+):
+    """동기 generator — Bedrock converse_stream의 text_delta를 즉시 yield.
+
+    인사이트 SSE 스트리밍에 사용. async 환경에서 호출 시 ThreadPoolExecutor로 감쌀 것.
+    """
+    params: Dict = {
+        "modelId": model_id,
+        "messages": messages,
+        "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
+    }
+    if system:
+        params["system"] = [{"text": system}]
+
+    response = _client().converse_stream(**params)
+    for event in response.get("stream", []):
+        if "contentBlockDelta" in event:
+            text = event["contentBlockDelta"].get("delta", {}).get("text")
+            if text:
+                yield text

@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
-import { AutoProbeStatus, ProbeResult, TrendPoint } from "@/lib/types";
-import { fetchAutoStatus, fetchAutoLatest, fetchAutoTrend, triggerAutoProbe } from "@/lib/api";
+import { AutoProbeStatus, ProbeResult, TrendPoint, WorkloadCategory } from "@/lib/types";
+import { fetchAutoStatus, fetchAutoLatest, fetchAutoTrend, triggerAutoProbe, fetchWorkloadCategories } from "@/lib/api";
 import { Translations } from "@/lib/i18n";
-import { useT } from "@/lib/i18n-context";
+import { useT, useLang } from "@/lib/i18n-context";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { isExcludedModel } from "@/lib/sortModels";
 import ModelStatusGrid from "./ModelStatusGrid";
 import TrendChart from "./TrendChart";
 import InsightsPanel from "./InsightsPanel";
@@ -39,17 +40,30 @@ function formatCountdown(nextRunTime: string | null, t: Translations): string {
   return `${min}${t.minutes} ${sec < 10 ? "0" : ""}${sec}${t.seconds}`;
 }
 
-// 시간 단위 + 분 단위 (fractional hours: 0.5h=30m, 0.25h=15m, 0.0833h≈5m).
-const TREND_RANGE_HOURS = [168, 120, 72, 24, 12, 6, 3, 1, 0.5, 0.25, 1 / 12];
+// 시간 단위 + 분 단위 (fractional hours: 0.5h=30m, 0.25h=15m, 1/6h=10m, 1/12h≈5m).
+const TREND_RANGE_HOURS = [168, 120, 72, 24, 12, 6, 3, 1, 0.5, 0.25, 1 / 6, 1 / 12];
 
 export default function AutoDashboard() {
   const t = useT();
+  const { lang } = useLang();
 
   const [status, setStatus] = useState<AutoProbeStatus | null>(null);
   const [results, setResults] = useState<ProbeResult[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
-  // 카드 클릭 시 해당 모델만 추세 그래프에 표시.
-  const [selectedModel, setSelectedModel] = useState<string | null>(null);
+  // 카드 클릭 시 해당 모델만 추세 그래프에 표시 (다중 선택 - Set 토글).
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  // Phase 3 Workload Preset - 선택된 카테고리 필터 (null = 전체).
+  const [categories, setCategories] = useState<WorkloadCategory[]>([]);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const toggleModel = (name: string) => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedModels(new Set());
   const [loading, setLoading] = useState(true);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [nextCountdown, setNextCountdown] = useState("-");
@@ -59,25 +73,30 @@ export default function AutoDashboard() {
     try {
       const [s, r, tr] = await Promise.all([
         fetchAutoStatus(),
-        fetchAutoLatest(),
-        fetchAutoTrend(trendHours),
+        fetchAutoLatest(selectedCategory),
+        fetchAutoTrend(trendHours, selectedCategory),
       ]);
       setStatus(s);
-      setResults(r);
-      setTrend(tr);
+      setResults(r.filter((row) => !isExcludedModel(row.model_name)));
+      setTrend(tr.filter((p) => !isExcludedModel(p.model_name)));
     } catch (err) {
       console.error("Failed to load auto-probe data:", err);
     } finally {
       setLoading(false);
     }
-  }, [trendHours]);
+  }, [trendHours, selectedCategory]);
+
+  // 카테고리 목록 1회 fetch.
+  useEffect(() => {
+    fetchWorkloadCategories().then(setCategories).catch(() => {});
+  }, []);
 
   // Initial load + trendHours 변경 시 즉시 reload (loadData identity 의존이 아니라
   // 명시적으로 trendHours를 트리거로 사용해 조회기간 클릭 즉시 그래프가 갱신되도록 보장).
   useEffect(() => {
     loadData();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trendHours]);
+  }, [trendHours, selectedCategory]);
 
   // Auto-refresh every 30 seconds
   const { countdown, enabled, setEnabled } = useAutoRefresh(loadData, 30000);
@@ -174,19 +193,49 @@ export default function AutoDashboard() {
         </div>
       </div>
 
+      {/* Workload Category 필터 - Phase 3 */}
+      {categories.length > 0 && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 flex items-center gap-3 flex-wrap">
+          <span className="text-xs font-medium text-gray-400">
+            {t.workloadLabel ?? "Workload"}
+          </span>
+          <button
+            onClick={() => setSelectedCategory(null)}
+            className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+              selectedCategory === null
+                ? "bg-blue-600 text-white"
+                : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+            }`}
+          >
+            {t.workloadAll ?? "All"}
+          </button>
+          {categories.map((c) => (
+            <button
+              key={c.id}
+              onClick={() => setSelectedCategory(c.id)}
+              title={c.id}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                selectedCategory === c.id
+                  ? "bg-blue-600 text-white"
+                  : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+              }`}
+            >
+              {lang === "en" ? c.label_en : c.label_ko}
+            </button>
+          ))}
+        </div>
+      )}
+
       {hasData ? (
         <>
-          {/* 1) Model Status Grid - 카드 클릭으로 그래프 필터링 가능 */}
+          {/* 1) Model Status Grid - 카드 클릭으로 그래프 다중 선택/해제 */}
           <ModelStatusGrid
             results={results}
-            selectedModel={selectedModel}
-            onSelectModel={setSelectedModel}
+            selectedModels={selectedModels}
+            onToggleModel={toggleModel}
           />
 
-          {/* 2) AI 인사이트 패널 (insights_runner 10분 잡 결과 + 새로고침 버튼) */}
-          <InsightsPanel />
-
-          {/* 3) Trend Charts - selectedModel이 있으면 해당 모델만 표시 */}
+          {/* 2) Trend Charts - selectedModel이 있으면 해당 모델만 표시 */}
           {trend.length > 0 && (
             <div className="space-y-4">
               {/* Time Range Selector */}
@@ -209,45 +258,71 @@ export default function AutoDashboard() {
                 </div>
               </div>
 
-              {/* Model Selector - 모델 칩, 선택 시 해당 그래프만 표시 */}
+              {/* Model Selector - 다중 선택 (Set 토글). 전체 = 빈 set. */}
               <div className="flex items-start gap-3 flex-wrap">
-                <span className="text-xs font-medium text-gray-400 pt-1 shrink-0">모델</span>
+                <span className="text-xs font-medium text-gray-400 pt-1 shrink-0">
+                  모델 {selectedModels.size > 0 && `(${selectedModels.size}개 선택)`}
+                </span>
                 <div className="flex gap-1 flex-wrap">
                   <button
-                    onClick={() => setSelectedModel(null)}
+                    onClick={clearSelection}
                     className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                      selectedModel === null
+                      selectedModels.size === 0
                         ? "bg-blue-600 text-white"
                         : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
                     }`}
                   >
                     전체
                   </button>
-                  {results.map((r) => (
-                    <button
-                      key={r.model_id}
-                      onClick={() =>
-                        setSelectedModel(selectedModel === r.model_name ? null : r.model_name)
-                      }
-                      className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                        selectedModel === r.model_name
-                          ? "bg-blue-600 text-white"
-                          : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
-                      }`}
-                    >
-                      {r.model_name}
-                    </button>
-                  ))}
+                  {results.map((r) => {
+                    const isSelected = selectedModels.has(r.model_name);
+                    return (
+                      <button
+                        key={r.model_id}
+                        onClick={() => toggleModel(r.model_name)}
+                        className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                          isSelected
+                            ? "bg-blue-600 text-white"
+                            : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                        }`}
+                      >
+                        {isSelected ? "✓ " : ""}{r.model_name}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              <TrendChart data={trend} metric="ttft_ms" title={t.ttftTrend} selectedModel={selectedModel} />
-              <TrendChart data={trend} metric="total_latency_ms" title={t.latencyTrend} selectedModel={selectedModel} />
-              <TrendChart data={trend} metric="tps" title={t.tpsTrend} selectedModel={selectedModel} />
+              <TrendChart data={trend} metric="ttft_ms" title={t.ttftTrend} selectedModels={selectedModels} />
+              <TrendChart data={trend} metric="total_latency_ms" title={t.latencyTrend} selectedModels={selectedModels} />
+              <TrendChart data={trend} metric="tps" title={t.tpsTrend} selectedModels={selectedModels} />
             </div>
           )}
 
-          {/* 4) Metric Descriptions Panel */}
+          {/* 3) AI 인사이트 패널 - 그래프 밑으로 이동 (사용자 요청) */}
+          <InsightsPanel />
+
+          {/* 4) Channel Descriptions Panel - 호출 채널/Endpoint 설명 */}
+          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+            <h3 className="text-sm font-semibold text-gray-200 mb-3">{t.channelDescTitle}</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {(["bedrock", "anthropic"] as const).map((k) => (
+                <div key={k} className="text-xs space-y-1.5 bg-gray-950/50 border border-gray-800 rounded-md p-3">
+                  <div className="flex items-center gap-2">
+                    <span className={`inline-block w-2 h-2 rounded-full ${k === "bedrock" ? "bg-orange-400" : "bg-purple-400"}`} />
+                    <span className="font-semibold text-gray-200">{t.channels[k].name}</span>
+                  </div>
+                  <p className="text-gray-500 leading-relaxed">{t.channels[k].desc}</p>
+                  <div className="text-gray-600">
+                    <span className="text-gray-500">Endpoint: </span>
+                    <code className="text-blue-300 break-all">{t.channels[k].endpoint}</code>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* 5) Metric Descriptions Panel */}
           <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
             <h3 className="text-sm font-semibold text-gray-200 mb-3">{t.metricDescTitle}</h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3">

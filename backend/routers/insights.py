@@ -68,6 +68,7 @@ def list_insights(
 
 class RegenerateRequest(BaseModel):
     window: str = "6h"
+    lang: Optional[str] = "ko"
 
 
 class RegenerateResponse(BaseModel):
@@ -117,3 +118,94 @@ def regenerate(
         triggered=True,
         message=f"인사이트 생성 시작 (window={body.window})",
     )
+
+
+# ---------------------------------------------------------------------
+# SSE 스트리밍 regenerate - Bedrock converse_stream으로 token 단위 즉시 emit.
+# 완료 시 DB 저장.
+# ---------------------------------------------------------------------
+from sse_starlette.sse import EventSourceResponse
+import asyncio
+import json as _json
+
+
+@router.post("/stream-regenerate")
+async def stream_regenerate(
+    body: RegenerateRequest,
+    user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
+):
+    """SSE 스트리밍 인사이트 재생성.
+
+    Bedrock Sonnet 4.6 converse_stream으로 토큰 단위 yield → SSE delta 이벤트.
+    완료 시 DB에 Insight row 저장 + final 이벤트로 응답 종료.
+    """
+    from agent.bedrock import converse_stream_text, INSIGHTS_MODEL_ID
+    from insights_runner import collect_stats_for_window, _build_prompt
+    from datetime import datetime, timezone
+
+    window = body.window
+    lang = body.lang or "ko"
+
+    async def _generator():
+        # 1) Stats 수집 (DB sync).
+        try:
+            stats = collect_stats_for_window(db, window)
+        except Exception as exc:
+            logger.exception("stats compute failed")
+            yield f"event: error\ndata: {_json.dumps({'message': str(exc)})}\n\n"
+            return
+
+        # 2) Prompt 빌드.
+        system_prompt, user_prompt = _build_prompt(window, stats, lang)
+
+        # 3) Bedrock converse_stream을 thread executor로 wrap (sync generator).
+        loop = asyncio.get_event_loop()
+        accumulated: list[str] = []
+
+        def _sync_iter():
+            return list(converse_stream_text(
+                messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+                model_id=INSIGHTS_MODEL_ID,
+                system=system_prompt,
+                max_tokens=2048,
+                temperature=0.3,
+            ))
+
+        try:
+            # converse_stream은 sync generator. async에서 안전하게 사용 위해 한 chunk씩 fetch.
+            # Bedrock SDK가 자체 stream을 동기적으로 yield하므로 thread executor 사용.
+            chunks = await loop.run_in_executor(None, _sync_iter)
+            for chunk in chunks:
+                accumulated.append(chunk)
+                yield f"event: delta\ndata: {_json.dumps({'text': chunk}, ensure_ascii=False)}\n\n"
+                # 짧은 yield point — buffer flush 보장
+                await asyncio.sleep(0)
+        except Exception as exc:
+            logger.exception("converse_stream insight failed")
+            yield f"event: error\ndata: {_json.dumps({'message': str(exc)})}\n\n"
+            return
+
+        # 4) DB 저장 - Insight 모델 스키마에 맞게:
+        #    summary_md NOT NULL (KO 항상 채움), summary_md_en nullable (EN만).
+        #    EN 단독 호출 시에도 KO 자리에 동일 텍스트를 넣어 NOT NULL 만족.
+        full_text = "".join(accumulated)
+        try:
+            from insights_runner import parse_window
+            now = datetime.now(timezone.utc)
+            window_delta = parse_window(window)
+            insight = Insight(
+                window_start=now - window_delta,
+                window_end=now,
+                summary_md=full_text,  # NOT NULL — 항상 채움
+                summary_md_en=full_text if lang == "en" else None,
+            )
+            db.add(insight)
+            db.commit()
+            db.refresh(insight)
+            yield f"event: final\ndata: {_json.dumps({'ok': True, 'id': insight.id, 'window': window, 'lang': lang})}\n\n"
+        except Exception as exc:
+            logger.exception("insight save failed")
+            yield f"event: final\ndata: {_json.dumps({'ok': False, 'error': str(exc)})}\n\n"
+
+    return EventSourceResponse(_generator(), media_type="text/event-stream")

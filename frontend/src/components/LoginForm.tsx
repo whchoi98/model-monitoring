@@ -84,17 +84,24 @@ export default function LoginForm({ onLoginSuccess }: Props) {
           {/* Form */}
           <form onSubmit={handleSubmit} className="space-y-4">
             <div>
-              <label className="block text-xs font-medium text-gray-400 mb-1.5">{t.username}</label>
+              <label className="block text-xs font-medium text-gray-400 mb-1.5">
+                {mode === "register" ? "이메일 (아이디)" : t.username}
+              </label>
               <input
-                type="text"
+                type={mode === "register" ? "email" : "text"}
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 minLength={2}
                 className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
-                placeholder="admin"
-                autoComplete="username"
+                placeholder={mode === "register" ? "you@example.com" : "admin"}
+                autoComplete={mode === "register" ? "email" : "username"}
               />
+              {mode === "register" && (
+                <p className="mt-1 text-[11px] text-gray-500">
+                  관리자 승인 알림 발송을 위해 이메일 형식으로 입력하세요.
+                </p>
+              )}
             </div>
             <div>
               <label className="block text-xs font-medium text-gray-400 mb-1.5">{t.password}</label>

@@ -1,5 +1,11 @@
 "use client";
 
+// 정적 캐시 비활성화 - 매 요청마다 dynamic SSR 보장.
+// CloudFront/브라우저가 옛 HTML(옛 buildId chunk URL 포함)을 캐시해 매 deploy마다
+// chunk 404 + 빈 화면이 반복되는 문제 영구 회피.
+// 응답 헤더가 자동으로 `cache-control: no-store, must-revalidate, max-age=0`로 설정됨.
+export const dynamic = "force-dynamic";
+
 import { useState, useEffect, useCallback } from "react";
 import { ModelInfo, ProbeConfig, PromptSet, AuthUser } from "@/lib/types";
 import { fetchModels, fetchPromptSets, fetchMe, setToken, getToken } from "@/lib/api";
@@ -17,6 +23,8 @@ import ProgressBar from "@/components/ProgressBar";
 import AutoDashboard from "@/components/AutoDashboard";
 import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
+import Link from "next/link";
+import { APP_VERSION } from "@/lib/version";
 
 const DEFAULT_CONFIG: ProbeConfig = {
   model_ids: [],
@@ -53,6 +61,7 @@ function HomeContent() {
   // Auth state
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
+  const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const stream = useProbeStream();
 
@@ -135,6 +144,9 @@ function HomeContent() {
               <p className="text-xs text-gray-500">
                 {t.appDesc}
               </p>
+              <span className="text-[10px] text-gray-600 font-mono tabular-nums">
+                {APP_VERSION}
+              </span>
             </div>
           </div>
 
@@ -185,10 +197,40 @@ function HomeContent() {
               >
                 {t.manualProbeTab}
               </button>
+              <Link
+                href="/prompts"
+                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
+              >
+                {lang === "en" ? "Prompts" : "프롬프트"}
+              </Link>
+              <Link
+                href="/cost"
+                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
+              >
+                {lang === "en" ? "Cost" : "비용"}
+              </Link>
+              <Link
+                href="/reliability"
+                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
+              >
+                {lang === "en" ? "Reliability" : "신뢰성"}
+              </Link>
+              <Link
+                href="/efficiency"
+                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
+              >
+                {lang === "en" ? "Efficiency" : "효율성"}
+              </Link>
+              <Link
+                href="/analysis"
+                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
+              >
+                {lang === "en" ? "Analysis" : "분석"}
+              </Link>
             </nav>
 
-            {/* User info / Logout */}
-            {user && (
+            {/* User info / Login / Logout */}
+            {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">{user.username}</span>
                 <button
@@ -198,6 +240,13 @@ function HomeContent() {
                   {t.logout}
                 </button>
               </div>
+            ) : (
+              <button
+                onClick={() => setLoginModalOpen(true)}
+                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
+              >
+                {lang === "en" ? "Login" : "로그인"}
+              </button>
             )}
 
             <button
@@ -234,7 +283,7 @@ function HomeContent() {
       {topTab === "manual" && user && (
         <div className="flex">
           {/* Left Sidebar - Config */}
-          <aside className="w-72 flex-shrink-0 border-r border-gray-800 bg-gray-950 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto">
+          <aside className="w-96 flex-shrink-0 border-r border-gray-800 bg-gray-950 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto">
             <div className="p-4 space-y-6">
               <ModelSelector
                 selectedModels={config.model_ids}
@@ -372,8 +421,36 @@ function HomeContent() {
       {/* History Panel */}
       <HistoryPanel isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
 
-      {/* FloatingChat — 인증된 사용자만 챗봇 사용 가능 (panel 내부에서 한 번 더 확인). */}
-      {user && <FloatingChat />}
+      {/* FloatingChat - 미인증 사용자도 버튼 표시. 클릭 시 로그인 모달 → 로그인 후 자동 오픈. */}
+      <FloatingChat />
+
+      {/* Header 로그인 버튼이 여는 인증 모달 */}
+      {loginModalOpen && !user && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          <button
+            type="button"
+            aria-label="overlay"
+            onClick={() => setLoginModalOpen(false)}
+            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
+          />
+          <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-6">
+            <button
+              type="button"
+              onClick={() => setLoginModalOpen(false)}
+              className="absolute top-3 right-3 text-gray-400 hover:text-white text-xl leading-none"
+              aria-label="close"
+            >
+              ×
+            </button>
+            <LoginForm
+              onLoginSuccess={(u) => {
+                handleLoginSuccess(u);
+                setLoginModalOpen(false);
+              }}
+            />
+          </div>
+        </div>
+      )}
     </div>
   );
 }

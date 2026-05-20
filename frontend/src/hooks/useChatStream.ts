@@ -13,6 +13,7 @@ export function useChatStream() {
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
+  const [followups, setFollowups] = useState<string[]>([]);
   const controllerRef = useRef<AbortController | null>(null);
 
   const send = useCallback(
@@ -35,6 +36,7 @@ export function useChatStream() {
 
       setMessages((prev) => [...prev, userMsg, assistantMsg]);
       setIsStreaming(true);
+      setFollowups([]);  // 새 질문 시 옛 followups 초기화
 
       const updateAssistant = (mutator: (m: ChatMessage) => ChatMessage) =>
         setMessages((prev) => {
@@ -53,6 +55,7 @@ export function useChatStream() {
               toolCalls: [...(m.toolCalls ?? []), { name: call.name, input: call.input }],
             })),
           onWarning: (msg) => setError(`warning: ${msg}`),
+          onFollowups: (suggestions) => setFollowups(suggestions),
           onFinal: (payload) => {
             setIsStreaming(false);
             if (payload.session_id) setSessionId(payload.session_id);
@@ -79,7 +82,8 @@ export function useChatStream() {
     setMessages([]);
     setError(null);
     setSessionId(null);
+    setFollowups([]);
   }, [cancel]);
 
-  return { messages, isStreaming, error, sessionId, send, cancel, reset };
+  return { messages, isStreaming, error, sessionId, followups, send, cancel, reset };
 }

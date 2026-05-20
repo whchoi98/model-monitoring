@@ -11,6 +11,28 @@ const nextConfig = {
       { source: "/api/:path*", destination: `${backend}/api/:path*` },
     ];
   },
+
+  // 영구 해결: HTML 응답을 절대 캐시하지 않게 강제.
+  // CloudFront 기본 동작이 SSR HTML도 s-maxage=31536000(1년)으로 받아 edge에 stale HTML이
+  // 남는 문제 회피. 새 deploy 시 옛 buildId chunk URL이 박힌 옛 HTML을 캐시해
+  // chunk 404 + 빈 화면이 반복되는 root cause.
+  // _next/static (hash-based filename)은 immutable로 강하게 캐시 유지.
+  async headers() {
+    return [
+      {
+        source: "/((?!_next/static|api|favicon).*)",
+        headers: [
+          { key: "Cache-Control", value: "no-store, no-cache, must-revalidate, max-age=0" },
+        ],
+      },
+      {
+        source: "/_next/static/:path*",
+        headers: [
+          { key: "Cache-Control", value: "public, max-age=31536000, immutable" },
+        ],
+      },
+    ];
+  },
 };
 
 export default nextConfig;

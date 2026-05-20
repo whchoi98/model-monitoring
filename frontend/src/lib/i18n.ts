@@ -36,6 +36,11 @@ export interface Translations {
   trendRange: string;
   metricDescTitle: string;
   trendRangeLabel: (hours: number) => string;
+  channelDescTitle: string;
+  channels: {
+    bedrock: { name: string; desc: string; endpoint: string };
+    anthropic: { name: string; desc: string; endpoint: string };
+  };
 
   // Manual probe
   readyTitle: string;
@@ -66,6 +71,10 @@ export interface Translations {
   // Status
   success: string;
   error: string;
+  overloaded: string;
+  overloadedHint: string;
+  workloadLabel: string;
+  workloadAll: string;
 
   // Time
   justNow: string;
@@ -132,6 +141,19 @@ export const ko: Translations = {
     if (hours < 24) return `${hours}시간`;
     return `${hours / 24}일`;
   },
+  channelDescTitle: "호출 채널 설명",
+  channels: {
+    bedrock: {
+      name: "Bedrock",
+      desc: "AWS Bedrock의 cross-region inference profile을 통해 호출합니다. IAM 권한으로 인증되며 AWS 청구서에 통합됩니다.",
+      endpoint: "bedrock-runtime.{us-east-1 | ap-northeast-2}.amazonaws.com (us.* / global.* inference profile)",
+    },
+    anthropic: {
+      name: "Anthropic",
+      desc: "Claude Platform on AWS (Path 3 External) 채널을 통해 호출합니다. AWS Marketplace 구독으로 결제 연동되며, Anthropic이 운영하는 vendor endpoint를 사용합니다.",
+      endpoint: "aws-external-anthropic.us-east-2.api.aws (x-api-key + anthropic-workspace-id 헤더)",
+    },
+  },
 
   // Manual probe
   readyTitle: "프로브 실행 준비 완료",
@@ -162,6 +184,10 @@ export const ko: Translations = {
   // Status
   success: "성공",
   error: "오류",
+  overloaded: "일시 과부하",
+  overloadedHint: "Vendor 일시 과부하 — 2초/4초/8초 backoff로 자동 재시도 완료. 다음 5분 주기에 자동 재시도합니다.",
+  workloadLabel: "워크로드",
+  workloadAll: "전체",
 
   // Time
   justNow: "방금 전",
@@ -252,6 +278,19 @@ export const en: Translations = {
     if (hours < 24) return `${hours}h`;
     return `${hours / 24}d`;
   },
+  channelDescTitle: "Invocation Channels",
+  channels: {
+    bedrock: {
+      name: "Bedrock",
+      desc: "Invoked via AWS Bedrock cross-region inference profiles. Authenticated by IAM; usage rolls up to your AWS bill.",
+      endpoint: "bedrock-runtime.{us-east-1 | ap-northeast-2}.amazonaws.com (us.* / global.* inference profile)",
+    },
+    anthropic: {
+      name: "Anthropic",
+      desc: "Invoked via Claude Platform on AWS (Path 3 External). Billed through AWS Marketplace subscription, using Anthropic's vendor-hosted endpoint.",
+      endpoint: "aws-external-anthropic.us-east-2.api.aws (x-api-key + anthropic-workspace-id headers)",
+    },
+  },
 
   // Manual probe
   readyTitle: "Ready to Run Probe",
@@ -282,6 +321,10 @@ export const en: Translations = {
   // Status
   success: "OK",
   error: "Error",
+  overloaded: "Overloaded",
+  overloadedHint: "Vendor temporarily overloaded — auto-retried 2× with 2/4/8s backoff. Will auto-retry next 5-min cycle.",
+  workloadLabel: "Workload",
+  workloadAll: "All",
 
   // Time
   justNow: "Just now",

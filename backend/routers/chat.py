@@ -117,6 +117,54 @@ def _invoke_tool(name: str, tool_input: dict, db: Session) -> dict:
         return {"error": str(exc)}
 
 
+async def _generate_followups(user_question: str, assistant_answer: str) -> list[str]:
+    """대화 맥락 기반 follow-up 3개 생성 — 응답에 등장한 모델·메트릭·시간대 참조.
+
+    Haiku 4.5로 빠르고 저렴하게. 응답이 JSON array가 아닐 경우 line 단위 fallback.
+    """
+    import json as _json
+    import re as _re
+    from agent.bedrock import converse_blocking
+
+    system = (
+        "You are a follow-up question generator for a Bedrock LLM monitoring chatbot. "
+        "Given the user's last question and the assistant's answer, output 3 concise follow-up questions "
+        "the user would naturally ask next. Questions must reference SPECIFIC entities mentioned "
+        "(model names, metrics, time windows, errors). Keep each under 25 words. "
+        "Respond in the SAME language as the answer. "
+        "Output ONLY a JSON array of 3 strings, no preamble. Example: "
+        '[\"Question 1\", \"Question 2\", \"Question 3\"]'
+    )
+    user_prompt = (
+        f"User question:\n{user_question[:500]}\n\n"
+        f"Assistant answer:\n{assistant_answer[:2000]}\n\n"
+        "Generate 3 follow-up questions as a JSON array."
+    )
+
+    raw = converse_blocking(
+        messages=[{"role": "user", "content": [{"text": user_prompt}]}],
+        model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        system=system,
+        max_tokens=400,
+        temperature=0.4,
+    )
+
+    # JSON array 추출 — 응답이 ```json ... ``` 또는 prefix 포함 가능.
+    match = _re.search(r"\[\s*\".*?\"\s*\]", raw, _re.DOTALL)
+    if match:
+        try:
+            arr = _json.loads(match.group(0))
+            if isinstance(arr, list):
+                return [str(x).strip() for x in arr if str(x).strip()][:3]
+        except _json.JSONDecodeError:
+            pass
+
+    # Fallback: 줄 단위로 ?로 끝나는 line 추출.
+    lines = [ln.strip(" -*0123456789.") for ln in raw.splitlines()]
+    cands = [ln for ln in lines if ln and (ln.endswith("?") or "?" in ln)]
+    return cands[:3]
+
+
 async def _chat_generator(
     initial_message: str,
     actor_id: str,
@@ -228,6 +276,16 @@ async def _chat_generator(
         memory_client.append_message(
             actor_id, session_id, role="ASSISTANT", content=final_assistant
         )
+
+    # 5) 동적 Follow-up 3개 생성 — 마지막 user 질문 + assistant 응답을 기반으로 Haiku 4.5에 single-shot.
+    #    응답이 너무 짧거나 에러면 skip.
+    if final_assistant and len(final_assistant) >= 20:
+        try:
+            followups = await _generate_followups(initial_message, final_assistant)
+            if followups:
+                yield sse_event("followups", {"suggestions": followups})
+        except Exception:
+            logger.exception("Followup generation failed (non-fatal)")
 
 
 @router.post("/stream")

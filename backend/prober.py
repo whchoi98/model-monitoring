@@ -8,11 +8,13 @@ from __future__ import annotations
 
 import json
 import logging
+import os
+import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timezone
 from queue import Queue, Empty
-from typing import Generator
+from typing import Generator, Optional
 
 import boto3
 from botocore.exceptions import ClientError
@@ -24,22 +26,79 @@ logger = logging.getLogger(__name__)
 
 # 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
 AVAILABLE_MODELS: dict[str, str] = {
-    # Global cross-region inference profile (ap-northeast-2)
-    "global.anthropic.claude-opus-4-7": "Claude Opus 4.7 (Global)",
-    "global.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (Global)",
-    "global.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (Global)",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (Global)",
-    "global.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (Global)",
-    # US cross-region inference profile (us-east-1) - Claude Platform on AWS
-    # Anthropic 3P 모델
-    "us.anthropic.claude-opus-4-7": "Claude Opus 4.7 (US)",
-    "us.anthropic.claude-opus-4-6-v1": "Claude Opus 4.6 (US)",
-    "us.anthropic.claude-sonnet-4-6": "Claude Sonnet 4.6 (US)",
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Claude Haiku 4.5 (US)",
-    # Amazon 1P (Nova) 모델 - Claude Platform on AWS 채널의 1P 옵션.
-    # Nova Premier는 provider에 의해 Legacy로 마킹되어 접근 불가 - 제외.
-    "us.amazon.nova-2-lite-v1:0": "Nova 2.0 Lite (US, 1P)",
+    # Bedrock - Global cross-region inference profile (ap-northeast-2)
+    "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
+    "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
+    "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
+    "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
+    # Bedrock - US cross-region inference profile (us-east-1)
+    "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
+    "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
+    "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
+    # Opus 4.5, Sonnet 4.5는 사용자 요청으로 모니터링 대상에서 제외 (2026-05-20).
+    # Bedrock - Amazon Nova (1P). 사용자 요청으로 Nova 2.0 Lite (US)만 유지.
+    "us.amazon.nova-2-lite-v1:0": "Bedrock Nova 2.0 Lite (US)",
 }
+
+# Claude Platform on AWS (CP on AWS) - Path 3 External 채널.
+# vendor-hosted endpoint: aws-external-anthropic.<region>.api.aws
+# Key prefix "anthropic:<actual-anthropic-model-id>" 형태로 저장.
+# 시작 시 _discover_anthropic_models()가 /v1/models 응답에서 substring 매칭해 자동 등록.
+_ANTHROPIC_TARGETS: list[tuple[str, str]] = [
+    ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
+    ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
+    ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
+]
+
+# Claude Platform on AWS Path 3 External endpoint - vendor-hosted AWS API.
+# region은 ANTHROPIC_AWS_REGION 환경변수로 오버라이드 가능 (기본 us-east-2).
+_ANTHROPIC_AWS_BASE_URL_TEMPLATE = "https://aws-external-anthropic.{region}.api.aws"
+
+
+def _anthropic_base_url() -> str:
+    region = os.environ.get("ANTHROPIC_AWS_REGION", "us-east-2")
+    return _ANTHROPIC_AWS_BASE_URL_TEMPLATE.format(region=region)
+
+
+def _anthropic_default_headers() -> dict[str, str]:
+    """CP on AWS 필수 헤더 - workspace-id."""
+    ws = os.environ.get("ANTHROPIC_WORKSPACE_ID", "")
+    return {"anthropic-workspace-id": ws} if ws else {}
+
+
+def _discover_anthropic_models() -> None:
+    """Claude Platform on AWS의 /v1/models를 호출해 모델 ID 자동 발견 후 AVAILABLE_MODELS에 등록.
+
+    호출 실패 / 키 또는 workspace-id 미설정 시 조용히 skip - Bedrock 12개는 정상 동작.
+    """
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    workspace_id = os.environ.get("ANTHROPIC_WORKSPACE_ID")
+    if not api_key or not workspace_id:
+        logger.info(
+            "ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models",
+        )
+        return
+    try:
+        from anthropic import Anthropic
+        client = Anthropic(
+            api_key=api_key,
+            base_url=_anthropic_base_url(),
+            default_headers=_anthropic_default_headers(),
+        )
+        models_page = client.models.list(limit=100)
+        all_ids = [m.id for m in models_page.data]
+        for substring, display_label in _ANTHROPIC_TARGETS:
+            matched = next((mid for mid in all_ids if substring in mid), None)
+            if matched:
+                key = f"anthropic:{matched}"
+                AVAILABLE_MODELS[key] = display_label
+                logger.info("Registered CP on AWS model: %s -> %s", key, display_label)
+            else:
+                logger.warning("CP on AWS model substring '%s' not found in /v1/models", substring)
+    except Exception:
+        logger.exception("Failed to discover CP on AWS models")
+
 
 # 모델 prefix별 boto3 client 리전 - cross-region inference profile은 각 home region에서 호출해야 함.
 _REGION_MAP: dict[str, str] = {
@@ -48,6 +107,29 @@ _REGION_MAP: dict[str, str] = {
 }
 
 _client_cache: dict[str, object] = {}
+_anthropic_client_cache: object | None = None
+
+
+def _get_anthropic_client():
+    """Lazy-init Anthropic SDK client (singleton). CP on AWS base_url + workspace 헤더."""
+    global _anthropic_client_cache
+    if _anthropic_client_cache is None:
+        from anthropic import Anthropic
+        _anthropic_client_cache = Anthropic(
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+            base_url=_anthropic_base_url(),
+            default_headers=_anthropic_default_headers(),
+        )
+    return _anthropic_client_cache
+
+
+def _is_anthropic_direct(model_id: str) -> bool:
+    return model_id.startswith("anthropic:")
+
+
+def _anthropic_actual_id(model_id: str) -> str:
+    """anthropic:<id> → <id>."""
+    return model_id.split(":", 1)[1]
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
@@ -72,6 +154,29 @@ def _get_bedrock_client(region_name: str = "us-east-1"):
     return _client_cache[region_name]
 
 
+# Retry — Anthropic 529 overloaded_error / Bedrock ThrottlingException 등 vendor 일시 부하.
+# 2s, 4s, 8s exponential backoff. 최대 2회 재시도 (총 3 attempts).
+_RETRYABLE_PATTERNS: tuple[str, ...] = (
+    "Overloaded",
+    "overloaded_error",
+    "ThrottlingException",
+    "Throttling",
+    "ServiceUnavailableException",
+    "TooManyRequestsException",
+    "ModelStreamErrorException",
+)
+_RETRY_BACKOFFS: tuple[int, ...] = (2, 4, 8)
+
+
+def _is_retryable_error(err_msg: str) -> bool:
+    return any(p in err_msg for p in _RETRYABLE_PATTERNS)
+
+
+def _is_overload_error(err_msg: str) -> bool:
+    """overloaded는 별도 status로 표시해 운영자에게 'vendor 일시 부하' 신호."""
+    return "Overloaded" in err_msg or "overloaded_error" in err_msg
+
+
 def _probe_single_model(
     client,
     model_id: str,
@@ -83,63 +188,142 @@ def _probe_single_model(
     event_queue: Queue,
     run_id: int,
     db: Session,
+    category: Optional[str] = None,
 ) -> None:
-    """Execute a single converse_stream call and push SSE events to the queue."""
+    """Execute a single streaming probe call and push SSE events to the queue.
+
+    Bedrock 경로(`us.*`, `global.*`)는 boto3 converse_stream.
+    Anthropic 직접 API 경로(`anthropic:*`)는 anthropic SDK messages.stream.
+    """
     start_time = time.monotonic()
     first_token_time: float | None = None
     collected_text: list[str] = []
     input_tokens = 0
     output_tokens = 0
     server_latency_ms: float | None = None
+    stop_reason: str | None = None
 
-    try:
-        # Claude Opus 4.7 등 reasoning model은 temperature 파라미터를 거부한다.
-        # 모델 ID 기반으로 inferenceConfig 동적 구성.
-        inference_config: dict = {"maxTokens": max_tokens}
-        if not _is_reasoning_model(model_id):
-            inference_config["temperature"] = temperature
-
-        response = client.converse_stream(
-            modelId=model_id,
-            messages=[{"role": "user", "content": [{"text": prompt}]}],
-            inferenceConfig=inference_config,
-        )
-
-        stream = response["stream"]
-        for event in stream:
-            if "contentBlockDelta" in event:
-                delta = event["contentBlockDelta"]["delta"]
-                text = delta.get("text", "")
-                if text:
-                    now = time.monotonic()
-                    if first_token_time is None:
-                        first_token_time = now
-                        ttft_ms = (first_token_time - start_time) * 1000.0
-                        event_queue.put(
-                            _sse("ttft", {
+    # Retry loop - vendor 일시 부하(529 overloaded / Throttle) 시 2/4/8s backoff 최대 2회.
+    # Streaming setup 실패만 retry — 중간 token 수신 도중 실패는 retry하지 않음(이미 partial yield).
+    last_exception: Exception | None = None
+    for attempt in range(len(_RETRY_BACKOFFS) + 1):  # 3 attempts: 0, 1, 2
+        # 재시도 시 state 리셋 (partial token이 client에 이미 도착했다면 자연스러운 reset로 인식).
+        if attempt > 0:
+            start_time = time.monotonic()
+            first_token_time = None
+            collected_text = []
+            input_tokens = 0
+            output_tokens = 0
+            server_latency_ms = None
+            stop_reason = None
+        try:
+            if _is_anthropic_direct(model_id):
+                actual_id = _anthropic_actual_id(model_id)
+                anthropic_client = _get_anthropic_client()
+                with anthropic_client.messages.stream(
+                    model=actual_id,
+                    max_tokens=max_tokens,
+                    messages=[{"role": "user", "content": prompt}],
+                ) as stream:
+                    for text in stream.text_stream:
+                        if text:
+                            now = time.monotonic()
+                            if first_token_time is None:
+                                first_token_time = now
+                                ttft_ms = (first_token_time - start_time) * 1000.0
+                                event_queue.put(_sse("ttft", {
+                                    "model_id": model_id,
+                                    "model_name": model_name,
+                                    "iteration": iteration,
+                                    "ttft_ms": round(ttft_ms, 2),
+                                }))
+                            collected_text.append(text)
+                            event_queue.put(_sse("token", {
                                 "model_id": model_id,
                                 "model_name": model_name,
                                 "iteration": iteration,
-                                "ttft_ms": round(ttft_ms, 2),
-                            })
-                        )
-                    collected_text.append(text)
-                    event_queue.put(
-                        _sse("token", {
-                            "model_id": model_id,
-                            "model_name": model_name,
-                            "iteration": iteration,
-                            "token": text,
-                        })
-                    )
+                                "token": text,
+                            }))
+                    final_message = stream.get_final_message()
+                    input_tokens = final_message.usage.input_tokens
+                    output_tokens = final_message.usage.output_tokens
+                    # stop_reason: end_turn | max_tokens | stop_sequence | tool_use
+                    stop_reason = getattr(final_message, "stop_reason", None)
+                    # Anthropic API는 server-side latency를 제공하지 않음 - None 유지.
+            else:
+                # Bedrock 경로 - 기존 동작.
+                inference_config: dict = {"maxTokens": max_tokens}
+                if not _is_reasoning_model(model_id):
+                    inference_config["temperature"] = temperature
 
-            elif "metadata" in event:
-                metadata = event["metadata"]
-                usage = metadata.get("usage", {})
-                metrics = metadata.get("metrics", {})
-                input_tokens = usage.get("inputTokens", 0)
-                output_tokens = usage.get("outputTokens", 0)
-                server_latency_ms = metrics.get("latencyMs")
+                response = client.converse_stream(
+                    modelId=model_id,
+                    messages=[{"role": "user", "content": [{"text": prompt}]}],
+                    inferenceConfig=inference_config,
+                )
+
+                stream = response["stream"]
+                for event in stream:
+                    if "contentBlockDelta" in event:
+                        delta = event["contentBlockDelta"]["delta"]
+                        text = delta.get("text", "")
+                        if text:
+                            now = time.monotonic()
+                            if first_token_time is None:
+                                first_token_time = now
+                                ttft_ms = (first_token_time - start_time) * 1000.0
+                                event_queue.put(
+                                    _sse("ttft", {
+                                        "model_id": model_id,
+                                        "model_name": model_name,
+                                        "iteration": iteration,
+                                        "ttft_ms": round(ttft_ms, 2),
+                                    })
+                                )
+                            collected_text.append(text)
+                            event_queue.put(
+                                _sse("token", {
+                                    "model_id": model_id,
+                                    "model_name": model_name,
+                                    "iteration": iteration,
+                                    "token": text,
+                                })
+                            )
+
+                    elif "metadata" in event:
+                        metadata = event["metadata"]
+                        usage = metadata.get("usage", {})
+                        metrics = metadata.get("metrics", {})
+                        input_tokens = usage.get("inputTokens", 0)
+                        output_tokens = usage.get("outputTokens", 0)
+                        server_latency_ms = metrics.get("latencyMs")
+
+                    elif "messageStop" in event:
+                        # Bedrock converse_stream: stopReason in messageStop event.
+                        # 값: end_turn | tool_use | max_tokens | stop_sequence | guardrail_intervened | content_filtered
+                        stop_reason = event["messageStop"].get("stopReason")
+            # 성공 — retry loop 탈출
+            last_exception = None
+            break
+        except Exception as exc:
+            last_exception = exc
+            msg = str(exc)
+            if attempt < len(_RETRY_BACKOFFS) and _is_retryable_error(msg):
+                backoff = _RETRY_BACKOFFS[attempt]
+                logger.warning(
+                    "Retryable error for %s (attempt %d/%d, backoff %ds): %s",
+                    model_id, attempt + 1, len(_RETRY_BACKOFFS) + 1, backoff, msg[:120],
+                )
+                time.sleep(backoff)
+                continue
+            # 비-retryable 또는 최종 시도 실패 — outer try 안에서 처리되도록 break.
+            # raise하면 for 루프 밖으로 propagate되어 outer try-except 미도달 → DB row 미저장 버그.
+            break
+
+    try:
+        # retry 다 소진했거나 non-retryable로 빠진 경우 outer except가 DB에 error row 저장.
+        if last_exception is not None:
+            raise last_exception
 
         end_time = time.monotonic()
         total_latency_ms = (end_time - start_time) * 1000.0
@@ -173,6 +357,7 @@ def _probe_single_model(
             "output_text": output_text,
             "error_message": None,
             "iteration": iteration,
+            "stop_reason": stop_reason,
         }
 
         # Persist to DB
@@ -192,6 +377,8 @@ def _probe_single_model(
             output_text=output_text,
             error_message=None,
             iteration=iteration,
+            category=category,
+            stop_reason=stop_reason,
         )
         db.add(db_result)
         db.commit()
@@ -208,8 +395,9 @@ def _probe_single_model(
         error_code = exc.response.get("Error", {}).get("Code", "Unknown")
         error_msg = exc.response.get("Error", {}).get("Message", str(exc))
         full_error = f"{error_code}: {error_msg}"
+        status_value = "overloaded" if _is_overload_error(full_error) else "error"
 
-        logger.warning("Probe error for %s (iter %d): %s", model_id, iteration, full_error)
+        logger.warning("Probe %s for %s (iter %d): %s", status_value, model_id, iteration, full_error)
 
         # Persist error to DB
         db_result = ProbeResult(
@@ -218,7 +406,7 @@ def _probe_single_model(
             model_name=model_name,
             timestamp=datetime.now(timezone.utc),
             prompt=prompt,
-            status="error",
+            status=status_value,
             ttft_ms=None,
             total_latency_ms=round(total_latency_ms, 2),
             server_latency_ms=None,
@@ -228,6 +416,7 @@ def _probe_single_model(
             output_text=None,
             error_message=full_error,
             iteration=iteration,
+            category=category,
         )
         db.add(db_result)
         db.commit()
@@ -247,8 +436,9 @@ def _probe_single_model(
         end_time = time.monotonic()
         total_latency_ms = (end_time - start_time) * 1000.0
         full_error = f"Unexpected: {str(exc)}"
+        status_value = "overloaded" if _is_overload_error(full_error) else "error"
 
-        logger.exception("Unexpected probe error for %s (iter %d)", model_id, iteration)
+        logger.exception("Probe %s for %s (iter %d)", status_value, model_id, iteration)
 
         db_result = ProbeResult(
             run_id=run_id,
@@ -256,7 +446,7 @@ def _probe_single_model(
             model_name=model_name,
             timestamp=datetime.now(timezone.utc),
             prompt=prompt,
-            status="error",
+            status=status_value,
             ttft_ms=None,
             total_latency_ms=round(total_latency_ms, 2),
             server_latency_ms=None,
@@ -266,6 +456,7 @@ def _probe_single_model(
             output_text=None,
             error_message=full_error,
             iteration=iteration,
+            category=category,
         )
         db.add(db_result)
         db.commit()
@@ -390,3 +581,158 @@ def stream_probe_events(
     yield _sse("complete", {"run_id": run_id, "total": completed})
 
     worker_thread.join(timeout=5)
+
+
+# =====================================================================
+# Comparison Lab - in-memory streaming probe (DB 저장 없음).
+# Phase 1: 한 prompt를 N개 모델에 병렬 invoke + side-by-side 비교.
+# =====================================================================
+
+
+def _compare_single_model(
+    model_id: str,
+    prompt: str,
+    max_tokens: int,
+    temperature: float,
+    event_queue: Queue,
+) -> None:
+    """compare용 - DB 저장 없이 SSE event_queue로만 결과 push.
+
+    Bedrock(`us.*`/`global.*`) + Anthropic CP on AWS(`anthropic:*`) 양쪽 채널 지원.
+    실패는 error 이벤트로만 보고 (raise 없음 - 다른 모델 호출에 영향 X).
+    """
+    start_time = time.monotonic()
+    first_token_time: float | None = None
+    collected_text: list[str] = []
+    input_tokens = 0
+    output_tokens = 0
+    server_latency_ms: float | None = None
+    model_name = AVAILABLE_MODELS.get(model_id, model_id)
+
+    def emit(event_type: str, data: dict) -> None:
+        data.setdefault("model_id", model_id)
+        data.setdefault("model_name", model_name)
+        event_queue.put(_sse(event_type, data))
+
+    try:
+        if _is_anthropic_direct(model_id):
+            actual_id = _anthropic_actual_id(model_id)
+            client = _get_anthropic_client()
+            with client.messages.stream(
+                model=actual_id,
+                max_tokens=max_tokens,
+                messages=[{"role": "user", "content": prompt}],
+            ) as stream:
+                for text in stream.text_stream:
+                    if text:
+                        now = time.monotonic()
+                        if first_token_time is None:
+                            first_token_time = now
+                            emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                        collected_text.append(text)
+                        emit("token", {"token": text})
+                final = stream.get_final_message()
+                input_tokens = final.usage.input_tokens
+                output_tokens = final.usage.output_tokens
+        else:
+            client = _get_bedrock_client(_get_region_for_model(model_id))
+            cfg: dict = {"maxTokens": max_tokens}
+            if not _is_reasoning_model(model_id):
+                cfg["temperature"] = temperature
+            response = client.converse_stream(
+                modelId=model_id,
+                messages=[{"role": "user", "content": [{"text": prompt}]}],
+                inferenceConfig=cfg,
+            )
+            for event in response["stream"]:
+                if "contentBlockDelta" in event:
+                    text = event["contentBlockDelta"]["delta"].get("text", "")
+                    if text:
+                        now = time.monotonic()
+                        if first_token_time is None:
+                            first_token_time = now
+                            emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                        collected_text.append(text)
+                        emit("token", {"token": text})
+                elif "metadata" in event:
+                    usage = event["metadata"].get("usage", {})
+                    metrics = event["metadata"].get("metrics", {})
+                    input_tokens = usage.get("inputTokens", 0)
+                    output_tokens = usage.get("outputTokens", 0)
+                    server_latency_ms = metrics.get("latencyMs")
+
+        end_time = time.monotonic()
+        total_latency_ms = (end_time - start_time) * 1000.0
+        ttft_ms = (first_token_time - start_time) * 1000.0 if first_token_time else None
+        tps: float | None = None
+        if first_token_time is not None and output_tokens > 0:
+            gen_seconds = end_time - first_token_time
+            if gen_seconds > 0:
+                tps = output_tokens / gen_seconds
+
+        emit("result", {
+            "status": "success",
+            "ttft_ms": round(ttft_ms, 2) if ttft_ms is not None else None,
+            "total_latency_ms": round(total_latency_ms, 2),
+            "server_latency_ms": round(server_latency_ms, 2) if server_latency_ms is not None else None,
+            "tps": round(tps, 2) if tps is not None else None,
+            "input_tokens": input_tokens,
+            "output_tokens": output_tokens,
+            "output_text": "".join(collected_text),
+        })
+    except Exception as exc:
+        end_time = time.monotonic()
+        err_msg = f"{type(exc).__name__}: {exc}"
+        status_value = "overloaded" if _is_overload_error(err_msg) else "error"
+        logger.exception("Compare probe %s for %s", status_value, model_id)
+        emit("error", {
+            "status": status_value,
+            "error": err_msg,
+            "total_latency_ms": round((end_time - start_time) * 1000, 2),
+        })
+
+
+def stream_compare_events(
+    model_ids: list[str],
+    prompt: str,
+    max_tokens: int = 512,
+    temperature: float = 0.1,
+    concurrency: int = 5,
+) -> Generator[str, None, None]:
+    """Comparison Lab generator - N개 모델 병렬 invoke + SSE 스트림.
+
+    DB 저장 안 함. 모든 결과는 in-memory event queue로만 흐름.
+    각 모델에 1회씩만 호출 (반복 없음).
+    """
+    event_queue: Queue[str | None] = Queue()
+    total = len(model_ids)
+    yield _sse("start", {"total_tasks": total, "model_ids": model_ids})
+
+    def _run_all() -> None:
+        with ThreadPoolExecutor(max_workers=max(1, min(concurrency, total))) as ex:
+            futures = [
+                ex.submit(_compare_single_model, mid, prompt, max_tokens, temperature, event_queue)
+                for mid in model_ids
+            ]
+            for f in futures:
+                try:
+                    f.result()
+                except Exception:
+                    logger.exception("Compare future failed")
+        event_queue.put(None)
+
+    threading.Thread(target=_run_all, daemon=True).start()
+
+    completed = 0
+    while True:
+        try:
+            event = event_queue.get(timeout=300)
+        except Empty:
+            yield _sse("error", {"error": "Compare timed out after 5 minutes"})
+            break
+        if event is None:
+            break
+        yield event
+        if "event: result\n" in event or "event: error\n" in event:
+            completed += 1
+    yield _sse("complete", {"total": completed})

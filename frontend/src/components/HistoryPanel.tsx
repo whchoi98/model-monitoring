@@ -5,6 +5,7 @@ import { ModelStats } from "@/lib/types";
 import { fetchStats } from "@/lib/api";
 import { useT } from "@/lib/i18n-context";
 import { Translations } from "@/lib/i18n";
+import { sortResults } from "@/lib/sortModels";
 
 interface HistoryPanelProps {
   isOpen: boolean;
@@ -65,15 +66,9 @@ function isGlobal(name: string): boolean {
   return name.includes("(Global)");
 }
 
+// 카드 정렬과 동일: family 우선 → Anthropic → Bedrock Global → Bedrock US 순서.
 function sortStats(stats: ModelStats[]): ModelStats[] {
-  return [...stats].sort((a, b) => {
-    const aGlobal = isGlobal(a.model_name);
-    const bGlobal = isGlobal(b.model_name);
-    // Global first, then US
-    if (aGlobal && !bGlobal) return -1;
-    if (!aGlobal && bGlobal) return 1;
-    return a.model_name.localeCompare(b.model_name);
-  });
+  return sortResults(stats);
 }
 
 function getRegionBadge(name: string, t: Translations) {

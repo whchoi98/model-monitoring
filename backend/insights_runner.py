@@ -124,6 +124,41 @@ def summarize_with_bedrock(window_label: str, stats: Dict[str, Any]) -> str:
     return _summarize(window_label, stats, "ko")
 
 
+def _build_prompt(window_label: str, stats: Dict[str, Any], lang: str) -> tuple[str, str]:
+    """Return (system_prompt, user_prompt) for streaming use."""
+    if lang == "en":
+        user_text = (
+            f"Below are AWS Bedrock LLM monitoring statistics for the last {window_label} window.\n"
+            "Summarize per-model performance and error rates in English. Call out anomalies.\n\n"
+            "```json\n"
+            f"{json.dumps(stats, ensure_ascii=False, indent=2)}\n"
+            "```\n\n"
+            "Output: markdown. First line is a one-sentence summary, followed by a per-model table."
+        )
+        return SUMMARY_SYSTEM_EN, user_text
+    user_text = (
+        f"다음은 최근 {window_label} 동안의 Bedrock 모델 모니터링 통계입니다.\n"
+        "각 모델의 성능과 에러율을 한국어로 요약하고, 눈에 띄는 이상 징후가 있다면 짚어 주세요.\n\n"
+        "```json\n"
+        f"{json.dumps(stats, ensure_ascii=False, indent=2)}\n"
+        "```\n\n"
+        "출력 형식: 마크다운. 첫 줄에 한 문장 요약, 이어서 모델별 표."
+    )
+    return SUMMARY_SYSTEM_KO, user_text
+
+
+def collect_stats_for_window(db, window_spec: str) -> Dict[str, Any]:
+    """주어진 window의 stats만 계산 (DB session 주입식, SSE에서 사용)."""
+    delta = parse_window(window_spec)
+    since = datetime.now(timezone.utc) - delta
+    rows = (
+        db.query(ProbeResult)
+        .filter(ProbeResult.timestamp >= since)
+        .all()
+    )
+    return compute_stats(rows)
+
+
 def run_once(window_spec: str = "6h") -> int:
     """한 번 실행하고 종료. 반환값: 생성된 insight ID (0 = skip, -1 = 실패)."""
     try:
