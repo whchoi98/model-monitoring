@@ -30,6 +30,10 @@ export function setToken(token: string | null) {
   if (typeof window !== "undefined") {
     if (token) localStorage.setItem("auth_token", token);
     else localStorage.removeItem("auth_token");
+    // 다른 컴포넌트가 자체 useEffect로 mount 시 1회만 auth check 하는 패턴이라
+    // 상단 헤더 로그인 후에도 InsightsPanel / FloatingChat가 옛 unauth state를 유지.
+    // 전역 이벤트로 모든 listener가 재확인하도록 broadcast.
+    window.dispatchEvent(new Event("auth-changed"));
   }
 }
 

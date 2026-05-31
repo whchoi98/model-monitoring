@@ -42,6 +42,10 @@ export default function FloatingChat() {
 
   useEffect(() => {
     refreshAuth();
+    // 다른 컴포넌트(헤더 LoginForm 등)에서 로그인/로그아웃 시 broadcast되는 이벤트 청취.
+    const onAuthChange = () => refreshAuth();
+    window.addEventListener("auth-changed", onAuthChange);
+    return () => window.removeEventListener("auth-changed", onAuthChange);
   }, [refreshAuth]);
 
   const handleClick = useCallback(() => {

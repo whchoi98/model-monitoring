@@ -114,7 +114,7 @@ def _summarize(window_label: str, stats: Dict[str, Any], lang: str) -> str:
         messages=[{"role": "user", "content": [{"text": user_text}]}],
         model_id=INSIGHTS_MODEL_ID,
         system=system,
-        max_tokens=2048,
+        max_tokens=8192,
         temperature=0.1,
     )
 
