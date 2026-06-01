@@ -22,7 +22,7 @@
 ## Architecture / 아키텍처 (v2)
 
 ```
-CloudFront (d1ra694ytoup3r.cloudfront.net)
+CloudFront (d36s7ml54xwemr.cloudfront.net)
   ↓  VPC Origin (HTTPS)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
@@ -131,14 +131,14 @@ docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:$TAG
 # (see docs/runbooks/deploy.md for full procedure including autoprober schedule)
 
 # Verify
-curl https://d1ra694ytoup3r.cloudfront.net/api/auto-probe/status
-curl https://d1ra694ytoup3r.cloudfront.net/api/auto-probe/latest
+curl https://d36s7ml54xwemr.cloudfront.net/api/auto-probe/status
+curl https://d36s7ml54xwemr.cloudfront.net/api/auto-probe/latest
 
 # Admin operations (need SEED_ADMIN_PASSWORD)
-TOKEN=$(curl -sX POST https://d1ra694ytoup3r.cloudfront.net/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"<pw>"}' | jq -r .access_token)
-curl https://d1ra694ytoup3r.cloudfront.net/api/admin/users -H "Authorization: Bearer $TOKEN"
-curl -X DELETE "https://d1ra694ytoup3r.cloudfront.net/api/admin/users/<username>" -H "Authorization: Bearer $TOKEN"
-curl -X POST "https://d1ra694ytoup3r.cloudfront.net/api/admin/users/<username>/approve" -H "Authorization: Bearer $TOKEN"
+TOKEN=$(curl -sX POST https://d36s7ml54xwemr.cloudfront.net/api/auth/login -H 'Content-Type: application/json' -d '{"username":"admin","password":"<pw>"}' | jq -r .access_token)
+curl https://d36s7ml54xwemr.cloudfront.net/api/admin/users -H "Authorization: Bearer $TOKEN"
+curl -X DELETE "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>" -H "Authorization: Bearer $TOKEN"
+curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/approve" -H "Authorization: Bearer $TOKEN"
 ```
 
 ---
@@ -253,7 +253,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `JWT_SECRET_KEY` | (필수, 32자 이상) | placeholder 거부 |
 | `SEED_ADMIN_USERNAME` | `admin` | 시드 admin username |
 | `SEED_ADMIN_PASSWORD` | (필수, 8자 이상) | admin 시드 비번 (변경 시 자동 rotate) |
-| `PUBLIC_BASE_URL` | `https://d1ra694ytoup3r.cloudfront.net` | 승인 이메일 링크 base |
+| `PUBLIC_BASE_URL` | `https://d36s7ml54xwemr.cloudfront.net` | 승인 이메일 링크 base |
 | `DATABASE_URL` / `DB_*` | (CDK 주입) | RDS 연결 |
 | `ANTHROPIC_API_KEY` | (CDK 주입, secret) | CP on AWS envelope key |
 | `ANTHROPIC_WORKSPACE_ID` | (CDK 주입, secret) | CP on AWS workspace |
@@ -266,4 +266,4 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 - Remote: `https://github.com/whchoi98/model-monitoring.git`
 - Branch: `main`
 - 운영 환경: ap-northeast-2 (Seoul). RDS / ECS / ALB / EventBridge 모두 Seoul.
-- CloudFront distribution ID: `E2DYR3UEOBPIYR`. Invalidation `/*` 자주 호출.
+- CloudFront distribution ID: `E3JNKTNZGS3NX2`. Invalidation `/*` 자주 호출.
