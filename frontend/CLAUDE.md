@@ -16,10 +16,10 @@ Dashboard UI for monitoring Bedrock LLM model performance.
 - `src/lib/` — Utilities (API client, i18n, types)
 
 ## Conventions
-- All `/api/*` requests are proxied to FastAPI via `next.config.ts` rewrites
+- All `/api/*` requests are proxied to FastAPI via `next.config.mjs` rewrites
 - UI text must go through `src/lib/i18n.ts` (Korean primary, English secondary)
 - Components use Tailwind dark theme (bg-gray-900/950 palette)
-- Model cards are sorted by: region (Global first) → version (newest first) → tier (Opus > Sonnet > Haiku)
+- Model cards are sorted by: channel (Anthropic → Bedrock Global → Bedrock US) → family (newest first), via `lib/sortModels.ts` `channelRank`/`familyRank`
 
 ## Commands
 ```bash

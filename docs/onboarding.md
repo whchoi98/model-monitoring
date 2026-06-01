@@ -3,9 +3,8 @@
 ## Prerequisites
 
 - AWS account with Bedrock access (us-east-1, ap-northeast-2)
-- EC2 instance access (SSH key)
-- Python 3.9+ installed
-- Node.js 18+ and npm installed
+- Python 3.11+ installed
+- Node.js 20+ and npm installed
 - Docker and docker compose installed
 
 ## Local Development Setup
@@ -47,23 +46,28 @@ npm run dev
 |----------|-------------|---------|
 | `JWT_SECRET_KEY` | JWT signing key (required) | `your-secret-key-here` |
 | `DATABASE_URL` | PostgreSQL connection | `postgresql://postgres:yourpass@localhost:5432/monitoring` |
-| `ADMIN_EMAIL` | Admin email for approval flow | `admin@example.com` |
-| `DEFAULT_ADMIN_PASSWORD` | Initial admin password | `changeme` |
+| `SEED_ADMIN_USERNAME` | Seed admin username | `admin` |
+| `SEED_ADMIN_PASSWORD` | Initial admin password (8+ chars) | `changeme123` |
 | `PUBLIC_BASE_URL` | Public URL for email links | `https://your-domain.com` |
+
+> `ADMIN_EMAIL` is hardcoded in `backend/auth.py` (`whchoi98@gmail.com`), not an env var.
 
 ## Key Concepts
 
-- **Auto Prober**: Background daemon thread that probes all models every 5 minutes
+- **Auto Prober**: Separate Fargate task (EventBridge Scheduler, every 5 min) that probes all models — `run_cycle()` in `auto_prober.py`, NOT an in-process daemon
 - **Manual Probe**: Authenticated SSE streaming probe via `/api/probes/run`
 - **Model Cards**: Dashboard grid showing latest metrics per model
 - **Trend Charts**: Time-series visualization of TTFT, latency, and TPS
 
 ## Common Tasks
 
+> Production runs on ECS Fargate (not systemd/EC2). Use ECS, not `systemctl`.
+
 | Task | Command |
 |------|---------|
-| Restart backend | `sudo systemctl restart monitor-backend` |
-| Restart frontend | `sudo systemctl restart monitor-frontend` |
-| View backend logs | `journalctl -u monitor-backend -f` |
-| Trigger probe | `curl -X POST http://localhost:8000/api/auto-probe/trigger` |
-| Access DB | `docker exec -it monitoring-postgres psql -U postgres -d monitoring` |
+| Redeploy backend (prod) | `aws ecs update-service --cluster bedrock-monitor --service backend --force-new-deployment` |
+| Redeploy frontend (prod) | `aws ecs update-service --cluster bedrock-monitor --service frontend --force-new-deployment` |
+| View backend logs (prod) | `aws logs tail /ecs/backend --follow` |
+| View autoprober logs | `aws logs tail /ecs/autoprober --since 1h` |
+| Trigger probe (local) | `curl -X POST http://localhost:8000/api/auto-probe/trigger` |
+| Access DB (local) | `docker exec -it monitoring-postgres psql -U postgres -d monitoring` |

@@ -26,8 +26,8 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 11 모델 프로빙 → RDS
-   └─ rate(30 minutes) → ECS RunTask "insights"    → 최근 6h 요약 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 15 모델 프로빙 → RDS
+   └─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
 ```
 
 ### 컴포넌트 (Layer별)
@@ -46,7 +46,7 @@ EventBridge Scheduler
 | Internal ALB | HTTPS:443만, ACM Private CA cert, `/api/*` → backend / 기본 → frontend |
 | S3 (ALB logs) | ALB access logs (90일) |
 | ECS Cluster `bedrock-monitor` | Container Insights ON |
-| ECR `bedrock-monitor-backend` / `-frontend` | IMMUTABLE tag, scan-on-push, 10개 유지 |
+| ECR `bedrock-monitor-backend-v2` / `-frontend` | IMMUTABLE tag, scan-on-push, 10개 유지 (ADR-018) |
 | Backend Fargate Service | FastAPI :8000, 0.5 vCPU / 1 GB, AS 1~3 |
 | Frontend Fargate Service | Next.js standalone :3000, AS 1~3 |
 
@@ -104,7 +104,7 @@ EventBridge Scheduler
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-009 참조.
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-018 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -117,6 +117,11 @@ EventBridge Scheduler
 | 007 | SSE 패턴: VIEWER_REQUEST only + simulateStreaming |
 | 008 | CDK TypeScript (VPC Origin 등 신기능 L2 우선) |
 | 009 | FloatingChat 듀얼 모드 (popup/iframe) |
+| 010 | ECR immutable tag 정책 (production `:latest` 금지) |
+| 011 | Scheduler IAM `ecs:RunTask` Resource를 task def family `:*` wildcard로 |
+| 013 | Output Analysis (stop_reason 분포 + output 길이) |
+| 017 | 모델 catalogue 축소 (13 → 12) |
+| 018 | ECR repository 교체 (`-v2`, Fargate image cache silent bug 우회) |
 
 ### 운영 / Operations
 
@@ -144,8 +149,8 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 11 models → RDS
-   └─ rate(30 minutes) → ECS RunTask "insights"    → 6h summary → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 15 models → RDS
+   └─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
 ```
 
 ### Components by Layer
