@@ -27,7 +27,7 @@ CloudFront (d1ra694ytoup3r.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 13 model cards + trend)
+                ├── /             — Dashboard (status + 15 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -35,7 +35,7 @@ Internal ALB
                 └── /analysis     — Stop reason 분포 + Output length 분포
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 13 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 15 models × 1 workload preset (round-robin 6 categories)
   └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS
@@ -54,7 +54,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (13개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (15개), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -78,7 +78,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 13 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 15 cards + trend + workload filter)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx
@@ -86,8 +86,8 @@ model-monitoring/
 │   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 13 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 16개 (13 Bedrock + 3 Anthropic CP)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 15 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 15개 (11 Bedrock + 4 Anthropic CP)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -143,10 +143,11 @@ curl -X POST "https://d1ra694ytoup3r.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (12 total) / 모니터링 대상 모델 (총 12개)
+## Monitored Models (15 total) / 모니터링 대상 모델 (총 15개)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
+| Claude Opus 4.8 | ✅ | ✅ | ✅ |
 | Claude Opus 4.7 | ✅ | ✅ | ✅ |
 | Claude Opus 4.6 | ✅ | ✅ | — |
 | Claude Sonnet 4.6 | ✅ | ✅ | ✅ |

@@ -9,7 +9,7 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
-from sse_starlette.sse import EventSourceResponse
+from starlette.responses import StreamingResponse
 
 from auth import get_current_user
 from models import User
@@ -54,5 +54,15 @@ async def compare_run(payload: CompareRequest, user: User = Depends(get_current_
         max_tokens=payload.max_tokens,
         temperature=payload.temperature,
     )
-    # NFR-4: SSE no-buffering. EventSourceResponse가 자동으로 X-Accel-Buffering: no 헤더 설정.
-    return EventSourceResponse(generator, media_type="text/event-stream")
+    # stream_compare_events는 이미 SSE 형식("event: X\ndata: Y\n\n")으로 raw yield하므로
+    # EventSourceResponse(이중 wrap)가 아닌 StreamingResponse를 사용 (probes.py / insights.py 동일 패턴).
+    # NFR-4: SSE no-buffering — X-Accel-Buffering: no 헤더를 명시적으로 설정.
+    return StreamingResponse(
+        generator,
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        },
+    )

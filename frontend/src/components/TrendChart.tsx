@@ -23,6 +23,8 @@ interface Props {
 // Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.
 // 매칭 안 되면 family substring 기반 fallback.
 const MODEL_COLORS: Record<string, string> = {
+  "Bedrock Claude Opus 4.8 (Global)": "#fb7185",
+  "Bedrock Claude Opus 4.8 (US)": "#e11d48",
   "Bedrock Claude Opus 4.7 (Global)": "#f97316",
   "Bedrock Claude Opus 4.7 (US)": "#ef4444",
   "Bedrock Claude Opus 4.6 (Global)": "#f59e0b",
@@ -32,12 +34,14 @@ const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Haiku 4.5 (Global)": "#06b6d4",
   "Bedrock Claude Haiku 4.5 (US)": "#a855f7",
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
+  "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
 };
 
 const FAMILY_FALLBACK: [string, string][] = [
+  ["Opus 4.8", "#e11d48"],
   ["Opus 4.7", "#ef4444"],
   ["Opus 4.6", "#f59e0b"],
   ["Sonnet 4.6", "#8b5cf6"],

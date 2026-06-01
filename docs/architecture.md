@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 9 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 11 모델 프로빙 → RDS
    └─ rate(30 minutes) → ECS RunTask "insights"    → 최근 6h 요약 → RDS
 ```
 
@@ -144,7 +144,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 9 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 11 models → RDS
    └─ rate(30 minutes) → ECS RunTask "insights"    → 6h summary → RDS
 ```
 

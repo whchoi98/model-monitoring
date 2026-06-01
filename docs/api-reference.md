@@ -51,7 +51,7 @@ Returns auto-prober state.
   "last_run_time": "2026-04-16T16:48:53Z",
   "next_run_time": "2026-04-16T16:53:53Z",
   "interval_seconds": 300,
-  "model_count": 13
+  "model_count": 15
 }
 ```
 
@@ -94,7 +94,8 @@ Returns available model list.
 **Response:**
 ```json
 [
-  { "id": "us.anthropic.claude-opus-4-7", "name": "Claude Opus 4.7 (US)" }
+  { "id": "us.anthropic.claude-opus-4-8", "name": "Bedrock Claude Opus 4.8 (US)" },
+  { "id": "us.anthropic.claude-opus-4-7", "name": "Bedrock Claude Opus 4.7 (US)" }
 ]
 ```
 

@@ -188,8 +188,50 @@ export class SchedulerStack extends cdk.Stack {
     );
 
     // ---------------------------------------------------------------------
+    // 4-1) Scheduler invoke role (ADR-011).
+    //    L2 EcsRunFargateTask가 자동 생성하는 role은 ecs:RunTask Resource를 task def의
+    //    **특정 revision**(taskDefinitionArn)에 pin한다. 런북의 수동 재배포
+    //    (register-task-definition)로 revision이 bump되면 pinned 권한이 새 revision을
+    //    거부 → autoprober/insights가 silent fail (EventBridge metric도 비어 디버깅 난해).
+    //    이를 방지하기 위해 명시적 role에 task def family ':*' wildcard RunTask 권한을
+    //    부여하고 두 target에 전달한다 (CLAUDE.md / ADR-011 지침).
+    // ---------------------------------------------------------------------
+    const schedulerInvokeRole = new iam.Role(this, "SchedulerInvokeRole", {
+      assumedBy: new iam.ServicePrincipal("scheduler.amazonaws.com"),
+      description:
+        "EventBridge Scheduler role - ecs:RunTask (task def family ':*' wildcard, ADR-011) + scoped iam:PassRole",
+    });
+    schedulerInvokeRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "RunTaskFamilyWildcard",
+        effect: iam.Effect.ALLOW,
+        actions: ["ecs:RunTask"],
+        // revision 번호를 박지 않고 family ':*' wildcard 사용 (ADR-011).
+        resources: [
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${autoProberTaskDef.family}:*`,
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${insightsTaskDef.family}:*`,
+        ],
+      }),
+    );
+    schedulerInvokeRole.addToPolicy(
+      new iam.PolicyStatement({
+        sid: "PassTaskRoles",
+        effect: iam.Effect.ALLOW,
+        actions: ["iam:PassRole"],
+        resources: [
+          autoProberTaskRole.roleArn,
+          insightsTaskRole.roleArn,
+          executionRole.roleArn,
+        ],
+        conditions: {
+          StringLike: { "iam:PassedToService": "ecs-tasks.amazonaws.com" },
+        },
+      }),
+    );
+
+    // ---------------------------------------------------------------------
     // 5) EventBridge Schedules.
-    //    L2 EcsRunFargateTask가 scheduler IAM role을 자동 생성 + ecs:RunTask/iam:PassRole 부여.
+    //    명시적 schedulerInvokeRole(ADR-011 family ':*' wildcard)을 두 target에 전달.
     // ---------------------------------------------------------------------
     this.autoProberSchedule = new scheduler.Schedule(this, "AutoProberSchedule", {
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
@@ -200,6 +242,7 @@ export class SchedulerStack extends cdk.Stack {
         securityGroups: [schedulerTaskSg],
         assignPublicIp: false,
         platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
       }),
     });
 
@@ -212,6 +255,7 @@ export class SchedulerStack extends cdk.Stack {
         securityGroups: [schedulerTaskSg],
         assignPublicIp: false,
         platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
       }),
     });
 
@@ -244,6 +288,18 @@ export class SchedulerStack extends cdk.Stack {
           "Plaintext environment variables are non-sensitive metadata (AWS_REGION, PYTHONUNBUFFERED). All secrets (DB credentials, JWT key, AgentCore Memory ID) use ECS secrets backed by Secrets Manager / SSM.",
       },
     ]);
+
+    NagSuppressions.addResourceSuppressions(
+      schedulerInvokeRole,
+      [
+        {
+          id: "AwsSolutions-IAM5",
+          reason:
+            "ADR-011: ecs:RunTask Resource는 task def family ':*' wildcard 사용 - 런북 재배포로 revision이 bump돼도 RunTask가 거부되지 않도록 (silent fail 방지). iam:PassRole은 iam:PassedToService=ecs-tasks 조건으로 제한.",
+        },
+      ],
+      true,
+    );
 
     // ---------------------------------------------------------------------
     // Outputs.
