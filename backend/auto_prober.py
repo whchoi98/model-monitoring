@@ -190,13 +190,17 @@ def run_cycle() -> int:
 
     event_queue: Queue = Queue()
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = []
-        for model_id, model_name in AVAILABLE_MODELS.items():
-            client = _get_bedrock_client(_get_region_for_model(model_id))
-            thread_db = SessionLocal()
-            future = executor.submit(
-                _probe_single_model,
+    # 각 probe는 자신의 DB 세션을 worker 안에서 생성하고 finally에서 즉시 닫는다.
+    # 과거 버그(2026-06-09): 모델당 SessionLocal()을 submit 루프에서 미리 만들고 in-order
+    # 결과 루프에서야 close → 느린 probe 하나(예: Opus 4.8 Global read-timeout)가 루프를
+    # 막으면 완료된 세션들의 connection이 쌓여 pool(5+5=10)을 고갈시킴(commit 후 db.refresh가
+    # read 트랜잭션을 close까지 유지). 모델 수 12→15 확장으로 한계를 넘어 tail 모델들이
+    # "QueuePool limit reached"로 persist 실패. 세션 수명을 worker 실행에 묶어 동시
+    # connection 수를 max_workers로 제한 → 모델 수와 무관하게 안전.
+    def _probe_worker(client, model_id: str, model_name: str) -> None:
+        thread_db = SessionLocal()
+        try:
+            _probe_single_model(
                 client,
                 model_id,
                 model_name,
@@ -209,15 +213,20 @@ def run_cycle() -> int:
                 thread_db,
                 cur_category,  # category 전달
             )
-            futures.append((future, thread_db))
+        finally:
+            thread_db.close()
 
-        for future, thread_db in futures:
+    with ThreadPoolExecutor(max_workers=3) as executor:
+        futures = []
+        for model_id, model_name in AVAILABLE_MODELS.items():
+            client = _get_bedrock_client(_get_region_for_model(model_id))
+            futures.append(executor.submit(_probe_worker, client, model_id, model_name))
+
+        for future in futures:
             try:
                 future.result(timeout=120)
             except Exception:
                 logger.exception("AutoProber: model probe failed")
-            finally:
-                thread_db.close()
 
     try:
         run = db.query(ProbeRun).filter(ProbeRun.id == run_id).first()
