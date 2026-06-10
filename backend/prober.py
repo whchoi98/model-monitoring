@@ -27,12 +27,15 @@ logger = logging.getLogger(__name__)
 # 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
 AVAILABLE_MODELS: dict[str, str] = {
     # Bedrock - Global cross-region inference profile (ap-northeast-2)
+    "global.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (Global)",
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
+    # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용.
+    "us.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (US)",
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
@@ -48,6 +51,7 @@ AVAILABLE_MODELS: dict[str, str] = {
 # Key prefix "anthropic:<actual-anthropic-model-id>" 형태로 저장.
 # 시작 시 _discover_anthropic_models()가 /v1/models 응답에서 substring 매칭해 자동 등록.
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
+    ("fable-5", "Anthropic Claude Fable 5 (US)"),
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
     ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
     ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
@@ -136,7 +140,7 @@ def _anthropic_actual_id(model_id: str) -> str:
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
-_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8")
+_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "fable-5")
 
 
 def _is_reasoning_model(model_id: str) -> bool:

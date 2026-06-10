@@ -9,6 +9,8 @@ interface StreamingViewProps {
 }
 
 const MODEL_COLORS: Record<string, string> = {
+  "Claude Fable 5": "bg-teal-700",
+  "Claude Fable 5 (Global)": "bg-teal-600",
   "Claude Opus 4.8": "bg-fuchsia-700",
   "Claude Opus 4.8 (Global)": "bg-fuchsia-600",
   "Claude Opus 4.7": "bg-rose-600",
@@ -31,6 +33,9 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
   // We'll derive it from the key patterns
   const modelId = key.split(":").slice(0, -1).join(":");
 
+  if (modelId.includes("fable-5")) {
+    return modelId.startsWith("global") ? "Claude Fable 5 (Global)" : "Claude Fable 5";
+  }
   if (modelId.includes("opus-4-8")) {
     return modelId.startsWith("global") ? "Claude Opus 4.8 (Global)" : "Claude Opus 4.8";
   }
