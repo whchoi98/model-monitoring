@@ -1,5 +1,6 @@
 """OpenAI pricing normalization + cost estimation."""
 import pricing
+from routers.cost import _channel
 
 
 def test_normalize_openai_key():
@@ -20,3 +21,9 @@ def test_estimate_cost_openai():
 def test_existing_pricing_unbroken():
     assert pricing.get_pricing("us.anthropic.claude-fable-5") == {"input": 10.0, "output": 50.0}
     assert pricing.get_pricing("anthropic:claude-opus-4-8") == {"input": 15.0, "output": 75.0}
+
+
+def test_channel_openai():
+    assert _channel("openai:us-east-1:openai.gpt-5.4") == "OpenAI"
+    assert _channel("us.anthropic.claude-opus-4-8") == "Bedrock US"
+    assert _channel("anthropic:claude-fable-5") == "Anthropic (CP on AWS)"
