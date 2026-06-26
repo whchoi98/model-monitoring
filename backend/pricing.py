@@ -21,6 +21,9 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     "claude-haiku-4-5-20251001": {"input": 1.0, "output": 5.0},
     # Amazon Nova
     "nova-2-lite-v1:0": {"input": 0.06, "output": 0.24},
+    # OpenAI GPT (Bedrock Mantle). cached-input 미추적 — input/output만.
+    "gpt-5.4": {"input": 2.75, "output": 16.50},
+    "gpt-5.5": {"input": 5.50, "output": 33.00},
 }
 
 
@@ -29,6 +32,9 @@ def _normalize_key(model_id: str) -> str:
     key = model_id
     if key.startswith("anthropic:"):
         key = key[len("anthropic:"):]
+    if key.startswith("openai:"):
+        # openai:<region>:<actual_id> → <actual_id>
+        key = key.split(":", 2)[-1]
     parts = key.split(".", 1)
     if len(parts) == 2 and parts[0] in ("global", "us", "eu", "apac"):
         key = parts[1]
@@ -36,6 +42,8 @@ def _normalize_key(model_id: str) -> str:
         key = key[len("anthropic."):]
     if key.startswith("amazon."):
         key = key[len("amazon."):]
+    if key.startswith("openai."):
+        key = key[len("openai."):]
     return key
 
 
