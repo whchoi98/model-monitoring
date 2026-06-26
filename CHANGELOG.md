@@ -7,6 +7,18 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.4.0 — 2026-06-26
+
+### Added
+- **OpenAI GPT 5.4 / GPT 5.5 모니터링 (4채널)**: Bedrock Mantle OpenAI-compatible endpoint 경유. 각 모델을 us-east-1 + us-east-2 2개 리전에서 모니터링 (채널 4개). 새 `"OpenAI"` family 추가. 모니터링 대상 18 → 22개 (Bedrock 13 + Anthropic CP 5 + OpenAI 4).
+- **OpenAI 토큰 단가** (USD/1M): gpt-5.4 input $2.75 / output $16.50, gpt-5.5 input $5.50 / output $33.00 — `backend/pricing.py` + `frontend/src/lib/pricing.ts`. `/cost`·효율성 점수 자동 반영.
+- **ADR-019**: OpenAI GPT via Bedrock Mantle 설계 결정 기록.
+
+### Changed
+- **`APP_VERSION` v2.3.0 → v2.4.0** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.3.0 — 2026-06-10
 
 ### Added

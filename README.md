@@ -152,7 +152,7 @@ model-monitoring/
 ## Testing
 
 ```bash
-# Full verification (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 7 pytest + frontend tsc)
+# Full verification (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 23 pytest + frontend tsc)
 make verify
 
 # Backend tests only
@@ -349,7 +349,7 @@ model-monitoring/
 ## 테스트
 
 ```bash
-# 전체 검증 (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 7 pytest + frontend tsc)
+# 전체 검증 (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 23 pytest + frontend tsc)
 make verify
 
 # 백엔드 테스트

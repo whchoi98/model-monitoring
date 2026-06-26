@@ -13,7 +13,7 @@
 make verify
 ```
 
-CDK lint + typecheck + 63 tests + cdk-nag clean + ruff + pytest 7 + frontend tsc 모두 PASS 확인.
+CDK lint + typecheck + 63 tests + cdk-nag clean + ruff + pytest 23 + frontend tsc 모두 PASS 확인.
 
 ## 2. 컨테이너 이미지 빌드 + ECR push
 
@@ -153,6 +153,14 @@ curl -i "https://$CF_DOMAIN/api/health"
 
 # 첫 자동 프로빙 결과 (5분 후).
 curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
+
+# OpenAI (v2.4.0+) — 4개 채널 토큰 수 확인.
+# Bedrock Mantle 엔드포인트가 stream_options.include_usage를 무시하면
+# input_tokens/output_tokens 가 0 으로 silent drop → TPS·비용도 0.
+# 첫 프로브 cycle 후 아래 명령으로 4행 + non-zero 토큰 수를 반드시 확인.
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
+  | jq '[.results[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
+# 기댓값: 4개 행, status "success", input_tokens > 0, output_tokens > 0.
 ```
 
 ## 6. 후속 배포 (코드만 변경 시)

@@ -747,7 +747,7 @@ def _compare_single_model(
 ) -> None:
     """compare용 - DB 저장 없이 SSE event_queue로만 결과 push.
 
-    Bedrock(`us.*`/`global.*`) + Anthropic CP on AWS(`anthropic:*`) 양쪽 채널 지원.
+    Bedrock(`us.*`/`global.*`) + Anthropic CP on AWS(`anthropic:*`) + OpenAI(`openai:*`) 채널 지원.
     실패는 error 이벤트로만 보고 (raise 없음 - 다른 모델 호출에 영향 X).
     """
     start_time = time.monotonic()
