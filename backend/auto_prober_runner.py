@@ -31,7 +31,7 @@ def main() -> int:
         _discover_anthropic_models()
         _register_openai_models()
     except Exception:
-        logging.exception("Anthropic model discovery failed (non-fatal)")
+        logging.exception("Model discovery/registration failed (non-fatal)")
 
     try:
         run_id = run_cycle()

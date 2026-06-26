@@ -119,7 +119,7 @@ async def lifespan(app: FastAPI):
         _discover_anthropic_models()
         _register_openai_models()
     except Exception:
-        logger.exception("Anthropic model discovery failed (non-fatal)")
+        logger.exception("Model discovery/registration failed (non-fatal)")
 
     logger.info("Database tables ready.")
 

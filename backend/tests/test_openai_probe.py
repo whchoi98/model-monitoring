@@ -53,3 +53,16 @@ def test_register_openai_models_skips_without_key(monkeypatch):
     before = len(prober.AVAILABLE_MODELS)
     prober._register_openai_models()
     assert len(prober.AVAILABLE_MODELS) == before
+
+
+def test_register_openai_models_partial_skip(monkeypatch):
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
+    monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
+    monkeypatch.delenv("OPENAI_US_EAST_2_BASE_URL", raising=False)
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_54_MODEL_ID", "openai.gpt-5.4")
+    monkeypatch.delenv("BEDROCK_OPENAI_GPT_55_MODEL_ID", raising=False)
+    prober._register_openai_models()
+    keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
+    # gpt-5.5 model-id absent → skipped; us-east-2 base-url absent → skipped.
+    assert keys == ["openai:us-east-1:openai.gpt-5.4"]
