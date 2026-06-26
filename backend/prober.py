@@ -231,6 +231,26 @@ def _register_openai_models() -> None:
             logger.info("Registered OpenAI model: %s -> %s", key, label)
 
 
+def _openai_create_stream(client, actual_id: str, prompt: str, max_tokens: int):
+    """OpenAI Chat Completions streaming. gpt-5.x reasoning models use
+    max_completion_tokens; fall back to max_tokens if the endpoint rejects it.
+    temperature는 보내지 않음 (reasoning model 거부 — anthropic 분기와 동일).
+    """
+    base = dict(
+        model=actual_id,
+        messages=[{"role": "user", "content": prompt}],
+        stream=True,
+        stream_options={"include_usage": True},
+    )
+    try:
+        return client.chat.completions.create(max_completion_tokens=max_tokens, **base)
+    except Exception as exc:
+        if "max_completion_tokens" in str(exc):
+            logger.info("OpenAI endpoint rejected max_completion_tokens; retrying with max_tokens")
+            return client.chat.completions.create(max_tokens=max_tokens, **base)
+        raise
+
+
 def _get_region_for_model(model_id: str) -> str:
     """Derive the AWS region from a model ID prefix."""
     prefix = model_id.split(".")[0]
@@ -254,6 +274,11 @@ _RETRYABLE_PATTERNS: tuple[str, ...] = (
     "ServiceUnavailableException",
     "TooManyRequestsException",
     "ModelStreamErrorException",
+    # OpenAI (Bedrock Mantle) rate-limit / overload markers.
+    "RateLimitError",
+    "rate_limit",
+    "ServiceUnavailable",
+    "overloaded",
 )
 _RETRY_BACKOFFS: tuple[int, ...] = (2, 4, 8)
 
@@ -340,6 +365,40 @@ def _probe_single_model(
                     # stop_reason: end_turn | max_tokens | stop_sequence | tool_use
                     stop_reason = getattr(final_message, "stop_reason", None)
                     # Anthropic API는 server-side latency를 제공하지 않음 - None 유지.
+            elif _is_openai_direct(model_id):
+                region, actual_id = _openai_parts(model_id)
+                oa_client = _get_openai_client(_openai_base_url(region))
+                stream = _openai_create_stream(oa_client, actual_id, prompt, max_tokens)
+                for chunk in stream:
+                    usage = getattr(chunk, "usage", None)
+                    if usage is not None:
+                        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                        output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                    if not chunk.choices:
+                        continue
+                    choice = chunk.choices[0]
+                    text = getattr(choice.delta, "content", None) if choice.delta else None
+                    if text:
+                        now = time.monotonic()
+                        if first_token_time is None:
+                            first_token_time = now
+                            ttft_ms = (first_token_time - start_time) * 1000.0
+                            event_queue.put(_sse("ttft", {
+                                "model_id": model_id,
+                                "model_name": model_name,
+                                "iteration": iteration,
+                                "ttft_ms": round(ttft_ms, 2),
+                            }))
+                        collected_text.append(text)
+                        event_queue.put(_sse("token", {
+                            "model_id": model_id,
+                            "model_name": model_name,
+                            "iteration": iteration,
+                            "token": text,
+                        }))
+                    if choice.finish_reason:
+                        stop_reason = _map_openai_finish_reason(choice.finish_reason)
+                # OpenAI-compatible 엔드포인트는 server-side latency 미제공 - None 유지.
             else:
                 # Bedrock 경로 - 기존 동작.
                 inference_config: dict = {"maxTokens": max_tokens}

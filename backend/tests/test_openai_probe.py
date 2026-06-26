@@ -66,3 +66,154 @@ def test_register_openai_models_partial_skip(monkeypatch):
     keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
     # gpt-5.5 model-id absent → skipped; us-east-2 base-url absent → skipped.
     assert keys == ["openai:us-east-1:openai.gpt-5.4"]
+
+
+import json
+from queue import Queue
+
+
+class _Delta:
+    def __init__(self, content):
+        self.content = content
+
+
+class _Choice:
+    def __init__(self, content=None, finish_reason=None):
+        self.delta = _Delta(content)
+        self.finish_reason = finish_reason
+
+
+class _Usage:
+    def __init__(self, prompt_tokens, completion_tokens):
+        self.prompt_tokens = prompt_tokens
+        self.completion_tokens = completion_tokens
+
+
+class _Chunk:
+    def __init__(self, choices, usage=None):
+        self.choices = choices
+        self.usage = usage
+
+
+class _FakeSession:
+    def add(self, *a, **k):
+        pass
+
+    def commit(self, *a, **k):
+        pass
+
+    def refresh(self, obj, *a, **k):
+        from datetime import datetime, timezone
+        if getattr(obj, "id", None) is None:
+            obj.id = 1
+        if getattr(obj, "timestamp", None) is None:
+            obj.timestamp = datetime.now(timezone.utc)
+
+
+def _drain(q):
+    out = []
+    while not q.empty():
+        out.append(q.get_nowait())
+    return out
+
+
+def _parse(ev):
+    etype = ev.split("event: ", 1)[1].split("\n", 1)[0]
+    body = json.loads(ev.split("data: ", 1)[1].rstrip("\n"))
+    return etype, body
+
+
+def _install_fake_openai(monkeypatch, chunks, calls=None):
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            if calls is not None:
+                calls.append("mct" if "max_completion_tokens" in kwargs else "mt")
+            assert kwargs["stream"] is True
+            assert kwargs["stream_options"] == {"include_usage": True}
+            return iter(chunks)
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeClient:
+        chat = _FakeChat()
+
+    monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
+    monkeypatch.setattr(prober, "_get_openai_client", lambda base_url: _FakeClient())
+
+
+def test_openai_probe_streams_and_persists(monkeypatch):
+    chunks = [
+        _Chunk([_Choice(content="Hello")]),
+        _Chunk([_Choice(content=" world")]),
+        _Chunk([_Choice(content=None, finish_reason="length")]),
+        _Chunk([], usage=_Usage(prompt_tokens=12, completion_tokens=5)),
+    ]
+    _install_fake_openai(monkeypatch, chunks)
+    q: Queue = Queue()
+    prober._probe_single_model(
+        client=None,
+        model_id="openai:us-east-1:openai.gpt-5.4",
+        model_name="OpenAI GPT 5.4 (us-east-1)",
+        prompt="hi",
+        temperature=0.1,
+        max_tokens=64,
+        iteration=1,
+        event_queue=q,
+        run_id=1,
+        db=_FakeSession(),
+    )
+    events = [_parse(e) for e in _drain(q)]
+    types = [t for t, _ in events]
+    assert "ttft" in types
+    assert types.count("token") == 2
+    result = next(b for t, b in events if t == "result")
+    assert result["status"] == "success"
+    assert result["input_tokens"] == 12
+    assert result["output_tokens"] == 5
+    assert result["output_text"] == "Hello world"
+    assert result["stop_reason"] == "max_tokens"
+    assert result["ttft_ms"] is not None
+    assert result["server_latency_ms"] is None
+
+
+def test_openai_probe_falls_back_to_max_tokens(monkeypatch):
+    chunks = [
+        _Chunk([_Choice(content="x", finish_reason="stop")]),
+        _Chunk([], usage=_Usage(1, 1)),
+    ]
+    calls = []
+
+    class _FakeCompletions:
+        def create(self, **kwargs):
+            if "max_completion_tokens" in kwargs:
+                calls.append("mct")
+                raise Exception("Unsupported parameter: 'max_completion_tokens'")
+            calls.append("mt")
+            return iter(chunks)
+
+    class _FakeChat:
+        completions = _FakeCompletions()
+
+    class _FakeClient:
+        chat = _FakeChat()
+
+    monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
+    monkeypatch.setattr(prober, "_get_openai_client", lambda base_url: _FakeClient())
+    q: Queue = Queue()
+    prober._probe_single_model(
+        client=None,
+        model_id="openai:us-east-1:openai.gpt-5.5",
+        model_name="OpenAI GPT 5.5 (us-east-1)",
+        prompt="hi",
+        temperature=0.1,
+        max_tokens=64,
+        iteration=1,
+        event_queue=q,
+        run_id=1,
+        db=_FakeSession(),
+    )
+    assert calls == ["mct", "mt"]
+    result = next(b for t, b in (_parse(e) for e in _drain(q)) if t == "result")
+    assert result["status"] == "success"
+    assert result["stop_reason"] == "end_turn"
