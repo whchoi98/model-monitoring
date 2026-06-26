@@ -158,11 +158,10 @@ _OPENAI_REGION_ENV: dict[str, str] = {
     "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
 }
 
-# OpenAI finish_reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
-_OPENAI_FINISH_REASON_MAP: dict[str, str] = {
-    "stop": "end_turn",
-    "length": "max_tokens",
-    "tool_calls": "tool_use",
+# OpenAI Responses API의 incomplete reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
+# gpt-5.x는 /chat/completions 미지원 → /responses 사용. finish_reason 대신 status/incomplete_details.
+_OPENAI_INCOMPLETE_MAP: dict[str, str] = {
+    "max_output_tokens": "max_tokens",
     "content_filter": "content_filtered",
 }
 
@@ -200,10 +199,13 @@ def _get_openai_client(base_url: str):
     return _openai_client_cache[base_url]
 
 
-def _map_openai_finish_reason(reason: str | None) -> str | None:
-    if reason is None:
-        return None
-    return _OPENAI_FINISH_REASON_MAP.get(reason, reason)
+def _openai_stop_reason(status: str | None, incomplete_reason: str | None) -> str | None:
+    """Responses API: status 'completed' → end_turn; 'incomplete' → mapped incomplete reason."""
+    if status == "completed":
+        return "end_turn"
+    if status == "incomplete":
+        return _OPENAI_INCOMPLETE_MAP.get(incomplete_reason, incomplete_reason or "incomplete")
+    return incomplete_reason
 
 
 def _register_openai_models() -> None:
@@ -231,24 +233,39 @@ def _register_openai_models() -> None:
             logger.info("Registered OpenAI model: %s -> %s", key, label)
 
 
-def _openai_create_stream(client, actual_id: str, prompt: str, max_tokens: int):
-    """OpenAI Chat Completions streaming. gpt-5.x reasoning models use
-    max_completion_tokens; fall back to max_tokens if the endpoint rejects it.
-    temperature는 보내지 않음 (reasoning model 거부 — anthropic 분기와 동일).
+def _openai_stream_events(client, actual_id: str, prompt: str, max_tokens: int):
+    """Stream the OpenAI **Responses API** (gpt-5.x require /responses, NOT /chat/completions).
+
+    Normalized tuples를 yield:
+      ("delta", text)                                       - 출력 텍스트 조각
+      ("final", input_tokens, output_tokens, stop_reason)   - 완료/미완료 시 usage + stop
+    temperature는 보내지 않음 (reasoning model). 토큰 한도는 max_output_tokens.
     """
-    base = dict(
+    stream = client.responses.create(
         model=actual_id,
-        messages=[{"role": "user", "content": prompt}],
+        input=prompt,
+        max_output_tokens=max_tokens,
         stream=True,
-        stream_options={"include_usage": True},
     )
-    try:
-        return client.chat.completions.create(max_completion_tokens=max_tokens, **base)
-    except Exception as exc:
-        if "max_completion_tokens" in str(exc):
-            logger.info("OpenAI endpoint rejected max_completion_tokens; retrying with max_tokens")
-            return client.chat.completions.create(max_tokens=max_tokens, **base)
-        raise
+    for ev in stream:
+        etype = getattr(ev, "type", "")
+        if etype == "response.output_text.delta":
+            text = getattr(ev, "delta", "") or ""
+            if text:
+                yield ("delta", text)
+        elif etype in ("response.completed", "response.incomplete", "response.failed"):
+            resp = getattr(ev, "response", None)
+            in_tok = out_tok = 0
+            stop = None
+            if resp is not None:
+                usage = getattr(resp, "usage", None)
+                if usage is not None:
+                    in_tok = getattr(usage, "input_tokens", 0) or 0
+                    out_tok = getattr(usage, "output_tokens", 0) or 0
+                idet = getattr(resp, "incomplete_details", None)
+                reason = getattr(idet, "reason", None) if idet is not None else None
+                stop = _openai_stop_reason(getattr(resp, "status", None), reason)
+            yield ("final", in_tok, out_tok, stop)
 
 
 def _get_region_for_model(model_id: str) -> str:
@@ -368,17 +385,9 @@ def _probe_single_model(
             elif _is_openai_direct(model_id):
                 region, actual_id = _openai_parts(model_id)
                 oa_client = _get_openai_client(_openai_base_url(region))
-                stream = _openai_create_stream(oa_client, actual_id, prompt, max_tokens)
-                for chunk in stream:
-                    usage = getattr(chunk, "usage", None)
-                    if usage is not None:
-                        input_tokens = getattr(usage, "prompt_tokens", 0) or 0
-                        output_tokens = getattr(usage, "completion_tokens", 0) or 0
-                    if not chunk.choices:
-                        continue
-                    choice = chunk.choices[0]
-                    text = getattr(choice.delta, "content", None) if choice.delta else None
-                    if text:
+                for kind, *rest in _openai_stream_events(oa_client, actual_id, prompt, max_tokens):
+                    if kind == "delta":
+                        text = rest[0]
                         now = time.monotonic()
                         if first_token_time is None:
                             first_token_time = now
@@ -396,9 +405,9 @@ def _probe_single_model(
                             "iteration": iteration,
                             "token": text,
                         }))
-                    if choice.finish_reason:
-                        stop_reason = _map_openai_finish_reason(choice.finish_reason)
-                # OpenAI-compatible 엔드포인트는 server-side latency 미제공 - None 유지.
+                    else:  # ("final", input_tokens, output_tokens, stop_reason)
+                        input_tokens, output_tokens, stop_reason = rest
+                # OpenAI Responses 엔드포인트는 server-side latency 미제공 - None 유지.
             else:
                 # Bedrock 경로 - 기존 동작.
                 inference_config: dict = {"maxTokens": max_tokens}
@@ -786,23 +795,17 @@ def _compare_single_model(
         elif _is_openai_direct(model_id):
             region, actual_id = _openai_parts(model_id)
             client = _get_openai_client(_openai_base_url(region))
-            stream = _openai_create_stream(client, actual_id, prompt, max_tokens)
-            for chunk in stream:
-                usage = getattr(chunk, "usage", None)
-                if usage is not None:
-                    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
-                    output_tokens = getattr(usage, "completion_tokens", 0) or 0
-                if not chunk.choices:
-                    continue
-                choice = chunk.choices[0]
-                text = getattr(choice.delta, "content", None) if choice.delta else None
-                if text:
+            for kind, *rest in _openai_stream_events(client, actual_id, prompt, max_tokens):
+                if kind == "delta":
+                    text = rest[0]
                     now = time.monotonic()
                     if first_token_time is None:
                         first_token_time = now
                         emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
                     collected_text.append(text)
                     emit("token", {"token": text})
+                else:  # ("final", input_tokens, output_tokens, _stop)
+                    input_tokens, output_tokens, _stop = rest
         else:
             client = _get_bedrock_client(_get_region_for_model(model_id))
             cfg: dict = {"maxTokens": max_tokens}
