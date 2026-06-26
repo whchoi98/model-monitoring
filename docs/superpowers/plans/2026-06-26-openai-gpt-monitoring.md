@@ -639,7 +639,6 @@ Create `backend/tests/test_openai_pricing.py`:
 ```python
 """OpenAI pricing normalization + cost estimation."""
 import pricing
-from routers.cost import _channel
 
 
 def test_normalize_openai_key():
@@ -660,18 +659,14 @@ def test_estimate_cost_openai():
 def test_existing_pricing_unbroken():
     assert pricing.get_pricing("us.anthropic.claude-fable-5") == {"input": 10.0, "output": 50.0}
     assert pricing.get_pricing("anthropic:claude-opus-4-8") == {"input": 15.0, "output": 75.0}
-
-
-def test_channel_openai():
-    assert _channel("openai:us-east-1:openai.gpt-5.4") == "OpenAI"
-    assert _channel("us.anthropic.claude-opus-4-8") == "Bedrock US"
-    assert _channel("anthropic:claude-fable-5") == "Anthropic (CP on AWS)"
 ```
+
+(The cost `_channel` test lives in Task 5, which owns the cost.py edit — keeping this file green at the end of Task 4.)
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `cd backend && python -m pytest tests/test_openai_pricing.py -v`
-Expected: FAIL — `_normalize_key` returns `openai.gpt-5.4` (not stripped) and `_channel` returns `"Other"`.
+Expected: FAIL — `_normalize_key` returns `openai.gpt-5.4` (not stripped).
 
 - [ ] **Step 3: Edit `backend/pricing.py`**
 
@@ -768,7 +763,7 @@ to:
 - [ ] **Step 5: Run tests + typecheck**
 
 Run: `cd backend && python -m pytest tests/test_openai_pricing.py -v`
-Expected: PASS (5 tests)
+Expected: PASS (4 tests)
 Run: `cd frontend && npx tsc --noEmit`
 Expected: no errors
 
@@ -785,9 +780,21 @@ git commit -m "feat(pricing): GPT-5.4/5.5 token pricing + openai: key normalizat
 
 **Files:**
 - Modify: `backend/routers/cost.py` (`_channel` lines 40-50)
-- Test: covered by `test_channel_openai` in `backend/tests/test_openai_pricing.py` (already written in Task 4)
+- Test: `backend/tests/test_openai_pricing.py` (append the channel test)
 
-- [ ] **Step 1: Confirm the test fails (from Task 4 it already exists)**
+- [ ] **Step 1: Write the failing channel test**
+
+Append to `backend/tests/test_openai_pricing.py`:
+
+```python
+from routers.cost import _channel
+
+
+def test_channel_openai():
+    assert _channel("openai:us-east-1:openai.gpt-5.4") == "OpenAI"
+    assert _channel("us.anthropic.claude-opus-4-8") == "Bedrock US"
+    assert _channel("anthropic:claude-fable-5") == "Anthropic (CP on AWS)"
+```
 
 Run: `cd backend && python -m pytest tests/test_openai_pricing.py::test_channel_openai -v`
 Expected: FAIL — `_channel` returns `"Other"` for the openai key.
@@ -818,7 +825,7 @@ Expected: PASS
 - [ ] **Step 4: Commit**
 
 ```bash
-git add backend/routers/cost.py
+git add backend/routers/cost.py backend/tests/test_openai_pricing.py
 git commit -m "feat(cost): bucket openai: model_ids into 'OpenAI' channel"
 ```
 
