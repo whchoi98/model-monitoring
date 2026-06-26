@@ -117,6 +117,13 @@ export class AppServicesStack extends cdk.Stack {
       { parameterName: "/bedrock-monitor/anthropic-workspace-id" },
     );
 
+    // OpenAI via Bedrock Mantle (Path 4) - 사전 생성된 SSM SecureString import. 없어도 동작.
+    const openaiApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAiApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-api-key" },
+    );
+
     const backendSecrets: Record<string, ecs.Secret> = {
       // DATABASE_URL은 backend/database.py가 DB_USER/PASSWORD/HOST/PORT/NAME 으로 직접 조립한다.
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -129,11 +136,16 @@ export class AppServicesStack extends cdk.Stack {
       SEED_ADMIN_PASSWORD: ecs.Secret.fromSsmParameter(seedAdminPasswordParam),
       ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
       ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
+      OPENAI_API_KEY: ecs.Secret.fromSsmParameter(openaiApiKeyParam),
     };
 
     const backendEnv: Record<string, string> = {
       AWS_REGION: this.region,
       PYTHONUNBUFFERED: "1",
+      OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
+      OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
+      BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
+      BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
     };
 
     // ---------------------------------------------------------------------
