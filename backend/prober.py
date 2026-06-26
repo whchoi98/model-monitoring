@@ -156,7 +156,15 @@ def _is_reasoning_model(model_id: str) -> bool:
 _OPENAI_REGION_ENV: dict[str, str] = {
     "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
     "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
+    "us-west-2": "OPENAI_US_WEST_2_BASE_URL",
 }
+
+# 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5는 us-west-2 미제공 → 404).
+# (model-id env var, display family, 제공 리전 튜플)
+_OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1", "us-east-2", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1", "us-east-2")),
+]
 
 # OpenAI Responses API의 incomplete reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
 # gpt-5.x는 /chat/completions 미지원 → /responses 사용. finish_reason 대신 status/incomplete_details.
@@ -209,23 +217,22 @@ def _openai_stop_reason(status: str | None, incomplete_reason: str | None) -> st
 
 
 def _register_openai_models() -> None:
-    """OPENAI_API_KEY + region별 base_url + model-id env가 있으면 4개 채널 등록.
+    """OPENAI_API_KEY + 모델별 가용 리전(base_url env 존재)에 한해 등록.
 
+    _OPENAI_MODEL_SPECS가 모델별 제공 리전을 정의 (gpt-5.5는 us-west-2 미제공).
     누락 시 조용히 skip (해당 채널만 미등록 — 나머지 정상).
     """
     api_key = os.environ.get("OPENAI_API_KEY")
     if not api_key:
         logger.info("OPENAI_API_KEY not set - skipping OpenAI (Bedrock Mantle) models")
         return
-    specs = [
-        (os.environ.get("BEDROCK_OPENAI_GPT_54_MODEL_ID"), "GPT 5.4"),
-        (os.environ.get("BEDROCK_OPENAI_GPT_55_MODEL_ID"), "GPT 5.5"),
-    ]
-    for actual_id, family in specs:
+    for env_var, family, regions in _OPENAI_MODEL_SPECS:
+        actual_id = os.environ.get(env_var)
         if not actual_id:
             continue
-        for region, env_name in _OPENAI_REGION_ENV.items():
-            if not os.environ.get(env_name):
+        for region in regions:
+            env_name = _OPENAI_REGION_ENV.get(region)
+            if not env_name or not os.environ.get(env_name):
                 continue
             key = f"openai:{region}:{actual_id}"
             label = f"OpenAI {family} ({region})"

@@ -144,6 +144,7 @@ export class AppServicesStack extends cdk.Stack {
       PYTHONUNBUFFERED: "1",
       OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
       OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
+      OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
       BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
       BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
     };

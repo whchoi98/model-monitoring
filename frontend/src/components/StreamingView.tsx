@@ -26,6 +26,7 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 5.5 (us-east-2)": "bg-emerald-700",
   "GPT 5.4 (us-east-1)": "bg-green-600",
   "GPT 5.4 (us-east-2)": "bg-green-700",
+  "GPT 5.4 (us-west-2)": "bg-green-800",
 };
 
 function getModelColor(name: string): string {
@@ -56,11 +57,11 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
     return modelId.startsWith("global") ? "Claude Haiku 4.5 (Global)" : "Claude Haiku 4.5";
   }
   if (modelId.includes("nova")) return "Nova 2.0 Lite";
-  if (modelId.includes("gpt-5.5")) {
-    return modelId.includes("us-east-2") ? "GPT 5.5 (us-east-2)" : "GPT 5.5 (us-east-1)";
-  }
-  if (modelId.includes("gpt-5.4")) {
-    return modelId.includes("us-east-2") ? "GPT 5.4 (us-east-2)" : "GPT 5.4 (us-east-1)";
+  if (modelId.startsWith("openai:")) {
+    // openai:<region>:<actual_id> — region을 직접 파싱(any region: us-east-1/2, us-west-2, ...).
+    const region = modelId.split(":")[1] || "";
+    const fam = modelId.includes("gpt-5.5") ? "GPT 5.5" : modelId.includes("gpt-5.4") ? "GPT 5.4" : "GPT";
+    return `${fam} (${region})`;
   }
   return modelId;
 }

@@ -24,8 +24,10 @@ def test_openai_parts():
 def test_openai_base_url(monkeypatch):
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.setenv("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1")
+    monkeypatch.setenv("OPENAI_US_WEST_2_BASE_URL", "https://w2/openai/v1")
     assert prober._openai_base_url("us-east-1") == "https://e1/openai/v1"
     assert prober._openai_base_url("us-east-2") == "https://e2/openai/v1"
+    assert prober._openai_base_url("us-west-2") == "https://w2/openai/v1"
 
 
 def test_openai_stop_reason():
@@ -36,18 +38,26 @@ def test_openai_stop_reason():
     assert prober._openai_stop_reason("incomplete", None) == "incomplete"
 
 
-def test_register_openai_models_registers_four(monkeypatch):
+def test_register_openai_models_per_region_availability(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.setenv("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1")
+    monkeypatch.setenv("OPENAI_US_WEST_2_BASE_URL", "https://w2/openai/v1")
     monkeypatch.setenv("BEDROCK_OPENAI_GPT_54_MODEL_ID", "openai.gpt-5.4")
     monkeypatch.setenv("BEDROCK_OPENAI_GPT_55_MODEL_ID", "openai.gpt-5.5")
     prober._register_openai_models()
-    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-5.4"] == "OpenAI GPT 5.4 (us-east-1)"
-    assert prober.AVAILABLE_MODELS["openai:us-east-2:openai.gpt-5.4"] == "OpenAI GPT 5.4 (us-east-2)"
-    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-5.5"] == "OpenAI GPT 5.5 (us-east-1)"
-    assert prober.AVAILABLE_MODELS["openai:us-east-2:openai.gpt-5.5"] == "OpenAI GPT 5.5 (us-east-2)"
+    openai_keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
+    # gpt-5.4 in e1/e2/w2 (3) + gpt-5.5 in e1/e2 (2) = 5; gpt-5.5 NOT in us-west-2.
+    assert openai_keys == [
+        "openai:us-east-1:openai.gpt-5.4",
+        "openai:us-east-1:openai.gpt-5.5",
+        "openai:us-east-2:openai.gpt-5.4",
+        "openai:us-east-2:openai.gpt-5.5",
+        "openai:us-west-2:openai.gpt-5.4",
+    ]
+    assert prober.AVAILABLE_MODELS["openai:us-west-2:openai.gpt-5.4"] == "OpenAI GPT 5.4 (us-west-2)"
+    assert "openai:us-west-2:openai.gpt-5.5" not in prober.AVAILABLE_MODELS
 
 
 def test_register_openai_models_skips_without_key(monkeypatch):

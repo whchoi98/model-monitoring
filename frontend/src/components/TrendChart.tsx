@@ -45,6 +45,7 @@ const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
   "OpenAI GPT 5.4 (us-east-1)": "#34d399",
   "OpenAI GPT 5.4 (us-east-2)": "#059669",
+  "OpenAI GPT 5.4 (us-west-2)": "#10b981",
 };
 
 const FAMILY_FALLBACK: [string, string][] = [
