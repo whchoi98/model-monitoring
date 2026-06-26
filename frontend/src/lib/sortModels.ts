@@ -11,6 +11,8 @@ export const FAMILY_ORDER = [
   "Claude Sonnet 4.6",
   "Claude Haiku 4.5",
   "Nova 2.0 Lite",
+  "GPT 5.5",
+  "GPT 5.4",
 ];
 
 // 모니터링 catalogue에서 제외된 모델 (ADR-017). backend silent bug 대비 frontend hard-filter.
@@ -30,6 +32,7 @@ export function familyRank(name: string): number {
 export function channelRank(name: string): number {
   if (name.startsWith("Anthropic ")) return 0;
   if (name.includes("(Global)")) return 1;
+  if (name.startsWith("OpenAI ")) return 3; // OpenAI 자체 채널 티어 (us-east-1 → us-east-2)
   return 2; // Bedrock US (default)
 }
 

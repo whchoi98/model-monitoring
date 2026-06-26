@@ -22,6 +22,10 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Haiku 4.5": "bg-cyan-600",
   "Claude Haiku 4.5 (Global)": "bg-cyan-500",
   "Nova 2.0 Lite": "bg-amber-600",
+  "GPT 5.5 (us-east-1)": "bg-emerald-600",
+  "GPT 5.5 (us-east-2)": "bg-emerald-700",
+  "GPT 5.4 (us-east-1)": "bg-green-600",
+  "GPT 5.4 (us-east-2)": "bg-green-700",
 };
 
 function getModelColor(name: string): string {
@@ -52,6 +56,12 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
     return modelId.startsWith("global") ? "Claude Haiku 4.5 (Global)" : "Claude Haiku 4.5";
   }
   if (modelId.includes("nova")) return "Nova 2.0 Lite";
+  if (modelId.includes("gpt-5.5")) {
+    return modelId.includes("us-east-2") ? "GPT 5.5 (us-east-2)" : "GPT 5.5 (us-east-1)";
+  }
+  if (modelId.includes("gpt-5.4")) {
+    return modelId.includes("us-east-2") ? "GPT 5.4 (us-east-2)" : "GPT 5.4 (us-east-1)";
+  }
   return modelId;
 }
 

@@ -41,6 +41,10 @@ const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
+  "OpenAI GPT 5.5 (us-east-1)": "#10a37f",
+  "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
+  "OpenAI GPT 5.4 (us-east-1)": "#34d399",
+  "OpenAI GPT 5.4 (us-east-2)": "#059669",
 };
 
 const FAMILY_FALLBACK: [string, string][] = [
@@ -51,6 +55,8 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Sonnet 4.6", "#8b5cf6"],
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
+  ["GPT 5.5", "#10a37f"],
+  ["GPT 5.4", "#34d399"],
 ];
 
 function getColor(modelName: string): string {
