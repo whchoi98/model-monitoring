@@ -38,7 +38,7 @@ EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 22 models × 1 workload preset (round-robin 6 categories)
   └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
 
-Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS
+Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
 ```
 
@@ -99,7 +99,7 @@ model-monitoring/
 │   │   └── lib/
 │   │       ├── api.ts                   # 모든 fetch 함수 (auth token mgmt)
 │   │       ├── i18n.ts + i18n-context.tsx  # KO/EN
-│   │       ├── sortModels.ts            # FAMILY_ORDER 7 entries, groupByFamily
+│   │       ├── sortModels.ts            # FAMILY_ORDER 9 entries, groupByFamily
 │   │       ├── pricing.ts               # backend/pricing.py mirror
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / middleware.ts
