@@ -2,6 +2,9 @@
 
 No live API calls — env is monkeypatched and the OpenAI client is faked in Task 2.
 """
+import json
+from queue import Queue
+
 import prober
 
 
@@ -66,10 +69,6 @@ def test_register_openai_models_partial_skip(monkeypatch):
     keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
     # gpt-5.5 model-id absent → skipped; us-east-2 base-url absent → skipped.
     assert keys == ["openai:us-east-1:openai.gpt-5.4"]
-
-
-import json
-from queue import Queue
 
 
 class _Delta:
