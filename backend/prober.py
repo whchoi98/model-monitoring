@@ -783,6 +783,26 @@ def _compare_single_model(
                 final = stream.get_final_message()
                 input_tokens = final.usage.input_tokens
                 output_tokens = final.usage.output_tokens
+        elif _is_openai_direct(model_id):
+            region, actual_id = _openai_parts(model_id)
+            client = _get_openai_client(_openai_base_url(region))
+            stream = _openai_create_stream(client, actual_id, prompt, max_tokens)
+            for chunk in stream:
+                usage = getattr(chunk, "usage", None)
+                if usage is not None:
+                    input_tokens = getattr(usage, "prompt_tokens", 0) or 0
+                    output_tokens = getattr(usage, "completion_tokens", 0) or 0
+                if not chunk.choices:
+                    continue
+                choice = chunk.choices[0]
+                text = getattr(choice.delta, "content", None) if choice.delta else None
+                if text:
+                    now = time.monotonic()
+                    if first_token_time is None:
+                        first_token_time = now
+                        emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                    collected_text.append(text)
+                    emit("token", {"token": text})
         else:
             client = _get_bedrock_client(_get_region_for_model(model_id))
             cfg: dict = {"maxTokens": max_tokens}

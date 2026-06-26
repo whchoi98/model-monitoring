@@ -216,3 +216,29 @@ def test_openai_probe_falls_back_to_max_tokens(monkeypatch):
     result = next(b for t, b in (_parse(e) for e in _drain(q)) if t == "result")
     assert result["status"] == "success"
     assert result["stop_reason"] == "end_turn"
+
+
+def test_openai_compare_emits_result(monkeypatch):
+    chunks = [
+        _Chunk([_Choice(content="Hi")]),
+        _Chunk([_Choice(content=None, finish_reason="stop")]),
+        _Chunk([], usage=_Usage(prompt_tokens=3, completion_tokens=2)),
+    ]
+    _install_fake_openai(monkeypatch, chunks)
+    q: Queue = Queue()
+    prober._compare_single_model(
+        model_id="openai:us-east-1:openai.gpt-5.4",
+        prompt="hi",
+        max_tokens=64,
+        temperature=0.1,
+        event_queue=q,
+    )
+    events = [_parse(e) for e in _drain(q)]
+    types = [t for t, _ in events]
+    assert "ttft" in types
+    assert types.count("token") == 1
+    result = next(b for t, b in events if t == "result")
+    assert result["status"] == "success"
+    assert result["input_tokens"] == 3
+    assert result["output_tokens"] == 2
+    assert result["output_text"] == "Hi"
