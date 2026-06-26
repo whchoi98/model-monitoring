@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 18 model cards + trend)
+                ├── /             — Dashboard (status + 22 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -35,7 +35,7 @@ Internal ALB
                 └── /analysis     — Stop reason 분포 + Output length 분포
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 18 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 22 models × 1 workload preset (round-robin 6 categories)
   └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS
@@ -54,7 +54,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (18개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (22개), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -78,7 +78,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 18 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 22 cards + trend + workload filter)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx
@@ -86,8 +86,8 @@ model-monitoring/
 │   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 18 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 18개 (13 Bedrock + 5 Anthropic CP)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 22 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 22개 (13 Bedrock + 5 Anthropic CP + 4 OpenAI)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -106,7 +106,7 @@ model-monitoring/
 ├── cdk/                                  # 8 stacks (TypeScript)
 └── docs/
     ├── architecture.md
-    ├── decisions/ADR-001~018.md
+    ├── decisions/ADR-001~019.md
     └── runbooks/deploy.md, rollback.md, ...
 ```
 
@@ -143,7 +143,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (18 total) / 모니터링 대상 모델 (총 18개)
+## Monitored Models (22 total) / 모니터링 대상 모델 (총 22개)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
@@ -155,9 +155,18 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | Claude Haiku 4.5 | ✅ | ✅ | ✅ |
 | Amazon Nova 2.0 Lite | — | ✅ | — |
 
+**OpenAI (Bedrock Mantle, in-region)** — 신규 v2.4.0:
+
+| Family | us-east-1 | us-east-2 |
+|--------|-----------|-----------|
+| GPT 5.5 | ✅ | ✅ |
+| GPT 5.4 | ✅ | ✅ |
+
+model_id 키: `openai:<region>:openai.gpt-5.x`. 라벨: `OpenAI GPT 5.x (<region>)`. CP/Bedrock과 다른 3rd provider path (OpenAI-compatible `/openai/v1`, bearer 토큰). 자세히는 ADR-019.
+
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 
-**라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Bedrock Global → Bedrock US** (`channelRank` 함수).
+**라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"` prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Bedrock Global → Bedrock US → OpenAI** (`channelRank` 함수).
 
 ---
 

@@ -5,7 +5,7 @@ React UI components for the monitoring dashboard (20 top-level + a `chat/` subfo
 
 ## Key Components
 - `AutoDashboard.tsx` — Main dashboard: status panel + model grid + trend charts + workload/model filters
-- `ModelStatusGrid.tsx` — family-grouped model cards (15 models), color-coded metrics
+- `ModelStatusGrid.tsx` — family-grouped model cards (22 models), color-coded metrics
 - `TrendChart.tsx` — Recharts LineChart (TTFT / latency / TPS); `MODEL_COLORS` + `FAMILY_FALLBACK`
 - `LatencyChart.tsx`, `StatsCards.tsx`, `ProgressBar.tsx` — supporting dashboard widgets
 - `ModelSelector.tsx` — multi-select model chips (`selectedModels: Set<string>`)

@@ -101,6 +101,17 @@ npx cdk deploy --all \
 
 ## 4. 배포 후 수동 설정
 
+### 4-0. OpenAI (Bedrock Mantle) 키 등록 (v2.4.0 신규, 최초 1회)
+
+```bash
+# OpenAI (Bedrock Mantle) bearer key — Path 4. 배포 전 1회, 운영 리전(ap-northeast-2).
+aws ssm put-parameter --region ap-northeast-2 \
+  --name /bedrock-monitor/openai-api-key --type SecureString \
+  --value '<bedrock-long-term-api-key>'
+```
+
+> ⚠️ 키 값을 평문으로 공유한 적이 있으면 반드시 교체 후 등록할 것.
+
 ### 4-1. JWT_SECRET_KEY 실 값으로 교체
 
 ```bash
