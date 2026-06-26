@@ -6,7 +6,9 @@
 
 ## 1. Goal / 목표
 
-Add OpenAI **GPT-5.4** and **GPT-5.5** to the Bedrock LLM Monitor as a **third provider call-path** (alongside boto3-Bedrock and Anthropic-CP). The models are served through the **Bedrock Mantle OpenAI-compatible endpoint** (`/openai/v1`, OpenAI Chat Completions shape, Bedrock long-term API key as bearer token).
+Add OpenAI **GPT-5.4** and **GPT-5.5** to the Bedrock LLM Monitor as a **third provider call-path** (alongside boto3-Bedrock and Anthropic-CP). The models are served through the **Bedrock Mantle OpenAI-compatible endpoint** (`/openai/v1`, Bedrock long-term API key as bearer token).
+
+> **Correction (post-implementation, 2026-06-26):** this design assumed the OpenAI **Chat Completions** API, but live verification showed gpt-5.4/5.5 reject `/v1/chat/completions` (`400 validation_error`) — they require the **Responses API** (`client.responses.create`, `max_output_tokens`, `response.output_text.delta` streaming, usage on `response.completed`). The shipped code uses the Responses API; the Chat-Completions snippets below are superseded. See ADR-019.
 
 ## 2. Locked decisions / 확정 결정
 
