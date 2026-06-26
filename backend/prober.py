@@ -148,6 +148,89 @@ def _is_reasoning_model(model_id: str) -> bool:
     return any(p in model_id for p in _REASONING_MODEL_PATTERNS)
 
 
+# =====================================================================
+# OpenAI GPT via Bedrock Mantle (OpenAI-compatible /openai/v1) — Path 4.
+# model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-5.4).
+# region이 채널 식별자 (같은 model_id를 두 리전에 호출). bearer 토큰 인증.
+# =====================================================================
+_OPENAI_REGION_ENV: dict[str, str] = {
+    "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
+    "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
+}
+
+# OpenAI finish_reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
+_OPENAI_FINISH_REASON_MAP: dict[str, str] = {
+    "stop": "end_turn",
+    "length": "max_tokens",
+    "tool_calls": "tool_use",
+    "content_filter": "content_filtered",
+}
+
+_openai_client_cache: dict[str, object] = {}
+
+
+def _is_openai_direct(model_id: str) -> bool:
+    return model_id.startswith("openai:")
+
+
+def _openai_parts(model_id: str) -> tuple[str, str]:
+    """openai:<region>:<actual_id> → (region, actual_id)."""
+    _, region, actual_id = model_id.split(":", 2)
+    return region, actual_id
+
+
+def _openai_base_url(region: str) -> str:
+    env_name = _OPENAI_REGION_ENV.get(region)
+    if not env_name:
+        raise ValueError(f"Unknown OpenAI region: {region}")
+    url = os.environ.get(env_name)
+    if not url:
+        raise RuntimeError(f"{env_name} not set")
+    return url
+
+
+def _get_openai_client(base_url: str):
+    """Lazy-init OpenAI SDK client per base_url. Bedrock Mantle endpoint + bearer key."""
+    if base_url not in _openai_client_cache:
+        from openai import OpenAI
+        _openai_client_cache[base_url] = OpenAI(
+            api_key=os.environ["OPENAI_API_KEY"],
+            base_url=base_url,
+        )
+    return _openai_client_cache[base_url]
+
+
+def _map_openai_finish_reason(reason: str | None) -> str | None:
+    if reason is None:
+        return None
+    return _OPENAI_FINISH_REASON_MAP.get(reason, reason)
+
+
+def _register_openai_models() -> None:
+    """OPENAI_API_KEY + region별 base_url + model-id env가 있으면 4개 채널 등록.
+
+    누락 시 조용히 skip (해당 채널만 미등록 — 나머지 정상).
+    """
+    api_key = os.environ.get("OPENAI_API_KEY")
+    if not api_key:
+        logger.info("OPENAI_API_KEY not set - skipping OpenAI (Bedrock Mantle) models")
+        return
+    specs = [
+        (os.environ.get("BEDROCK_OPENAI_GPT_54_MODEL_ID"), "GPT 5.4"),
+        (os.environ.get("BEDROCK_OPENAI_GPT_55_MODEL_ID"), "GPT 5.5"),
+    ]
+    for actual_id, family in specs:
+        if not actual_id:
+            continue
+        for region, env_name in _OPENAI_REGION_ENV.items():
+            if not os.environ.get(env_name):
+                continue
+            key = f"openai:{region}:{actual_id}"
+            label = f"OpenAI {family} ({region})"
+            AVAILABLE_MODELS[key] = label
+            logger.info("Registered OpenAI model: %s -> %s", key, label)
+
+
 def _get_region_for_model(model_id: str) -> str:
     """Derive the AWS region from a model ID prefix."""
     prefix = model_id.split(".")[0]

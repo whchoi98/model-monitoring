@@ -115,8 +115,9 @@ async def lifespan(app: FastAPI):
 
     # Anthropic 직접 API 모델 자동 발견 (ANTHROPIC_API_KEY 설정 시에만 동작)
     try:
-        from prober import _discover_anthropic_models
+        from prober import _discover_anthropic_models, _register_openai_models
         _discover_anthropic_models()
+        _register_openai_models()
     except Exception:
         logger.exception("Anthropic model discovery failed (non-fatal)")
 
