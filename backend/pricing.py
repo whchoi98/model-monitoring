@@ -16,6 +16,7 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     "claude-opus-4-7": {"input": 15.0, "output": 75.0},
     "claude-opus-4-6-v1": {"input": 15.0, "output": 75.0},
     "claude-opus-4-6": {"input": 15.0, "output": 75.0},
+    "claude-sonnet-5": {"input": 2.0, "output": 10.0},
     "claude-sonnet-4-6": {"input": 3.0, "output": 15.0},
     "claude-haiku-4-5-20251001-v1:0": {"input": 1.0, "output": 5.0},
     "claude-haiku-4-5-20251001": {"input": 1.0, "output": 5.0},

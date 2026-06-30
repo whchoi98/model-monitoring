@@ -17,6 +17,8 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Opus 4.7 (Global)": "bg-rose-500",
   "Claude Opus 4.6": "bg-purple-600",
   "Claude Opus 4.6 (Global)": "bg-purple-500",
+  "Claude Sonnet 5": "bg-indigo-600",
+  "Claude Sonnet 5 (Global)": "bg-indigo-500",
   "Claude Sonnet 4.6": "bg-blue-600",
   "Claude Sonnet 4.6 (Global)": "bg-blue-500",
   "Claude Haiku 4.5": "bg-cyan-600",
@@ -49,6 +51,9 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
   }
   if (modelId.includes("opus-4-6")) {
     return modelId.startsWith("global") ? "Claude Opus 4.6 (Global)" : "Claude Opus 4.6";
+  }
+  if (modelId.includes("sonnet-5")) {
+    return modelId.startsWith("global") ? "Claude Sonnet 5 (Global)" : "Claude Sonnet 5";
   }
   if (modelId.includes("sonnet-4-6")) {
     return modelId.startsWith("global") ? "Claude Sonnet 4.6 (Global)" : "Claude Sonnet 4.6";

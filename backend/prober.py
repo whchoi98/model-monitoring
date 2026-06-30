@@ -31,6 +31,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
+    "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
@@ -39,6 +40,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
+    "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
     "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
     # Opus 4.5, Sonnet 4.5는 사용자 요청으로 모니터링 대상에서 제외 (2026-05-20).
@@ -54,6 +56,7 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
     ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
+    ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
     ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
     ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
 ]
@@ -140,7 +143,7 @@ def _anthropic_actual_id(model_id: str) -> str:
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
-_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "fable-5")
+_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "fable-5", "sonnet-5")
 
 
 def _is_reasoning_model(model_id: str) -> bool:

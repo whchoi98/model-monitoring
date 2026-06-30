@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 23 model cards + trend)
+                ├── /             — Dashboard (status + 26 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -35,7 +35,7 @@ Internal ALB
                 └── /analysis     — Stop reason 분포 + Output length 분포
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 23 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 26 models × 1 workload preset (round-robin 6 categories)
   └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle)
@@ -54,7 +54,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (23개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (26개), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -78,7 +78,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 23 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 26 cards + trend + workload filter)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx
@@ -86,8 +86,8 @@ model-monitoring/
 │   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 23 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 23개 (13 Bedrock + 5 Anthropic CP + 5 OpenAI)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 26 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 26개 (15 Bedrock + 6 Anthropic CP + 5 OpenAI)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -99,7 +99,7 @@ model-monitoring/
 │   │   └── lib/
 │   │       ├── api.ts                   # 모든 fetch 함수 (auth token mgmt)
 │   │       ├── i18n.ts + i18n-context.tsx  # KO/EN
-│   │       ├── sortModels.ts            # FAMILY_ORDER 9 entries, groupByFamily
+│   │       ├── sortModels.ts            # FAMILY_ORDER 10 entries, groupByFamily
 │   │       ├── pricing.ts               # backend/pricing.py mirror
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / middleware.ts
@@ -143,7 +143,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (23 total) / 모니터링 대상 모델 (총 23개)
+## Monitored Models (26 total) / 모니터링 대상 모델 (총 26개)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
@@ -151,6 +151,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | Claude Opus 4.8 | ✅ | ✅ | ✅ |
 | Claude Opus 4.7 | ✅ | ✅ | ✅ |
 | Claude Opus 4.6 | ✅ | ✅ | — |
+| Claude Sonnet 5 | ✅ | ✅ | ✅ |
 | Claude Sonnet 4.6 | ✅ | ✅ | ✅ |
 | Claude Haiku 4.5 | ✅ | ✅ | ✅ |
 | Amazon Nova 2.0 Lite | — | ✅ | — |

@@ -20,6 +20,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   { id: "global.anthropic.claude-opus-4-8", label: "Bedrock Claude Opus 4.8 (Global)" },
   { id: "global.anthropic.claude-opus-4-7", label: "Bedrock Claude Opus 4.7 (Global)" },
   { id: "global.anthropic.claude-opus-4-6-v1", label: "Bedrock Claude Opus 4.6 (Global)" },
+  { id: "global.anthropic.claude-sonnet-5", label: "Bedrock Claude Sonnet 5 (Global)" },
   { id: "global.anthropic.claude-sonnet-4-6", label: "Bedrock Claude Sonnet 4.6 (Global)" },
   { id: "global.anthropic.claude-haiku-4-5-20251001-v1:0", label: "Bedrock Claude Haiku 4.5 (Global)" },
   // Bedrock US Anthropic
@@ -27,6 +28,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   { id: "us.anthropic.claude-opus-4-8", label: "Bedrock Claude Opus 4.8 (US)" },
   { id: "us.anthropic.claude-opus-4-7", label: "Bedrock Claude Opus 4.7 (US)" },
   { id: "us.anthropic.claude-opus-4-6-v1", label: "Bedrock Claude Opus 4.6 (US)" },
+  { id: "us.anthropic.claude-sonnet-5", label: "Bedrock Claude Sonnet 5 (US)" },
   { id: "us.anthropic.claude-sonnet-4-6", label: "Bedrock Claude Sonnet 4.6 (US)" },
   { id: "us.anthropic.claude-haiku-4-5-20251001-v1:0", label: "Bedrock Claude Haiku 4.5 (US)" },
   // Bedrock Nova
