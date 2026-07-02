@@ -30,6 +30,22 @@ def test_openai_base_url(monkeypatch):
     assert prober._openai_base_url("us-west-2") == "https://w2/openai/v1"
 
 
+def test_openai_parts_1p():
+    region, actual = prober._openai_parts("openai:1p:gpt-5.4")
+    assert region == "1p"
+    assert actual == "gpt-5.4"
+
+
+def test_openai_1p_base_url_default(monkeypatch):
+    monkeypatch.delenv("OPENAI_1P_BASE_URL", raising=False)
+    assert prober._openai_base_url("1p") == "https://api.openai.com/v1"
+
+
+def test_openai_1p_base_url_override(monkeypatch):
+    monkeypatch.setenv("OPENAI_1P_BASE_URL", "https://proxy.example/v1")
+    assert prober._openai_base_url("1p") == "https://proxy.example/v1"
+
+
 def test_openai_stop_reason():
     assert prober._openai_stop_reason("completed", None) == "end_turn"
     assert prober._openai_stop_reason("incomplete", "max_output_tokens") == "max_tokens"
@@ -40,6 +56,7 @@ def test_openai_stop_reason():
 
 def test_register_openai_models_per_region_availability(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)  # isolate Mantle tests from 1P path
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.setenv("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1")
@@ -62,6 +79,7 @@ def test_register_openai_models_per_region_availability(monkeypatch):
 
 def test_register_openai_models_skips_without_key(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)  # isolate Mantle tests from 1P path
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     before = len(prober.AVAILABLE_MODELS)
     prober._register_openai_models()
@@ -70,6 +88,7 @@ def test_register_openai_models_skips_without_key(monkeypatch):
 
 def test_register_openai_models_partial_skip(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)  # isolate Mantle tests from 1P path
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.delenv("OPENAI_US_EAST_2_BASE_URL", raising=False)
@@ -79,6 +98,29 @@ def test_register_openai_models_partial_skip(monkeypatch):
     keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
     # gpt-5.5 model-id absent → skipped; us-east-2 base-url absent → skipped.
     assert keys == ["openai:us-east-1:openai.gpt-5.4"]
+
+
+def test_register_openai_1p_models(monkeypatch):
+    """1P는 Mantle 키(OPENAI_API_KEY) 없이도 OPENAI_1P_API_KEY만으로 독립 등록."""
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # Mantle off — 1P is independent
+    monkeypatch.setenv("OPENAI_1P_API_KEY", "sk-proj-fake")
+    monkeypatch.setenv("OPENAI_1P_GPT_54_MODEL_ID", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_1P_GPT_55_MODEL_ID", "gpt-5.5")
+    prober._register_openai_models()
+    keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:1p:"))
+    assert keys == ["openai:1p:gpt-5.4", "openai:1p:gpt-5.5"]
+    assert prober.AVAILABLE_MODELS["openai:1p:gpt-5.4"] == "OpenAI GPT 5.4 (1P)"
+    assert prober.AVAILABLE_MODELS["openai:1p:gpt-5.5"] == "OpenAI GPT 5.5 (1P)"
+
+
+def test_register_openai_1p_skips_without_key(monkeypatch):
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_API_KEY", raising=False)
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_1P_GPT_54_MODEL_ID", "gpt-5.4")  # id present but no key → skip
+    prober._register_openai_models()
+    assert not [k for k in prober.AVAILABLE_MODELS if k.startswith("openai:1p:")]
 
 
 # --- Responses API event mocks -------------------------------------------
@@ -217,6 +259,32 @@ def test_openai_probe_incomplete_maps_max_tokens(monkeypatch):
     assert result["input_tokens"] == 10
     assert result["output_tokens"] == 64
     assert result["stop_reason"] == "max_tokens"
+
+
+def test_openai_1p_probe_streams(monkeypatch):
+    """1P key (openai:1p:*) — base_url이 api.openai.com으로 resolve되고 정상 프로브."""
+    events = [
+        _Ev("response.output_text.delta", delta="ok"),
+        _Ev("response.completed", response=_Resp(3, 1, "completed")),
+    ]
+    _install_fake_openai(monkeypatch, events)
+    q: Queue = Queue()
+    prober._probe_single_model(
+        client=None,
+        model_id="openai:1p:gpt-5.5",
+        model_name="OpenAI GPT 5.5 (1P)",
+        prompt="hi",
+        temperature=0.1,
+        max_tokens=64,
+        iteration=1,
+        event_queue=q,
+        run_id=1,
+        db=_FakeSession(),
+    )
+    result = next(b for t, b in (_parse(e) for e in _drain(q)) if t == "result")
+    assert result["status"] == "success"
+    assert result["output_text"] == "ok"
+    assert result["stop_reason"] == "end_turn"
 
 
 def test_openai_compare_emits_result(monkeypatch):

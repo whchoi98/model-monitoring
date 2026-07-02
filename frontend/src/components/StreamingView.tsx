@@ -26,9 +26,11 @@ const MODEL_COLORS: Record<string, string> = {
   "Nova 2.0 Lite": "bg-amber-600",
   "GPT 5.5 (us-east-1)": "bg-emerald-600",
   "GPT 5.5 (us-east-2)": "bg-emerald-700",
+  "GPT 5.5 (1P)": "bg-emerald-800",
   "GPT 5.4 (us-east-1)": "bg-green-600",
   "GPT 5.4 (us-east-2)": "bg-green-700",
   "GPT 5.4 (us-west-2)": "bg-green-800",
+  "GPT 5.4 (1P)": "bg-green-500",
 };
 
 function getModelColor(name: string): string {
@@ -63,8 +65,9 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
   }
   if (modelId.includes("nova")) return "Nova 2.0 Lite";
   if (modelId.startsWith("openai:")) {
-    // openai:<region>:<actual_id> — region을 직접 파싱(any region: us-east-1/2, us-west-2, ...).
-    const region = modelId.split(":")[1] || "";
+    // openai:<region>:<actual_id> — region 직접 파싱. 1P direct는 pseudo-region "1p" → "1P" 표기.
+    const rawRegion = modelId.split(":")[1] || "";
+    const region = rawRegion === "1p" ? "1P" : rawRegion;
     const fam = modelId.includes("gpt-5.5") ? "GPT 5.5" : modelId.includes("gpt-5.4") ? "GPT 5.4" : "GPT";
     return `${fam} (${region})`;
   }

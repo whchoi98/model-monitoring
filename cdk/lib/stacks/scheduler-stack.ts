@@ -125,6 +125,13 @@ export class SchedulerStack extends cdk.Stack {
       { parameterName: "/bedrock-monitor/openai-api-key" },
     );
 
+    // OpenAI 1P direct / api.openai.com (Path 5) - 별도 OpenAI platform 키. 없어도 동작.
+    const openai1pApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAi1pApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-1p-api-key" },
+    );
+
     // ---------------------------------------------------------------------
     // 4) TaskDefinition 빌더 - backend 이미지 + command override 패턴.
     // ---------------------------------------------------------------------
@@ -163,6 +170,9 @@ export class SchedulerStack extends cdk.Stack {
           OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
           BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
           BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
+          // 1P direct — native ids. base_url은 코드 기본값(api.openai.com) 사용.
+          OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
+          OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
         },
         secrets: {
           DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -175,6 +185,7 @@ export class SchedulerStack extends cdk.Stack {
           ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
           ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
           OPENAI_API_KEY: ecs.Secret.fromSsmParameter(openaiApiKeyParam),
+          OPENAI_1P_API_KEY: ecs.Secret.fromSsmParameter(openai1pApiKeyParam),
         },
         logging: ecs.LogDrivers.awsLogs({
           logGroup,

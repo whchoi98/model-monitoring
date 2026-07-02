@@ -169,6 +169,20 @@ _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1", "us-east-2")),
 ]
 
+# =====================================================================
+# OpenAI GPT 1P direct (api.openai.com) — Path 5.
+# Mantle와 별개 자격증명(OpenAI *platform* 키 sk-proj-…, OPENAI_1P_API_KEY)·리전 개념 없음.
+# key 스킴: "openai:1p:<native_id>" (예: openai:1p:gpt-5.4). native id는 접두사 없음(gpt-5.4).
+# base_url은 항상 api.openai.com (OPENAI_1P_BASE_URL로 override 가능).
+# =====================================================================
+_OPENAI_1P_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+# (model-id env var, display family) — 리전 없음.
+_OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = [
+    ("OPENAI_1P_GPT_54_MODEL_ID", "GPT 5.4"),
+    ("OPENAI_1P_GPT_55_MODEL_ID", "GPT 5.5"),
+]
+
 # OpenAI Responses API의 incomplete reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
 # gpt-5.x는 /chat/completions 미지원 → /responses 사용. finish_reason 대신 status/incomplete_details.
 _OPENAI_INCOMPLETE_MAP: dict[str, str] = {
@@ -189,7 +203,14 @@ def _openai_parts(model_id: str) -> tuple[str, str]:
     return region, actual_id
 
 
+def _openai_1p_base_url() -> str:
+    """1P direct 엔드포인트. OPENAI_1P_BASE_URL로 override 가능(기본 api.openai.com)."""
+    return os.environ.get("OPENAI_1P_BASE_URL") or _OPENAI_1P_DEFAULT_BASE_URL
+
+
 def _openai_base_url(region: str) -> str:
+    if region == "1p":
+        return _openai_1p_base_url()
     env_name = _OPENAI_REGION_ENV.get(region)
     if not env_name:
         raise ValueError(f"Unknown OpenAI region: {region}")
@@ -200,11 +221,20 @@ def _openai_base_url(region: str) -> str:
 
 
 def _get_openai_client(base_url: str):
-    """Lazy-init OpenAI SDK client per base_url. Bedrock Mantle endpoint + bearer key."""
+    """Lazy-init OpenAI SDK client per base_url.
+
+    base_url이 1P(api.openai.com)면 OpenAI platform 키(OPENAI_1P_API_KEY)를,
+    아니면 Bedrock Mantle bearer 키(OPENAI_API_KEY)를 사용한다. 두 자격증명은 호환되지 않음.
+    """
     if base_url not in _openai_client_cache:
         from openai import OpenAI
+        api_key = (
+            os.environ["OPENAI_1P_API_KEY"]
+            if base_url == _openai_1p_base_url()
+            else os.environ["OPENAI_API_KEY"]
+        )
         _openai_client_cache[base_url] = OpenAI(
-            api_key=os.environ["OPENAI_API_KEY"],
+            api_key=api_key,
             base_url=base_url,
         )
     return _openai_client_cache[base_url]
@@ -220,27 +250,43 @@ def _openai_stop_reason(status: str | None, incomplete_reason: str | None) -> st
 
 
 def _register_openai_models() -> None:
-    """OPENAI_API_KEY + 모델별 가용 리전(base_url env 존재)에 한해 등록.
+    """OpenAI 채널 등록 — Bedrock Mantle(Path 4) + 1P direct(Path 5)를 독립적으로 gate.
 
-    _OPENAI_MODEL_SPECS가 모델별 제공 리전을 정의 (gpt-5.5는 us-west-2 미제공).
-    누락 시 조용히 skip (해당 채널만 미등록 — 나머지 정상).
+    Mantle: OPENAI_API_KEY(bearer) + _OPENAI_MODEL_SPECS(모델별 가용 리전, gpt-5.5는 us-west-2 미제공).
+    1P: OPENAI_1P_API_KEY(platform 키) + _OPENAI_1P_MODEL_SPECS(리전 없음, key "openai:1p:<native_id>").
+    한쪽 키만 있어도 그쪽만 등록. 누락 시 조용히 skip (해당 채널만 미등록 — 나머지 정상).
     """
-    api_key = os.environ.get("OPENAI_API_KEY")
-    if not api_key:
-        logger.info("OPENAI_API_KEY not set - skipping OpenAI (Bedrock Mantle) models")
-        return
-    for env_var, family, regions in _OPENAI_MODEL_SPECS:
-        actual_id = os.environ.get(env_var)
-        if not actual_id:
-            continue
-        for region in regions:
-            env_name = _OPENAI_REGION_ENV.get(region)
-            if not env_name or not os.environ.get(env_name):
+    # --- Bedrock Mantle (Path 4) ---
+    mantle_key = os.environ.get("OPENAI_API_KEY")
+    if mantle_key:
+        for env_var, family, regions in _OPENAI_MODEL_SPECS:
+            actual_id = os.environ.get(env_var)
+            if not actual_id:
                 continue
-            key = f"openai:{region}:{actual_id}"
-            label = f"OpenAI {family} ({region})"
+            for region in regions:
+                env_name = _OPENAI_REGION_ENV.get(region)
+                if not env_name or not os.environ.get(env_name):
+                    continue
+                key = f"openai:{region}:{actual_id}"
+                label = f"OpenAI {family} ({region})"
+                AVAILABLE_MODELS[key] = label
+                logger.info("Registered OpenAI model: %s -> %s", key, label)
+    else:
+        logger.info("OPENAI_API_KEY not set - skipping OpenAI (Bedrock Mantle) models")
+
+    # --- 1P direct / api.openai.com (Path 5) ---
+    oa_1p_key = os.environ.get("OPENAI_1P_API_KEY")
+    if oa_1p_key:
+        for env_var, family in _OPENAI_1P_MODEL_SPECS:
+            actual_id = os.environ.get(env_var)
+            if not actual_id:
+                continue
+            key = f"openai:1p:{actual_id}"
+            label = f"OpenAI {family} (1P)"
             AVAILABLE_MODELS[key] = label
-            logger.info("Registered OpenAI model: %s -> %s", key, label)
+            logger.info("Registered OpenAI 1P model: %s -> %s", key, label)
+    else:
+        logger.info("OPENAI_1P_API_KEY not set - skipping OpenAI 1P (direct) models")
 
 
 def _openai_stream_events(client, actual_id: str, prompt: str, max_tokens: int):

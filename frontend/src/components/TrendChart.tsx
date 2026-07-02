@@ -46,9 +46,11 @@ const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
   "OpenAI GPT 5.5 (us-east-1)": "#10a37f",
   "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
+  "OpenAI GPT 5.5 (1P)": "#047857",
   "OpenAI GPT 5.4 (us-east-1)": "#34d399",
   "OpenAI GPT 5.4 (us-east-2)": "#059669",
   "OpenAI GPT 5.4 (us-west-2)": "#10b981",
+  "OpenAI GPT 5.4 (1P)": "#6ee7b7",
 };
 
 const FAMILY_FALLBACK: [string, string][] = [

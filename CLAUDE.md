@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 26 model cards + trend)
+                ├── /             — Dashboard (status + 28 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -35,10 +35,10 @@ Internal ALB
                 └── /analysis     — Stop reason 분포 + Output length 분포
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 26 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 28 models × 1 workload preset (round-robin 6 categories)
   └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
 
-Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle)
+Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
 ```
 
@@ -54,7 +54,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP), AVAILABLE_MODELS (26개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (28개), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -78,7 +78,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 26 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 28 cards + trend + workload filter)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx
@@ -86,8 +86,8 @@ model-monitoring/
 │   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 26 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 26개 (15 Bedrock + 6 Anthropic CP + 5 OpenAI)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 28 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 28개 (15 Bedrock + 6 Anthropic CP + 7 OpenAI)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -143,7 +143,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (26 total) / 모니터링 대상 모델 (총 26개)
+## Monitored Models (28 total) / 모니터링 대상 모델 (총 28개)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
@@ -158,16 +158,17 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 **OpenAI (Bedrock Mantle, in-region)** — 신규 v2.4.0:
 
-| Family | us-east-1 | us-east-2 | us-west-2 |
-|--------|-----------|-----------|-----------|
-| GPT 5.5 | ✅ | ✅ | — |
-| GPT 5.4 | ✅ | ✅ | ✅ |
+| Family | us-east-1 | us-east-2 | us-west-2 | 1P direct |
+|--------|-----------|-----------|-----------|-----------|
+| GPT 5.5 | ✅ | ✅ | — | ✅ (v2.6.0) |
+| GPT 5.4 | ✅ | ✅ | ✅ | ✅ (v2.6.0) |
 
-model_id 키: `openai:<region>:openai.gpt-5.x`. 라벨: `OpenAI GPT 5.x (<region>)`. CP/Bedrock과 다른 3rd provider path (OpenAI-compatible `/openai/v1`, bearer 토큰). 자세히는 ADR-019.
+- **Mantle (Path 4)** model_id 키: `openai:<region>:openai.gpt-5.x`. 라벨: `OpenAI GPT 5.x (<region>)`. OpenAI-compatible `/openai/v1` + Bedrock bearer 토큰(`OPENAI_API_KEY`, `ABSK-…`). 자세히는 ADR-019.
+- **1P direct (Path 5, v2.6.0)** model_id 키: `openai:1p:gpt-5.x`. 라벨: `OpenAI GPT 5.x (1P)`. `https://api.openai.com/v1` 직접 호출 + **OpenAI platform 키**(`OPENAI_1P_API_KEY`, `sk-proj-…` — Mantle bearer와 호환 불가). native id(`gpt-5.x`, 접두사 없음). 리전 개념 없음(글로벌 라우팅). env: `OPENAI_1P_API_KEY`(SSM `/bedrock-monitor/openai-1p-api-key`), `OPENAI_1P_GPT_54/55_MODEL_ID`, `OPENAI_1P_BASE_URL`(선택). 자세히는 ADR-020.
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 
-**라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"` prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Bedrock Global → Bedrock US → OpenAI** (`channelRank` 함수).
+**라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"`(Mantle) 또는 `"OpenAI <family> (1P)"`(1P direct) prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Bedrock Global → Bedrock US → OpenAI** (`channelRank` 함수).
 
 ---
 

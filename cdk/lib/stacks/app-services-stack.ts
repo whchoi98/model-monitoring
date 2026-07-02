@@ -124,6 +124,13 @@ export class AppServicesStack extends cdk.Stack {
       { parameterName: "/bedrock-monitor/openai-api-key" },
     );
 
+    // OpenAI 1P direct / api.openai.com (Path 5) - 별도 OpenAI platform 키(sk-proj-…). 없어도 동작.
+    const openai1pApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAi1pApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-1p-api-key" },
+    );
+
     const backendSecrets: Record<string, ecs.Secret> = {
       // DATABASE_URL은 backend/database.py가 DB_USER/PASSWORD/HOST/PORT/NAME 으로 직접 조립한다.
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -137,6 +144,7 @@ export class AppServicesStack extends cdk.Stack {
       ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
       ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
       OPENAI_API_KEY: ecs.Secret.fromSsmParameter(openaiApiKeyParam),
+      OPENAI_1P_API_KEY: ecs.Secret.fromSsmParameter(openai1pApiKeyParam),
     };
 
     const backendEnv: Record<string, string> = {
@@ -147,6 +155,9 @@ export class AppServicesStack extends cdk.Stack {
       OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
       BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
       BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
+      // 1P direct — native ids (접두사 없음). base_url은 코드 기본값(api.openai.com) 사용.
+      OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
+      OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
     };
 
     // ---------------------------------------------------------------------

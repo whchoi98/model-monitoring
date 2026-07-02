@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 26 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 모델 프로빙 → RDS
    └─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
 ```
 
@@ -123,6 +123,7 @@ EventBridge Scheduler
 | 017 | 모델 catalogue 축소 (13 → 12) |
 | 018 | ECR repository 교체 (`-v2`, Fargate image cache silent bug 우회) |
 | 019 | OpenAI/Bedrock-Mantle provider path 추가 (gpt-5.4, gpt-5.5, 4 channels) |
+| 020 | OpenAI 1P direct (api.openai.com) provider path 추가 (gpt-5.4/5.5, 2 channels) |
 
 ### 운영 / Operations
 
@@ -150,7 +151,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 26 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 models → RDS
    └─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
 ```
 
