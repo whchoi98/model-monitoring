@@ -16,6 +16,57 @@ from schemas import ProbeResultResponse
 router = APIRouter(prefix="/api/auto-probe", tags=["auto-probe"])
 
 
+class _Bucket:
+    """모델×시각버킷 하나의 평균 집계 결과 (trend 응답 row와 동일 속성)."""
+
+    __slots__ = ("model_id", "model_name", "timestamp", "ttft_ms",
+                 "total_latency_ms", "tps", "status", "category")
+
+    def __init__(self, model_id, model_name, timestamp, ttft_ms,
+                 total_latency_ms, tps, status, category):
+        self.model_id = model_id
+        self.model_name = model_name
+        self.timestamp = timestamp
+        self.ttft_ms = ttft_ms
+        self.total_latency_ms = total_latency_ms
+        self.tps = tps
+        self.status = status
+        self.category = category
+
+
+def _downsample_hourly(rows):
+    """(model_name, 시각 정시 버킷)별 metric 평균. null metric은 평균에서 제외.
+
+    status는 버킷 내 성공이 하나라도 있으면 success (차트는 metric null 여부로 결측 표현).
+    category는 버킷 내 첫 값 — 카테고리 필터 지정 시엔 모두 동일, 미지정 시 혼합 대표값.
+    """
+    groups: dict[tuple, list] = {}
+    for r in rows:
+        if r.timestamp is None:
+            continue
+        bucket_ts = r.timestamp.replace(minute=0, second=0, microsecond=0)
+        groups.setdefault((r.model_name, bucket_ts), []).append(r)
+
+    def mean(values):
+        vals = [v for v in values if v is not None]
+        return (sum(vals) / len(vals)) if vals else None
+
+    out = []
+    for (model_name, bucket_ts), items in groups.items():
+        out.append(_Bucket(
+            model_id=items[0].model_id,
+            model_name=model_name,
+            timestamp=bucket_ts,
+            ttft_ms=mean(i.ttft_ms for i in items),
+            total_latency_ms=mean(i.total_latency_ms for i in items),
+            tps=mean(i.tps for i in items),
+            status="success" if any(i.status == "success" for i in items) else "error",
+            category=items[0].category,
+        ))
+    out.sort(key=lambda b: b.timestamp)
+    return out
+
+
 @router.get("/status")
 def get_status(db: Session = Depends(get_db)):
     """Return current auto-prober status.
@@ -133,6 +184,12 @@ def get_trend(
     if category:
         q = q.filter(ProbeResult.category == category)
     rows = q.order_by(ProbeResult.timestamp).all()
+
+    # 24h 초과 조회는 시간 버킷 평균으로 다운샘플링 — 168h 원본은 56k행/13MB JSON이라
+    # 전송·Recharts 렌더링 모두 마비. 5분 해상도는 24h 이하에서만 유지한다.
+    # (Python 집계: date_trunc 등 PG 전용 SQL을 피해 sqlite 테스트와 호환, 수만 행 수준에선 ms 단위.)
+    if hours > 24:
+        rows = _downsample_hourly(rows)
 
     return [
         {
