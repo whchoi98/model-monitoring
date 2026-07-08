@@ -110,24 +110,29 @@ def get_trend(
     """
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
-    auto_runs = (
-        db.query(ProbeRun)
+    # 성능 (2026-07-08): ORM 전체 컬럼 로드(output_text 응답 전문 포함) + run_id IN 리스트가
+    # hours=24 기준 1.87MB DB I/O·수 초 지연을 유발 → 응답에 쓰는 컬럼만 SELECT + JOIN.
+    q = (
+        db.query(
+            ProbeResult.model_id,
+            ProbeResult.model_name,
+            ProbeResult.timestamp,
+            ProbeResult.ttft_ms,
+            ProbeResult.total_latency_ms,
+            ProbeResult.tps,
+            ProbeResult.status,
+            ProbeResult.category,
+        )
+        .join(ProbeRun, ProbeResult.run_id == ProbeRun.id)
         .filter(
             ProbeRun.is_auto == 1,
             ProbeRun.status == "completed",
             ProbeRun.created_at >= cutoff,
         )
-        .all()
     )
-    if not auto_runs:
-        return []
-
-    run_ids = [r.id for r in auto_runs]
-
-    q = db.query(ProbeResult).filter(ProbeResult.run_id.in_(run_ids))
     if category:
         q = q.filter(ProbeResult.category == category)
-    results = q.order_by(ProbeResult.timestamp).all()
+    rows = q.order_by(ProbeResult.timestamp).all()
 
     return [
         {
@@ -140,7 +145,7 @@ def get_trend(
             "status": r.status,
             "category": r.category,
         }
-        for r in results
+        for r in rows
     ]
 
 
