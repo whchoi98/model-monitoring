@@ -1,6 +1,8 @@
 "use client";
 
+import { memo, useMemo } from "react";
 import { TrendPoint } from "@/lib/types";
+import { pivotTrend } from "@/lib/pivotTrend";
 import {
   LineChart,
   Line,
@@ -80,15 +82,22 @@ function formatUnit(value: number, metric: string): string {
   return `${value.toFixed(0)} ms`;
 }
 
-export default function TrendChart({ data, metric, title, selectedModels }: Props) {
+function TrendChart({ data, metric, title, selectedModels }: Props) {
+  const hasSelection = selectedModels && selectedModels.size > 0;
+
+  // 피벗은 O(N) 단일 패스 (lib/pivotTrend). 칩 토글·자동새로고침마다 재실행되므로 useMemo 필수.
+  const { modelNames, chartData } = useMemo(
+    () => pivotTrend(data, metric, selectedModels),
+    [data, metric, selectedModels],
+  );
+
+  // 포인트가 많으면 dot SVG 노드(포인트당 1개)가 렌더링을 지배 — 700개 초과 시 라인만 그린다.
+  const totalPoints = chartData.length * modelNames.length;
+  const showDots = totalPoints <= 700;
+
   if (data.length === 0) return null;
 
-  const hasSelection = selectedModels && selectedModels.size > 0;
-  const filtered = hasSelection
-    ? data.filter((d) => selectedModels!.has(d.model_name))
-    : data;
-
-  if (filtered.length === 0) {
+  if (chartData.length === 0) {
     const names = Array.from(selectedModels ?? []).join(", ");
     return (
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
@@ -99,21 +108,6 @@ export default function TrendChart({ data, metric, title, selectedModels }: Prop
       </div>
     );
   }
-
-  const modelNames = Array.from(new Set(filtered.map((d) => d.model_name)));
-  const timestamps = Array.from(new Set(filtered.map((d) => d.timestamp))).sort();
-
-  const chartData = timestamps.map((ts) => {
-    const point: Record<string, string | number | null> = {
-      timestamp: ts,
-      time: new Date(ts).toLocaleTimeString("ko-KR", { hour: "2-digit", minute: "2-digit" }),
-    };
-    for (const name of modelNames) {
-      const match = filtered.find((d) => d.timestamp === ts && d.model_name === name);
-      point[name] = match ? match[metric] : null;
-    }
-    return point;
-  });
 
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
@@ -165,9 +159,10 @@ export default function TrendChart({ data, metric, title, selectedModels }: Prop
               dataKey={name}
               stroke={getColor(name)}
               strokeWidth={2}
-              dot={{ r: 3 }}
+              dot={showDots ? { r: 3 } : false}
               activeDot={{ r: 5 }}
               connectNulls
+              isAnimationActive={false}
             />
           ))}
         </LineChart>
@@ -175,3 +170,6 @@ export default function TrendChart({ data, metric, title, selectedModels }: Prop
     </div>
   );
 }
+
+// data/selectedModels 참조가 같으면 재렌더 스킵 (부모의 무관한 state 변경 차단).
+export default memo(TrendChart);
