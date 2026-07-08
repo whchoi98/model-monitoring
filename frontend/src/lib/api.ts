@@ -180,23 +180,30 @@ export async function optimizePrompt(data: {
 
 // --- Auto-probe API ---
 
-export async function fetchAutoStatus(): Promise<AutoProbeStatus> {
-  const res = await fetch(`${BASE}/api/auto-probe/status`);
+export async function fetchAutoStatus(signal?: AbortSignal): Promise<AutoProbeStatus> {
+  const res = await fetch(`${BASE}/api/auto-probe/status`, { signal });
   if (!res.ok) throw new Error(`Failed to fetch auto-probe status: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchAutoLatest(category?: string | null): Promise<ProbeResult[]> {
+export async function fetchAutoLatest(
+  category?: string | null,
+  signal?: AbortSignal,
+): Promise<ProbeResult[]> {
   const qs = category ? `?category=${encodeURIComponent(category)}` : "";
-  const res = await fetch(`${BASE}/api/auto-probe/latest${qs}`);
+  const res = await fetch(`${BASE}/api/auto-probe/latest${qs}`, { signal });
   if (!res.ok) throw new Error(`Failed to fetch auto-probe latest: ${res.statusText}`);
   return res.json();
 }
 
-export async function fetchAutoTrend(hours: number = 24, category?: string | null): Promise<TrendPoint[]> {
+export async function fetchAutoTrend(
+  hours: number = 24,
+  category?: string | null,
+  signal?: AbortSignal,
+): Promise<TrendPoint[]> {
   const sp = new URLSearchParams({ hours: String(hours) });
   if (category) sp.set("category", category);
-  const res = await fetch(`${BASE}/api/auto-probe/trend?${sp.toString()}`);
+  const res = await fetch(`${BASE}/api/auto-probe/trend?${sp.toString()}`, { signal });
   if (!res.ok) throw new Error(`Failed to fetch auto-probe trend: ${res.statusText}`);
   return res.json();
 }
