@@ -82,6 +82,31 @@ aws ecs update-service --cluster bedrock-monitor --service frontend --desired-co
 
 CloudFront 단에서 `Disabled` 토글로 전체 차단 가능 (사용자에게 503 반환).
 
+## 배포별 롤백 포인트
+
+### v2.6.2 배포 전 상태 (2026-07-09 기록)
+
+문제 시 아래 task definition revision으로 즉시 복귀:
+
+```bash
+REGION=ap-northeast-2
+aws ecs update-service --cluster bedrock-monitor --service backend --region $REGION \
+  --task-definition BedrockMonitorAppServicesBackendTaskDef81C53F03:33
+aws ecs update-service --cluster bedrock-monitor --service frontend --region $REGION \
+  --task-definition BedrockMonitorAppServicesFrontendTaskDefB3083787:21
+# autoprober 스케줄: BedrockMonitorSchedulerAutoProberTaskDefF8B95086:23
+# insights 스케줄:   BedrockMonitorSchedulerInsightsTaskDef9396CE7C:16
+```
+
+| 항목 | v2.6.1 (배포 전) |
+|------|------------------|
+| backend image | `bedrock-monitor-backend-v2@sha256:ad07f0238d4db5a57bc611488e3fb18ee29e2e3eeaac048f7d6ca4103272dfa6` |
+| frontend image | `bedrock-monitor-frontend@sha256:e0faa1b1c7a78a61cec5524c552d28b547173d03f1f58da180dd54613661aa62` |
+
+주의: v2.6.2가 생성한 DB 인덱스 3종(`ix_probe_runs_auto_status_created`, `ix_probe_results_run_id`,
+`ix_probe_results_timestamp`)은 롤백 시에도 무해하므로 DROP 불필요. CloudFront `/api/auto-probe/*`
+behavior 롤백은 `git revert` 후 `cdk deploy BedrockMonitor-Edge`.
+
 ## 알람 응답
 
 각 알람의 대응 방안:
