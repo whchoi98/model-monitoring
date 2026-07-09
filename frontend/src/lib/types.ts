@@ -97,6 +97,13 @@ export interface TrendPoint {
   tps: number | null;
   status: string;
   category?: string | null;
+  // 집계 구간(hours>24)의 min–max 밴드 — 원본(5분 해상도) 행은 null (v2.7.1)
+  ttft_ms_min?: number | null;
+  ttft_ms_max?: number | null;
+  total_latency_ms_min?: number | null;
+  total_latency_ms_max?: number | null;
+  tps_min?: number | null;
+  tps_max?: number | null;
 }
 
 // ---------------------------------------------------------------------------

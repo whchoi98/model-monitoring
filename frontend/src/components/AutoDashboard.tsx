@@ -7,6 +7,7 @@ import { Translations } from "@/lib/i18n";
 import { useT, useLang } from "@/lib/i18n-context";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { isExcludedModel } from "@/lib/sortModels";
+import { buildTrendQuery, defaultTrendSelection, parseTrendQuery } from "@/lib/trendSelection";
 import ModelStatusGrid from "./ModelStatusGrid";
 import TrendChart from "./TrendChart";
 import InsightsPanel from "./InsightsPanel";
@@ -47,14 +48,25 @@ export default function AutoDashboard() {
   const t = useT();
   const { lang } = useLang();
 
+  // URL query에서 초기 상태 복원 (v2.7.1: 새로고침 유지 + 링크 공유). SSR 중엔 window 없음.
+  const initialQuery =
+    typeof window !== "undefined" ? parseTrendQuery(window.location.search) : undefined;
+
   const [status, setStatus] = useState<AutoProbeStatus | null>(null);
   const [results, setResults] = useState<ProbeResult[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
-  // 카드 클릭 시 해당 모델만 추세 그래프에 표시 (다중 선택 - Set 토글).
-  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  // 카드/칩/범례 클릭 시 해당 모델만 추세 그래프에 표시 (다중 선택 - Set 토글).
+  // 첫 방문(URL에 models 없음)은 데이터 로드 후 패밀리 대표 모델로 초기화된다.
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(
+    initialQuery?.models ?? new Set(),
+  );
+  // URL에 models 파라미터가 있었으면(공유 링크/새로고침) 대표 기본값을 덮어쓰지 않는다.
+  const selectionInitialized = useRef(initialQuery?.models !== undefined);
   // Phase 3 Workload Preset - 선택된 카테고리 필터 (null = 전체).
   const [categories, setCategories] = useState<WorkloadCategory[]>([]);
-  const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  const [selectedCategory, setSelectedCategory] = useState<string | null>(
+    initialQuery?.category ?? null,
+  );
   const toggleModel = (name: string) => {
     setSelectedModels((prev) => {
       const next = new Set(prev);
@@ -69,7 +81,11 @@ export default function AutoDashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [nextCountdown, setNextCountdown] = useState("-");
-  const [trendHours, setTrendHours] = useState(1);
+  const [trendHours, setTrendHours] = useState(
+    initialQuery?.hours !== undefined && TREND_RANGE_HOURS.includes(initialQuery.hours)
+      ? initialQuery.hours
+      : 1,
+  );
   // 연속 클릭 시 이전 요청 취소 — 느린 이전 응답이 나중에 도착해 최신 선택을 덮어쓰는 경쟁 상태 방지.
   const abortRef = useRef<AbortController | null>(null);
 
@@ -113,6 +129,22 @@ export default function AutoDashboard() {
     isFirstLoad.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendHours, selectedCategory]);
+
+  // 첫 데이터 로드 후, URL에 명시 선택이 없으면 패밀리 대표 모델을 기본 선택 (28라인 → ~10라인).
+  useEffect(() => {
+    if (!selectionInitialized.current && results.length > 0) {
+      setSelectedModels(defaultTrendSelection(results.map((r) => r.model_name)));
+      selectionInitialized.current = true;
+    }
+  }, [results]);
+
+  // 선택 상태를 URL query에 반영 — 새로고침 유지 + 공유 가능한 링크.
+  // (replaceState: 히스토리 오염 없이 갱신. 초기화 전에는 기본값을 URL에 굳히지 않는다.)
+  useEffect(() => {
+    if (!selectionInitialized.current) return;
+    const qs = buildTrendQuery(selectedModels, trendHours, selectedCategory);
+    window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
+  }, [selectedModels, trendHours, selectedCategory]);
 
   // Auto-refresh every 30 seconds
   const { countdown, enabled, setEnabled } = useAutoRefresh(loadData, 30000);
@@ -299,7 +331,16 @@ export default function AutoDashboard() {
                         : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
                     }`}
                   >
-                    전체
+                    {t.allModels}
+                  </button>
+                  <button
+                    onClick={() =>
+                      setSelectedModels(defaultTrendSelection(results.map((r) => r.model_name)))
+                    }
+                    className="px-2.5 py-1 text-xs rounded-md transition-colors bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                    title={t.repModelsHint}
+                  >
+                    {t.repModels}
                   </button>
                   {results.map((r) => {
                     const isSelected = selectedModels.has(r.model_name);
@@ -320,9 +361,9 @@ export default function AutoDashboard() {
                 </div>
               </div>
 
-              <TrendChart data={trend} metric="ttft_ms" title={t.ttftTrend} selectedModels={selectedModels} />
-              <TrendChart data={trend} metric="total_latency_ms" title={t.latencyTrend} selectedModels={selectedModels} />
-              <TrendChart data={trend} metric="tps" title={t.tpsTrend} selectedModels={selectedModels} />
+              <TrendChart data={trend} metric="ttft_ms" title={t.ttftTrend} selectedModels={selectedModels} onToggleModel={toggleModel} />
+              <TrendChart data={trend} metric="total_latency_ms" title={t.latencyTrend} selectedModels={selectedModels} onToggleModel={toggleModel} />
+              <TrendChart data={trend} metric="tps" title={t.tpsTrend} selectedModels={selectedModels} onToggleModel={toggleModel} />
             </div>
           )}
 

@@ -92,6 +92,10 @@ def _seed(session, *, now=None):
 EXPECTED_KEYS = {
     "model_id", "model_name", "timestamp", "ttft_ms",
     "total_latency_ms", "tps", "status", "category",
+    # min-max 밴드 (집계 구간만 값, 원본 구간은 null)
+    "ttft_ms_min", "ttft_ms_max",
+    "total_latency_ms_min", "total_latency_ms_max",
+    "tps_min", "tps_max",
 }
 
 
@@ -194,6 +198,11 @@ def test_trend_over_24h_downsamples_to_hour_buckets(db_env):
     assert b1["ttft_ms"] == 200.0  # (100+300)/2
     assert b1["total_latency_ms"] == 400.0
     assert b1["status"] == "success"
+    # min-max 밴드용 (v2.7.1): 집계 구간은 버킷 내 최소/최대를 함께 반환
+    assert b1["ttft_ms_min"] == 100.0
+    assert b1["ttft_ms_max"] == 300.0
+    assert b1["total_latency_ms_min"] == 200.0
+    assert b1["total_latency_ms_max"] == 600.0
     b2 = find(base + timedelta(hours=1))
     assert b2["ttft_ms"] == 500.0
 
@@ -204,8 +213,9 @@ def test_trend_at_or_under_24h_stays_raw(db_env):
 
     rows = client.get("/api/auto-probe/trend", params={"hours": 24}).json()
 
-    # 다운샘플링 없이 cycle 단위 원본 유지 (5분 해상도)
+    # 다운샘플링 없이 cycle 단위 원본 유지 (5분 해상도) — 원본 행은 min/max 없음(null)
     assert sorted(r["ttft_ms"] for r in rows) == [100.0, 200.0]
+    assert all(r["ttft_ms_min"] is None for r in rows)
 
 
 def test_trend_and_latest_send_cachecontrol_for_cloudfront(db_env):

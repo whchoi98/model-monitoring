@@ -4,7 +4,8 @@ import { memo, useMemo } from "react";
 import { TrendPoint } from "@/lib/types";
 import { pivotTrend } from "@/lib/pivotTrend";
 import {
-  LineChart,
+  Area,
+  ComposedChart,
   Line,
   XAxis,
   YAxis,
@@ -20,6 +21,8 @@ interface Props {
   title: string;
   /** 선택된 모델 set (빈 set이면 전체 표시). 다중 비교 지원. */
   selectedModels?: Set<string>;
+  /** 범례 클릭으로 모델 라인을 토글 (v2.7.1). */
+  onToggleModel?: (modelName: string) => void;
 }
 
 // Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.
@@ -82,14 +85,18 @@ function formatUnit(value: number, metric: string): string {
   return `${value.toFixed(0)} ms`;
 }
 
-function TrendChart({ data, metric, title, selectedModels }: Props) {
+function TrendChart({ data, metric, title, selectedModels, onToggleModel }: Props) {
   const hasSelection = selectedModels && selectedModels.size > 0;
+  // min–max 밴드: 단일 모델 선택 + 집계 구간(hours>24)일 때만 — 다중 모델 밴드는 시각적 혼잡.
+  const showBand = selectedModels?.size === 1;
 
   // 피벗은 O(N) 단일 패스 (lib/pivotTrend). 칩 토글·자동새로고침마다 재실행되므로 useMemo 필수.
   const { modelNames, chartData } = useMemo(
-    () => pivotTrend(data, metric, selectedModels),
-    [data, metric, selectedModels],
+    () => pivotTrend(data, metric, selectedModels, { withRange: showBand }),
+    [data, metric, selectedModels, showBand],
   );
+  const hasRange =
+    showBand && chartData.some((row) => row[`${modelNames[0]}__range`] !== undefined);
 
   // 포인트가 많으면 dot SVG 노드(포인트당 1개)가 렌더링을 지배 — 700개 초과 시 라인만 그린다.
   const totalPoints = chartData.length * modelNames.length;
@@ -120,7 +127,7 @@ function TrendChart({ data, metric, title, selectedModels }: Props) {
         )}
       </div>
       <ResponsiveContainer width="100%" height={300}>
-        <LineChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
+        <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
           <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
           <XAxis
             dataKey="time"
@@ -150,8 +157,25 @@ function TrendChart({ data, metric, title, selectedModels }: Props) {
             ]}
           />
           <Legend
-            wrapperStyle={{ fontSize: "11px", paddingTop: "8px" }}
+            wrapperStyle={{ fontSize: "11px", paddingTop: "8px", cursor: onToggleModel ? "pointer" : "default" }}
+            onClick={(e) => {
+              const name = (e as { value?: string })?.value;
+              if (name && onToggleModel) onToggleModel(name);
+            }}
           />
+          {/* min–max 밴드 — 시간 평균에 숨는 스파이크 노출 (범례에는 미표시) */}
+          {hasRange && (
+            <Area
+              dataKey={`${modelNames[0]}__range`}
+              stroke="none"
+              fill={getColor(modelNames[0])}
+              fillOpacity={0.15}
+              legendType="none"
+              tooltipType="none"
+              connectNulls
+              isAnimationActive={false}
+            />
+          )}
           {modelNames.map((name) => (
             <Line
               key={name}
@@ -165,7 +189,7 @@ function TrendChart({ data, metric, title, selectedModels }: Props) {
               isAnimationActive={false}
             />
           ))}
-        </LineChart>
+        </ComposedChart>
       </ResponsiveContainer>
     </div>
   );

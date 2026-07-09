@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.7.1 — 2026-07-09
+
+### Added
+- **Trend chart readability**: first visit now shows one representative channel per family (~10 lines instead of 28); "대표 모델"/"전체" buttons switch modes. Legend entries are clickable to toggle model lines. Long-range views (>24h) draw a min–max band behind the average line when a single model is selected (backend now returns per-bucket min/max). Selection state (models/hours/category) is synced to the URL query — survives refresh and is shareable.
+- **트렌드 차트 가독성**: 첫 방문 시 패밀리별 대표 채널 1개만 표시(28개 → 약 10개 라인), "대표 모델"/"전체" 버튼으로 전환. 범례 클릭으로 라인 토글. 24h 초과 조회에서 단일 모델 선택 시 평균선 뒤에 min–max 밴드 표시(backend가 버킷별 min/max 반환). 선택 상태(models/hours/category)는 URL query에 동기화 — 새로고침 유지·링크 공유 가능.
+
+### Changed
+- **`APP_VERSION` v2.7.0 → v2.7.1** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.7.0 — 2026-07-09
 
 ### Added
