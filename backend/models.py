@@ -71,6 +71,33 @@ class ProbeResult(Base):
     run = relationship("ProbeRun", back_populates="results")
 
 
+class ProbeResultHourly(Base):
+    """보존 기간(RETENTION_DAYS, 기본 60일)을 지난 probe_results의 시간 단위 집계 보관.
+
+    retention.apply_retention()이 원본 삭제 전에 (model, category, 정시 버킷)별로 집계해
+    이관한다. 장기 히스토리(비용 추정용 토큰 합계 포함)를 손실 없이 보존하면서
+    원본 테이블 크기를 상수 수준으로 유지하는 것이 목적.
+    """
+
+    __tablename__ = "probe_results_hourly"
+    __table_args__ = (
+        Index("ix_probe_results_hourly_bucket_ts", "bucket_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    bucket_ts = Column(DateTime(timezone=True), nullable=False)  # 정시(hour) 버킷 시작
+    model_id = Column(Text, nullable=False)
+    model_name = Column(Text, nullable=False)
+    category = Column(Text, nullable=True)
+    cnt = Column(Integer, nullable=False)          # 버킷 내 전체 probe 수
+    success_cnt = Column(Integer, nullable=False)  # status == "success" 수
+    avg_ttft_ms = Column(Float, nullable=True)     # null metric 제외 평균
+    avg_total_latency_ms = Column(Float, nullable=True)
+    avg_tps = Column(Float, nullable=True)
+    sum_input_tokens = Column(Integer, nullable=True)   # 비용 재계산용
+    sum_output_tokens = Column(Integer, nullable=True)
+
+
 class User(Base):
     __tablename__ = "users"
 
