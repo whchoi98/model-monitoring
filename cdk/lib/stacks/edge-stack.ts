@@ -9,6 +9,7 @@
 //   - Origin protocol HTTPS_ONLY 유지 (ALB의 cert는 cert hostname 무관하게
 //     PrivateLink 경로에서 동작 - 운영 cert 정착 후 SNI 동작도 정상).
 import * as cdk from "aws-cdk-lib";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
@@ -91,7 +92,27 @@ export class EdgeStack extends cdk.Stack {
       enableAcceptEncodingBrotli: true,
     });
 
+    // 대체 도메인 (2026-07-09 실사고 재발 방지).
+    // 콘솔에서 수동 추가했던 alias는 cdk deploy가 템플릿 상태로 되돌리며 제거된다 —
+    // 그 순간 llm-monitor.whchoi.net 요청이 *.whchoi.net 와일드카드 alias를 가진
+    // 다른 배포판(Cognito 인증)으로 넘어가 사용자가 로그인 화면/에러를 보게 된다.
+    // 반드시 CDK가 소유한다. context로 교체 가능: -c monitorDomain / -c monitorCertArn.
+    const monitorDomain =
+      (this.node.tryGetContext("monitorDomain") as string | undefined) ??
+      "llm-monitor.whchoi.net";
+    const monitorCertArn =
+      (this.node.tryGetContext("monitorCertArn") as string | undefined) ??
+      // *.whchoi.net (us-east-1 — CloudFront viewer cert는 us-east-1 필수)
+      "arn:aws:acm:us-east-1:061525506239:certificate/7d53182a-2a2a-4225-a319-4f94030561b7";
+    const aliasCertificate = acm.Certificate.fromCertificateArn(
+      this,
+      "AliasCertificate",
+      monitorCertArn,
+    );
+
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
+      domainNames: [monitorDomain],
+      certificate: aliasCertificate,
       // Default behavior - HTML 페이지 (/, /prompts 등). 캐시 + 응답 헤더 모두 no-store 강제.
       defaultBehavior: {
         origin: albOrigin,

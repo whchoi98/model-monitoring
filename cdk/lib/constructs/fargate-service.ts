@@ -15,6 +15,7 @@ import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
 import * as iam from "aws-cdk-lib/aws-iam";
 import * as logs from "aws-cdk-lib/aws-logs";
 import { Construct } from "constructs";
+import { pinnedContainerImage } from "./pinned-image";
 
 export interface FargateServiceProps {
   readonly serviceName: string;
@@ -23,6 +24,8 @@ export interface FargateServiceProps {
   readonly appSubnets: ec2.SubnetSelection;
   readonly repository: ecr.IRepository;
   readonly imageTag: string;
+  /** 전체 이미지 URI(digest 고정) — 지정 시 repository/imageTag 대신 사용 (pinned-image.ts 참고). */
+  readonly imageOverride?: string;
   readonly containerPort: number;
   readonly healthCheckPath: string;
   /** 컨테이너에 노출할 환경 변수 (비밀이 아닌 평문). */
@@ -100,7 +103,9 @@ export class FargateServiceConstruct extends Construct {
     });
 
     this.taskDefinition.addContainer("App", {
-      image: ecs.ContainerImage.fromEcrRepository(props.repository, props.imageTag),
+      image: props.imageOverride
+        ? pinnedContainerImage(this, "PinnedImageRepo", props.imageOverride, this.executionRole)
+        : ecs.ContainerImage.fromEcrRepository(props.repository, props.imageTag),
       containerName: props.serviceName,
       portMappings: [{ containerPort: props.containerPort, protocol: ecs.Protocol.TCP }],
       environment: props.environment,

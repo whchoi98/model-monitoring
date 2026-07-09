@@ -40,6 +40,21 @@ describe("EdgeStack (VPC Origin + Internal ALB)", () => {
     template = Template.fromStack(edge);
   });
 
+  // 2026-07-09 실사고 회귀 가드: 콘솔에서 수동 추가했던 대체 도메인(llm-monitor.whchoi.net)이
+  // cdk deploy로 제거되어, 요청이 *.whchoi.net 와일드카드를 가진 다른 배포판(Cognito 인증)으로
+  // 넘어갔다. alias + ACM cert는 반드시 CDK가 관리한다.
+  it("llm-monitor.whchoi.net alias와 ACM 인증서가 배포판에 설정된다", () => {
+    template.hasResourceProperties("AWS::CloudFront::Distribution", Match.objectLike({
+      DistributionConfig: Match.objectLike({
+        Aliases: ["llm-monitor.whchoi.net"],
+        ViewerCertificate: Match.objectLike({
+          AcmCertificateArn: Match.stringLikeRegexp("arn:aws:acm:us-east-1:.*certificate/.+"),
+          SslSupportMethod: "sni-only",
+        }),
+      }),
+    }));
+  });
+
   it("CloudFront Distribution이 1개 생성된다", () => {
     template.resourceCountIs("AWS::CloudFront::Distribution", 1);
   });
@@ -78,3 +93,4 @@ describe("EdgeStack (VPC Origin + Internal ALB)", () => {
     }));
   });
 });
+

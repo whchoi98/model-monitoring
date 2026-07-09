@@ -55,11 +55,10 @@ describe("DataStack", () => {
     }));
   });
 
-  it("SSM Parameter (JWT secret placeholder)가 생성된다", () => {
-    template.hasResourceProperties("AWS::SSM::Parameter", Match.objectLike({
-      Name: "/bedrock-monitor/jwt-secret-key",
-      Type: "String",
-    }));
+  it("JWT secret은 SSM Parameter를 생성하지 않고 기존 SecureString을 참조한다", () => {
+    // 운영 전환 후 JWT 키는 runbook §4-1에서 수동 등록한 SecureString을
+    // fromSecureStringParameterAttributes로 참조만 한다 (placeholder 생성 안 함).
+    template.resourceCountIs("AWS::SSM::Parameter", 0);
   });
 
   it("DB SG는 ingress 규칙 없이 export되어 후속 Phase에서 추가된다", () => {

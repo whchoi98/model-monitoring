@@ -161,6 +161,21 @@ export class AppServicesStack extends cdk.Stack {
     };
 
     // ---------------------------------------------------------------------
+    // 이미지 고정 (2026-07-09 실사고 재발 방지 — pinned-image.ts 참고).
+    // context 미지정 시 legacy repo:latest로 synth는 가능하지만, 운영 배포에서는 반드시
+    // -c backendImage/-c frontendImage로 digest URI를 주입할 것 (runbook §3).
+    // ---------------------------------------------------------------------
+    const backendImage = this.node.tryGetContext("backendImage") as string | undefined;
+    const frontendImage = this.node.tryGetContext("frontendImage") as string | undefined;
+    if (!backendImage || !frontendImage) {
+      cdk.Annotations.of(this).addWarning(
+        "backendImage/frontendImage context 미지정 — legacy :latest 참조로 synth됨. " +
+          "운영 배포 시 반드시 -c backendImage=<uri@digest> -c frontendImage=<uri@digest> 주입 " +
+          "(미주입 배포는 서비스를 옛 이미지로 되돌린다).",
+      );
+    }
+
+    // ---------------------------------------------------------------------
     // backend Service.
     // ---------------------------------------------------------------------
     this.backend = new FargateServiceConstruct(this, "Backend", {
@@ -170,6 +185,7 @@ export class AppServicesStack extends cdk.Stack {
       appSubnets: props.appSubnets,
       repository: props.backendRepo,
       imageTag: "latest",
+      imageOverride: backendImage,
       containerPort: 8000,
       healthCheckPath: "/api/health",
       environment: backendEnv,
@@ -188,6 +204,7 @@ export class AppServicesStack extends cdk.Stack {
       appSubnets: props.appSubnets,
       repository: props.frontendRepo,
       imageTag: "latest",
+      imageOverride: frontendImage,
       containerPort: 3000,
       healthCheckPath: "/",
       environment: {

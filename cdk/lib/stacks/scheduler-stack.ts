@@ -18,6 +18,7 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
+import { pinnedContainerImage } from "../constructs/pinned-image";
 
 export interface SchedulerStackProps extends cdk.StackProps {
   readonly vpc: ec2.IVpc;
@@ -134,7 +135,15 @@ export class SchedulerStack extends cdk.Stack {
 
     // ---------------------------------------------------------------------
     // 4) TaskDefinition 빌더 - backend 이미지 + command override 패턴.
+    // 이미지 고정: context backendImage(digest URI) 지정 시 그것을 사용 (pinned-image.ts).
     // ---------------------------------------------------------------------
+    const backendImage = this.node.tryGetContext("backendImage") as string | undefined;
+    if (!backendImage) {
+      cdk.Annotations.of(this).addWarning(
+        "backendImage context 미지정 — legacy :latest 참조로 synth됨. " +
+          "운영 배포 시 -c backendImage=<uri@digest> 주입 필수 (runbook §3).",
+      );
+    }
     const buildTaskDef = (
       id: string,
       taskRole: iam.IRole,
@@ -159,7 +168,9 @@ export class SchedulerStack extends cdk.Stack {
       });
 
       td.addContainer("App", {
-        image: ecs.ContainerImage.fromEcrRepository(props.backendRepo, "latest"),
+        image: backendImage
+          ? pinnedContainerImage(this, `${id}PinnedImageRepo`, backendImage, td.obtainExecutionRole())
+          : ecs.ContainerImage.fromEcrRepository(props.backendRepo, "latest"),
         containerName: id.toLowerCase(),
         command,
         environment: {
