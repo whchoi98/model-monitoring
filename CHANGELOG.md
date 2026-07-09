@@ -7,6 +7,21 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.7.0 — 2026-07-09
+
+### Added
+- **Data retention policy**: raw `probe_results` older than `RETENTION_DAYS` (default 60) are aggregated into a new `probe_results_hourly` table — per (model, category, hour bucket): total/success counts, avg TTFT/latency/TPS, input/output token sums (cost reconstruction possible) — then deleted, in a single atomic transaction (safe retry, no double-aggregation). Runs at the end of every auto-prober cycle. Old `probe_runs` without remaining results are cleaned up (FK-safe).
+- **데이터 보존 정책**: `RETENTION_DAYS`(기본 60일)를 지난 원본 `probe_results`를 신규 `probe_results_hourly` 테이블에 (모델, 카테고리, 정시 버킷)별 집계 — 전체/성공 수, 평균 TTFT/레이턴시/TPS, 토큰 합계(비용 재계산 가능) — 로 이관 후 삭제. 집계+삭제는 단일 트랜잭션(재시도 안전). 매 auto-prober cycle 말미 실행, 결과 없는 옛 `probe_runs`도 정리.
+
+### Infra
+- **CI (GitHub Actions)**: push(main)/PR마다 backend pytest + frontend tsc/vitest/next build + CDK jest 병렬 실행 (`.github/workflows/ci.yml`, v2.6.2 이후 추가분 포함).
+- **CDK 이미지 digest 고정**: 모든 배포는 `-c backendImage`/`-c frontendImage`(digest URI) 필수 — cdk deploy가 서비스를 :latest 구버전으로 되돌리던 실사고(2026-07-09) 원천 차단. `llm-monitor.whchoi.net` alias + ACM cert도 CDK(edge-stack) 소유로 이전.
+
+### Changed
+- **`APP_VERSION` v2.6.2 → v2.7.0** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.6.2 — 2026-07-09
 
 ### Fixed

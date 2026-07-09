@@ -270,6 +270,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `ANTHROPIC_API_KEY` | (CDK 주입, secret) | CP on AWS envelope key |
 | `ANTHROPIC_WORKSPACE_ID` | (CDK 주입, secret) | CP on AWS workspace |
 | `ANTHROPIC_AWS_REGION` | `us-east-2` | CP on AWS endpoint region |
+| `RETENTION_DAYS` | `60` | 원본 probe_results 보존 일수 (초과분은 probe_results_hourly 집계 이관, 0 이하=비활성) |
 
 ---
 
