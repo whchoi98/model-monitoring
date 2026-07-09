@@ -102,6 +102,13 @@ export class FargateServiceConstruct extends Construct {
       },
     });
 
+    // imageOverride 사용 시에도 legacy repo pull 권한을 유지한다 — 이 참조가 사라지면
+    // Cluster 스택의 CFN export 삭제가 시도되고, 아직 옛 템플릿인 소비 스택이 import 중이라
+    // "Cannot delete export ... in use"로 배포 전체가 롤백된다 (2026-07-09 실측).
+    if (props.imageOverride) {
+      props.repository.grantPull(this.executionRole);
+    }
+
     this.taskDefinition.addContainer("App", {
       image: props.imageOverride
         ? pinnedContainerImage(this, "PinnedImageRepo", props.imageOverride, this.executionRole)

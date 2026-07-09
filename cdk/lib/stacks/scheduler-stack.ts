@@ -169,7 +169,11 @@ export class SchedulerStack extends cdk.Stack {
 
       td.addContainer("App", {
         image: backendImage
-          ? pinnedContainerImage(this, `${id}PinnedImageRepo`, backendImage, td.obtainExecutionRole())
+          ? (() => {
+              // legacy repo 참조 유지 — cross-stack export 삭제 데드락 방지 (fargate-service.ts 참고).
+              props.backendRepo.grantPull(td.obtainExecutionRole());
+              return pinnedContainerImage(this, `${id}PinnedImageRepo`, backendImage, td.obtainExecutionRole());
+            })()
           : ecs.ContainerImage.fromEcrRepository(props.backendRepo, "latest"),
         containerName: id.toLowerCase(),
         command,
