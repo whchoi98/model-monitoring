@@ -84,7 +84,22 @@ CloudFront 단에서 `Disabled` 토글로 전체 차단 가능 (사용자에게 
 
 ## 배포별 롤백 포인트
 
-### v2.6.2 배포 전 상태 (2026-07-09 기록)
+### v2.7.0 배포 전 상태 (2026-07-09 기록)
+
+```bash
+REGION=ap-northeast-2
+aws ecs update-service --cluster bedrock-monitor --service backend --region $REGION \
+  --task-definition BedrockMonitorAppServicesBackendTaskDef81C53F03:36
+aws ecs update-service --cluster bedrock-monitor --service frontend --region $REGION \
+  --task-definition BedrockMonitorAppServicesFrontendTaskDefB3083787:22
+# autoprober 스케줄: BedrockMonitorSchedulerAutoProberTaskDefF8B95086:24
+# insights 스케줄:   BedrockMonitorSchedulerInsightsTaskDef9396CE7C:17
+# v2.6.2 이미지: backend-v2@sha256:8ec3ff6d… / frontend@sha256:41383b05…
+# 주의: v2.7.0의 probe_results_hourly 테이블·집계 데이터는 롤백 시에도 무해 (읽는 곳 없음)
+```
+
+
+### v2.6.2 배포 전 상태 (2026-07-09 기록, v2.6.1)
 
 문제 시 아래 task definition revision으로 즉시 복귀:
 
