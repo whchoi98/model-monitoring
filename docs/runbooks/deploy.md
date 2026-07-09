@@ -90,15 +90,23 @@ aws scheduler update-schedule --region $REGION --cli-input-json file:///tmp/sche
 
 ## 3. 전체 CDK 배포
 
-> ⚠️ **CDK 배포 함정 (2026-07-09 실사고)**: 체크인된 CDK는 아직 `imageTag: "latest"` + 옛
-> `bedrock-monitor-backend` repo를 참조한다 (`app-services-stack.ts`, `scheduler-stack.ts`).
-> `cdk deploy BedrockMonitor-Edge`처럼 **한 스택만 지정해도 CDK가 템플릿 diff가 있는 상류
-> 의존 스택(AppServices)을 함께 배포**하며, 이때 backend 서비스가 옛 `backend:latest` 이미지의
-> 새 task def revision으로 **되돌아간다**. v2.6.2 배포 중 실제로 발생 (`:34` → CFN이 `:35`
-> 등록·전환 → 수동으로 `:34` 복구). CDK 배포 후에는 반드시 `aws ecs describe-services`로
-> task definition이 의도한 digest revision인지 확인하고, 다르면 §2-1 절차로 재지정할 것.
-> 근본 해결(별도 작업): CDK image 참조를 context 파라미터(`-c backendImageDigest=...`)로 받아
-> 수동 배포 관행과 일치시키기.
+> ⚠️ **CDK 배포 시 이미지 context 필수 (2026-07-09 도입)**: 모든 `cdk deploy`에
+> 현재 운영 중인 이미지 digest URI를 context로 주입해야 한다. 미주입 시 legacy `:latest`
+> fallback으로 synth되며(경고 출력), 그대로 배포하면 서비스가 옛 이미지로 되돌아간다
+> (2026-07-09 실사고 — Edge만 배포해도 의존 스택 AppServices가 함께 갱신됨).
+>
+> ```bash
+> # 현재 운영 digest 확인
+> aws ecs describe-services --cluster bedrock-monitor --services backend frontend \
+>   --region ap-northeast-2 --query 'services[].taskDefinition' --output text
+> # (task def에서 image URI 확인 후)
+> npx cdk deploy <스택> --require-approval never \
+>   -c backendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-backend-v2@sha256:... \
+>   -c frontendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-frontend@sha256:...
+> ```
+>
+> 대체 도메인(`llm-monitor.whchoi.net`)과 ACM cert도 CDK(edge-stack)가 소유한다 —
+> 콘솔에서 수동 추가한 배포판 설정은 다음 cdk deploy 때 제거되므로 금지.
 
 ```bash
 cd cdk
