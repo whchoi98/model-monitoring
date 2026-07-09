@@ -109,12 +109,46 @@ class Insight(Base):
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
 
 
-def ensure_performance_indexes(conn) -> None:
-    """기존 DB에 성능 인덱스를 멱등하게 생성 (main.py lifespan 마이그레이션에서 호출).
+_PERF_INDEXES = (*ProbeRun.__table__.indexes, *ProbeResult.__table__.indexes)
+
+
+def ensure_performance_indexes(engine) -> None:
+    """기존 DB에 성능 인덱스를 멱등하게 생성 (main.py lifespan에서 호출).
 
     신규 DB는 create_tables()가 모델 선언 인덱스를 함께 만들지만, 이미 테이블이
     존재하는 운영 DB에는 create_all이 인덱스를 추가하지 않으므로 이 헬퍼가 필요하다.
-    IF NOT EXISTS라 반복 실행에 안전. (일반 CREATE INDEX는 쓰기 잠깐 블록 — 수 초 수준.)
+
+    PG 경로 (2026-07-09 실사고 교훈): probe_results 22만 행에서 일반 CREATE INDEX가
+    마이그레이션 트랜잭션의 statement_timeout(30s)을 초과해 실패했다. 그래서
+    (1) 자체 AUTOCOMMIT 커넥션 (CONCURRENTLY는 트랜잭션 안에서 실행 불가),
+    (2) statement_timeout 10분,
+    (3) CREATE INDEX CONCURRENTLY — 쓰기(autoprober cycle) 블로킹 없음,
+    (4) 이전 CONCURRENTLY 실패가 남긴 INVALID 인덱스는 드롭 후 재생성.
     """
-    for idx in (*ProbeRun.__table__.indexes, *ProbeResult.__table__.indexes):
-        conn.execute(CreateIndex(idx, if_not_exists=True))
+    from sqlalchemy import text  # 지역 import — models는 기본적으로 DDL-only 모듈
+
+    if engine.dialect.name == "postgresql":
+        with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
+            conn.execute(text("SET statement_timeout = '600000'"))
+            for idx in _PERF_INDEXES:
+                invalid = conn.execute(
+                    text(
+                        "SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+                        "WHERE c.relname = :name AND NOT i.indisvalid"
+                    ),
+                    {"name": idx.name},
+                ).first()
+                if invalid:
+                    conn.execute(text(f"DROP INDEX CONCURRENTLY IF EXISTS {idx.name}"))
+                cols = ", ".join(c.name for c in idx.columns)
+                conn.execute(
+                    text(
+                        f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {idx.name} "
+                        f"ON {idx.table.name} ({cols})"
+                    )
+                )
+    else:
+        # sqlite (로컬/테스트): CONCURRENTLY 미지원 — 일반 IF NOT EXISTS로 충분.
+        with engine.begin() as conn:
+            for idx in _PERF_INDEXES:
+                conn.execute(CreateIndex(idx, if_not_exists=True))

@@ -60,11 +60,6 @@ async def lifespan(app: FastAPI):
                 conn.execute(text("ALTER TABLE probe_results ADD COLUMN IF NOT EXISTS category TEXT"))
                 # Output Analysis (stop_reason 분포 + output 길이 통계)
                 conn.execute(text("ALTER TABLE probe_results ADD COLUMN IF NOT EXISTS stop_reason TEXT"))
-                # 2026-07-08 성능: trend/latest 풀 스캔 제거용 인덱스 (models.py 선언과 동기).
-                # 최상단 `from routers import models`와 이름 충돌하므로 지점 import.
-                from models import ensure_performance_indexes
-
-                ensure_performance_indexes(conn)
                 # 2026-05-20: 사용자 요청으로 Opus 4.5 + Sonnet 4.5를 모니터링 대상에서 제외 — 옛 row 삭제.
                 conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Opus 4.5%'"))
                 conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Sonnet 4.5%'"))
@@ -114,6 +109,17 @@ async def lifespan(app: FastAPI):
                     pass
     except Exception:
         logger.exception("Migration block failed (non-fatal, backend continues)")
+
+    # 성능 인덱스 (2026-07-08). 위 마이그레이션 트랜잭션(30s timeout) 밖에서 실행 —
+    # 22만+ 행 테이블의 CREATE INDEX가 30초를 초과해 실패한 실사고(2026-07-09) 재발 방지.
+    # PG에서는 CONCURRENTLY + 10분 timeout (쓰기 블로킹 없음). 상세는 models.py 참고.
+    # 최상단 `from routers import models`와 이름 충돌하므로 지점 import.
+    try:
+        from models import ensure_performance_indexes
+
+        ensure_performance_indexes(engine)
+    except Exception:
+        logger.exception("Performance index creation failed (non-fatal, backend continues)")
 
     # Seed default admin user if no users exist
     _seed_default_admin()
