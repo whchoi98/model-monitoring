@@ -83,3 +83,32 @@ describe("pivotTrend", () => {
     expect(elapsed).toBeLessThan(200); // 구 O(T×M×N) 구현은 수십 초 걸림
   });
 });
+
+describe("min–max 밴드 (withRange)", () => {
+  const withMinMax: TrendPoint[] = [
+    {
+      ...point("Model A", "2026-07-08T01:00:00Z", 200),
+      ttft_ms_min: 100,
+      ttft_ms_max: 300,
+    } as TrendPoint,
+  ];
+
+  test("withRange: 단일 모델 선택 시 [min,max] 범위 컬럼을 추가한다", () => {
+    const { chartData } = pivotTrend(withMinMax, "ttft_ms", new Set(["Model A"]), {
+      withRange: true,
+    });
+    expect(chartData[0]["Model A__range"]).toEqual([100, 300]);
+  });
+
+  test("min/max가 없는 원본 행에는 범위 컬럼을 만들지 않는다", () => {
+    const { chartData } = pivotTrend(DATA, "ttft_ms", new Set(["Model A"]), {
+      withRange: true,
+    });
+    expect(chartData[0]["Model A__range"]).toBeUndefined();
+  });
+
+  test("withRange 미지정이면 범위 컬럼 없음 (기존 동작 유지)", () => {
+    const { chartData } = pivotTrend(withMinMax, "ttft_ms", new Set(["Model A"]));
+    expect(chartData[0]["Model A__range"]).toBeUndefined();
+  });
+});

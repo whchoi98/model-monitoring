@@ -4,7 +4,12 @@ export type TrendMetric = "ttft_ms" | "total_latency_ms" | "tps";
 
 export interface PivotedTrend {
   modelNames: string[];
-  chartData: Array<Record<string, string | number | null>>;
+  chartData: Array<Record<string, string | number | number[] | null>>;
+}
+
+export interface PivotOptions {
+  /** true면 집계 행의 [min,max]를 `<모델명>__range` 컬럼으로 추가 (Recharts range Area용). */
+  withRange?: boolean;
 }
 
 /**
@@ -18,11 +23,12 @@ export function pivotTrend(
   data: TrendPoint[],
   metric: TrendMetric,
   selectedModels?: Set<string>,
+  options?: PivotOptions,
 ): PivotedTrend {
   const hasSelection = !!selectedModels && selectedModels.size > 0;
 
   const modelSet = new Set<string>();
-  const rows = new Map<string, Record<string, string | number | null>>();
+  const rows = new Map<string, Record<string, string | number | number[] | null>>();
 
   for (const d of data) {
     if (hasSelection && !selectedModels!.has(d.model_name)) continue;
@@ -39,6 +45,13 @@ export function pivotTrend(
       rows.set(d.timestamp, row);
     }
     row[d.model_name] = d[metric];
+    if (options?.withRange) {
+      const lo = d[`${metric}_min` as keyof TrendPoint] as number | null | undefined;
+      const hi = d[`${metric}_max` as keyof TrendPoint] as number | null | undefined;
+      if (lo != null && hi != null) {
+        row[`${d.model_name}__range`] = [lo, hi];
+      }
+    }
   }
 
   const modelNames = Array.from(modelSet);

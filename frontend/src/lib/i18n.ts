@@ -29,6 +29,9 @@ export interface Translations {
   noDataDesc: string;
   autoRefresh: string;
   refreshing: string;
+  allModels: string;
+  repModels: string;
+  repModelsHint: string;
   seconds: string;
   minutes: string;
   triggerNow: string;
@@ -131,6 +134,9 @@ export const ko: Translations = {
   noDataDesc: "자동 프로빙이 5분 간격으로 실행됩니다. 첫 번째 결과를 기다려주세요.",
   autoRefresh: "자동 새로고침",
   refreshing: "데이터 갱신 중…",
+  allModels: "전체",
+  repModels: "대표 모델",
+  repModelsHint: "패밀리별 대표 채널 1개만 표시",
   seconds: "초",
   minutes: "분",
   triggerNow: "지금 실행",
@@ -269,6 +275,9 @@ export const en: Translations = {
   noDataDesc: "Auto-probing runs every 5 minutes. Please wait for the first result.",
   autoRefresh: "Auto Refresh",
   refreshing: "Refreshing…",
+  allModels: "All",
+  repModels: "Representatives",
+  repModelsHint: "Show one representative channel per family",
   seconds: "s",
   minutes: "m",
   triggerNow: "Run Now",

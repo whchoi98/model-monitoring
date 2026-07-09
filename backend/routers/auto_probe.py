@@ -17,21 +17,17 @@ router = APIRouter(prefix="/api/auto-probe", tags=["auto-probe"])
 
 
 class _Bucket:
-    """모델×시각버킷 하나의 평균 집계 결과 (trend 응답 row와 동일 속성)."""
+    """모델×시각버킷 하나의 집계 결과 (trend 응답 row와 동일 속성 + min/max 밴드)."""
 
     __slots__ = ("model_id", "model_name", "timestamp", "ttft_ms",
-                 "total_latency_ms", "tps", "status", "category")
+                 "total_latency_ms", "tps", "status", "category",
+                 "ttft_ms_min", "ttft_ms_max",
+                 "total_latency_ms_min", "total_latency_ms_max",
+                 "tps_min", "tps_max")
 
-    def __init__(self, model_id, model_name, timestamp, ttft_ms,
-                 total_latency_ms, tps, status, category):
-        self.model_id = model_id
-        self.model_name = model_name
-        self.timestamp = timestamp
-        self.ttft_ms = ttft_ms
-        self.total_latency_ms = total_latency_ms
-        self.tps = tps
-        self.status = status
-        self.category = category
+    def __init__(self, **kw):
+        for k in self.__slots__:
+            setattr(self, k, kw.get(k))
 
 
 def _downsample_hourly(rows):
@@ -47,19 +43,24 @@ def _downsample_hourly(rows):
         bucket_ts = r.timestamp.replace(minute=0, second=0, microsecond=0)
         groups.setdefault((r.model_name, bucket_ts), []).append(r)
 
-    def mean(values):
+    def stats(values):
         vals = [v for v in values if v is not None]
-        return (sum(vals) / len(vals)) if vals else None
+        if not vals:
+            return None, None, None
+        return sum(vals) / len(vals), min(vals), max(vals)
 
     out = []
     for (model_name, bucket_ts), items in groups.items():
+        ttft_avg, ttft_min, ttft_max = stats(i.ttft_ms for i in items)
+        lat_avg, lat_min, lat_max = stats(i.total_latency_ms for i in items)
+        tps_avg, tps_min, tps_max = stats(i.tps for i in items)
         out.append(_Bucket(
             model_id=items[0].model_id,
             model_name=model_name,
             timestamp=bucket_ts,
-            ttft_ms=mean(i.ttft_ms for i in items),
-            total_latency_ms=mean(i.total_latency_ms for i in items),
-            tps=mean(i.tps for i in items),
+            ttft_ms=ttft_avg, ttft_ms_min=ttft_min, ttft_ms_max=ttft_max,
+            total_latency_ms=lat_avg, total_latency_ms_min=lat_min, total_latency_ms_max=lat_max,
+            tps=tps_avg, tps_min=tps_min, tps_max=tps_max,
             status="success" if any(i.status == "success" for i in items) else "error",
             category=items[0].category,
         ))
@@ -201,6 +202,7 @@ def get_trend(
     if hours > 24:
         rows = _downsample_hourly(rows)
 
+    # 원본(비집계) 행은 min/max가 없으므로 getattr 기본값 None — 밴드는 집계 구간에서만 그려짐.
     return [
         {
             "model_id": r.model_id,
@@ -211,6 +213,12 @@ def get_trend(
             "tps": r.tps,
             "status": r.status,
             "category": r.category,
+            "ttft_ms_min": getattr(r, "ttft_ms_min", None),
+            "ttft_ms_max": getattr(r, "ttft_ms_max", None),
+            "total_latency_ms_min": getattr(r, "total_latency_ms_min", None),
+            "total_latency_ms_max": getattr(r, "total_latency_ms_max", None),
+            "tps_min": getattr(r, "tps_min", None),
+            "tps_max": getattr(r, "tps_max", None),
         }
         for r in rows
     ]
