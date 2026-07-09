@@ -50,7 +50,20 @@ def _percentile(values: list[float], pct: float) -> Optional[float]:
 #  "Bedrock Claude Sonnet 4.6 (US)"     → family="Claude Sonnet 4.6", channel="Bedrock US"
 #  "Anthropic Claude Sonnet 4.6 (US)"   → family="Claude Sonnet 4.6", channel="Anthropic"
 #  "Bedrock Nova 2.0 Lite (US)"         → family="Nova 2.0 Lite",     channel="Bedrock US"
-_LABEL_RE = re.compile(r"^(Bedrock|Anthropic)\s+(.+?)\s+\(([^)]+)\)$")
+#  "OpenAI GPT 5.4 (us-east-1)"         → family="GPT 5.4",           channel="OpenAI us-east-1"
+#  "OpenAI GPT 5.5 (1P)"                → family="GPT 5.5",           channel="OpenAI 1P"
+_LABEL_RE = re.compile(r"^(Bedrock|Anthropic|OpenAI)\s+(.+?)\s+\(([^)]+)\)$")
+
+# 채널 표시 순서: Anthropic → Bedrock Global → Bedrock US → OpenAI(Mantle 리전 + 1P) → 기타.
+_FIXED_CHANNEL_ORDER = {"Anthropic (CP on AWS)": 0, "Bedrock Global": 1, "Bedrock US": 2}
+
+
+def _channel_sort_key(channel: str) -> tuple[int, str]:
+    if channel in _FIXED_CHANNEL_ORDER:
+        return (_FIXED_CHANNEL_ORDER[channel], channel)
+    if channel.startswith("OpenAI"):
+        return (3, channel)  # OpenAI Mantle 리전들 + 1P direct
+    return (4, channel)      # 미분류 → 마지막
 
 
 def _parse_label(name: str) -> tuple[str, str]:
@@ -60,6 +73,9 @@ def _parse_label(name: str) -> tuple[str, str]:
     namespace, family, region = m.group(1), m.group(2), m.group(3)
     if namespace == "Anthropic":
         channel = "Anthropic (CP on AWS)"
+    elif namespace == "OpenAI":
+        # OpenAI — region(paren 내용)이 채널 식별자. Mantle: us-east-1/2/west-2, 1P direct: "1P".
+        channel = f"OpenAI {region}"
     else:
         # Bedrock — region에 따라 Global / US
         if "Global" in region:
@@ -167,10 +183,10 @@ def get_multi_channel(
     families: list[FamilyGroup] = []
     for family in sorted(agg.keys()):
         ch_rows: list[ChannelRow] = []
-        for channel in ("Anthropic (CP on AWS)", "Bedrock Global", "Bedrock US"):
-            c = agg[family].get(channel)
-            if c is None:
+        for channel in sorted(agg[family].keys(), key=_channel_sort_key):
+            if channel == "Other":
                 continue
+            c = agg[family][channel]
             samples = c["samples"]
             success = c["success"]
             ch_rows.append(ChannelRow(

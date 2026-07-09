@@ -238,6 +238,19 @@ def run_cycle() -> int:
     finally:
         db.close()
 
+    # 데이터 보존 정책 (v2.7.0): 보존 기간 초과 원본을 시간 집계로 이관 후 삭제.
+    # 실패해도 probe cycle 자체는 성공으로 유지 — 다음 cycle에서 재시도된다.
+    try:
+        from retention import apply_retention
+
+        retention_db = SessionLocal()
+        try:
+            apply_retention(retention_db)
+        finally:
+            retention_db.close()
+    except Exception:
+        logger.exception("AutoProber: retention pass failed (non-fatal)")
+
     auto_prober.last_run_time = datetime.now(timezone.utc)
     auto_prober.current_cycle_running = False
     logger.info("AutoProber: cycle completed (run_id=%d)", run_id)

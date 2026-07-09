@@ -1,5 +1,5 @@
 // 모델 카드/이력 정렬 공통 유틸.
-// 1차: 모델 family 우선순위 (Fable 5 > Opus 4.8 > Opus 4.7 > Opus 4.6 > Sonnet 4.6 > Haiku 4.5 > Nova ...)
+// 1차: 모델 family 우선순위 (Fable 5 > Opus 4.8 > Opus 4.7 > Opus 4.6 > Sonnet 5 > Sonnet 4.6 > Haiku 4.5 > Nova ...)
 // 2차: 채널 순서 (Anthropic > Bedrock Global > Bedrock US)
 // FAMILY 매칭은 substring `includes` 기반이므로 "Bedrock " prefix 유무에 관계없이 동작.
 // 모델명 라벨은 backend에서 "Bedrock " 또는 "Anthropic " prefix가 붙은 형태로 응답.
@@ -8,9 +8,12 @@ export const FAMILY_ORDER = [
   "Claude Opus 4.8",
   "Claude Opus 4.7",
   "Claude Opus 4.6",
+  "Claude Sonnet 5",
   "Claude Sonnet 4.6",
   "Claude Haiku 4.5",
   "Nova 2.0 Lite",
+  "GPT 5.5",
+  "GPT 5.4",
 ];
 
 // 모니터링 catalogue에서 제외된 모델 (ADR-017). backend silent bug 대비 frontend hard-filter.
@@ -30,6 +33,7 @@ export function familyRank(name: string): number {
 export function channelRank(name: string): number {
   if (name.startsWith("Anthropic ")) return 0;
   if (name.includes("(Global)")) return 1;
+  if (name.startsWith("OpenAI ")) return 3; // OpenAI 자체 채널 티어 (us-east-1 → us-east-2)
   return 2; // Bedrock US (default)
 }
 

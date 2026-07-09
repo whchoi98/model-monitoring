@@ -19,6 +19,11 @@ const CHANNEL_BG: Record<string, string> = {
   "Bedrock Global": "bg-orange-500/10 border-orange-500/30 text-orange-300",
   "Bedrock US": "bg-pink-500/10 border-pink-500/30 text-pink-300",
   "Anthropic (CP on AWS)": "bg-purple-500/10 border-purple-500/30 text-purple-300",
+  // OpenAI channels — Mantle regions + 1P direct (green family).
+  "OpenAI us-east-1": "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
+  "OpenAI us-east-2": "bg-green-500/10 border-green-500/30 text-green-300",
+  "OpenAI us-west-2": "bg-teal-500/10 border-teal-500/30 text-teal-300",
+  "OpenAI 1P": "bg-lime-500/10 border-lime-500/30 text-lime-300",
 };
 
 const ERROR_BUCKET_LABELS_KO: Record<string, string> = {
@@ -85,8 +90,8 @@ export default function ReliabilityPanel() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
-              ? "Same model family across Bedrock Global / US / Anthropic CP on AWS channels — for failover decisions."
-              : "동일 모델을 Bedrock Global / US / Anthropic CP on AWS 채널별로 비교 — failover 의사결정용."}
+              ? "Same model family across Bedrock Global / US, Anthropic CP on AWS, and OpenAI (Mantle regions + 1P direct) channels — for failover decisions."
+              : "동일 모델을 Bedrock Global / US, Anthropic CP on AWS, OpenAI(Mantle 리전 + 1P direct) 채널별로 비교 — failover 의사결정용."}
           </p>
         </div>
         <div className="flex items-center gap-3 flex-wrap">

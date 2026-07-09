@@ -20,17 +20,23 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   "claude-opus-4-7": { input: 15.0, output: 75.0 },
   "claude-opus-4-6-v1": { input: 15.0, output: 75.0 },
   "claude-opus-4-6": { input: 15.0, output: 75.0 },
+  "claude-sonnet-5": { input: 2.0, output: 10.0 },
   "claude-sonnet-4-6": { input: 3.0, output: 15.0 },
   "claude-haiku-4-5-20251001-v1:0": { input: 1.0, output: 5.0 },
   "claude-haiku-4-5-20251001": { input: 1.0, output: 5.0 },
   // Amazon Nova
   "nova-2-lite-v1:0": { input: 0.06, output: 0.24 },
+  // OpenAI GPT (Bedrock Mantle). cached-input 미추적 — input/output만.
+  "gpt-5.4": { input: 2.75, output: 16.50 },
+  "gpt-5.5": { input: 5.50, output: 33.00 },
 };
 
 /** model_id → ModelPricing. 매칭 실패 시 null. */
 export function getPricing(modelId: string): ModelPricing | null {
   // anthropic:<id> → <id>
   let key = modelId.startsWith("anthropic:") ? modelId.slice("anthropic:".length) : modelId;
+  // openai:<region>:<actual_id> → <actual_id>
+  if (key.startsWith("openai:")) key = key.split(":").slice(2).join(":");
   // global.X.Y / us.X.Y → X.Y (Y는 그대로)
   const parts = key.split(".");
   if (parts.length >= 2 && (parts[0] === "global" || parts[0] === "us" || parts[0] === "eu" || parts[0] === "apac")) {
@@ -40,6 +46,7 @@ export function getPricing(modelId: string): ModelPricing | null {
   // anthropic. / amazon. prefix 제거
   if (key.startsWith("anthropic.")) key = key.slice("anthropic.".length);
   if (key.startsWith("amazon.")) key = key.slice("amazon.".length);
+  if (key.startsWith("openai.")) key = key.slice("openai.".length);
 
   // 정확 매칭 우선
   if (PRICE_TABLE[key]) return PRICE_TABLE[key];

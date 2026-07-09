@@ -9,6 +9,7 @@
 //   - Origin protocol HTTPS_ONLY 유지 (ALB의 cert는 cert hostname 무관하게
 //     PrivateLink 경로에서 동작 - 운영 cert 정착 후 SNI 동작도 정상).
 import * as cdk from "aws-cdk-lib";
+import * as acm from "aws-cdk-lib/aws-certificatemanager";
 import * as cloudfront from "aws-cdk-lib/aws-cloudfront";
 import * as origins from "aws-cdk-lib/aws-cloudfront-origins";
 import * as elbv2 from "aws-cdk-lib/aws-elasticloadbalancingv2";
@@ -73,7 +74,45 @@ export class EdgeStack extends cdk.Stack {
       },
     });
 
+    // auto-probe 조회 API 전용 캐시 정책 (2026-07-08 성능 개선).
+    // - 원본 Cache-Control(s-maxage=30)을 존중: defaultTtl 0이라 헤더 없는 응답(/status 등)은 캐시 안 됨.
+    // - 데이터가 5분 주기로만 갱신되므로 30초 edge 캐시로 다중 사용자·자동새로고침 중복 DB 조회 흡수.
+    // - hours/category 쿼리스트링이 캐시 키에 반드시 포함되어야 함 (필터별 응답이 다름).
+    // - 기존 /api/*는 compress:false(SSE 보호)라 대용량 JSON이 무압축이었음 — 이 경로만 gzip/br 활성화.
+    const autoProbeCachePolicy = new cloudfront.CachePolicy(this, "AutoProbeCachePolicy", {
+      cachePolicyName: "BedrockMonitorAutoProbeCache",
+      comment: "auto-probe JSON: honor origin Cache-Control + compression",
+      minTtl: cdk.Duration.seconds(0),
+      defaultTtl: cdk.Duration.seconds(0),
+      maxTtl: cdk.Duration.seconds(60),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+    });
+
+    // 대체 도메인 (2026-07-09 실사고 재발 방지).
+    // 콘솔에서 수동 추가했던 alias는 cdk deploy가 템플릿 상태로 되돌리며 제거된다 —
+    // 그 순간 llm-monitor.whchoi.net 요청이 *.whchoi.net 와일드카드 alias를 가진
+    // 다른 배포판(Cognito 인증)으로 넘어가 사용자가 로그인 화면/에러를 보게 된다.
+    // 반드시 CDK가 소유한다. context로 교체 가능: -c monitorDomain / -c monitorCertArn.
+    const monitorDomain =
+      (this.node.tryGetContext("monitorDomain") as string | undefined) ??
+      "llm-monitor.whchoi.net";
+    const monitorCertArn =
+      (this.node.tryGetContext("monitorCertArn") as string | undefined) ??
+      // *.whchoi.net (us-east-1 — CloudFront viewer cert는 us-east-1 필수)
+      "arn:aws:acm:us-east-1:061525506239:certificate/7d53182a-2a2a-4225-a319-4f94030561b7";
+    const aliasCertificate = acm.Certificate.fromCertificateArn(
+      this,
+      "AliasCertificate",
+      monitorCertArn,
+    );
+
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
+      domainNames: [monitorDomain],
+      certificate: aliasCertificate,
       // Default behavior - HTML 페이지 (/, /prompts 등). 캐시 + 응답 헤더 모두 no-store 강제.
       defaultBehavior: {
         origin: albOrigin,
@@ -85,6 +124,16 @@ export class EdgeStack extends cdk.Stack {
         compress: true,
       },
       additionalBehaviors: {
+        // auto-probe 조회 API - SSE 없음. 단기 edge 캐시 + 압축 (위 autoProbeCachePolicy 주석 참고).
+        // 주의: "/api/*"보다 먼저 선언해야 우선 매칭된다.
+        "/api/auto-probe/*": {
+          origin: albOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: autoProbeCachePolicy,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL, // /trigger POST 포함 (POST는 캐시 안 됨)
+          compress: true,
+        },
         // API - 절대 캐시 금지 (SSE 스트리밍 포함).
         "/api/*": {
           origin: albOrigin,

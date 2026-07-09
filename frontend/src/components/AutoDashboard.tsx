@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { AutoProbeStatus, ProbeResult, TrendPoint, WorkloadCategory } from "@/lib/types";
 import { fetchAutoStatus, fetchAutoLatest, fetchAutoTrend, triggerAutoProbe, fetchWorkloadCategories } from "@/lib/api";
 import { Translations } from "@/lib/i18n";
@@ -65,23 +65,37 @@ export default function AutoDashboard() {
   };
   const clearSelection = () => setSelectedModels(new Set());
   const [loading, setLoading] = useState(true);
+  // 필터(카테고리/조회기간) 변경·자동새로고침 등 재조회 중 표시 — 최초 로드(loading)와 별개.
+  const [refreshing, setRefreshing] = useState(false);
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [nextCountdown, setNextCountdown] = useState("-");
   const [trendHours, setTrendHours] = useState(1);
+  // 연속 클릭 시 이전 요청 취소 — 느린 이전 응답이 나중에 도착해 최신 선택을 덮어쓰는 경쟁 상태 방지.
+  const abortRef = useRef<AbortController | null>(null);
 
-  const loadData = useCallback(async () => {
+  const loadData = useCallback(async (opts?: { skipStatus?: boolean }) => {
+    abortRef.current?.abort();
+    const ac = new AbortController();
+    abortRef.current = ac;
+    setRefreshing(true);
     try {
-      const [s, r, tr] = await Promise.all([
-        fetchAutoStatus(),
-        fetchAutoLatest(selectedCategory),
-        fetchAutoTrend(trendHours, selectedCategory),
+      const [r, tr, s] = await Promise.all([
+        fetchAutoLatest(selectedCategory, ac.signal),
+        fetchAutoTrend(trendHours, selectedCategory, ac.signal),
+        // status는 필터와 무관 — 필터 변경 재조회에서는 생략 (30초 자동새로고침이 갱신).
+        opts?.skipStatus ? Promise.resolve(null) : fetchAutoStatus(ac.signal),
       ]);
-      setStatus(s);
+      if (ac.signal.aborted) return;
+      if (s) setStatus(s);
       setResults(r.filter((row) => !isExcludedModel(row.model_name)));
       setTrend(tr.filter((p) => !isExcludedModel(p.model_name)));
     } catch (err) {
-      console.error("Failed to load auto-probe data:", err);
+      if ((err as Error)?.name !== "AbortError") {
+        console.error("Failed to load auto-probe data:", err);
+      }
     } finally {
+      // 더 새로운 요청이 이미 시작됐다면 그 요청의 표시 상태를 건드리지 않는다.
+      if (abortRef.current === ac) setRefreshing(false);
       setLoading(false);
     }
   }, [trendHours, selectedCategory]);
@@ -91,10 +105,12 @@ export default function AutoDashboard() {
     fetchWorkloadCategories().then(setCategories).catch(() => {});
   }, []);
 
-  // Initial load + trendHours 변경 시 즉시 reload (loadData identity 의존이 아니라
+  // Initial load + trendHours/카테고리 변경 시 즉시 reload (loadData identity 의존이 아니라
   // 명시적으로 trendHours를 트리거로 사용해 조회기간 클릭 즉시 그래프가 갱신되도록 보장).
+  const isFirstLoad = useRef(true);
   useEffect(() => {
-    loadData();
+    loadData({ skipStatus: !isFirstLoad.current });
+    isFirstLoad.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendHours, selectedCategory]);
 
@@ -227,7 +243,18 @@ export default function AutoDashboard() {
       )}
 
       {hasData ? (
-        <>
+        <div
+          className={`relative space-y-6 transition-opacity duration-200 ${
+            refreshing ? "opacity-60" : ""
+          }`}
+        >
+          {/* 재조회 중 표시 — 필터 클릭이 묵묵히 멈춘 것처럼 보이지 않게 즉각 피드백 */}
+          {refreshing && (
+            <div className="absolute -top-2 left-1/2 -translate-x-1/2 z-30 flex items-center gap-2 px-3 py-1.5 rounded-full bg-gray-800/90 border border-gray-700 text-xs text-blue-300 shadow-lg">
+              <span className="w-3 h-3 border-2 border-blue-400 border-t-transparent rounded-full animate-spin" />
+              {t.refreshing}
+            </div>
+          )}
           {/* 1) Model Status Grid - 카드 클릭으로 그래프 다중 선택/해제 */}
           <ModelStatusGrid
             results={results}
@@ -335,7 +362,7 @@ export default function AutoDashboard() {
               ))}
             </div>
           </div>
-        </>
+        </div>
       ) : (
         /* Empty State */
         <div className="flex flex-col items-center justify-center py-24 text-center">

@@ -31,6 +31,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
+    "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
@@ -39,6 +40,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
+    "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
     "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
     # Opus 4.5, Sonnet 4.5는 사용자 요청으로 모니터링 대상에서 제외 (2026-05-20).
@@ -54,6 +56,7 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
     ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
+    ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
     ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
     ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
 ]
@@ -140,12 +143,185 @@ def _anthropic_actual_id(model_id: str) -> str:
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
-_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "fable-5")
+_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "fable-5", "sonnet-5")
 
 
 def _is_reasoning_model(model_id: str) -> bool:
     """temperature 파라미터를 거부하는 reasoning model 여부."""
     return any(p in model_id for p in _REASONING_MODEL_PATTERNS)
+
+
+# =====================================================================
+# OpenAI GPT via Bedrock Mantle (OpenAI-compatible /openai/v1) — Path 4.
+# model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-5.4).
+# region이 채널 식별자 (같은 model_id를 두 리전에 호출). bearer 토큰 인증.
+# =====================================================================
+_OPENAI_REGION_ENV: dict[str, str] = {
+    "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
+    "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
+    "us-west-2": "OPENAI_US_WEST_2_BASE_URL",
+}
+
+# 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5는 us-west-2 미제공 → 404).
+# (model-id env var, display family, 제공 리전 튜플)
+_OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1", "us-east-2", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1", "us-east-2")),
+]
+
+# =====================================================================
+# OpenAI GPT 1P direct (api.openai.com) — Path 5.
+# Mantle와 별개 자격증명(OpenAI *platform* 키 sk-proj-…, OPENAI_1P_API_KEY)·리전 개념 없음.
+# key 스킴: "openai:1p:<native_id>" (예: openai:1p:gpt-5.4). native id는 접두사 없음(gpt-5.4).
+# base_url은 항상 api.openai.com (OPENAI_1P_BASE_URL로 override 가능).
+# =====================================================================
+_OPENAI_1P_DEFAULT_BASE_URL = "https://api.openai.com/v1"
+
+# (model-id env var, display family) — 리전 없음.
+_OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = [
+    ("OPENAI_1P_GPT_54_MODEL_ID", "GPT 5.4"),
+    ("OPENAI_1P_GPT_55_MODEL_ID", "GPT 5.5"),
+]
+
+# OpenAI Responses API의 incomplete reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
+# gpt-5.x는 /chat/completions 미지원 → /responses 사용. finish_reason 대신 status/incomplete_details.
+_OPENAI_INCOMPLETE_MAP: dict[str, str] = {
+    "max_output_tokens": "max_tokens",
+    "content_filter": "content_filtered",
+}
+
+_openai_client_cache: dict[str, object] = {}
+
+
+def _is_openai_direct(model_id: str) -> bool:
+    return model_id.startswith("openai:")
+
+
+def _openai_parts(model_id: str) -> tuple[str, str]:
+    """openai:<region>:<actual_id> → (region, actual_id)."""
+    _, region, actual_id = model_id.split(":", 2)
+    return region, actual_id
+
+
+def _openai_1p_base_url() -> str:
+    """1P direct 엔드포인트. OPENAI_1P_BASE_URL로 override 가능(기본 api.openai.com)."""
+    return os.environ.get("OPENAI_1P_BASE_URL") or _OPENAI_1P_DEFAULT_BASE_URL
+
+
+def _openai_base_url(region: str) -> str:
+    if region == "1p":
+        return _openai_1p_base_url()
+    env_name = _OPENAI_REGION_ENV.get(region)
+    if not env_name:
+        raise ValueError(f"Unknown OpenAI region: {region}")
+    url = os.environ.get(env_name)
+    if not url:
+        raise RuntimeError(f"{env_name} not set")
+    return url
+
+
+def _get_openai_client(base_url: str):
+    """Lazy-init OpenAI SDK client per base_url.
+
+    base_url이 1P(api.openai.com)면 OpenAI platform 키(OPENAI_1P_API_KEY)를,
+    아니면 Bedrock Mantle bearer 키(OPENAI_API_KEY)를 사용한다. 두 자격증명은 호환되지 않음.
+    """
+    if base_url not in _openai_client_cache:
+        from openai import OpenAI
+        api_key = (
+            os.environ["OPENAI_1P_API_KEY"]
+            if base_url == _openai_1p_base_url()
+            else os.environ["OPENAI_API_KEY"]
+        )
+        _openai_client_cache[base_url] = OpenAI(
+            api_key=api_key,
+            base_url=base_url,
+        )
+    return _openai_client_cache[base_url]
+
+
+def _openai_stop_reason(status: str | None, incomplete_reason: str | None) -> str | None:
+    """Responses API: status 'completed' → end_turn; 'incomplete' → mapped incomplete reason."""
+    if status == "completed":
+        return "end_turn"
+    if status == "incomplete":
+        return _OPENAI_INCOMPLETE_MAP.get(incomplete_reason, incomplete_reason or "incomplete")
+    return incomplete_reason
+
+
+def _register_openai_models() -> None:
+    """OpenAI 채널 등록 — Bedrock Mantle(Path 4) + 1P direct(Path 5)를 독립적으로 gate.
+
+    Mantle: OPENAI_API_KEY(bearer) + _OPENAI_MODEL_SPECS(모델별 가용 리전, gpt-5.5는 us-west-2 미제공).
+    1P: OPENAI_1P_API_KEY(platform 키) + _OPENAI_1P_MODEL_SPECS(리전 없음, key "openai:1p:<native_id>").
+    한쪽 키만 있어도 그쪽만 등록. 누락 시 조용히 skip (해당 채널만 미등록 — 나머지 정상).
+    """
+    # --- Bedrock Mantle (Path 4) ---
+    mantle_key = os.environ.get("OPENAI_API_KEY")
+    if mantle_key:
+        for env_var, family, regions in _OPENAI_MODEL_SPECS:
+            actual_id = os.environ.get(env_var)
+            if not actual_id:
+                continue
+            for region in regions:
+                env_name = _OPENAI_REGION_ENV.get(region)
+                if not env_name or not os.environ.get(env_name):
+                    continue
+                key = f"openai:{region}:{actual_id}"
+                label = f"OpenAI {family} ({region})"
+                AVAILABLE_MODELS[key] = label
+                logger.info("Registered OpenAI model: %s -> %s", key, label)
+    else:
+        logger.info("OPENAI_API_KEY not set - skipping OpenAI (Bedrock Mantle) models")
+
+    # --- 1P direct / api.openai.com (Path 5) ---
+    oa_1p_key = os.environ.get("OPENAI_1P_API_KEY")
+    if oa_1p_key:
+        for env_var, family in _OPENAI_1P_MODEL_SPECS:
+            actual_id = os.environ.get(env_var)
+            if not actual_id:
+                continue
+            key = f"openai:1p:{actual_id}"
+            label = f"OpenAI {family} (1P)"
+            AVAILABLE_MODELS[key] = label
+            logger.info("Registered OpenAI 1P model: %s -> %s", key, label)
+    else:
+        logger.info("OPENAI_1P_API_KEY not set - skipping OpenAI 1P (direct) models")
+
+
+def _openai_stream_events(client, actual_id: str, prompt: str, max_tokens: int):
+    """Stream the OpenAI **Responses API** (gpt-5.x require /responses, NOT /chat/completions).
+
+    Normalized tuples를 yield:
+      ("delta", text)                                       - 출력 텍스트 조각
+      ("final", input_tokens, output_tokens, stop_reason)   - 완료/미완료 시 usage + stop
+    temperature는 보내지 않음 (reasoning model). 토큰 한도는 max_output_tokens.
+    """
+    stream = client.responses.create(
+        model=actual_id,
+        input=prompt,
+        max_output_tokens=max_tokens,
+        stream=True,
+    )
+    for ev in stream:
+        etype = getattr(ev, "type", "")
+        if etype == "response.output_text.delta":
+            text = getattr(ev, "delta", "") or ""
+            if text:
+                yield ("delta", text)
+        elif etype in ("response.completed", "response.incomplete", "response.failed"):
+            resp = getattr(ev, "response", None)
+            in_tok = out_tok = 0
+            stop = None
+            if resp is not None:
+                usage = getattr(resp, "usage", None)
+                if usage is not None:
+                    in_tok = getattr(usage, "input_tokens", 0) or 0
+                    out_tok = getattr(usage, "output_tokens", 0) or 0
+                idet = getattr(resp, "incomplete_details", None)
+                reason = getattr(idet, "reason", None) if idet is not None else None
+                stop = _openai_stop_reason(getattr(resp, "status", None), reason)
+            yield ("final", in_tok, out_tok, stop)
 
 
 def _get_region_for_model(model_id: str) -> str:
@@ -171,6 +347,11 @@ _RETRYABLE_PATTERNS: tuple[str, ...] = (
     "ServiceUnavailableException",
     "TooManyRequestsException",
     "ModelStreamErrorException",
+    # OpenAI (Bedrock Mantle) rate-limit / overload markers.
+    "RateLimitError",
+    "rate_limit",
+    "ServiceUnavailable",
+    "overloaded",
 )
 _RETRY_BACKOFFS: tuple[int, ...] = (2, 4, 8)
 
@@ -257,6 +438,32 @@ def _probe_single_model(
                     # stop_reason: end_turn | max_tokens | stop_sequence | tool_use
                     stop_reason = getattr(final_message, "stop_reason", None)
                     # Anthropic API는 server-side latency를 제공하지 않음 - None 유지.
+            elif _is_openai_direct(model_id):
+                region, actual_id = _openai_parts(model_id)
+                oa_client = _get_openai_client(_openai_base_url(region))
+                for kind, *rest in _openai_stream_events(oa_client, actual_id, prompt, max_tokens):
+                    if kind == "delta":
+                        text = rest[0]
+                        now = time.monotonic()
+                        if first_token_time is None:
+                            first_token_time = now
+                            ttft_ms = (first_token_time - start_time) * 1000.0
+                            event_queue.put(_sse("ttft", {
+                                "model_id": model_id,
+                                "model_name": model_name,
+                                "iteration": iteration,
+                                "ttft_ms": round(ttft_ms, 2),
+                            }))
+                        collected_text.append(text)
+                        event_queue.put(_sse("token", {
+                            "model_id": model_id,
+                            "model_name": model_name,
+                            "iteration": iteration,
+                            "token": text,
+                        }))
+                    else:  # ("final", input_tokens, output_tokens, stop_reason)
+                        input_tokens, output_tokens, stop_reason = rest
+                # OpenAI Responses 엔드포인트는 server-side latency 미제공 - None 유지.
             else:
                 # Bedrock 경로 - 기존 동작.
                 inference_config: dict = {"maxTokens": max_tokens}
@@ -605,7 +812,7 @@ def _compare_single_model(
 ) -> None:
     """compare용 - DB 저장 없이 SSE event_queue로만 결과 push.
 
-    Bedrock(`us.*`/`global.*`) + Anthropic CP on AWS(`anthropic:*`) 양쪽 채널 지원.
+    Bedrock(`us.*`/`global.*`) + Anthropic CP on AWS(`anthropic:*`) + OpenAI(`openai:*`) 채널 지원.
     실패는 error 이벤트로만 보고 (raise 없음 - 다른 모델 호출에 영향 X).
     """
     start_time = time.monotonic()
@@ -641,6 +848,20 @@ def _compare_single_model(
                 final = stream.get_final_message()
                 input_tokens = final.usage.input_tokens
                 output_tokens = final.usage.output_tokens
+        elif _is_openai_direct(model_id):
+            region, actual_id = _openai_parts(model_id)
+            client = _get_openai_client(_openai_base_url(region))
+            for kind, *rest in _openai_stream_events(client, actual_id, prompt, max_tokens):
+                if kind == "delta":
+                    text = rest[0]
+                    now = time.monotonic()
+                    if first_token_time is None:
+                        first_token_time = now
+                        emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                    collected_text.append(text)
+                    emit("token", {"token": text})
+                else:  # ("final", input_tokens, output_tokens, _stop)
+                    input_tokens, output_tokens, _stop = rest
         else:
             client = _get_bedrock_client(_get_region_for_model(model_id))
             cfg: dict = {"maxTokens": max_tokens}

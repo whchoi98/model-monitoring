@@ -17,11 +17,20 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Opus 4.7 (Global)": "bg-rose-500",
   "Claude Opus 4.6": "bg-purple-600",
   "Claude Opus 4.6 (Global)": "bg-purple-500",
+  "Claude Sonnet 5": "bg-indigo-600",
+  "Claude Sonnet 5 (Global)": "bg-indigo-500",
   "Claude Sonnet 4.6": "bg-blue-600",
   "Claude Sonnet 4.6 (Global)": "bg-blue-500",
   "Claude Haiku 4.5": "bg-cyan-600",
   "Claude Haiku 4.5 (Global)": "bg-cyan-500",
   "Nova 2.0 Lite": "bg-amber-600",
+  "GPT 5.5 (us-east-1)": "bg-emerald-600",
+  "GPT 5.5 (us-east-2)": "bg-emerald-700",
+  "GPT 5.5 (1P)": "bg-emerald-800",
+  "GPT 5.4 (us-east-1)": "bg-green-600",
+  "GPT 5.4 (us-east-2)": "bg-green-700",
+  "GPT 5.4 (us-west-2)": "bg-green-800",
+  "GPT 5.4 (1P)": "bg-green-500",
 };
 
 function getModelColor(name: string): string {
@@ -45,6 +54,9 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
   if (modelId.includes("opus-4-6")) {
     return modelId.startsWith("global") ? "Claude Opus 4.6 (Global)" : "Claude Opus 4.6";
   }
+  if (modelId.includes("sonnet-5")) {
+    return modelId.startsWith("global") ? "Claude Sonnet 5 (Global)" : "Claude Sonnet 5";
+  }
   if (modelId.includes("sonnet-4-6")) {
     return modelId.startsWith("global") ? "Claude Sonnet 4.6 (Global)" : "Claude Sonnet 4.6";
   }
@@ -52,6 +64,13 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
     return modelId.startsWith("global") ? "Claude Haiku 4.5 (Global)" : "Claude Haiku 4.5";
   }
   if (modelId.includes("nova")) return "Nova 2.0 Lite";
+  if (modelId.startsWith("openai:")) {
+    // openai:<region>:<actual_id> — region 직접 파싱. 1P direct는 pseudo-region "1p" → "1P" 표기.
+    const rawRegion = modelId.split(":")[1] || "";
+    const region = rawRegion === "1p" ? "1P" : rawRegion;
+    const fam = modelId.includes("gpt-5.5") ? "GPT 5.5" : modelId.includes("gpt-5.4") ? "GPT 5.4" : "GPT";
+    return `${fam} (${region})`;
+  }
   return modelId;
 }
 

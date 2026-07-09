@@ -75,6 +75,15 @@ export class ClusterStack extends cdk.Stack {
     this.backendRepo = this.createImageRepo("BackendRepo", "bedrock-monitor-backend");
     this.frontendRepo = this.createImageRepo("FrontendRepo", "bedrock-monitor-frontend");
 
+    // Cross-stack export 고정 (2026-07-09): 소비 스택이 imageOverride(digest URI)로 전환하면
+    // repo 이름(Ref) export 참조가 사라져 CFN이 export 삭제를 시도하는데, 아직 옛 템플릿인
+    // 소비 스택이 import 중이라 "Cannot delete export ... in use"로 전체 배포가 롤백된다.
+    // exportValue로 export를 producer 쪽에서 명시 유지한다 (CDK 공식 두-단계 제거 패턴).
+    this.exportValue(this.backendRepo.repositoryName);
+    this.exportValue(this.frontendRepo.repositoryName);
+    this.exportValue(this.backendRepo.repositoryArn);
+    this.exportValue(this.frontendRepo.repositoryArn);
+
     // ---------------------------------------------------------------------
     // Outputs.
     // ---------------------------------------------------------------------

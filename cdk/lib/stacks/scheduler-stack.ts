@@ -18,6 +18,7 @@ import * as secretsmanager from "aws-cdk-lib/aws-secretsmanager";
 import * as ssm from "aws-cdk-lib/aws-ssm";
 import { NagSuppressions } from "cdk-nag";
 import { Construct } from "constructs";
+import { pinnedContainerImage } from "../constructs/pinned-image";
 
 export interface SchedulerStackProps extends cdk.StackProps {
   readonly vpc: ec2.IVpc;
@@ -118,9 +119,31 @@ export class SchedulerStack extends cdk.Stack {
       { parameterName: "/bedrock-monitor/anthropic-workspace-id" },
     );
 
+    // OpenAI via Bedrock Mantle (Path 4) - 사전 생성된 SSM SecureString import. 없어도 동작.
+    const openaiApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAiApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-api-key" },
+    );
+
+    // OpenAI 1P direct / api.openai.com (Path 5) - 별도 OpenAI platform 키. 없어도 동작.
+    const openai1pApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAi1pApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-1p-api-key" },
+    );
+
     // ---------------------------------------------------------------------
     // 4) TaskDefinition 빌더 - backend 이미지 + command override 패턴.
+    // 이미지 고정: context backendImage(digest URI) 지정 시 그것을 사용 (pinned-image.ts).
     // ---------------------------------------------------------------------
+    const backendImage = this.node.tryGetContext("backendImage") as string | undefined;
+    if (!backendImage) {
+      cdk.Annotations.of(this).addWarning(
+        "backendImage context 미지정 — legacy :latest 참조로 synth됨. " +
+          "운영 배포 시 -c backendImage=<uri@digest> 주입 필수 (runbook §3).",
+      );
+    }
     const buildTaskDef = (
       id: string,
       taskRole: iam.IRole,
@@ -145,12 +168,26 @@ export class SchedulerStack extends cdk.Stack {
       });
 
       td.addContainer("App", {
-        image: ecs.ContainerImage.fromEcrRepository(props.backendRepo, "latest"),
+        image: backendImage
+          ? (() => {
+              // legacy repo 참조 유지 — cross-stack export 삭제 데드락 방지 (fargate-service.ts 참고).
+              props.backendRepo.grantPull(td.obtainExecutionRole());
+              return pinnedContainerImage(this, `${id}PinnedImageRepo`, backendImage, td.obtainExecutionRole());
+            })()
+          : ecs.ContainerImage.fromEcrRepository(props.backendRepo, "latest"),
         containerName: id.toLowerCase(),
         command,
         environment: {
           AWS_REGION: this.region,
           PYTHONUNBUFFERED: "1",
+          OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
+          OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
+          OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
+          BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
+          BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
+          // 1P direct — native ids. base_url은 코드 기본값(api.openai.com) 사용.
+          OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
+          OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
         },
         secrets: {
           DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -162,6 +199,8 @@ export class SchedulerStack extends cdk.Stack {
           AGENTCORE_MEMORY_ID: ecs.Secret.fromSsmParameter(props.agentCoreMemoryIdParam),
           ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
           ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
+          OPENAI_API_KEY: ecs.Secret.fromSsmParameter(openaiApiKeyParam),
+          OPENAI_1P_API_KEY: ecs.Secret.fromSsmParameter(openai1pApiKeyParam),
         },
         logging: ecs.LogDrivers.awsLogs({
           logGroup,

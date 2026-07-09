@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 18 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 모델 프로빙 → RDS
    └─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
 ```
 
@@ -104,7 +104,7 @@ EventBridge Scheduler
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-018 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-019 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -122,12 +122,14 @@ EventBridge Scheduler
 | 013 | Output Analysis (stop_reason 분포 + output 길이) |
 | 017 | 모델 catalogue 축소 (13 → 12) |
 | 018 | ECR repository 교체 (`-v2`, Fargate image cache silent bug 우회) |
+| 019 | OpenAI/Bedrock-Mantle provider path 추가 (gpt-5.4, gpt-5.5, 4 channels) |
+| 020 | OpenAI 1P direct (api.openai.com) provider path 추가 (gpt-5.4/5.5, 2 channels) |
 
 ### 운영 / Operations
 
 - **배포**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
 - **롤백**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
-- **검증**: `make verify` — CDK lint + typecheck + 63 tests + cdk-nag + ruff + pytest 7 + frontend tsc.
+- **검증**: `make verify` — CDK lint + typecheck + 63 tests + cdk-nag + ruff + pytest 23 + frontend tsc.
 
 ---
 
@@ -149,7 +151,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 18 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 models → RDS
    └─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
 ```
 
@@ -165,10 +167,10 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-009 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-019 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 
 - **Deploy**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
 - **Rollback**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
-- **Verify**: `make verify` — CDK lint + typecheck + 63 tests + cdk-nag + ruff + pytest 7 + frontend tsc.
+- **Verify**: `make verify` — CDK lint + typecheck + 63 tests + cdk-nag + ruff + pytest 23 + frontend tsc.

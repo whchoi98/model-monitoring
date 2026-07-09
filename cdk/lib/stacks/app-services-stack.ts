@@ -117,6 +117,20 @@ export class AppServicesStack extends cdk.Stack {
       { parameterName: "/bedrock-monitor/anthropic-workspace-id" },
     );
 
+    // OpenAI via Bedrock Mantle (Path 4) - 사전 생성된 SSM SecureString import. 없어도 동작.
+    const openaiApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAiApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-api-key" },
+    );
+
+    // OpenAI 1P direct / api.openai.com (Path 5) - 별도 OpenAI platform 키(sk-proj-…). 없어도 동작.
+    const openai1pApiKeyParam = ssm.StringParameter.fromSecureStringParameterAttributes(
+      this,
+      "OpenAi1pApiKeyParam",
+      { parameterName: "/bedrock-monitor/openai-1p-api-key" },
+    );
+
     const backendSecrets: Record<string, ecs.Secret> = {
       // DATABASE_URL은 backend/database.py가 DB_USER/PASSWORD/HOST/PORT/NAME 으로 직접 조립한다.
       DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -129,12 +143,37 @@ export class AppServicesStack extends cdk.Stack {
       SEED_ADMIN_PASSWORD: ecs.Secret.fromSsmParameter(seedAdminPasswordParam),
       ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
       ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
+      OPENAI_API_KEY: ecs.Secret.fromSsmParameter(openaiApiKeyParam),
+      OPENAI_1P_API_KEY: ecs.Secret.fromSsmParameter(openai1pApiKeyParam),
     };
 
     const backendEnv: Record<string, string> = {
       AWS_REGION: this.region,
       PYTHONUNBUFFERED: "1",
+      OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
+      OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
+      OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
+      BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
+      BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
+      // 1P direct — native ids (접두사 없음). base_url은 코드 기본값(api.openai.com) 사용.
+      OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
+      OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
     };
+
+    // ---------------------------------------------------------------------
+    // 이미지 고정 (2026-07-09 실사고 재발 방지 — pinned-image.ts 참고).
+    // context 미지정 시 legacy repo:latest로 synth는 가능하지만, 운영 배포에서는 반드시
+    // -c backendImage/-c frontendImage로 digest URI를 주입할 것 (runbook §3).
+    // ---------------------------------------------------------------------
+    const backendImage = this.node.tryGetContext("backendImage") as string | undefined;
+    const frontendImage = this.node.tryGetContext("frontendImage") as string | undefined;
+    if (!backendImage || !frontendImage) {
+      cdk.Annotations.of(this).addWarning(
+        "backendImage/frontendImage context 미지정 — legacy :latest 참조로 synth됨. " +
+          "운영 배포 시 반드시 -c backendImage=<uri@digest> -c frontendImage=<uri@digest> 주입 " +
+          "(미주입 배포는 서비스를 옛 이미지로 되돌린다).",
+      );
+    }
 
     // ---------------------------------------------------------------------
     // backend Service.
@@ -146,6 +185,7 @@ export class AppServicesStack extends cdk.Stack {
       appSubnets: props.appSubnets,
       repository: props.backendRepo,
       imageTag: "latest",
+      imageOverride: backendImage,
       containerPort: 8000,
       healthCheckPath: "/api/health",
       environment: backendEnv,
@@ -164,6 +204,7 @@ export class AppServicesStack extends cdk.Stack {
       appSubnets: props.appSubnets,
       repository: props.frontendRepo,
       imageTag: "latest",
+      imageOverride: frontendImage,
       containerPort: 3000,
       healthCheckPath: "/",
       environment: {

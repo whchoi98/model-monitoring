@@ -38,9 +38,11 @@ def _parse_window(spec: str) -> timedelta:
 
 
 def _channel(model_id: str) -> str:
-    """Bedrock global / Bedrock us / Anthropic CP on AWS / Bedrock Nova."""
+    """Bedrock global / Bedrock us / Anthropic CP on AWS / Bedrock Nova / OpenAI."""
     if model_id.startswith("anthropic:"):
         return "Anthropic (CP on AWS)"
+    if model_id.startswith("openai:"):
+        return "OpenAI"
     if model_id.startswith("global.amazon.") or model_id.startswith("us.amazon."):
         return "Bedrock Nova"
     if model_id.startswith("global."):

@@ -47,9 +47,9 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("Insights는 rate(30 minutes) 스케줄을 사용한다", () => {
+  it("Insights도 rate(5 minutes) 스케줄을 사용한다 (v2.2+에서 30분→5분 단축)", () => {
     template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({
-      ScheduleExpression: "rate(30 minutes)",
+      ScheduleExpression: "rate(5 minutes)",
     }));
   });
 

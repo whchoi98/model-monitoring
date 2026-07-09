@@ -28,6 +28,7 @@ export interface Translations {
   noDataYet: string;
   noDataDesc: string;
   autoRefresh: string;
+  refreshing: string;
   seconds: string;
   minutes: string;
   triggerNow: string;
@@ -129,6 +130,7 @@ export const ko: Translations = {
   noDataYet: "아직 자동 프로빙 데이터가 없습니다.",
   noDataDesc: "자동 프로빙이 5분 간격으로 실행됩니다. 첫 번째 결과를 기다려주세요.",
   autoRefresh: "자동 새로고침",
+  refreshing: "데이터 갱신 중…",
   seconds: "초",
   minutes: "분",
   triggerNow: "지금 실행",
@@ -266,6 +268,7 @@ export const en: Translations = {
   noDataYet: "No auto-probe data yet.",
   noDataDesc: "Auto-probing runs every 5 minutes. Please wait for the first result.",
   autoRefresh: "Auto Refresh",
+  refreshing: "Refreshing…",
   seconds: "s",
   minutes: "m",
   triggerNow: "Run Now",

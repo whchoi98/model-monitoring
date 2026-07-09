@@ -110,15 +110,27 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Migration block failed (non-fatal, backend continues)")
 
+    # 성능 인덱스 (2026-07-08). 위 마이그레이션 트랜잭션(30s timeout) 밖에서 실행 —
+    # 22만+ 행 테이블의 CREATE INDEX가 30초를 초과해 실패한 실사고(2026-07-09) 재발 방지.
+    # PG에서는 CONCURRENTLY + 10분 timeout (쓰기 블로킹 없음). 상세는 models.py 참고.
+    # 최상단 `from routers import models`와 이름 충돌하므로 지점 import.
+    try:
+        from models import ensure_performance_indexes
+
+        ensure_performance_indexes(engine)
+    except Exception:
+        logger.exception("Performance index creation failed (non-fatal, backend continues)")
+
     # Seed default admin user if no users exist
     _seed_default_admin()
 
     # Anthropic 직접 API 모델 자동 발견 (ANTHROPIC_API_KEY 설정 시에만 동작)
     try:
-        from prober import _discover_anthropic_models
+        from prober import _discover_anthropic_models, _register_openai_models
         _discover_anthropic_models()
+        _register_openai_models()
     except Exception:
-        logger.exception("Anthropic model discovery failed (non-fatal)")
+        logger.exception("Model discovery/registration failed (non-fatal)")
 
     logger.info("Database tables ready.")
 
