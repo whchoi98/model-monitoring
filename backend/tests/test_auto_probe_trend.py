@@ -206,3 +206,17 @@ def test_trend_at_or_under_24h_stays_raw(db_env):
 
     # 다운샘플링 없이 cycle 단위 원본 유지 (5분 해상도)
     assert sorted(r["ttft_ms"] for r in rows) == [100.0, 200.0]
+
+
+def test_trend_and_latest_send_cachecontrol_for_cloudfront(db_env):
+    """CloudFront 전용 단기 캐시 헤더 — max-age=0이라 브라우저는 캐시하지 않는다.
+
+    데이터는 5분 주기로만 갱신되므로 s-maxage=30이면 다중 사용자·30초 자동새로고침의
+    중복 DB 조회를 CloudFront에서 흡수한다 (edge-stack의 auto-probe behavior와 세트).
+    """
+    engine, session, client = db_env
+    _seed(session)
+
+    for path in ("/api/auto-probe/trend?hours=1", "/api/auto-probe/latest"):
+        res = client.get(path)
+        assert res.headers.get("cache-control") == "public, max-age=0, s-maxage=30", path

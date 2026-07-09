@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, Query, Response
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -96,8 +96,15 @@ def get_status(db: Session = Depends(get_db)):
     }
 
 
+# CloudFront 전용 단기 캐시 (max-age=0 → 브라우저 캐시 없음). 데이터는 5분 주기 갱신이므로
+# s-maxage=30으로 다중 사용자·30초 자동새로고침의 중복 DB 조회를 edge에서 흡수.
+# CloudFront가 이 헤더를 존중하려면 edge-stack의 /api/auto-probe/* behavior 필요.
+_CACHE_CONTROL = "public, max-age=0, s-maxage=30"
+
+
 @router.get("/latest", response_model=list[ProbeResultResponse])
 def get_latest(
+    response: Response,
     category: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
@@ -107,6 +114,7 @@ def get_latest(
                      (각 모델별로 가장 최근 1개 row → 카테고리 라운드로빈 후에도 카드 표시 안정).
     category 미지정: 가장 최근 auto run의 모든 결과.
     """
+    response.headers["Cache-Control"] = _CACHE_CONTROL
     if category:
         # 카테고리별 가장 최근 cycle의 결과들
         latest_run = (
@@ -151,6 +159,7 @@ def get_latest(
 
 @router.get("/trend")
 def get_trend(
+    response: Response,
     hours: float = Query(default=24, gt=0, le=168),
     category: str | None = Query(default=None),
     db: Session = Depends(get_db),
@@ -159,6 +168,7 @@ def get_trend(
 
     category 지정 시 그 카테고리의 결과만 반환.
     """
+    response.headers["Cache-Control"] = _CACHE_CONTROL
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
 
     # 성능 (2026-07-08): ORM 전체 컬럼 로드(output_text 응답 전문 포함) + run_id IN 리스트가

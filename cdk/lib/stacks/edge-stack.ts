@@ -73,6 +73,24 @@ export class EdgeStack extends cdk.Stack {
       },
     });
 
+    // auto-probe 조회 API 전용 캐시 정책 (2026-07-08 성능 개선).
+    // - 원본 Cache-Control(s-maxage=30)을 존중: defaultTtl 0이라 헤더 없는 응답(/status 등)은 캐시 안 됨.
+    // - 데이터가 5분 주기로만 갱신되므로 30초 edge 캐시로 다중 사용자·자동새로고침 중복 DB 조회 흡수.
+    // - hours/category 쿼리스트링이 캐시 키에 반드시 포함되어야 함 (필터별 응답이 다름).
+    // - 기존 /api/*는 compress:false(SSE 보호)라 대용량 JSON이 무압축이었음 — 이 경로만 gzip/br 활성화.
+    const autoProbeCachePolicy = new cloudfront.CachePolicy(this, "AutoProbeCachePolicy", {
+      cachePolicyName: "BedrockMonitorAutoProbeCache",
+      comment: "auto-probe JSON: honor origin Cache-Control + compression",
+      minTtl: cdk.Duration.seconds(0),
+      defaultTtl: cdk.Duration.seconds(0),
+      maxTtl: cdk.Duration.seconds(60),
+      queryStringBehavior: cloudfront.CacheQueryStringBehavior.all(),
+      headerBehavior: cloudfront.CacheHeaderBehavior.none(),
+      cookieBehavior: cloudfront.CacheCookieBehavior.none(),
+      enableAcceptEncodingGzip: true,
+      enableAcceptEncodingBrotli: true,
+    });
+
     this.distribution = new cloudfront.Distribution(this, "Distribution", {
       // Default behavior - HTML 페이지 (/, /prompts 등). 캐시 + 응답 헤더 모두 no-store 강제.
       defaultBehavior: {
@@ -85,6 +103,16 @@ export class EdgeStack extends cdk.Stack {
         compress: true,
       },
       additionalBehaviors: {
+        // auto-probe 조회 API - SSE 없음. 단기 edge 캐시 + 압축 (위 autoProbeCachePolicy 주석 참고).
+        // 주의: "/api/*"보다 먼저 선언해야 우선 매칭된다.
+        "/api/auto-probe/*": {
+          origin: albOrigin,
+          viewerProtocolPolicy: cloudfront.ViewerProtocolPolicy.REDIRECT_TO_HTTPS,
+          cachePolicy: autoProbeCachePolicy,
+          originRequestPolicy: cloudfront.OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER,
+          allowedMethods: cloudfront.AllowedMethods.ALLOW_ALL, // /trigger POST 포함 (POST는 캐시 안 됨)
+          compress: true,
+        },
         // API - 절대 캐시 금지 (SSE 스트리밍 포함).
         "/api/*": {
           origin: albOrigin,
