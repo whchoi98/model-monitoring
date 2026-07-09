@@ -7,6 +7,26 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.6.2 — 2026-07-09
+
+### Fixed
+- **Dashboard graph-selection latency**: `/api/auto-probe/trend` took 4.3s even for `hours=1` (336 rows) and 22.2s / 13.3MB for `hours=168`; category/time-range clicks appeared frozen for up to 22s with no feedback, and model-chip clicks blocked the main thread for seconds. Root causes: zero non-PK DB indexes (full scans on burstable t4g.micro), ORM hydrating unused large TEXT columns (`output_text`), no downsampling, an O(T×M×N) client-side pivot re-running on every render (including the 1-second countdown re-render), and no fetch cancellation (a slow stale response could overwrite a newer selection).
+- **대시보드 그래프 선택 지연**: `hours=1`(336행)도 4.3초, `hours=168`은 22.2초/13.3MB — 필터 클릭 후 최대 22초 무반응처럼 보였고 모델 칩 클릭도 수 초 멈춤. 원인: PK 외 인덱스 전무(풀 스캔), 미사용 대형 TEXT 컬럼까지 ORM 로드, 다운샘플링 부재, 매 렌더(1초 카운트다운 포함)마다 재실행되는 O(T×M×N) 클라이언트 피벗, fetch 취소 부재(늦게 도착한 이전 응답이 최신 선택을 덮어쓰는 경쟁 상태).
+
+### Changed
+- backend: `probe_runs(is_auto,status,created_at)` / `probe_results(run_id)` / `probe_results(timestamp)` 인덱스 (lifespan 마이그레이션 `ensure_performance_indexes`, 멱등). timestamp 인덱스는 cost/reliability/efficiency/analysis 공통 이득.
+- backend: trend 쿼리 다이어트 — 응답에 쓰는 8컬럼만 SELECT + JOIN (`output_text`/`prompt` 미조회).
+- backend: `hours>24` 시간 버킷 평균 다운샘플링 (168h: 56k행 → ~4.7k행), 24h 이하는 5분 해상도 유지.
+- backend: trend/latest에 `Cache-Control: public, max-age=0, s-maxage=30` (CloudFront 전용, 브라우저 캐시 없음).
+- frontend: TrendChart 피벗을 `lib/pivotTrend.ts` Map 기반 O(N)으로 추출 + `useMemo`/`React.memo`, 700 포인트 초과 시 dot 생략 (vitest 테스트 도입).
+- frontend: 필터 재조회 중 "데이터 갱신 중…" 오버레이, `AbortController`로 이전 요청 취소, 필터 변경 시 `/status` 재호출 생략.
+- **`APP_VERSION` v2.6.1 → v2.6.2** (`frontend/src/lib/version.ts`).
+
+### Infra
+- CDK `edge-stack.ts`: `/api/auto-probe/*` 전용 behavior — `BedrockMonitorAutoProbeCache` 캐시 정책(origin Cache-Control 존중, 쿼리스트링 캐시 키, gzip/brotli 압축). 기존 `/api/*`는 SSE 보호로 무압축이었음. **적용에는 `cdk deploy BedrockMonitor-Edge` 필요.**
+
+---
+
 ## v2.6.1 — 2026-07-03
 
 ### Fixed
