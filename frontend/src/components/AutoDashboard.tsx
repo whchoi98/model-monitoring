@@ -56,12 +56,12 @@ export default function AutoDashboard() {
   const [results, setResults] = useState<ProbeResult[]>([]);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   // 카드/칩/범례 클릭 시 해당 모델만 추세 그래프에 표시 (다중 선택 - Set 토글).
-  // 첫 방문(URL에 models 없음)은 데이터 로드 후 패밀리 대표 모델로 초기화된다.
+  // 기본값은 전체(빈 set). 대표 모델 자동 선택(v2.7.1)은 카드 그리드 하이라이트와 연동되어
+  // 첫 진입 시 일부 카드가 선택된 것처럼 보이는 혼란을 유발해 제거 (2026-07-10 사용자 피드백)
+  // — "대표 모델"은 버튼으로만 제공하고, 공유 링크(URL models)는 그대로 복원한다.
   const [selectedModels, setSelectedModels] = useState<Set<string>>(
     initialQuery?.models ?? new Set(),
   );
-  // URL에 models 파라미터가 있었으면(공유 링크/새로고침) 대표 기본값을 덮어쓰지 않는다.
-  const selectionInitialized = useRef(initialQuery?.models !== undefined);
   // Phase 3 Workload Preset - 선택된 카테고리 필터 (null = 전체).
   const [categories, setCategories] = useState<WorkloadCategory[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(
@@ -130,18 +130,9 @@ export default function AutoDashboard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [trendHours, selectedCategory]);
 
-  // 첫 데이터 로드 후, URL에 명시 선택이 없으면 패밀리 대표 모델을 기본 선택 (28라인 → ~10라인).
-  useEffect(() => {
-    if (!selectionInitialized.current && results.length > 0) {
-      setSelectedModels(defaultTrendSelection(results.map((r) => r.model_name)));
-      selectionInitialized.current = true;
-    }
-  }, [results]);
-
   // 선택 상태를 URL query에 반영 — 새로고침 유지 + 공유 가능한 링크.
-  // (replaceState: 히스토리 오염 없이 갱신. 초기화 전에는 기본값을 URL에 굳히지 않는다.)
+  // (replaceState: 히스토리 오염 없이 갱신.)
   useEffect(() => {
-    if (!selectionInitialized.current) return;
     const qs = buildTrendQuery(selectedModels, trendHours, selectedCategory);
     window.history.replaceState(null, "", `${window.location.pathname}${qs}`);
   }, [selectedModels, trendHours, selectedCategory]);

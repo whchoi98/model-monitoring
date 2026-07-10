@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.7.2 — 2026-07-10
+
+### Fixed
+- **First-visit selection defaults to All**: the v2.7.1 representative-model auto-selection also highlighted those models' cards in the status grid, which looked like stray pre-selected cards on first load. Auto-selection removed — first visit shows all models (전체) with no cards highlighted; "대표 모델" remains available as an explicit button, and shared URLs still restore their exact selection.
+- **첫 진입 선택 기본값을 전체로 복원**: v2.7.1의 대표 모델 자동 선택이 상태 그리드 카드 하이라이트와 연동되어 첫 화면에서 일부 카드가 선택된 것처럼 보였음. 자동 선택 제거 — 첫 진입은 전체 표시(카드 하이라이트 없음), "대표 모델"은 명시적 버튼으로 유지, 공유 URL 복원은 그대로 동작.
+
+### Changed
+- **`APP_VERSION` v2.7.1 → v2.7.2** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.7.1 — 2026-07-09
 
 ### Added
