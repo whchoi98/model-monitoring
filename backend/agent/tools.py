@@ -53,61 +53,103 @@ def get_latest_results(db: Session, model_id: Optional[str] = None) -> Dict[str,
     }
 
 
-def get_trend(db: Session, hours: int = 24, metric: str = "ttft_ms") -> Dict[str, Any]:
-    """최근 N시간 자동 프로브 결과 시계열.
+# get_trend 응답 포인트 상한 (2026-07-10 실사고 방지 — 아래 get_trend docstring 참고).
+MAX_TREND_POINTS = 2500
 
-    metric: ttft_ms / total_latency_ms / tps 중 하나.
-    """
-    allowed = {"ttft_ms", "total_latency_ms", "tps"}
-    if metric not in allowed:
-        return {"error": f"metric must be one of {sorted(allowed)}"}
+_ALLOWED_METRICS = {"ttft_ms", "total_latency_ms", "tps"}
 
-    hours = max(1, min(hours, 168))  # 1h ~ 7d 제한
+
+def _fetch_metric_rows(db: Session, hours: int, metric: str):
+    """(timestamp, model_id, model_name, value) 슬림 튜플 목록 — 큰 TEXT 컬럼 미조회."""
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-
-    runs = (
-        db.query(ProbeRun)
-        .filter(ProbeRun.is_auto == 1, ProbeRun.status == "completed", ProbeRun.created_at >= cutoff)
-        .all()
-    )
-    if not runs:
-        return {"hours": hours, "metric": metric, "points": []}
-
-    run_ids = [r.id for r in runs]
-    rows = (
-        db.query(ProbeResult)
-        .filter(ProbeResult.run_id.in_(run_ids))
+    metric_col = getattr(ProbeResult, metric)
+    return (
+        db.query(ProbeResult.timestamp, ProbeResult.model_id, ProbeResult.model_name, metric_col)
+        .join(ProbeRun, ProbeResult.run_id == ProbeRun.id)
+        .filter(
+            ProbeRun.is_auto == 1,
+            ProbeRun.status == "completed",
+            ProbeRun.created_at >= cutoff,
+            metric_col.isnot(None),
+        )
         .order_by(ProbeResult.timestamp)
         .all()
     )
 
-    points: List[Dict[str, Any]] = []
-    for r in rows:
-        value = getattr(r, metric)
-        if value is None:
-            continue
-        points.append(
+
+def get_trend(db: Session, hours: int = 24, metric: str = "ttft_ms") -> Dict[str, Any]:
+    """최근 N시간 자동 프로브 결과 시계열.
+
+    metric: ttft_ms / total_latency_ms / tps 중 하나.
+
+    토큰 폭발 방지 (2026-07-10 실사고): 원본 포인트를 무제한 반환하면 hours=168에서
+    56k+ 포인트(≈1.6M 토큰)가 tool_result로 LLM 컨텍스트에 들어가 ConverseStream이
+    'prompt is too long' (1M 상한)으로 죽는다. 6시간 초과는 (모델, 정시 버킷) 평균으로
+    축약하고, 결과는 항상 MAX_TREND_POINTS 이하로 자른다.
+    """
+    if metric not in _ALLOWED_METRICS:
+        return {"error": f"metric must be one of {sorted(_ALLOWED_METRICS)}"}
+
+    hours = max(1, min(hours, 168))  # 1h ~ 7d 제한
+    rows = _fetch_metric_rows(db, hours, metric)
+    if not rows:
+        return {"hours": hours, "metric": metric, "points": []}
+
+    aggregation = "raw"
+    if hours > 6:
+        aggregation = "hourly_avg"
+        buckets: Dict[tuple, List[float]] = {}
+        ids: Dict[tuple, str] = {}
+        for ts, model_id, model_name, value in rows:
+            if ts is None:
+                continue
+            key = (model_name, ts.replace(minute=0, second=0, microsecond=0))
+            buckets.setdefault(key, []).append(float(value))
+            ids[key] = model_id
+        points = [
             {
-                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
-                "model_id": r.model_id,
-                "model_name": r.model_name,
+                "timestamp": bucket_ts.isoformat(),
+                "model_id": ids[(name, bucket_ts)],
+                "model_name": name,
+                "value": round(sum(vals) / len(vals), 2),
+                "sample_count": len(vals),
+            }
+            for (name, bucket_ts), vals in sorted(buckets.items(), key=lambda kv: kv[0][1])
+        ]
+    else:
+        points = [
+            {
+                "timestamp": ts.isoformat() if ts else None,
+                "model_id": model_id,
+                "model_name": model_name,
                 "value": value,
             }
-        )
+            for ts, model_id, model_name, value in rows
+        ]
 
-    return {"hours": hours, "metric": metric, "points": points}
+    truncated = len(points) > MAX_TREND_POINTS
+    if truncated:
+        points = points[-MAX_TREND_POINTS:]  # 가장 최근 구간 우선
+
+    out = {"hours": hours, "metric": metric, "aggregation": aggregation, "points": points}
+    if truncated:
+        out["note"] = f"points truncated to most recent {MAX_TREND_POINTS}"
+    return out
 
 
 def compare_models(db: Session, metric: str = "ttft_ms", hours: int = 24) -> Dict[str, Any]:
-    """최근 N시간 동안의 모델별 metric 평균/p50/p95 요약."""
-    trend = get_trend(db, hours=hours, metric=metric)
-    if "error" in trend:
-        return trend
+    """최근 N시간 동안의 모델별 metric 평균/p50/p95 요약.
 
-    # 모델별 값 묶기.
+    통계는 원본 값으로 계산한다 — get_trend의 시간 평균 축약을 거치면 p95가 뭉개진다.
+    (요약만 반환하므로 토큰 폭발 위험 없음.)
+    """
+    if metric not in _ALLOWED_METRICS:
+        return {"error": f"metric must be one of {sorted(_ALLOWED_METRICS)}"}
+    hours = max(1, min(hours, 168))
+
     by_model: Dict[str, List[float]] = {}
-    for p in trend.get("points", []):
-        by_model.setdefault(p["model_name"], []).append(float(p["value"]))
+    for _ts, _mid, model_name, value in _fetch_metric_rows(db, hours, metric):
+        by_model.setdefault(model_name, []).append(float(value))
 
     summary: List[Dict[str, Any]] = []
     for name, values in by_model.items():

@@ -7,6 +7,18 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.8.1 — 2026-07-10
+
+### Fixed
+- **Chatbot `prompt is too long` (1.6M tokens)**: the `get_trend` chat tool returned every raw probe point (56k+ points ≈ 1.6M tokens at hours=168) as a tool_result, blowing ConverseStream's 1M-token limit. Ranges over 6h now aggregate to (model, hour-bucket) averages, responses are capped at `MAX_TREND_POINTS`(2500) with an explicit `aggregation`/`note` field, and the query selects only needed columns. `compare_models` computes p50/p95 from raw values (unaffected by aggregation).
+- **챗봇 `prompt is too long`(160만 토큰) 오류**: `get_trend` 도구가 원본 포인트 전부(168h 기준 56k+개 ≈ 1.6M 토큰)를 tool_result로 반환해 ConverseStream 1M 토큰 상한 초과. 6시간 초과 조회는 (모델, 정시 버킷) 평균으로 축약, 응답 포인트는 `MAX_TREND_POINTS`(2500) 상한 + `aggregation` 필드 명시, 필요한 컬럼만 조회. `compare_models`의 p50/p95는 원본 값으로 계산(축약 영향 없음).
+- **2026-07-08 커넥션 풀 장애 수정 git 복구**: TCP keepalive + statement_timeout `connect_args`가 미커밋 상태로 운영 이미지에만 존재했음 — 이미지에서 추출해 회귀 테스트와 함께 정식 커밋 (다음 빌드에서의 조용한 소실 방지).
+
+### Changed
+- **`APP_VERSION` v2.8.0 → v2.8.1** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.8.0 — 2026-07-10
 
 ### Added
