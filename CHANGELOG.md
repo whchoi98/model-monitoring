@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.8.2 — 2026-07-10
+
+### Fixed
+- **AI Insights unreadable in white theme**: `MessageMarkdown` hardcoded `prose-invert` (dark-only typography), rendering light text on white cards. Typography now switches with the theme; chat bubbles use the same component and are fixed together.
+- **화이트 테마에서 AI 인사이트 안 보임**: `MessageMarkdown`이 다크 전용 `prose-invert`를 하드코딩해 흰 카드 위 밝은 글자로 렌더링됨. 테마에 따라 typography 분기 — 같은 컴포넌트를 쓰는 챗봇 말풍선도 함께 수정.
+
+### Changed
+- **`APP_VERSION` v2.8.1 → v2.8.2** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.8.1 — 2026-07-10
 
 ### Fixed
