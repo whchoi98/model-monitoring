@@ -11,6 +11,7 @@ import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
 import AnalysisPanel from "@/components/AnalysisPanel";
 import { APP_VERSION } from "@/lib/version";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function AnalysisPage() {
   return (
@@ -65,6 +66,7 @@ function Inner() {
             <div className="flex bg-gray-800/50 rounded-lg p-0.5">
               <button onClick={() => setLang("ko")} className={`px-2 py-1 text-xs font-medium rounded-md ${lang === "ko" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-gray-200"}`}>KO</button>
               <button onClick={() => setLang("en")} className={`px-2 py-1 text-xs font-medium rounded-md ${lang === "en" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-gray-200"}`}>EN</button>
+              <ThemeToggle />
             </div>
             <nav className="flex bg-gray-800/50 rounded-lg p-0.5">
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.dashboardTab}</Link>

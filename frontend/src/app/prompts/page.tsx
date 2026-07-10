@@ -11,6 +11,7 @@ import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
 import PromptsPanel from "@/components/PromptsPanel";
 import { APP_VERSION } from "@/lib/version";
+import ThemeToggle from "@/components/ThemeToggle";
 
 export default function PromptsPage() {
   return (
@@ -102,6 +103,7 @@ function PromptsPageContent() {
               >
                 EN
               </button>
+              <ThemeToggle />
             </div>
 
             {/* Top nav - 다른 탭 클릭 시 main page로 이동 */}

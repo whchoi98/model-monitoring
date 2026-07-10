@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.8.0 — 2026-07-10
+
+### Added
+- **Dark/light theme toggle**: header ☀️/🌙 button on all 6 pages switches between the existing dark theme (default) and a new SnowUI-toned white theme; choice persists in localStorage and is restored pre-hydration (no flash). Implementation remaps the Tailwind gray scale to CSS variables (`globals.css` + `tailwind.config.ts`), so all ~495 existing `gray-*` class usages theme automatically with zero component changes; charts (Recharts JS-constant colors) switch via a `useChartTheme()` hook. Light theme adds subtle card shadows for depth.
+- **다크/화이트 테마 토글**: 6개 페이지 헤더의 ☀️/🌙 버튼으로 기존 다크(기본)와 SnowUI 톤 화이트 테마 전환. 선택은 localStorage에 저장되고 하이드레이션 전에 복원(FOUC 없음). Tailwind gray 스케일을 CSS 변수로 재매핑해 기존 `gray-*` 클래스 약 495곳이 컴포넌트 수정 없이 자동 테마화, 차트(Recharts JS 상수 색)는 `useChartTheme()` 훅으로 분기. 화이트 테마에는 카드 그림자 추가.
+
+### Changed
+- **`APP_VERSION` v2.7.2 → v2.8.0** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.7.2 — 2026-07-10
 
 ### Fixed
