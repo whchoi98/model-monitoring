@@ -3,6 +3,7 @@
 import { memo, useMemo } from "react";
 import { TrendPoint } from "@/lib/types";
 import { pivotTrend } from "@/lib/pivotTrend";
+import { useChartTheme } from "@/lib/chartTheme";
 import {
   Area,
   ComposedChart,
@@ -86,6 +87,7 @@ function formatUnit(value: number, metric: string): string {
 }
 
 function TrendChart({ data, metric, title, selectedModels, onToggleModel }: Props) {
+  const ct = useChartTheme();
   const hasSelection = selectedModels && selectedModels.size > 0;
   // min–max 밴드: 단일 모델 선택 + 집계 구간(hours>24)일 때만 — 다중 모델 밴드는 시각적 혼잡.
   const showBand = selectedModels?.size === 1;
@@ -128,15 +130,15 @@ function TrendChart({ data, metric, title, selectedModels, onToggleModel }: Prop
       </div>
       <ResponsiveContainer width="100%" height={300}>
         <ComposedChart data={chartData} margin={{ top: 5, right: 20, bottom: 5, left: 10 }}>
-          <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+          <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
           <XAxis
             dataKey="time"
-            tick={{ fill: "#6b7280", fontSize: 11 }}
-            stroke="#374151"
+            tick={{ fill: ct.tick, fontSize: 11 }}
+            stroke={ct.axisLine}
           />
           <YAxis
-            tick={{ fill: "#6b7280", fontSize: 11 }}
-            stroke="#374151"
+            tick={{ fill: ct.tick, fontSize: 11 }}
+            stroke={ct.axisLine}
             tickFormatter={(v) => {
               if (metric === "tps") return v.toFixed(0);
               if (metric === "total_latency_ms") return `${(v / 1000).toFixed(1)}s`;
@@ -144,13 +146,8 @@ function TrendChart({ data, metric, title, selectedModels, onToggleModel }: Prop
             }}
           />
           <Tooltip
-            contentStyle={{
-              backgroundColor: "#0f172a",
-              border: "1px solid #374151",
-              borderRadius: "8px",
-              fontSize: "12px",
-            }}
-            labelStyle={{ color: "#9ca3af" }}
+            contentStyle={ct.tooltipStyle}
+            labelStyle={ct.tooltipLabel}
             formatter={(value: number, name: string) => [
               formatUnit(value, metric),
               name,

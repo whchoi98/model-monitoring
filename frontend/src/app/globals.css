@@ -2,11 +2,60 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------------------------------------------------------------------------
+ * 테마 팔레트 (v2.8.0) — Tailwind gray 스케일을 CSS 변수(rgb triplet)로 재매핑.
+ * tailwind.config.ts가 gray-*를 var() 기반으로 정의하므로, 아래 변수만 바꾸면
+ * 기존 컴포넌트의 bg-gray-950 / text-gray-100 / border-gray-800 클래스 495곳이
+ * 코드 수정 없이 통째로 전환된다. 기본은 다크(:root), <html class="light">가 화이트.
+ * ------------------------------------------------------------------------- */
+:root {
+  /* 다크 (기본) — Tailwind 기본 gray 스케일 원본 */
+  --tw-gray-100: 243 244 246;
+  --tw-gray-200: 229 231 235;
+  --tw-gray-300: 209 213 219;
+  --tw-gray-400: 156 163 175;
+  --tw-gray-500: 107 114 128;
+  --tw-gray-600: 75 85 99;
+  --tw-gray-700: 55 65 81;
+  --tw-gray-800: 31 41 55;
+  --tw-gray-900: 17 24 39;
+  --tw-gray-950: 3 7 18;
+  color-scheme: dark;
+}
+
+html.light {
+  /* 화이트 — SnowUI 톤. 다크의 역할을 반전 매핑:
+   * 950(페이지 배경)→연회색, 900(카드)→흰색, 800(보더/버튼)→연보더,
+   * 100~300(본문 텍스트)→진회색. 상태색(emerald/amber/rose)·블루 액센트는 공용. */
+  --tw-gray-100: 15 23 42;    /* 본문 최강조 (#0F172A) */
+  --tw-gray-200: 30 41 59;    /* 제목/강조 (#1E293B) */
+  --tw-gray-300: 51 65 85;    /* 본문 (#334155) */
+  --tw-gray-400: 71 85 105;   /* 보조 텍스트 (#475569) */
+  --tw-gray-500: 100 116 139; /* 흐린 텍스트 (#64748B) */
+  --tw-gray-600: 148 163 184; /* 가장 흐린 텍스트 (#94A3B8) */
+  --tw-gray-700: 203 213 225; /* hover 배경/진보더 (#CBD5E1) */
+  --tw-gray-800: 226 232 240; /* 보더/칩 배경 (#E2E8F0) */
+  --tw-gray-900: 255 255 255; /* 카드 (#FFFFFF) */
+  --tw-gray-950: 244 247 251; /* 페이지 배경 (#F4F7FB — SnowUI 톤) */
+  color-scheme: light;
+}
+
 body {
   @apply bg-gray-950 text-gray-100;
 }
 
-/* Scrollbar styling for dark theme */
+/* 테마 전환 시 배경·보더가 부드럽게 넘어가도록 (개별 요소 transition은 과함) */
+body,
+.recharts-wrapper {
+  transition: background-color 0.2s ease;
+}
+
+/* 화이트 테마 카드 입체감 — 다크는 배경 대비로 충분하지만 흰 카드는 그림자가 필요 */
+html.light .rounded-xl.border {
+  box-shadow: 0 1px 2px 0 rgb(15 23 42 / 0.04), 0 1px 3px 0 rgb(15 23 42 / 0.06);
+}
+
+/* Scrollbar styling (gray가 var 기반이라 테마 자동 추종) */
 ::-webkit-scrollbar {
   width: 8px;
   height: 8px;

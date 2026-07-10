@@ -25,6 +25,7 @@ import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
+import ThemeToggle from "@/components/ThemeToggle";
 
 const DEFAULT_CONFIG: ProbeConfig = {
   model_ids: [],
@@ -173,6 +174,7 @@ function HomeContent() {
               >
                 EN
               </button>
+              <ThemeToggle />
             </div>
 
             {/* Top Tab Navigation */}

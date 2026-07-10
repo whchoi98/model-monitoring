@@ -1,5 +1,6 @@
 "use client";
 
+import { useChartTheme } from "@/lib/chartTheme";
 import { useMemo } from "react";
 import {
   BarChart,
@@ -92,6 +93,7 @@ const CustomTooltip = ({
 };
 
 export default function LatencyChart({ results }: LatencyChartProps) {
+  const ct = useChartTheme();
   const data = useMemo(() => aggregateByModel(results), [results]);
 
   if (data.length === 0) return null;
@@ -108,21 +110,21 @@ export default function LatencyChart({ results }: LatencyChartProps) {
             data={data}
             margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+            <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
             <XAxis
               dataKey="model"
-              tick={{ fill: "#9ca3af", fontSize: 11 }}
-              axisLine={{ stroke: "#374151" }}
-              tickLine={{ stroke: "#374151" }}
+              tick={{ fill: ct.tick, fontSize: 11 }}
+              axisLine={{ stroke: ct.axisLine }}
+              tickLine={{ stroke: ct.axisLine }}
             />
             <YAxis
-              tick={{ fill: "#9ca3af", fontSize: 11 }}
-              axisLine={{ stroke: "#374151" }}
-              tickLine={{ stroke: "#374151" }}
+              tick={{ fill: ct.tick, fontSize: 11 }}
+              axisLine={{ stroke: ct.axisLine }}
+              tickLine={{ stroke: ct.axisLine }}
             />
             <Tooltip content={<CustomTooltip />} />
             <Legend
-              wrapperStyle={{ fontSize: "12px", color: "#9ca3af" }}
+              wrapperStyle={{ fontSize: "12px", color: ct.tick }}
             />
             <Bar
               dataKey="ttft_avg"
@@ -159,17 +161,17 @@ export default function LatencyChart({ results }: LatencyChartProps) {
             data={data}
             margin={{ top: 5, right: 20, left: 10, bottom: 5 }}
           >
-            <CartesianGrid strokeDasharray="3 3" stroke="#1f2937" />
+            <CartesianGrid strokeDasharray="3 3" stroke={ct.grid} />
             <XAxis
               dataKey="model"
-              tick={{ fill: "#9ca3af", fontSize: 11 }}
-              axisLine={{ stroke: "#374151" }}
-              tickLine={{ stroke: "#374151" }}
+              tick={{ fill: ct.tick, fontSize: 11 }}
+              axisLine={{ stroke: ct.axisLine }}
+              tickLine={{ stroke: ct.axisLine }}
             />
             <YAxis
-              tick={{ fill: "#9ca3af", fontSize: 11 }}
-              axisLine={{ stroke: "#374151" }}
-              tickLine={{ stroke: "#374151" }}
+              tick={{ fill: ct.tick, fontSize: 11 }}
+              axisLine={{ stroke: ct.axisLine }}
+              tickLine={{ stroke: ct.axisLine }}
             />
             <Tooltip content={<CustomTooltip />} />
             <Bar
