@@ -7,6 +7,14 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.9.2 — 2026-07-11
+
+### Fixed
+- **/models 페이지 자체의 내비 순서 누락 수정**: v2.9.1 재배치가 다른 페이지에만 적용되고 모델 탐색 페이지의 활성 탭은 끝에 남아 있었음.
+- **`APP_VERSION` v2.9.1 → v2.9.2**.
+
+---
+
 ## v2.9.1 — 2026-07-11
 
 ### Changed
