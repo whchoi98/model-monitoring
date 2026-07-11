@@ -21,6 +21,10 @@ export interface ChannelInfo {
 
 export interface CodeExample {
   label: string;
+  /** API 종류 표기 — Converse API / InvokeModel API / Messages API / Responses API */
+  api: string;
+  /** 이 API가 의미하는 바 (카드 상세에서 탭 아래 표시) */
+  description: string;
   language: string;
   code: string;
 }
@@ -77,11 +81,13 @@ export function codeExamples(modelId: string): CodeExample[] {
   const id = nativeId(modelId);
 
   if (ch.type === "bedrock") {
-    return [
-      {
-        label: "Python (boto3)",
-        language: "python",
-        code: `import boto3
+    const converse: CodeExample = {
+      label: "Python (boto3)",
+      api: "Converse API",
+      description:
+        "Bedrock의 통합 대화 API — 모든 Bedrock 모델을 동일한 요청 형식으로 호출하므로 코드 수정 없이 모델을 교체할 수 있습니다. 스트리밍은 converse_stream을 사용합니다. 이 모니터의 prober도 이 API를 사용합니다.",
+      language: "python",
+      code: `import boto3
 
 client = boto3.client("bedrock-runtime", region_name="ap-northeast-2")
 
@@ -93,14 +99,33 @@ response = client.converse_stream(
 for event in response["stream"]:
     if "contentBlockDelta" in event:
         print(event["contentBlockDelta"]["delta"].get("text", ""), end="")`,
-      },
+    };
+    // InvokeModel은 모델 네이티브 페이로드가 필요 — Claude(Anthropic) 모델에만 예제 제공.
+    if (!modelId.includes("anthropic")) {
+      return [converse];
+    }
+    return [
+      converse,
       {
-        label: "AWS CLI",
-        language: "bash",
-        code: `aws bedrock-runtime converse \\
-  --region ap-northeast-2 \\
-  --model-id "${id}" \\
-  --messages '[{"role":"user","content":[{"text":"안녕하세요!"}]}]'`,
+        label: "Python (boto3)",
+        api: "InvokeModel API",
+        description:
+          "모델 네이티브 페이로드를 그대로 전달하는 저수준 API — 모델 고유 스키마(Claude는 Anthropic Messages 형식)와 세부 파라미터를 직접 제어할 때 사용합니다. 모델을 바꾸면 요청 본문도 함께 바꿔야 합니다.",
+        language: "python",
+        code: `import boto3, json
+
+client = boto3.client("bedrock-runtime", region_name="ap-northeast-2")
+
+response = client.invoke_model(
+    modelId="${id}",
+    body=json.dumps({
+        "anthropic_version": "bedrock-2023-05-31",
+        "max_tokens": 512,
+        "messages": [{"role": "user", "content": "안녕하세요!"}],
+    }),
+)
+result = json.loads(response["body"].read())
+print(result["content"][0]["text"])`,
       },
     ];
   }
@@ -109,6 +134,9 @@ for event in response["stream"]:
     return [
       {
         label: "Python (anthropic SDK)",
+        api: "Messages API",
+        description:
+          "Anthropic 네이티브 API — Claude 전용 기능(확장 사고, 프롬프트 캐싱 등)을 가장 완전하게 지원합니다. 여기서는 Claude Platform on AWS 엔드포인트와 workspace 헤더로 호출합니다.",
         language: "python",
         code: `from anthropic import Anthropic
 
@@ -134,6 +162,9 @@ with client.messages.stream(
     return [
       {
         label: "Python (openai SDK)",
+        api: "Responses API",
+        description:
+          "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. Bedrock Mantle은 OpenAI 호환 엔드포인트라 동일한 형식으로 호출하되, 키는 Bedrock bearer(ABSK-…)를 사용합니다.",
         language: "python",
         code: `from openai import OpenAI
 
@@ -159,6 +190,9 @@ for event in stream:
   return [
     {
       label: "Python (openai SDK)",
+      api: "Responses API",
+      description:
+        "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. api.openai.com 직접 호출이며 OpenAI platform 키(sk-proj-…)가 필요합니다.",
       language: "python",
       code: `from openai import OpenAI
 

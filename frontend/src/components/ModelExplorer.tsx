@@ -136,26 +136,29 @@ function DetailModal({ model, onClose }: { model: ModelInfo; onClose: () => void
             </h3>
             <CopyButton text={examples[tab].code} />
           </div>
-          {examples.length > 1 && (
-            <div className="flex gap-1 mb-2">
-              {examples.map((ex, i) => (
-                <button
-                  key={ex.label}
-                  onClick={() => setTab(i)}
-                  className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                    tab === i
-                      ? "bg-blue-600 text-white"
-                      : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
-                  }`}
-                >
-                  {ex.label}
-                </button>
-              ))}
-            </div>
-          )}
-          {examples.length === 1 && (
-            <div className="text-[10px] text-gray-500 mb-1">{examples[0].label}</div>
-          )}
+          {/* API 종류 탭 — Converse / InvokeModel / Messages / Responses */}
+          <div className="flex gap-1 mb-2">
+            {examples.map((ex, i) => (
+              <button
+                key={ex.api}
+                onClick={() => setTab(i)}
+                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                  tab === i
+                    ? "bg-blue-600 text-white"
+                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                }`}
+              >
+                {ex.api}
+              </button>
+            ))}
+          </div>
+          {/* 선택된 API가 의미하는 바 */}
+          <p className="text-xs text-gray-400 leading-relaxed mb-2 bg-blue-500/5 light:bg-gray-950 border border-gray-800 rounded-md p-2.5">
+            <span className="font-semibold text-gray-200">{examples[tab].api}</span>
+            {" — "}
+            {examples[tab].description}
+          </p>
+          <div className="text-[10px] text-gray-500 mb-1">{examples[tab].label}</div>
           <pre className="bg-gray-950 light:bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs text-gray-200 leading-relaxed">
             <code>{examples[tab].code}</code>
           </pre>
