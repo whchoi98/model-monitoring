@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.8.3 — 2026-07-11
+
+### Fixed
+- **Accent colors unreadable in white theme across all pages**: metric/badge text tuned for dark backgrounds (`text-emerald-400`, `text-rose-400`, `text-amber-400`, `text-blue-300`, …) washed out on white cards. The light tints (steps 200/300/400) of all 17 used accent hues are now CSS variables that swap to the same hue's dark tones (200→800, 300→700, 400→600) in the light theme — no component changes; solid 500+ (buttons) and low-opacity tint boxes stay shared between themes.
+- **화이트 테마에서 전 페이지 액센트 색 가독성 저하**: 다크 배경 기준으로 선정된 지표·배지 텍스트(`text-emerald-400`, `text-rose-400`, `text-amber-400`, `text-blue-300` 등)가 흰 카드에서 씻겨 보임. 사용 중인 17개 액센트 hue의 밝은 톤(200/300/400)을 CSS 변수화해 라이트에서 같은 hue의 진한 톤(200→800, 300→700, 400→600)으로 교체 — 컴포넌트 무수정, 500 이상(버튼)과 저투명 틴트 박스는 양 테마 공용 유지.
+
+### Changed
+- **`APP_VERSION` v2.8.2 → v2.8.3** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.8.2 — 2026-07-10
 
 ### Fixed

@@ -20,6 +20,93 @@ const config: Config = {
           900: "rgb(var(--tw-gray-900) / <alpha-value>)",
           950: "rgb(var(--tw-gray-950) / <alpha-value>)",
         },
+        // 액센트 밝은 톤(200/300/400)만 변수화 — 라이트에서 진한 톤으로 교체 (v2.8.3).
+        // 500+ 단계는 Tailwind 기본값 유지 (extend라 여기 없는 step은 원본 그대로).
+        blue: {
+          200: "rgb(var(--tw-blue-200) / <alpha-value>)",
+          300: "rgb(var(--tw-blue-300) / <alpha-value>)",
+          400: "rgb(var(--tw-blue-400) / <alpha-value>)",
+        },
+        emerald: {
+          200: "rgb(var(--tw-emerald-200) / <alpha-value>)",
+          300: "rgb(var(--tw-emerald-300) / <alpha-value>)",
+          400: "rgb(var(--tw-emerald-400) / <alpha-value>)",
+        },
+        amber: {
+          200: "rgb(var(--tw-amber-200) / <alpha-value>)",
+          300: "rgb(var(--tw-amber-300) / <alpha-value>)",
+          400: "rgb(var(--tw-amber-400) / <alpha-value>)",
+        },
+        rose: {
+          200: "rgb(var(--tw-rose-200) / <alpha-value>)",
+          300: "rgb(var(--tw-rose-300) / <alpha-value>)",
+          400: "rgb(var(--tw-rose-400) / <alpha-value>)",
+        },
+        purple: {
+          200: "rgb(var(--tw-purple-200) / <alpha-value>)",
+          300: "rgb(var(--tw-purple-300) / <alpha-value>)",
+          400: "rgb(var(--tw-purple-400) / <alpha-value>)",
+        },
+        orange: {
+          200: "rgb(var(--tw-orange-200) / <alpha-value>)",
+          300: "rgb(var(--tw-orange-300) / <alpha-value>)",
+          400: "rgb(var(--tw-orange-400) / <alpha-value>)",
+        },
+        cyan: {
+          200: "rgb(var(--tw-cyan-200) / <alpha-value>)",
+          300: "rgb(var(--tw-cyan-300) / <alpha-value>)",
+          400: "rgb(var(--tw-cyan-400) / <alpha-value>)",
+        },
+        indigo: {
+          200: "rgb(var(--tw-indigo-200) / <alpha-value>)",
+          300: "rgb(var(--tw-indigo-300) / <alpha-value>)",
+          400: "rgb(var(--tw-indigo-400) / <alpha-value>)",
+        },
+        teal: {
+          200: "rgb(var(--tw-teal-200) / <alpha-value>)",
+          300: "rgb(var(--tw-teal-300) / <alpha-value>)",
+          400: "rgb(var(--tw-teal-400) / <alpha-value>)",
+        },
+        green: {
+          200: "rgb(var(--tw-green-200) / <alpha-value>)",
+          300: "rgb(var(--tw-green-300) / <alpha-value>)",
+          400: "rgb(var(--tw-green-400) / <alpha-value>)",
+        },
+        red: {
+          200: "rgb(var(--tw-red-200) / <alpha-value>)",
+          300: "rgb(var(--tw-red-300) / <alpha-value>)",
+          400: "rgb(var(--tw-red-400) / <alpha-value>)",
+        },
+        yellow: {
+          200: "rgb(var(--tw-yellow-200) / <alpha-value>)",
+          300: "rgb(var(--tw-yellow-300) / <alpha-value>)",
+          400: "rgb(var(--tw-yellow-400) / <alpha-value>)",
+        },
+        lime: {
+          200: "rgb(var(--tw-lime-200) / <alpha-value>)",
+          300: "rgb(var(--tw-lime-300) / <alpha-value>)",
+          400: "rgb(var(--tw-lime-400) / <alpha-value>)",
+        },
+        fuchsia: {
+          200: "rgb(var(--tw-fuchsia-200) / <alpha-value>)",
+          300: "rgb(var(--tw-fuchsia-300) / <alpha-value>)",
+          400: "rgb(var(--tw-fuchsia-400) / <alpha-value>)",
+        },
+        sky: {
+          200: "rgb(var(--tw-sky-200) / <alpha-value>)",
+          300: "rgb(var(--tw-sky-300) / <alpha-value>)",
+          400: "rgb(var(--tw-sky-400) / <alpha-value>)",
+        },
+        violet: {
+          200: "rgb(var(--tw-violet-200) / <alpha-value>)",
+          300: "rgb(var(--tw-violet-300) / <alpha-value>)",
+          400: "rgb(var(--tw-violet-400) / <alpha-value>)",
+        },
+        pink: {
+          200: "rgb(var(--tw-pink-200) / <alpha-value>)",
+          300: "rgb(var(--tw-pink-300) / <alpha-value>)",
+          400: "rgb(var(--tw-pink-400) / <alpha-value>)",
+        },
       },
       fontFamily: {
         mono: [
