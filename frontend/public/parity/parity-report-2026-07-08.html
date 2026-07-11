@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Bedrock Feature Parity Report — 2026-07-08</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 40px 48px; font: 14px/1.55 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif; color: #1e293b; background: #fff; }
+  header { border-bottom: 3px solid #6366f1; padding-bottom: 18px; margin-bottom: 26px; }
+  h1 { margin: 0 0 4px; font-size: 24px; letter-spacing: -0.02em; }
+  h2 { font-size: 17px; margin: 32px 0 10px; letter-spacing: -0.01em; }
+  h3 { font-size: 15px; margin: 22px 0 8px; display: flex; align-items: center; gap: 8px; }
+  .confidential { display: inline-block; background: #fef3c7; color: #b45309; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; padding: 2px 8px; border-radius: 4px; margin-bottom: 8px; }
+  .meta { color: #64748b; font-size: 13px; }
+  .meta b { color: #334155; }
+  .meta .alias { display: inline-block; background: #eef2ff; color: #4338ca; font-weight: 700; padding: 1px 8px; border-radius: 4px; }
+  .cards { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; margin: 16px 0; }
+  .card { border: 1px solid #e2e8f0; border-radius: 10px; padding: 14px 16px; }
+  .card-head { display: flex; align-items: center; gap: 10px; }
+  .card-head h3 { margin: 0; }
+  .parity { margin-left: auto; font-size: 22px; font-weight: 800; }
+  .parity small { font-size: 10px; font-weight: 600; color: #94a3b8; text-transform: uppercase; margin-left: 4px; }
+  .badge { font-size: 11px; font-weight: 800; padding: 2px 7px; border-radius: 5px; letter-spacing: 0.03em; }
+  table { border-collapse: collapse; width: 100%; }
+  table.counts { margin-top: 10px; }
+  table.counts td { font-size: 13px; color: #64748b; padding: 2px 12px 2px 0; }
+  .ok { color: #059669; } .warn { color: #d97706; } .bad { color: #e11d48; } .mut { color: #94a3b8; }
+  table.kv td { padding: 5px 14px 5px 0; vertical-align: top; font-size: 13px; }
+  table.kv td:first-child { color: #64748b; white-space: nowrap; font-weight: 600; }
+  table.findings { font-size: 12px; margin-bottom: 8px; }
+  table.findings th { text-align: left; font-size: 10px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; padding: 6px 10px; border-bottom: 1px solid #e2e8f0; }
+  table.findings td { padding: 7px 10px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  table.findings tr:nth-child(even) td { background: #f8fafc; }
+  .mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11.5px; }
+  .small { font-size: 11.5px; color: #475569; }
+  .empty { color: #64748b; font-style: italic; }
+  footer { margin-top: 36px; padding-top: 14px; border-top: 1px solid #e2e8f0; color: #94a3b8; font-size: 12px; }
+  @media print {
+    body { padding: 0; }
+    .card, table.findings tr { break-inside: avoid; }
+    h2, h3 { break-after: avoid; }
+  }
+</style>
+</head>
+<body>
+<header>
+  <span class="confidential">Amazon Confidential — Internal Only</span>
+  <h1>Bedrock Feature Parity Report</h1>
+  <p class="meta">
+    Run <b>2026-07-08</b> · Generated Sat, 11 Jul 2026 05:48:16 UTC by
+    <span class="alias">whchoi@</span>
+  </p>
+</header>
+
+<h2>Run details</h2>
+<table class="kv">
+  <tr><td>Sweep started</td><td>Wed, 08 Jul 2026 12:37:42 UTC</td></tr>
+  <tr><td>Sweep ended</td><td>Wed, 08 Jul 2026 13:06:24 UTC</td></tr>
+  <tr><td>Scope</td><td>Full sweep — all providers, models, regions and features</td></tr>
+  <tr><td>Total checks</td><td>3,324</td></tr>
+  <tr><td>Models (9)</td><td class="mono small">anthropic.claude-fable-5, anthropic.claude-haiku-4-5, anthropic.claude-opus-4-7, anthropic.claude-opus-4-8, anthropic.claude-sonnet-5, openai.gpt-5.4, openai.gpt-5.5, openai.gpt-oss-120b, openai.gpt-oss-20b</td></tr>
+  <tr><td>Regions (15)</td><td class="mono small">ap-northeast-1, ap-south-1, ap-southeast-1, ap-southeast-2, ap-southeast-3, ap-southeast-4, eu-central-1, eu-north-1, eu-south-1, eu-west-1, eu-west-2, sa-east-1, us-east-1, us-east-2, us-west-2</td></tr>
+  <tr><td>API surfaces</td><td class="mono small">chat_completions, converse, invokemodel, messages, responses</td></tr>
+  <tr><td>Features tested</td><td>94</td></tr>
+</table>
+
+<h2>Provider summary (OAI &amp; ANT)</h2>
+<div class="cards">
+
+      <div class="card">
+        <div class="card-head">
+          <span class="badge" style="background:#6366f11a;color:#6366f1">ANT</span>
+          <h3>Anthropic</h3>
+          <span class="parity" style="color:#6366f1">47%<small>parity</small></span>
+        </div>
+        <table class="counts">
+          <tr>
+            <td><b class="ok">408</b> supported</td>
+            <td><b class="warn">410</b> unsupported</td>
+            <td><b class="bad">55</b> broken</td>
+            <td><b class="mut">742</b> skipped</td>
+          </tr>
+        </table>
+      </div>
+
+      <div class="card">
+        <div class="card-head">
+          <span class="badge" style="background:#10a37f1a;color:#10a37f">OAI</span>
+          <h3>OpenAI</h3>
+          <span class="parity" style="color:#10a37f">28%<small>parity</small></span>
+        </div>
+        <table class="counts">
+          <tr>
+            <td><b class="ok">385</b> supported</td>
+            <td><b class="warn">829</b> unsupported</td>
+            <td><b class="bad">156</b> broken</td>
+            <td><b class="mut">339</b> skipped</td>
+          </tr>
+        </table>
+      </div>
+</div>
+
+<h2>Major breaks</h2>
+
+      <h3><span class="badge" style="background:#6366f11a;color:#6366f1">ANT</span>
+        Anthropic — 20 broken findings</h3>
+      <table class="findings">
+        <thead><tr><th>Model</th><th>API</th><th>Feature</th><th>Regions</th><th>Error</th></tr></thead>
+        <tbody>
+      <tr>
+        <td class="mono">anthropic.claude-fable-5</td>
+        <td class="mono">messages</td>
+        <td>Reasoning effort levels</td>
+        <td class="mono small">us-east-1</td>
+        <td class="small">effort=low accepted</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">converse</td>
+        <td>Adaptive / extended thinking</td>
+        <td class="mono small">ap-northeast-1, us-east-1, eu-north-1, eu-west-1, us-west-2, ap-southeast-4</td>
+        <td class="small">ValidationException: An error occurred (ValidationException) when calling the Converse operation: The model returned the following errors: output_config.effort: Extra inputs are not permitted</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">invokemodel</td>
+        <td>Adaptive / extended thinking</td>
+        <td class="mono small">eu-west-1, ap-northeast-1, us-east-1, eu-north-1, ap-southeast-4, us-west-2</td>
+        <td class="small">ValidationException: An error occurred (ValidationException) when calling the InvokeModel operation: output_config.effort: Extra inputs are not permitted</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Basic inference</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_efe5nemsafmbtallzukszh4cyhl76ui5oou3upllmstkvrxboc2q', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Citations</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_47rdc5jechwgruuhcfydi43gemxtaiclueafwjk2ky64ucpu5yaa', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Computer use</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_ishnlnjpvgyf43lddnax3qv3bsav7ch6didw6sqgn4evnytvki5a', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Memory tool</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_patub7jkps7s3tdpqakfu6cyfpblwkwn4bvcj7o75iadhb3tessq', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>PDF document input</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_uusddvz4rw33w5ysmg2i2xmyhkqyrr67iwj5mpm3w67j7ccpk5na', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Prompt caching</td>
+        <td class="mono small">ap-northeast-1, eu-west-1, eu-north-1, ap-southeast-4, us-west-2, us-east-1</td>
+        <td class="small">cache_write=0, cache_read=0</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">invokemodel</td>
+        <td>Prompt caching</td>
+        <td class="mono small">us-east-1, eu-north-1, us-west-2, ap-southeast-4, eu-west-1, ap-northeast-1</td>
+        <td class="small">cache_write=0, cache_read=0</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Streaming</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_alwssgo4bzyl4mtvmmvtbw42h3uyux6dipbqs5j4qmovhe3nts4q', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">converse</td>
+        <td>Thinking display</td>
+        <td class="mono small">ap-northeast-1, us-west-2, eu-west-1, us-east-1, eu-north-1, ap-southeast-4</td>
+        <td class="small">ValidationException: An error occurred (ValidationException) when calling the Converse operation: The model returned the following errors: output_config.effort: Extra inputs are not permitted</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Tool use (function calling)</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_awias5xjya5w6hji6s7stk2urzj4s3vsaskl5vbnqnigdsemj6ta', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-haiku-4-5</td>
+        <td class="mono">messages</td>
+        <td>Vision (image input)</td>
+        <td class="mono small">us-west-2</td>
+        <td class="small">InternalServerError: Error code: 500 - {'type': 'error', 'request_id': 'req_on7ohw4gr7yzixh5yau5g4mbega56lqmgv52ejvl4j5ewsmxhtoq', 'error': {'type': 'api_error', 'message': 'The server had an error while processing your </td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-opus-4-7</td>
+        <td class="mono">messages</td>
+        <td>Adaptive / extended thinking</td>
+        <td class="mono small">eu-north-1, us-east-1</td>
+        <td class="small">thinking block present</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-opus-4-7</td>
+        <td class="mono">messages</td>
+        <td>Reasoning effort levels</td>
+        <td class="mono small">us-east-1, ap-northeast-1, eu-west-1, eu-north-1, ap-southeast-4</td>
+        <td class="small">effort=low accepted</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-opus-4-8</td>
+        <td class="mono">messages</td>
+        <td>Reasoning effort levels</td>
+        <td class="mono small">us-east-1, ap-northeast-1, eu-west-1, eu-north-1, ap-southeast-4</td>
+        <td class="small">effort=low accepted</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-sonnet-5</td>
+        <td class="mono">invokemodel</td>
+        <td>Adaptive / extended thinking</td>
+        <td class="mono small">us-east-1</td>
+        <td class="small">thinking block present</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-sonnet-5</td>
+        <td class="mono">converse</td>
+        <td>Adaptive / extended thinking</td>
+        <td class="mono small">eu-west-1</td>
+        <td class="small">reasoning present</td>
+      </tr>
+
+      <tr>
+        <td class="mono">anthropic.claude-sonnet-5</td>
+        <td class="mono">messages</td>
+        <td>Reasoning effort levels</td>
+        <td class="mono small">us-east-1, eu-west-1</td>
+        <td class="small">effort=low accepted</td>
+      </tr></tbody>
+      </table>
+
+      <h3><span class="badge" style="background:#10a37f1a;color:#10a37f">OAI</span>
+        OpenAI — 17 broken findings</h3>
+      <table class="findings">
+        <thead><tr><th>Model</th><th>API</th><th>Feature</th><th>Regions</th><th>Error</th></tr></thead>
+        <tbody>
+      <tr>
+        <td class="mono">openai.gpt-5.5</td>
+        <td class="mono">responses</td>
+        <td>Prompt caching breakpoints</td>
+        <td class="mono small">us-east-2, us-east-1</td>
+        <td class="small">cached_tokens first=0, last=0 over 3 identical 1817-token requests (spaced up to 30s for cache settle)</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-120b</td>
+        <td class="mono">responses</td>
+        <td>Prompt caching breakpoints</td>
+        <td class="mono small">us-east-2, ap-southeast-3, us-west-2, eu-north-1, us-east-1</td>
+        <td class="small">cached_tokens first=0, last=0 over 3 identical 1878-token requests (spaced up to 30s for cache settle)</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-120b</td>
+        <td class="mono">invokemodel</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">ap-northeast-1, eu-west-2, ap-south-1, us-west-2, us-east-2, eu-north-1, eu-south-1, eu-west-1, ap-southeast-2, us-east-1, eu-central-1, sa-east-1, ap-southeast-3</td>
+        <td class="small">response not valid JSON</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-120b</td>
+        <td class="mono">responses</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">us-west-2, ap-south-1, us-east-1, ap-southeast-4, ap-northeast-1, sa-east-1, eu-west-2, eu-west-1, ap-southeast-3, eu-south-1, ap-southeast-2, us-east-2, eu-north-1, eu-central-1</td>
+        <td class="small">APITimeoutError: Request timed out.</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-120b</td>
+        <td class="mono">converse</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">ap-southeast-2, us-west-2, eu-west-1, us-east-2, eu-south-1, ap-southeast-3, sa-east-1, eu-north-1, ap-south-1</td>
+        <td class="small">response not valid JSON</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-120b</td>
+        <td class="mono">chat_completions</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">eu-west-1, eu-west-2, ap-southeast-3, us-west-2, ap-south-1, ap-southeast-2, ap-southeast-4, eu-north-1, eu-central-1, eu-south-1, us-east-2, ap-northeast-1, sa-east-1</td>
+        <td class="small">response not valid JSON</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-120b</td>
+        <td class="mono">responses</td>
+        <td>System instructions honored</td>
+        <td class="mono small">eu-central-1, ap-southeast-4, ap-south-1, sa-east-1, ap-southeast-3, us-east-1, eu-west-1, eu-north-1, us-east-2, eu-west-2, ap-northeast-1, ap-southeast-2, us-west-2, eu-south-1</td>
+        <td class="small">usage.input_tokens=71 for ~1200-token instructions field (dropped)</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">chat_completions</td>
+        <td>Basic inference</td>
+        <td class="mono small">ap-southeast-3, ap-northeast-1, ap-southeast-2, ap-south-1, us-east-2, eu-central-1, us-west-2</td>
+        <td class="small">content returned</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">converse</td>
+        <td>Basic inference</td>
+        <td class="mono small">us-east-2, sa-east-1, ap-south-1, eu-north-1, eu-west-2, ap-southeast-2</td>
+        <td class="small">text returned</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">responses</td>
+        <td>Prompt caching breakpoints</td>
+        <td class="mono small">us-west-2, eu-north-1</td>
+        <td class="small">cached_tokens first=0, last=0 over 3 identical 1878-token requests (spaced up to 30s for cache settle)</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">chat_completions</td>
+        <td>Streaming</td>
+        <td class="mono small">eu-central-1, ap-southeast-2, us-east-1, eu-north-1</td>
+        <td class="small">streamed 0 chars</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">converse</td>
+        <td>Streaming</td>
+        <td class="mono small">us-east-1</td>
+        <td class="small">streamed 0 chars</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">invokemodel</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">ap-northeast-1, eu-west-2, ap-south-1, us-west-2, us-east-2, eu-north-1, eu-south-1, eu-west-1, ap-southeast-2, us-east-1, eu-central-1, sa-east-1, ap-southeast-3</td>
+        <td class="small">response not valid JSON</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">responses</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">us-west-2, ap-south-1, us-east-1, ap-southeast-4, ap-northeast-1, sa-east-1, eu-west-2, eu-west-1, ap-southeast-3, eu-south-1, ap-southeast-2, us-east-2, eu-north-1, eu-central-1</td>
+        <td class="small">APITimeoutError: Request timed out.</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">converse</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">ap-southeast-2, us-west-2, eu-west-2, eu-west-1, us-east-2, eu-south-1, ap-southeast-3, us-east-1, eu-central-1, sa-east-1, eu-north-1, ap-south-1</td>
+        <td class="small">response not valid JSON</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">chat_completions</td>
+        <td>Structured output / JSON schema</td>
+        <td class="mono small">eu-west-1, eu-west-2, ap-southeast-3, us-west-2, ap-south-1, ap-southeast-2, ap-southeast-4, eu-north-1, eu-central-1, eu-south-1, us-east-2, us-east-1, sa-east-1</td>
+        <td class="small">response not valid JSON</td>
+      </tr>
+
+      <tr>
+        <td class="mono">openai.gpt-oss-20b</td>
+        <td class="mono">responses</td>
+        <td>System instructions honored</td>
+        <td class="mono small">eu-central-1, ap-southeast-4, ap-south-1, sa-east-1, ap-southeast-3, us-east-1, eu-west-1, eu-north-1, us-east-2, eu-west-2, ap-northeast-1, ap-southeast-2, us-west-2, eu-south-1</td>
+        <td class="small">usage.input_tokens=71 for ~1200-token instructions field (dropped)</td>
+      </tr></tbody>
+      </table>
+
+<footer>
+  Amazon Bedrock Feature Parity · Anthropic (ANT) &amp; OpenAI (OAI) on Bedrock (Mantle) ·
+  Developed by Bedrock GTM SSAs · Contact rodzanto@ / mccartni@
+</footer>
+</body>
+</html>

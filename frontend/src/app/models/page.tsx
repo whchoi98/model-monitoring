@@ -71,6 +71,7 @@ function Inner() {
             <nav className="flex bg-gray-800/50 rounded-lg p-0.5">
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.dashboardTab}</Link>
               <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Models" : "모델 탐색"}</span>
+              <Link href="/parity" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Parity Run" : "패리티 런"}</Link>
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.manualProbeTab}</Link>
               <Link href="/prompts" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Prompts" : "프롬프트"}</Link>
               <Link href="/cost" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Cost" : "비용"}</Link>

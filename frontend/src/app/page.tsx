@@ -190,6 +190,7 @@ function HomeContent() {
                 {t.dashboardTab}
               </button>
               <Link href="/models" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Models" : "모델 탐색"}</Link>
+              <Link href="/parity" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Parity Run" : "패리티 런"}</Link>
               <button
                 onClick={() => setTopTab("manual")}
                 className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${

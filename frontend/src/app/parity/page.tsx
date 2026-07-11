@@ -9,11 +9,11 @@ import { fetchMe, getToken, setToken } from "@/lib/api";
 import { useT, useLang, LanguageProvider } from "@/lib/i18n-context";
 import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
-import ReliabilityPanel from "@/components/ReliabilityPanel";
+import ParityPanel from "@/components/ParityPanel";
 import { APP_VERSION } from "@/lib/version";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function ReliabilityPage() {
+export default function ParityPage() {
   return (
     <LanguageProvider>
       <Inner />
@@ -71,14 +71,14 @@ function Inner() {
             <nav className="flex bg-gray-800/50 rounded-lg p-0.5">
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.dashboardTab}</Link>
               <Link href="/models" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Models" : "모델 탐색"}</Link>
-              <Link href="/parity" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Parity Run" : "패리티 런"}</Link>
+              <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Parity Run" : "패리티 런"}</span>
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.manualProbeTab}</Link>
               <Link href="/prompts" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Prompts" : "프롬프트"}</Link>
               <Link href="/cost" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Cost" : "비용"}</Link>
-              <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Reliability" : "신뢰성"}</span>
+              <Link href="/reliability" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Reliability" : "신뢰성"}</Link>
               <Link href="/efficiency" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Efficiency" : "효율성"}</Link>
               <Link href="/analysis" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Analysis" : "분석"}</Link>
-                        </nav>
+            </nav>
             {user ? (
               <div className="flex items-center gap-2">
                 <span className="text-xs text-gray-400">{user.username}</span>
@@ -91,7 +91,7 @@ function Inner() {
         </div>
       </header>
 
-      <ReliabilityPanel />
+      <ParityPanel />
 
       <FloatingChat />
 
