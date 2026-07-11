@@ -9,11 +9,11 @@ import { fetchMe, getToken, setToken } from "@/lib/api";
 import { useT, useLang, LanguageProvider } from "@/lib/i18n-context";
 import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
-import CostDashboardPanel from "@/components/CostDashboardPanel";
+import ModelExplorer from "@/components/ModelExplorer";
 import { APP_VERSION } from "@/lib/version";
 import ThemeToggle from "@/components/ThemeToggle";
 
-export default function CostPage() {
+export default function ModelsPage() {
   return (
     <LanguageProvider>
       <Inner />
@@ -72,11 +72,11 @@ function Inner() {
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.dashboardTab}</Link>
               <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.manualProbeTab}</Link>
               <Link href="/prompts" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Prompts" : "프롬프트"}</Link>
-              <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Cost" : "비용"}</span>
+              <Link href="/cost" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Cost" : "비용"}</Link>
               <Link href="/reliability" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Reliability" : "신뢰성"}</Link>
               <Link href="/efficiency" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Efficiency" : "효율성"}</Link>
               <Link href="/analysis" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Analysis" : "분석"}</Link>
-                          <Link href="/models" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Models" : "모델 탐색"}</Link>
+              <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Models" : "모델 탐색"}</span>
             </nav>
             {user ? (
               <div className="flex items-center gap-2">
@@ -90,7 +90,7 @@ function Inner() {
         </div>
       </header>
 
-      <CostDashboardPanel />
+      <ModelExplorer />
 
       <FloatingChat />
 

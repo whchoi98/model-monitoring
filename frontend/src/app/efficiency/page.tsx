@@ -76,6 +76,7 @@ function Inner() {
               <Link href="/reliability" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Reliability" : "신뢰성"}</Link>
               <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Efficiency" : "효율성"}</span>
               <Link href="/analysis" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Analysis" : "분석"}</Link>
+                          <Link href="/models" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Models" : "모델 탐색"}</Link>
             </nav>
             {user ? (
               <div className="flex items-center gap-2">

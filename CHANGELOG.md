@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.9.0 — 2026-07-11
+
+### Added
+- **Model Explorer (`/models`)**: new nav menu listing all monitored models as a searchable/filterable card grid (channel filter: Anthropic CP / Bedrock / OpenAI Mantle / OpenAI 1P). Selecting a card opens a detail modal with the exact invoke model ID per provider path, endpoint/region, token pricing, copy-ready code examples matching the prober's real call patterns (boto3 `converse_stream`, anthropic SDK + CP on AWS endpoint, openai SDK + Mantle base_url, openai SDK + 1P Responses API), documentation/console links, and a deep link to that model's dashboard trend (v2.7.1 URL-share format). Data comes from `/api/models` — new models appear automatically.
+- **모델 탐색 (`/models`)**: 모니터링 중인 전체 모델을 검색·채널 필터 가능한 카드 그리드로 보여주는 신규 메뉴. 카드 선택 시 상세 모달 — provider path별 정확한 호출 모델 ID, 엔드포인트·리전, 토큰 단가, prober 실제 호출 방식과 동일한 복사용 코드 예제(boto3 `converse_stream` / anthropic SDK + CP on AWS / openai SDK + Mantle / openai SDK + 1P Responses API), 문서·콘솔 링크, 해당 모델 대시보드 트렌드 바로가기. 데이터는 `/api/models` 기반 — 모델 추가 시 자동 반영.
+
+### Changed
+- **`APP_VERSION` v2.8.4 → v2.9.0** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.8.4 — 2026-07-11
 
 ### Fixed
