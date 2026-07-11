@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.11.0 — 2026-07-11
+
+### Added
+- **Parity Run engine — real execution-evidence probes** (replaces the v2.10.0 screenshot gallery): a sweep fans out across monitored models × 5 API surfaces (Converse / InvokeModel / Messages / ChatCompletions / Responses) × 7 features (basic, streaming, system_instructions, tool_use, structured_output, reasoning, caching). Each cell is judged from real API responses — tool canary round-trip, system-instruction canary, JSON validity, cached-token counts on repeat, ≥2 stream deltas — never from HTTP 200 alone. Clean provider rejections classify as `unsupported`, evidence failures as `broken`. Results persist to RDS (`parity_runs`/`parity_results`); the /parity page renders a health summary + status matrix with per-cell evidence modal; manual trigger (login) + daily EventBridge schedule (01:00 UTC) via a new Fargate one-shot task.
+- **패리티 런 엔진 — 실제 실행-증거 프로브** (v2.10.0 스크린샷 갤러리 대체): 모니터링 모델 × 5개 API surface(Converse/InvokeModel/Messages/ChatCompletions/Responses) × 7개 피처(basic, streaming, system_instructions, tool_use, structured_output, reasoning, caching)로 팬아웃. 도구 카나리 왕복·시스템 지시 카나리·JSON 유효성·반복 요청 캐시 토큰·스트림 델타 2개 이상 등 응답 내용으로 판정 — HTTP 200만으로는 판정하지 않음. provider의 깨끗한 거부는 `unsupported`, 증거 실패는 `broken`. 결과는 RDS(`parity_runs`/`parity_results`)에 저장, /parity 페이지가 헬스 요약 + 상태 매트릭스 + 셀별 증거 모달 렌더링. 수동 트리거(로그인) + 일일 EventBridge 스케줄(01:00 UTC, 신규 Fargate one-shot).
+
+### Changed
+- **`APP_VERSION` v2.10.0 → v2.11.0** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.10.0 — 2026-07-11
 
 ### Added

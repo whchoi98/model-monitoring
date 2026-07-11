@@ -1,170 +1,334 @@
 "use client";
 
-// 패리티 런 (v2.10.0) — Bedrock Feature Parity 런의 동작 방식 설명(한국어 번역) +
-// 결과 스크린샷 갤러리. 이미지는 public/parity/의 최적화된 WebP (썸네일 + 풀사이즈).
+// 패리티 런 (v2.11.0) — 실제 API 호출 증거 기반의 기능 패리티 매트릭스.
+// 모든 셀은 실행-증거 프로브의 판정 결과 (supported/unsupported/broken/skipped).
+// 셀 클릭 → 해당 프로브의 요청 요약·응답 스니펫·오류 등 증거 표시.
 
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useLang } from "@/lib/i18n-context";
+import { getToken } from "@/lib/api";
 
-const IMAGE_COUNT = 20;
-const IMAGES = Array.from({ length: IMAGE_COUNT }, (_, i) => `parity-${String(i + 1).padStart(2, "0")}`);
+const BASE = "";
 
-interface Step {
-  no: string;
-  titleKo: string;
-  titleEn: string;
-  bodyKo: string;
-  bodyEn: string;
+type Status = "supported" | "unsupported" | "broken" | "skipped";
+
+interface ParityCell {
+  model_id: string;
+  model_name: string;
+  surface: string;
+  feature: string;
+  status: Status;
+  latency_ms: number | null;
 }
 
-const STEPS: Step[] = [
-  {
-    no: "1",
-    titleKo: "예약 스윕 (Scheduled sweep)",
-    titleEn: "Scheduled sweep",
-    bodyKo:
-      "EventBridge 스케줄이 Step Functions 상태 머신을 시작합니다. 첫 단계(plan)는 라이브 /v1/models 엔드포인트에서 Bedrock Mantle 엔진이 현재 서빙 중인 모델을 발견합니다 — 신규 모델은 자동으로 반영되고, 날짜 스냅샷과 safeguard 변형은 필터링됩니다.",
-    bodyEn:
-      "An EventBridge schedule starts a Step Functions state machine. The first step (plan) discovers the models currently served by Bedrock's Mantle engine from the live /v1/models endpoint — new models are picked up automatically, dated snapshots and safeguard variants are filtered out.",
-  },
-  {
-    no: "2",
-    titleKo: "에이전트가 관리하는 피처 카탈로그",
-    titleEn: "Agent-maintained feature catalog",
-    bodyKo:
-      "프로빙 전에 리서치 에이전트(Bedrock 위의 Claude — provider 문서와 AWS Knowledge MCP 서버에 그라운딩)가 각 provider의 공개 기능을 검토하고, 새로 발표된 기능을 카탈로그에 추가합니다. Bedrock이 아직 지원하지 않는 기능도 의도적으로 포함해 격차를 첫날부터 추적합니다. 카탈로그는 DynamoDB에 저장되며, 시드 목록은 부트스트랩일 뿐입니다.",
-    bodyEn:
-      "Before probing, a research agent (Claude on Bedrock, grounded in provider docs and the AWS Knowledge MCP server) reviews each provider's public capabilities and adds newly announced features to the catalog — deliberately including capabilities Bedrock does not support yet, so gaps are tracked from day one. The catalog lives in DynamoDB; the seed list is only its bootstrap.",
-  },
-  {
-    no: "3",
-    titleKo: "매트릭스 팬아웃",
-    titleEn: "Fan-out across the matrix",
-    bodyKo:
-      "상태 머신이 모델 × 리전 × API surface 조합마다 러너 호출을 하나씩 팬아웃합니다. 5개 surface를 프로빙합니다: Anthropic Messages, OpenAI Chat Completions와 Responses(bearer 토큰), 그리고 InvokeModel / Converse(SigV4, CRIS inference profile) — 15개 Mantle 프로덕션 리전 전체에 걸쳐서.",
-    bodyEn:
-      "The state machine fans out one runner invocation per model × region × API surface. Five surfaces are probed: Anthropic Messages, OpenAI Chat Completions and Responses (bearer token), and InvokeModel / Converse (SigV4, CRIS inference profiles) — across all 15 Mantle production regions.",
-  },
-  {
-    no: "4",
-    titleKo: "실행-증거 프로브 (Execution-evidence probes)",
-    titleEn: "Execution-evidence probes",
-    bodyKo:
-      "각 기능은 실제 요청으로 검증되며, 프로브는 응답의 내용을 검사합니다 — HTTP 200만으로는 절대 충분하지 않습니다. 예: MCP 프로브는 전용 픽스처 Lambda(실제 MCP 서버)를 커넥터로 연결하고, echo 카나리가 왕복하는 실행된 mcp_call을 요구합니다. system-instructions 프로브는 instructions 필드가 실제로 usage 토큰에 계산되는지 확인합니다. 캐싱 프로브는 동일 프롬프트 반복 시 cached_tokens를 확인합니다. 서버사이드 도구는 tool_choice: required를 강제해 — 모델의 기분이 아니라 능력을 측정합니다.",
-    bodyEn:
-      "Each feature is exercised with a real request, and the probe inspects the response content — an HTTP 200 is never enough. Examples: the MCP probe wires a purpose-built fixture Lambda (a real MCP server) as the connector and requires an executed mcp_call whose echo canary round-trips; the system-instructions probe verifies the instructions field is actually counted in usage tokens; the caching probe checks cached_tokens on repeat identical prompts; server-side tools force tool_choice: required so results measure capability, not model mood.",
-  },
-  {
-    no: "5",
-    titleKo: "분류 및 저장",
-    titleEn: "Classification & storage",
-    bodyKo:
-      "원시 증거(요청, 응답, 지연시간, 오류)가 분류되어 DynamoDB에 저장된 뒤 대시보드에 제공됩니다. 매트릭스의 어떤 셀이든 클릭하면 그 뒤에 있는 리전별 증거를 확인할 수 있습니다.",
-    bodyEn:
-      "Raw evidence (request, response, latency, error) is classified and persisted to DynamoDB, then served to this dashboard. Click any cell in the matrix to see the per-region evidence behind it.",
-  },
-];
+interface ParityRunInfo {
+  id: number;
+  started_at: string | null;
+  finished_at: string | null;
+  totals: Record<string, number> | null;
+  running: boolean;
+}
+
+interface Feature {
+  id: string;
+  label_ko: string;
+  desc_ko: string;
+}
+
+const SURFACE_LABELS: Record<string, string> = {
+  converse: "Converse",
+  invoke_model: "InvokeModel",
+  messages: "Messages",
+  chat_completions: "ChatCompletions",
+  responses: "Responses",
+};
+
+const STATUS_STYLE: Record<Status, string> = {
+  supported: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
+  unsupported: "bg-amber-500/10 border-amber-500/30 text-amber-300",
+  broken: "bg-rose-500/10 border-rose-500/30 text-rose-300",
+  skipped: "bg-gray-800 border-gray-700 text-gray-500",
+};
+
+const STATUS_LABEL: Record<Status, string> = {
+  supported: "Supported",
+  unsupported: "Unsupported",
+  broken: "Broken",
+  skipped: "—",
+};
+
+function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCell; onClose: () => void }) {
+  const [data, setData] = useState<Record<string, unknown> | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const sp = new URLSearchParams({
+      run_id: String(runId), model_id: cell.model_id, surface: cell.surface, feature: cell.feature,
+    });
+    fetch(`${BASE}/api/parity/evidence?${sp}`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(setData)
+      .catch((e) => setError(String(e)));
+  }, [runId, cell]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+      <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+      <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-gray-900 light:bg-white border border-gray-800 rounded-xl shadow-2xl p-6 space-y-4">
+        <button type="button" onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
+        <div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h2 className="text-base font-bold text-gray-100">{cell.model_name}</h2>
+            <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full border ${STATUS_STYLE[cell.status]}`}>
+              {STATUS_LABEL[cell.status]}
+            </span>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            {cell.feature} · {SURFACE_LABELS[cell.surface] ?? cell.surface}
+            {cell.latency_ms != null && <> · {Math.round(cell.latency_ms)} ms</>}
+          </div>
+        </div>
+        {error && <div className="text-xs text-rose-400">증거 로드 실패: {error}</div>}
+        {data && (
+          <>
+            {Boolean(data.error_message) && (
+              <div>
+                <div className="text-xs font-semibold text-gray-300 mb-1">오류</div>
+                <pre className="bg-rose-500/10 border border-rose-500/20 rounded-md p-3 text-xs text-rose-300 whitespace-pre-wrap break-all">{String(data.error_message)}</pre>
+              </div>
+            )}
+            <div>
+              <div className="text-xs font-semibold text-gray-300 mb-1">실행 증거 (evidence)</div>
+              <pre className="bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs text-gray-200 leading-relaxed">
+                {JSON.stringify(data.evidence ?? {}, null, 2)}
+              </pre>
+            </div>
+          </>
+        )}
+      </div>
+    </div>
+  );
+}
 
 export default function ParityPanel() {
   const { lang } = useLang();
-  const [lightbox, setLightbox] = useState<string | null>(null);
+  const [run, setRun] = useState<ParityRunInfo | null>(null);
+  const [results, setResults] = useState<ParityCell[]>([]);
+  const [features, setFeatures] = useState<Feature[]>([]);
+  const [surfaces, setSurfaces] = useState<string[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
+  const [selected, setSelected] = useState<ParityCell | null>(null);
+  const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
+
+  const load = () => {
+    Promise.all([
+      fetch(`${BASE}/api/parity/latest`).then((r) => r.json()),
+      fetch(`${BASE}/api/parity/catalog`).then((r) => r.json()),
+    ])
+      .then(([latest, catalog]) => {
+        setRun(latest.run);
+        setResults(latest.results);
+        setFeatures(catalog.features);
+        setSurfaces(catalog.surfaces);
+      })
+      .catch((e) => console.error("parity load failed:", e))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(load, []);
+
+  const handleTrigger = async () => {
+    const token = getToken();
+    if (!token) {
+      setTriggerMsg(lang === "en" ? "Login required to trigger a run." : "런 실행에는 로그인이 필요합니다.");
+      return;
+    }
+    const res = await fetch(`${BASE}/api/parity/trigger`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}` },
+    });
+    const body = await res.json().catch(() => ({}));
+    setTriggerMsg(body.message ?? `HTTP ${res.status}`);
+  };
+
+  // (feature, model) 행 구성 — 각 행에 surface별 셀 매핑
+  const matrix = useMemo(() => {
+    const byKey = new Map<string, ParityCell>();
+    for (const r of results) byKey.set(`${r.feature}|${r.model_id}|${r.surface}`, r);
+    const models = Array.from(new Map(results.map((r) => [r.model_id, r.model_name])).entries());
+    const q = search.trim().toLowerCase();
+    const rows: { feature: string; model_id: string; model_name: string; cells: (ParityCell | null)[] }[] = [];
+    for (const f of features) {
+      for (const [model_id, model_name] of models) {
+        if (q && !model_name.toLowerCase().includes(q) && !model_id.toLowerCase().includes(q)) continue;
+        const cells = surfaces.map((s) => byKey.get(`${f.id}|${model_id}|${s}`) ?? null);
+        if (statusFilter !== "all" && !cells.some((c) => c && c.status === statusFilter)) continue;
+        rows.push({ feature: f.id, model_id, model_name, cells });
+      }
+    }
+    return rows;
+  }, [results, features, surfaces, search, statusFilter]);
+
+  const totals = run?.totals ?? null;
+  const health = totals
+    ? Math.round((100 * (totals.supported ?? 0)) / Math.max(1, (totals.supported ?? 0) + (totals.broken ?? 0)))
+    : null;
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-24">
+        <div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
+      </div>
+    );
+  }
 
   return (
-    <div className="p-6 space-y-8 max-w-7xl mx-auto">
-      {/* 개요 */}
-      <div>
-        <h2 className="text-xl font-bold text-gray-100">
-          {lang === "en" ? "Parity Run" : "패리티 런"}
-        </h2>
-        <p className="text-sm text-gray-400 mt-2 leading-relaxed max-w-3xl">
-          {lang === "en"
-            ? "Every result on the parity dashboard is backed by a real API call against Bedrock — nothing is asserted from documentation alone."
-            : "패리티 대시보드의 모든 결과는 Bedrock에 대한 실제 API 호출로 검증됩니다 — 문서만으로 단정하는 항목은 없습니다."}
-        </p>
-        <a
-          href="/parity/parity-report-2026-07-08.html"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="inline-block mt-3 px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
-        >
-          {lang === "en" ? "Open full report (2026-07-08) ↗" : "전체 리포트 열기 (2026-07-08) ↗"}
-        </a>
+    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* 헤더 + 요약 */}
+      <div className="flex items-start justify-between flex-wrap gap-4">
+        <div>
+          <h2 className="text-xl font-bold text-gray-100">{lang === "en" ? "Parity Run" : "패리티 런"}</h2>
+          <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
+            {lang === "en"
+              ? "Every cell is backed by a real API call — probes inspect response content, HTTP 200 is never enough."
+              : "모든 셀은 실제 API 호출로 검증됩니다 — 프로브가 응답 내용을 검사하며, HTTP 200만으로는 판정하지 않습니다."}
+          </p>
+          {run && (
+            <p className="text-xs text-gray-500 mt-1">
+              {lang === "en" ? "Last run" : "최근 런"} #{run.id} ·{" "}
+              {run.finished_at ? new Date(run.finished_at).toLocaleString() : "-"}
+              {run.running && <span className="ml-2 text-blue-400">● {lang === "en" ? "run in progress…" : "런 실행 중…"}</span>}
+            </p>
+          )}
+        </div>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={handleTrigger}
+            className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors"
+          >
+            {lang === "en" ? "Run parity sweep" : "패리티 런 실행"}
+          </button>
+        </div>
       </div>
+      {triggerMsg && (
+        <div className="px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded-md text-xs text-blue-300">{triggerMsg}</div>
+      )}
 
-      {/* 동작 방식 5단계 */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-200">
-          {lang === "en" ? "How a parity run works" : "패리티 런은 어떻게 동작하나"}
-        </h3>
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-          {STEPS.map((s) => (
-            <div key={s.no} className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-              <div className="flex items-center gap-2 mb-2">
-                <span className="w-6 h-6 shrink-0 rounded-full bg-blue-600 text-white text-xs font-bold flex items-center justify-center">
-                  {s.no}
-                </span>
-                <h4 className="text-sm font-semibold text-gray-100">
-                  {lang === "en" ? s.titleEn : s.titleKo}
-                </h4>
+      {/* 헬스 요약 */}
+      {totals && (
+        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+            <div className="text-2xl font-bold text-gray-100 tabular-nums">{health}%</div>
+            <div className="text-[11px] text-gray-500 mt-1">{lang === "en" ? "healthy (supported / should-work)" : "헬스 (동작해야 하는 것 중 동작)"}</div>
+          </div>
+          {(["supported", "unsupported", "broken", "skipped"] as Status[]).map((s) => (
+            <div key={s} className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+              <div className={`text-2xl font-bold tabular-nums ${s === "supported" ? "text-emerald-400" : s === "broken" ? "text-rose-400" : s === "unsupported" ? "text-amber-400" : "text-gray-500"}`}>
+                {totals[s] ?? 0}
               </div>
-              <p className="text-xs text-gray-400 leading-relaxed">
-                {lang === "en" ? s.bodyEn : s.bodyKo}
-              </p>
+              <div className="text-[11px] text-gray-500 mt-1">{STATUS_LABEL[s] === "—" ? "Skipped" : STATUS_LABEL[s]}</div>
             </div>
           ))}
         </div>
-      </div>
+      )}
 
-      {/* 결과 갤러리 */}
-      <div className="space-y-3">
-        <h3 className="text-sm font-semibold text-gray-200">
-          {lang === "en" ? `Run results (${IMAGE_COUNT} captures)` : `실행 결과 (${IMAGE_COUNT}장)`}
-        </h3>
-        <p className="text-xs text-gray-500">
-          {lang === "en" ? "Click an image to enlarge." : "이미지를 클릭하면 크게 볼 수 있습니다."}
-        </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
-          {IMAGES.map((name) => (
-            <button
-              key={name}
-              onClick={() => setLightbox(name)}
-              className="bg-gray-900/50 border border-gray-800 rounded-xl overflow-hidden hover:border-blue-500/50 transition-colors"
-            >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`/parity/${name}-thumb.webp`}
-                alt={name}
-                loading="lazy"
-                className="w-full h-40 object-cover object-top"
-              />
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* 라이트박스 */}
-      {lightbox && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            aria-label="overlay"
-            onClick={() => setLightbox(null)}
-            className="absolute inset-0 bg-black/80 backdrop-blur-sm"
-          />
-          <div className="relative max-w-5xl max-h-[90vh] overflow-auto rounded-xl border border-gray-700 shadow-2xl">
-            <button
-              type="button"
-              onClick={() => setLightbox(null)}
-              className="sticky top-2 float-right mr-2 w-8 h-8 rounded-full bg-black/60 text-white text-xl leading-none z-10"
-              aria-label="close"
-            >
-              ×
-            </button>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={`/parity/${lightbox}.webp`} alt={lightbox} className="w-full" />
-          </div>
+      {!run && (
+        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 text-center text-sm text-gray-400">
+          {lang === "en"
+            ? "No parity run yet — click \"Run parity sweep\" (login required) or wait for the daily schedule."
+            : "아직 실행된 패리티 런이 없습니다 — \"패리티 런 실행\"(로그인 필요)을 누르거나 일일 스케줄을 기다려 주세요."}
         </div>
       )}
+
+      {/* 필터 */}
+      {run && (
+        <div className="flex items-center gap-3 flex-wrap">
+          <input
+            type="text"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder={lang === "en" ? "Search models..." : "모델 검색..."}
+            className="px-3 py-1.5 text-sm rounded-lg bg-gray-900 light:bg-white border border-gray-800 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-56"
+          />
+          <div className="flex gap-1">
+            {(["all", "supported", "unsupported", "broken"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
+                  statusFilter === s ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                }`}
+              >
+                {s === "all" ? (lang === "en" ? "All" : "전체") : STATUS_LABEL[s as Status]}
+              </button>
+            ))}
+          </div>
+          <span className="text-xs text-gray-500">{matrix.length} rows</span>
+        </div>
+      )}
+
+      {/* 매트릭스 */}
+      {run && (
+        <div className="overflow-x-auto bg-gray-900/50 border border-gray-800 rounded-xl">
+          <table className="w-full text-xs border-collapse">
+            <thead>
+              <tr className="border-b border-gray-800">
+                <th className="text-left px-3 py-2 text-gray-400 font-medium sticky left-0 bg-gray-900 light:bg-white">
+                  {lang === "en" ? "Feature · Model" : "기능 · 모델"}
+                </th>
+                {surfaces.map((s) => (
+                  <th key={s} className="text-left px-3 py-2 text-gray-400 font-medium whitespace-nowrap">
+                    {SURFACE_LABELS[s] ?? s}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {matrix.map((row, i) => {
+                const featureLabel = features.find((f) => f.id === row.feature);
+                const firstOfFeature = i === 0 || matrix[i - 1].feature !== row.feature;
+                return (
+                  <tr key={`${row.feature}|${row.model_id}`} className={`border-b border-gray-800/60 ${firstOfFeature ? "border-t-2 border-t-gray-700" : ""}`}>
+                    <td className="px-3 py-1.5 sticky left-0 bg-gray-900 light:bg-white">
+                      <div className="font-medium text-gray-200">{firstOfFeature ? featureLabel?.label_ko ?? row.feature : ""}</div>
+                      <div className="text-gray-500 font-mono text-[10px]">{row.model_name}</div>
+                    </td>
+                    {row.cells.map((cell, j) => (
+                      <td key={j} className="px-3 py-1.5">
+                        {cell && cell.status !== "skipped" ? (
+                          <button
+                            onClick={() => setSelected(cell)}
+                            className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-transform hover:scale-105 ${STATUS_STYLE[cell.status]}`}
+                            title={`${Math.round(cell.latency_ms ?? 0)} ms — 클릭해서 증거 보기`}
+                          >
+                            {STATUS_LABEL[cell.status]}
+                          </button>
+                        ) : (
+                          <span className="text-gray-600">—</span>
+                        )}
+                      </td>
+                    ))}
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* 동작 방식 요약 */}
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-1.5">
+        <div className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "How it works" : "동작 방식"}</div>
+        <p>1 · {lang === "en" ? "Daily EventBridge schedule (or manual trigger) starts a Fargate sweep." : "일일 EventBridge 스케줄(또는 수동 트리거)이 Fargate 스윕을 시작합니다."}</p>
+        <p>2 · {lang === "en" ? "The monitored model catalog is the source — new models are picked up automatically." : "모니터링 모델 카탈로그가 소스입니다 — 신규 모델은 자동으로 반영됩니다."}</p>
+        <p>3 · {lang === "en" ? "Fan-out across model × API surface (Converse / InvokeModel / Messages / ChatCompletions / Responses) × 7 features." : "모델 × API surface(Converse/InvokeModel/Messages/ChatCompletions/Responses) × 7개 피처로 팬아웃합니다."}</p>
+        <p>4 · {lang === "en" ? "Execution-evidence probes: tool canary round-trip, system-instruction canary, JSON validity, cached_tokens on repeat, ≥2 stream deltas — HTTP 200 is never enough." : "실행-증거 프로브: 도구 카나리 왕복, 시스템 지시 카나리, JSON 유효성, 반복 요청의 cached tokens, 스트림 델타 2개 이상 — HTTP 200만으로는 판정하지 않습니다."}</p>
+        <p>5 · {lang === "en" ? "Raw evidence (request, response, latency, error) is stored in RDS; click any cell to see it." : "원시 증거(요청·응답·지연·오류)는 RDS에 저장됩니다. 셀을 클릭하면 확인할 수 있습니다."}</p>
+      </div>
+
+      {selected && run && <EvidenceModal runId={run.id} cell={selected} onClose={() => setSelected(null)} />}
     </div>
   );
 }

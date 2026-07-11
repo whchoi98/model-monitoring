@@ -139,6 +139,38 @@ class Insight(Base):
 _PERF_INDEXES = (*ProbeRun.__table__.indexes, *ProbeResult.__table__.indexes)
 
 
+class ParityRun(Base):
+    """패리티 런 1회 실행 기록 (v2.11.0)."""
+
+    __tablename__ = "parity_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(Text, default="running")  # running | completed | failed
+    totals = Column(JSON, nullable=True)  # {supported, unsupported, broken, skipped}
+
+
+class ParityResult(Base):
+    """패리티 프로브 1건의 판정 + 실행 증거 (v2.11.0)."""
+
+    __tablename__ = "parity_results"
+    __table_args__ = (
+        Index("ix_parity_results_run_id", "run_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("parity_runs.id"), nullable=False)
+    model_id = Column(Text, nullable=False)
+    model_name = Column(Text, nullable=False)
+    surface = Column(Text, nullable=False)   # converse | invoke_model | messages | chat_completions | responses
+    feature = Column(Text, nullable=False)   # catalog.FEATURE_IDS
+    status = Column(Text, nullable=False)    # supported | unsupported | broken | skipped
+    latency_ms = Column(Float, nullable=True)
+    evidence = Column(JSON, nullable=True)   # 요청 요약·응답 스니펫·검사 결과
+    error_message = Column(Text, nullable=True)
+
+
 def ensure_performance_indexes(engine) -> None:
     """기존 DB에 성능 인덱스를 멱등하게 생성 (main.py lifespan에서 호출).
 

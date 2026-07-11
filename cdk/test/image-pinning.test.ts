@@ -101,12 +101,12 @@ describe("context 이미지 주입 (backendImage/frontendImage)", () => {
     }));
   });
 
-  it("scheduler의 autoprober/insights task definition도 backend digest URI를 사용한다", () => {
+  it("scheduler의 autoprober/insights/parity task definition도 backend digest URI를 사용한다", () => {
     const tds = schedTemplate.findResources("AWS::ECS::TaskDefinition");
     const images = Object.values(tds).map(
       (td) => (td as any).Properties.ContainerDefinitions[0].Image,
     );
-    expect(images).toHaveLength(2);
+    expect(images).toHaveLength(3); // autoprober + insights + parityrun (v2.11.0)
     for (const img of images) {
       expect(img).toBe(BE_URI);
     }
