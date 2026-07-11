@@ -28,7 +28,10 @@ def session():
     s.close()
 
 
-NOW = datetime(2026, 7, 10, 12, 0, 0, tzinfo=timezone.utc)
+# 실제 현재 시각 기준 — 고정 날짜 시딩은 시간이 지나면 조회 윈도우를 벗어나고,
+# 정시 절단은 시드가 윈도우 경계에 걸린다 (CI에서 0/22포인트 실패, 2026-07-11).
+# 원칙: 시드는 항상 과거로만, 조회 윈도우는 시드 스팬보다 1시간 이상 넉넉하게.
+NOW = datetime.now(timezone.utc)
 
 
 def _seed_cycles(s, *, hours, per_hour=12, model_names=("Model A",)):
@@ -51,7 +54,7 @@ def _seed_cycles(s, *, hours, per_hour=12, model_names=("Model A",)):
 
 def test_get_trend_short_range_stays_raw(session):
     _seed_cycles(session, hours=2, per_hour=12)
-    out = tools.get_trend(session, hours=2, metric="ttft_ms")
+    out = tools.get_trend(session, hours=4, metric="ttft_ms")  # 윈도우 > 시드 스팬(~2h) 여유
     # 6시간 이하는 5분 해상도 원본 유지
     assert len(out["points"]) == 24
     assert "aggregation" not in out or out.get("aggregation") == "raw"
@@ -71,9 +74,9 @@ def test_get_trend_long_range_aggregates_hourly(session):
 
 def test_get_trend_never_exceeds_max_points(session):
     # 28모델 × 12/h × 24h = 8064 원본 — hours=24도 상한(2500) 이하로 축약되어야 한다.
-    _seed_cycles(session, hours=24, per_hour=12,
+    _seed_cycles(session, hours=22, per_hour=12,
                  model_names=tuple(f"Model {i:02d}" for i in range(28)))
-    out = tools.get_trend(session, hours=24, metric="ttft_ms")
+    out = tools.get_trend(session, hours=24, metric="ttft_ms")  # 윈도우 > 시드 스팬
     assert len(out["points"]) <= tools.MAX_TREND_POINTS
     # 축약이 일어났음을 응답에 명시 (LLM이 해상도를 오해하지 않도록)
     assert out["aggregation"] in ("hourly_avg", "raw")
