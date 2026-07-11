@@ -60,6 +60,8 @@ describe("SchedulerStack", () => {
           PolicyDocument: Match.objectLike({
             Statement: Match.arrayWith([
               Match.objectLike({ Action: "bedrock-mantle:CreateInference" }),
+              // bearer 인증 흐름의 두 번째 필수 액션 (403 실측: resource *)
+              Match.objectLike({ Action: "bedrock-mantle:CallWithBearerToken" }),
             ]),
           }),
         }),

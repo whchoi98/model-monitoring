@@ -97,6 +97,13 @@ export class SchedulerStack extends cdk.Stack {
           actions: ["bedrock-mantle:CreateInference"],
           resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
         }),
+        new iam.PolicyStatement({
+          // bearer 인증 흐름의 두 번째 필수 액션 — 403 실측상 resource scope가 * 뿐.
+          sid: "BedrockMantleBearer",
+          effect: iam.Effect.ALLOW,
+          actions: ["bedrock-mantle:CallWithBearerToken"],
+          resources: ["*"],
+        }),
       ],
     });
 
