@@ -33,8 +33,8 @@ RUN addgroup --system --gid 1001 nodejs \
 # Standalone 출력은 server.js + 필요한 node_modules만 포함.
 COPY --from=build --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=build --chown=nextjs:nodejs /app/.next/static ./.next/static
-# public/ 디렉토리가 추가되면 다음 줄 주석 해제 (현재 프로젝트는 정적 자원 없음).
-# COPY --from=build --chown=nextjs:nodejs /app/public ./public
+# public/ 정적 자원 (v2.10.0 패리티 갤러리부터 사용).
+COPY --from=build --chown=nextjs:nodejs /app/public ./public
 
 USER nextjs
 
