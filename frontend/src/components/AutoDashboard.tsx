@@ -76,6 +76,12 @@ export default function AutoDashboard() {
     });
   };
   const clearSelection = () => setSelectedModels(new Set());
+  const [anomalies, setAnomalies] = useState<{
+    hours: number;
+    total_probes: number;
+    total_failures: number;
+    models: { model_name: string; failures: number; total: number; last_error: string | null }[];
+  } | null>(null);
   const [loading, setLoading] = useState(true);
   // 필터(카테고리/조회기간) 변경·자동새로고침 등 재조회 중 표시 — 최초 로드(loading)와 별개.
   const [refreshing, setRefreshing] = useState(false);
@@ -120,6 +126,14 @@ export default function AutoDashboard() {
   useEffect(() => {
     fetchWorkloadCategories().then(setCategories).catch(() => {});
   }, []);
+
+  // 최근 12시간 이상 징후 요약 — 새 프로브가 반영될 때마다 갱신 (v2.12.0).
+  useEffect(() => {
+    fetch("/api/auto-probe/anomalies?hours=12")
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then(setAnomalies)
+      .catch(() => {});
+  }, [status?.last_run_time]);
 
   // Initial load + trendHours/카테고리 변경 시 즉시 reload (loadData identity 의존이 아니라
   // 명시적으로 trendHours를 트리거로 사용해 조회기간 클릭 즉시 그래프가 갱신되도록 보장).
@@ -175,6 +189,53 @@ export default function AutoDashboard() {
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
+      {/* 최근 12시간 이상 징후 (v2.12.0) */}
+      {anomalies && (
+        anomalies.total_failures > 0 ? (
+          <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl px-4 py-3">
+            <div className="flex items-center gap-2 flex-wrap text-sm">
+              <span className="w-2 h-2 rounded-full bg-rose-400 animate-pulse" />
+              <span className="font-semibold text-rose-300">
+                {lang === "en"
+                  ? `${anomalies.total_failures} anomalies in the last 12h`
+                  : `최근 12시간 이상 징후 ${anomalies.total_failures}건`}
+              </span>
+              <span className="text-xs text-gray-500">
+                ({lang === "en" ? `${anomalies.total_probes} probes` : `프로브 ${anomalies.total_probes}회 중`})
+              </span>
+            </div>
+            <div className="flex items-center gap-1.5 flex-wrap mt-2">
+              {anomalies.models.slice(0, 8).map((m) => (
+                <span
+                  key={m.model_name}
+                  title={m.last_error ?? undefined}
+                  className="px-2 py-0.5 text-[11px] rounded-full bg-rose-500/10 border border-rose-500/30 text-rose-300"
+                >
+                  {m.model_name} ×{m.failures}
+                </span>
+              ))}
+              {anomalies.models.length > 8 && (
+                <span className="text-[11px] text-gray-500">
+                  {lang === "en" ? `+${anomalies.models.length - 8} more` : `외 ${anomalies.models.length - 8}개 모델`}
+                </span>
+              )}
+            </div>
+          </div>
+        ) : (
+          <div className="bg-emerald-500/5 border border-emerald-500/20 rounded-xl px-4 py-2.5 flex items-center gap-2 text-sm">
+            <span className="w-2 h-2 rounded-full bg-emerald-400" />
+            <span className="text-emerald-300 font-medium">
+              {lang === "en" ? "No anomalies in the last 12h" : "최근 12시간 이상 징후 없음"}
+            </span>
+            <span className="text-xs text-gray-500">
+              {lang === "en"
+                ? `all ${anomalies.total_probes} probes succeeded`
+                : `프로브 ${anomalies.total_probes}회 전체 성공`}
+            </span>
+          </div>
+        )
+      )}
+
       {/* Status Bar */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
         <div className="flex items-center justify-between flex-wrap gap-4">

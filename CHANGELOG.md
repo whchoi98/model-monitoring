@@ -7,6 +7,22 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.12.0 — 2026-07-11
+
+### Added
+- **Parity provider summary cards + insights drawer**: /parity now opens with per-provider cards (Anthropic / OpenAI / Amazon — health donut, check counts by status); selecting a card slides in a right-hand Key Findings drawer (broken features with cell ratios and affected models/surfaces, cleanly-unsupported chips, weakest-model bars).
+- **Parity run-over-run changes banner**: `/api/parity/latest` now returns `changes` (diff vs the previous completed run, new cells marked); the page shows them at the top (or an explicit "no changes" note).
+- **Parity model picker**: the search box is now a combobox — focusing it lists all models for one-click selection, with a clear (×) button.
+- **Dashboard anomaly box**: a rounded banner at the top of the dashboard summarizes probe failures in the last 12 hours per model (`GET /api/auto-probe/anomalies?hours=12`), green when all probes succeeded.
+- **패리티 provider 요약 카드 + 상세 드로어**: /parity 상단에 provider별 카드(Anthropic/OpenAI/Amazon — 헬스 도넛, 상태별 검사 수). 카드 선택 시 우측 Key Findings 바 — Broken 피처(셀 비율·대상 모델/surface), 깨끗한 미지원 칩, 취약 모델 바.
+- **패리티 런 간 변경 배너**: `/api/parity/latest`가 직전 완료 런 대비 `changes`(diff, 신규 셀 표시) 반환, 페이지 상단에 변경사항(또는 "변경 없음") 표시.
+- **패리티 모델 선택기**: 검색창이 콤보박스로 — 포커스 시 전체 모델 리스트에서 클릭 선택, 지우기(×) 버튼.
+- **대시보드 이상 징후 박스**: 대시보드 상단 라운드 배너가 최근 12시간 프로브 실패를 모델별 요약 (`GET /api/auto-probe/anomalies?hours=12`), 전체 성공 시 녹색 표시.
+
+### Changed
+- **Parity schedule: daily → every 12 hours** (`rate(12 hours)` EventBridge schedule, was cron 01:00 UTC).
+- **패리티 스케줄: 일 1회 → 12시간 주기** (`rate(12 hours)`, 기존 cron 01:00 UTC).
+
 ## v2.11.2 — 2026-07-11
 
 ### Fixed

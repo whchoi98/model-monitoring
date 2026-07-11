@@ -19,6 +19,7 @@ from auth import get_current_user
 from database import get_db
 from models import ParityResult, ParityRun
 from parity.catalog import FEATURES, SURFACES
+from parity.engine import diff_statuses
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/parity", tags=["parity"])
@@ -50,6 +51,30 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
         .filter(ParityResult.run_id == run.id)
         .all()
     )
+
+    # 직전 완료 런 대비 변경 셀 (v2.12.0) — 상단 배너용
+    prev_run = (
+        db.query(ParityRun)
+        .filter(ParityRun.status == "completed", ParityRun.id < run.id)
+        .order_by(desc(ParityRun.id))
+        .first()
+    )
+    changes: list[dict] = []
+    if prev_run:
+        prev_rows = (
+            db.query(ParityResult.model_id, ParityResult.surface,
+                     ParityResult.feature, ParityResult.status)
+            .filter(ParityResult.run_id == prev_run.id)
+            .all()
+        )
+        prev_map = {(p.model_id, p.surface, p.feature): p.status for p in prev_rows}
+        cur_map = {(r.model_id, r.surface, r.feature): r.status for r in rows}
+        names = {r.model_id: r.model_name for r in rows}
+        changes = [
+            {**c, "model_name": names.get(c["model_id"], c["model_id"])}
+            for c in diff_statuses(prev_map, cur_map)
+        ]
+
     return {
         "run": {
             "id": run.id,
@@ -58,6 +83,8 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
             "totals": run.totals,
             "running": _running["active"],
         },
+        "previous_run_id": prev_run.id if prev_run else None,
+        "changes": changes,
         "results": [
             {"model_id": r.model_id, "model_name": r.model_name, "surface": r.surface,
              "feature": r.feature, "status": r.status, "latency_ms": r.latency_ms}

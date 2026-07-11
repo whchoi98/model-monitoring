@@ -35,6 +35,15 @@ interface Feature {
   desc_ko: string;
 }
 
+interface ParityChange {
+  model_id: string;
+  model_name: string;
+  surface: string;
+  feature: string;
+  before: Status | null;
+  after: Status;
+}
+
 const SURFACE_LABELS: Record<string, string> = {
   converse: "Converse",
   invoke_model: "InvokeModel",
@@ -56,6 +65,209 @@ const STATUS_LABEL: Record<Status, string> = {
   broken: "Broken",
   skipped: "—",
 };
+
+// provider 그룹 — 상단 요약 카드 + 우측 상세 바 단위
+function providerOf(modelId: string): string {
+  if (modelId.startsWith("openai:")) return "OpenAI";
+  if (modelId.includes("nova")) return "Amazon";
+  return "Anthropic";
+}
+
+interface ProviderStat {
+  provider: string;
+  counts: Record<Status, number>;
+  total: number;
+  health: number; // supported / (supported + broken)
+}
+
+const DONUT_COLORS: Record<Status, string> = {
+  supported: "#34d399",
+  unsupported: "#fbbf24",
+  broken: "#fb7185",
+  skipped: "#4b5563",
+};
+
+function Donut({ counts, health }: { counts: Record<Status, number>; health: number }) {
+  const total = Math.max(1, (Object.values(counts) as number[]).reduce((a, b) => a + b, 0));
+  const R = 34;
+  const C = 2 * Math.PI * R;
+  let offset = 0;
+  const order: Status[] = ["supported", "unsupported", "broken", "skipped"];
+  return (
+    <svg viewBox="0 0 88 88" className="w-24 h-24 shrink-0" role="img" aria-label={`healthy ${health}%`}>
+      {order.map((s) => {
+        const frac = (counts[s] ?? 0) / total;
+        const seg = (
+          <circle
+            key={s}
+            cx="44" cy="44" r={R} fill="none"
+            stroke={DONUT_COLORS[s]} strokeWidth="9"
+            strokeDasharray={`${frac * C} ${C}`}
+            strokeDashoffset={-offset * C}
+            transform="rotate(-90 44 44)"
+          />
+        );
+        offset += frac;
+        return seg;
+      })}
+      <text x="44" y="42" textAnchor="middle" className="fill-gray-100" fontSize="17" fontWeight="700">{health}%</text>
+      <text x="44" y="56" textAnchor="middle" className="fill-gray-500" fontSize="8" letterSpacing="1">HEALTHY</text>
+    </svg>
+  );
+}
+
+function ProviderDrawer({
+  provider, cells, features, lang, onClose,
+}: {
+  provider: string;
+  cells: ParityCell[];
+  features: Feature[];
+  lang: string;
+  onClose: () => void;
+}) {
+  const featureLabel = (id: string) =>
+    lang === "en" ? id : features.find((f) => f.id === id)?.label_ko ?? id;
+
+  // Broken — 피처별 그룹: 실패 채널 수 / 검사 채널 수 + 대상 모델·surface
+  const brokenByFeature = useMemo(() => {
+    const byFeature = new Map<string, { broken: ParityCell[]; probed: number }>();
+    for (const c of cells) {
+      if (c.status === "skipped") continue;
+      const g = byFeature.get(c.feature) ?? { broken: [], probed: 0 };
+      g.probed += 1;
+      if (c.status === "broken") g.broken.push(c);
+      byFeature.set(c.feature, g);
+    }
+    return Array.from(byFeature.entries())
+      .filter(([, g]) => g.broken.length > 0)
+      .sort((a, b) => b[1].broken.length - a[1].broken.length);
+  }, [cells]);
+
+  // 깨끗한 미지원 — (feature, surface) 고유 조합 칩
+  const unsupportedChips = useMemo(() => {
+    const set = new Map<string, { feature: string; surface: string }>();
+    for (const c of cells) {
+      if (c.status === "unsupported") set.set(`${c.feature}|${c.surface}`, { feature: c.feature, surface: c.surface });
+    }
+    return Array.from(set.values());
+  }, [cells]);
+
+  // 취약 모델 — 헬스 낮은 순 (broken 있는 모델만)
+  const weakest = useMemo(() => {
+    const per = new Map<string, { supported: number; broken: number }>();
+    for (const c of cells) {
+      if (c.status !== "supported" && c.status !== "broken") continue;
+      const m = per.get(c.model_name) ?? { supported: 0, broken: 0 };
+      m[c.status] += 1;
+      per.set(c.model_name, m);
+    }
+    return Array.from(per.entries())
+      .map(([name, m]) => ({ name, broken: m.broken, health: Math.round((100 * m.supported) / Math.max(1, m.supported + m.broken)) }))
+      .filter((m) => m.broken > 0)
+      .sort((a, b) => a.health - b.health)
+      .slice(0, 5);
+  }, [cells]);
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto bg-gray-900 light:bg-white border-l border-gray-800 shadow-2xl p-6 space-y-6">
+        <div>
+          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-100">{provider}</h2>
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            {lang === "en" ? "Latest run · computed from every probed cell" : "최근 런 기준 · 프로브된 전체 셀에서 계산"}
+          </p>
+        </div>
+
+        <section>
+          <h3 className="text-sm font-semibold text-rose-300 mb-1">
+            {lang === "en"
+              ? `Broken — expected to work but failing (${brokenByFeature.length} features)`
+              : `Broken — 동작해야 하는데 실패 (${brokenByFeature.length}개 피처)`}
+          </h3>
+          <p className="text-[11px] text-gray-500 mb-2">
+            {lang === "en"
+              ? "Live probes hit an error on advertised capabilities — regressions worth chasing."
+              : "실제 프로브가 오류를 만난 항목 — 추적할 가치가 있는 회귀입니다."}
+          </p>
+          {brokenByFeature.length === 0 && (
+            <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">
+              {lang === "en" ? "No broken features." : "Broken 피처가 없습니다."}
+            </div>
+          )}
+          <div className="space-y-2">
+            {brokenByFeature.map(([fid, g]) => {
+              const surfaces = Array.from(new Set(g.broken.map((c) => SURFACE_LABELS[c.surface] ?? c.surface)));
+              const models = Array.from(new Set(g.broken.map((c) => c.model_name)));
+              return (
+                <div key={fid} className="bg-rose-500/10 border border-rose-500/20 rounded-lg px-3 py-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-sm font-medium text-gray-100">{featureLabel(fid)}</span>
+                    <span className="text-xs font-semibold text-rose-300 whitespace-nowrap">
+                      {g.broken.length}/{g.probed} {lang === "en" ? "cells" : "셀"}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-gray-400 font-mono mt-0.5">{surfaces.join(", ")}</div>
+                  <div className="text-[11px] text-gray-500 mt-0.5">
+                    {models.slice(0, 3).join(" · ")}{models.length > 3 ? ` ${lang === "en" ? `+${models.length - 3} more` : `외 ${models.length - 3}개`}` : ""}
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </section>
+
+        <section>
+          <h3 className="text-sm font-semibold text-amber-300 mb-1">
+            {lang === "en"
+              ? `Cleanly unsupported (${unsupportedChips.length})`
+              : `깨끗한 미지원 (${unsupportedChips.length})`}
+          </h3>
+          <p className="text-[11px] text-gray-500 mb-2">
+            {lang === "en"
+              ? "Provider rejected the capability explicitly — deliberate gaps, not bugs."
+              : "provider가 명시적으로 거부한 기능 — 버그가 아닌 의도된 격차입니다."}
+          </p>
+          <div className="flex flex-wrap gap-1.5">
+            {unsupportedChips.map((u) => (
+              <span key={`${u.feature}|${u.surface}`} className="px-2 py-0.5 text-[11px] rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+                {featureLabel(u.feature)} · {SURFACE_LABELS[u.surface] ?? u.surface}
+              </span>
+            ))}
+            {unsupportedChips.length === 0 && <span className="text-xs text-gray-500">—</span>}
+          </div>
+        </section>
+
+        {weakest.length > 0 && (
+          <section>
+            <h3 className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "Weakest models" : "취약 모델"}</h3>
+            <p className="text-[11px] text-gray-500 mb-2">
+              {lang === "en" ? "Share of should-work checks that pass, per model." : "모델별 동작해야 하는 검사의 통과 비율."}
+            </p>
+            <div className="space-y-1.5">
+              {weakest.map((m) => (
+                <div key={m.name} className="flex items-center gap-2 text-[11px]">
+                  <span className="w-44 shrink-0 truncate font-mono text-gray-400">{m.name}</span>
+                  <div className="flex-1 h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${m.health < 60 ? "bg-rose-400" : "bg-emerald-400"}`}
+                      style={{ width: `${m.health}%` }}
+                    />
+                  </div>
+                  <span className="w-20 text-right text-gray-400 tabular-nums whitespace-nowrap">{m.health}% · {m.broken} broken</span>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+      </aside>
+    </div>
+  );
+}
 
 function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCell; onClose: () => void }) {
   const [data, setData] = useState<Record<string, unknown> | null>(null);
@@ -118,9 +330,13 @@ export default function ParityPanel() {
   const [surfaces, setSurfaces] = useState<string[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [pickerOpen, setPickerOpen] = useState(false);
   const [statusFilter, setStatusFilter] = useState<Status | "all">("all");
   const [selected, setSelected] = useState<ParityCell | null>(null);
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
+  const [changes, setChanges] = useState<ParityChange[]>([]);
+  const [prevRunId, setPrevRunId] = useState<number | null>(null);
+  const [providerDetail, setProviderDetail] = useState<string | null>(null);
 
   const load = () => {
     Promise.all([
@@ -130,6 +346,8 @@ export default function ParityPanel() {
       .then(([latest, catalog]) => {
         setRun(latest.run);
         setResults(latest.results);
+        setChanges(latest.changes ?? []);
+        setPrevRunId(latest.previous_run_id ?? null);
         setFeatures(catalog.features);
         setSurfaces(catalog.surfaces);
       })
@@ -153,6 +371,36 @@ export default function ParityPanel() {
     setTriggerMsg(body.message ?? `HTTP ${res.status}`);
   };
 
+  // provider별 요약 카드 (v2.12.0) — Anthropic / OpenAI / Amazon
+  const providerStats = useMemo<ProviderStat[]>(() => {
+    const per = new Map<string, Record<Status, number>>();
+    for (const r of results) {
+      const p = providerOf(r.model_id);
+      const c = per.get(p) ?? { supported: 0, unsupported: 0, broken: 0, skipped: 0 };
+      c[r.status] += 1;
+      per.set(p, c);
+    }
+    const order = ["Anthropic", "OpenAI", "Amazon"];
+    return Array.from(per.entries())
+      .sort((a, b) => order.indexOf(a[0]) - order.indexOf(b[0]))
+      .map(([provider, counts]) => ({
+        provider,
+        counts,
+        total: counts.supported + counts.unsupported + counts.broken + counts.skipped,
+        health: Math.round((100 * counts.supported) / Math.max(1, counts.supported + counts.broken)),
+      }));
+  }, [results]);
+
+  // 모델 선택 드롭다운용 — 매트릭스 등장 순서의 고유 모델명
+  const modelNames = useMemo(
+    () => Array.from(new Set(results.map((r) => r.model_name))),
+    [results],
+  );
+  const pickerItems = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return q ? modelNames.filter((n) => n.toLowerCase().includes(q)) : modelNames;
+  }, [modelNames, search]);
+
   // (feature, model) 행 구성 — 각 행에 surface별 셀 매핑
   const matrix = useMemo(() => {
     const byKey = new Map<string, ParityCell>();
@@ -170,11 +418,6 @@ export default function ParityPanel() {
     }
     return rows;
   }, [results, features, surfaces, search, statusFilter]);
-
-  const totals = run?.totals ?? null;
-  const health = totals
-    ? Math.round((100 * (totals.supported ?? 0)) / Math.max(1, (totals.supported ?? 0) + (totals.broken ?? 0)))
-    : null;
 
   if (loading) {
     return (
@@ -216,20 +459,73 @@ export default function ParityPanel() {
         <div className="px-3 py-2 bg-blue-500/10 border border-blue-500/30 rounded-md text-xs text-blue-300">{triggerMsg}</div>
       )}
 
-      {/* 헬스 요약 */}
-      {totals && (
-        <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
-          <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-            <div className="text-2xl font-bold text-gray-100 tabular-nums">{health}%</div>
-            <div className="text-[11px] text-gray-500 mt-1">{lang === "en" ? "healthy (supported / should-work)" : "헬스 (동작해야 하는 것 중 동작)"}</div>
+      {/* 이전 런 대비 변경사항 (v2.12.0) */}
+      {run && changes.length > 0 && (
+        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+          <div className="text-sm font-semibold text-amber-300 mb-2">
+            {lang === "en"
+              ? `Changes since run #${prevRunId}: ${changes.length}`
+              : `이전 런(#${prevRunId}) 대비 변경 ${changes.length}건`}
           </div>
-          {(["supported", "unsupported", "broken", "skipped"] as Status[]).map((s) => (
-            <div key={s} className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-              <div className={`text-2xl font-bold tabular-nums ${s === "supported" ? "text-emerald-400" : s === "broken" ? "text-rose-400" : s === "unsupported" ? "text-amber-400" : "text-gray-500"}`}>
-                {totals[s] ?? 0}
+          <ul className="space-y-1 text-xs text-gray-300">
+            {changes.slice(0, 10).map((c) => {
+              const featureLabel = features.find((f) => f.id === c.feature)?.label_ko ?? c.feature;
+              return (
+                <li key={`${c.model_id}|${c.surface}|${c.feature}`} className="flex items-center gap-2 flex-wrap">
+                  <span className="text-gray-400">{c.model_name}</span>
+                  <span className="text-gray-600">·</span>
+                  <span>{lang === "en" ? c.feature : featureLabel} / {SURFACE_LABELS[c.surface] ?? c.surface}</span>
+                  <span className="text-gray-600">:</span>
+                  <span className={c.before ? "" : "text-gray-500"}>{c.before ?? (lang === "en" ? "new" : "신규")}</span>
+                  <span className="text-gray-500">→</span>
+                  <span className={c.after === "supported" ? "text-emerald-300" : c.after === "broken" ? "text-rose-300" : "text-amber-300"}>
+                    {c.after}
+                  </span>
+                </li>
+              );
+            })}
+            {changes.length > 10 && (
+              <li className="text-gray-500">{lang === "en" ? `+${changes.length - 10} more` : `외 ${changes.length - 10}건`}</li>
+            )}
+          </ul>
+        </div>
+      )}
+      {run && prevRunId != null && changes.length === 0 && (
+        <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
+          {lang === "en"
+            ? `No changes since run #${prevRunId}.`
+            : `이전 런(#${prevRunId}) 대비 변경 없음.`}
+        </div>
+      )}
+
+      {/* provider별 요약 카드 (v2.12.0) — 클릭 시 우측 상세 요약 바 */}
+      {run && providerStats.length > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          {providerStats.map((p) => (
+            <button
+              key={p.provider}
+              type="button"
+              onClick={() => setProviderDetail(p.provider)}
+              className="text-left bg-gray-900/50 border border-gray-800 hover:border-blue-500/60 rounded-xl p-4 flex items-center gap-4 transition-colors"
+            >
+              <Donut counts={p.counts} health={p.health} />
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <span className="text-base font-bold text-gray-100">{p.provider}</span>
+                  <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400">{p.total} {lang === "en" ? "checks" : "검사"}</span>
+                </div>
+                <div className="text-[11px] text-gray-500 mt-0.5">
+                  {lang === "en" ? `${p.health}% of features that should work do` : `동작해야 하는 기능 중 ${p.health}% 동작`}
+                </div>
+                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-[11px] tabular-nums">
+                  <span className="text-emerald-300">● {p.counts.supported} supported</span>
+                  <span className="text-amber-300">● {p.counts.unsupported} unsupported</span>
+                  <span className="text-rose-300">● {p.counts.broken} broken</span>
+                  <span className="text-gray-500">● {p.counts.skipped} skipped</span>
+                </div>
+                <div className="text-[11px] text-blue-400 mt-1.5">{lang === "en" ? "Insights →" : "상세 요약 →"}</div>
               </div>
-              <div className="text-[11px] text-gray-500 mt-1">{STATUS_LABEL[s] === "—" ? "Skipped" : STATUS_LABEL[s]}</div>
-            </div>
+            </button>
           ))}
         </div>
       )}
@@ -237,21 +533,52 @@ export default function ParityPanel() {
       {!run && (
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 text-center text-sm text-gray-400">
           {lang === "en"
-            ? "No parity run yet — click \"Run parity sweep\" (login required) or wait for the daily schedule."
-            : "아직 실행된 패리티 런이 없습니다 — \"패리티 런 실행\"(로그인 필요)을 누르거나 일일 스케줄을 기다려 주세요."}
+            ? "No parity run yet — click \"Run parity sweep\" (login required) or wait for the 12-hour schedule."
+            : "아직 실행된 패리티 런이 없습니다 — \"패리티 런 실행\"(로그인 필요)을 누르거나 12시간 주기 스케줄을 기다려 주세요."}
         </div>
       )}
 
       {/* 필터 */}
       {run && (
         <div className="flex items-center gap-3 flex-wrap">
-          <input
-            type="text"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            placeholder={lang === "en" ? "Search models..." : "모델 검색..."}
-            className="px-3 py-1.5 text-sm rounded-lg bg-gray-900 light:bg-white border border-gray-800 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-56"
-          />
+          <div className="relative">
+            <input
+              type="text"
+              value={search}
+              onChange={(e) => { setSearch(e.target.value); setPickerOpen(true); }}
+              onFocus={() => setPickerOpen(true)}
+              onBlur={() => setTimeout(() => setPickerOpen(false), 150)}
+              placeholder={lang === "en" ? "Select or search models..." : "모델 선택/검색..."}
+              className="px-3 py-1.5 pr-8 text-sm rounded-lg bg-gray-900 light:bg-white border border-gray-800 text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 w-64"
+            />
+            {search && (
+              <button
+                type="button"
+                onClick={() => { setSearch(""); setPickerOpen(false); }}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-300 text-sm"
+                aria-label={lang === "en" ? "clear model filter" : "모델 필터 지우기"}
+              >
+                ×
+              </button>
+            )}
+            {pickerOpen && pickerItems.length > 0 && (
+              <ul className="absolute z-20 mt-1 w-full max-h-72 overflow-y-auto bg-gray-900 light:bg-white border border-gray-700 rounded-lg shadow-xl py-1">
+                {pickerItems.map((name) => (
+                  <li key={name}>
+                    <button
+                      type="button"
+                      onMouseDown={() => { setSearch(name); setPickerOpen(false); }}
+                      className={`w-full text-left px-3 py-1.5 text-xs transition-colors hover:bg-blue-600/20 ${
+                        search === name ? "text-blue-300 font-medium" : "text-gray-300"
+                      }`}
+                    >
+                      {name}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
           <div className="flex gap-1">
             {(["all", "supported", "unsupported", "broken"] as const).map((s) => (
               <button
@@ -321,14 +648,23 @@ export default function ParityPanel() {
       {/* 동작 방식 요약 */}
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-1.5">
         <div className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "How it works" : "동작 방식"}</div>
-        <p>1 · {lang === "en" ? "Daily EventBridge schedule (or manual trigger) starts a Fargate sweep." : "일일 EventBridge 스케줄(또는 수동 트리거)이 Fargate 스윕을 시작합니다."}</p>
+        <p>1 · {lang === "en" ? "An EventBridge schedule starts a Fargate sweep every 12 hours (manual trigger runs inside the backend service)." : "EventBridge 스케줄이 12시간마다 Fargate 스윕을 시작합니다 (수동 트리거는 backend 서비스 내에서 실행)."}</p>
         <p>2 · {lang === "en" ? "The monitored model catalog is the source — new models are picked up automatically." : "모니터링 모델 카탈로그가 소스입니다 — 신규 모델은 자동으로 반영됩니다."}</p>
         <p>3 · {lang === "en" ? "Fan-out across model × API surface (Converse / InvokeModel / Messages / ChatCompletions / Responses) × 7 features." : "모델 × API surface(Converse/InvokeModel/Messages/ChatCompletions/Responses) × 7개 피처로 팬아웃합니다."}</p>
         <p>4 · {lang === "en" ? "Execution-evidence probes: tool canary round-trip, system-instruction canary, JSON validity, cached_tokens on repeat, ≥2 stream deltas — HTTP 200 is never enough." : "실행-증거 프로브: 도구 카나리 왕복, 시스템 지시 카나리, JSON 유효성, 반복 요청의 cached tokens, 스트림 델타 2개 이상 — HTTP 200만으로는 판정하지 않습니다."}</p>
-        <p>5 · {lang === "en" ? "Raw evidence (request, response, latency, error) is stored in RDS; click any cell to see it." : "원시 증거(요청·응답·지연·오류)는 RDS에 저장됩니다. 셀을 클릭하면 확인할 수 있습니다."}</p>
+        <p>5 · {lang === "en" ? "Execution evidence (response snippet, tool call, usage, latency, error) is stored in RDS; click any cell to see it. Changes vs the previous run are shown at the top." : "실행 증거(응답 스니펫·도구 호출·usage·지연·오류)는 RDS에 저장됩니다. 셀을 클릭하면 확인할 수 있고, 이전 런 대비 변경사항은 상단에 표시됩니다."}</p>
       </div>
 
       {selected && run && <EvidenceModal runId={run.id} cell={selected} onClose={() => setSelected(null)} />}
+      {providerDetail && (
+        <ProviderDrawer
+          provider={providerDetail}
+          cells={results.filter((r) => providerOf(r.model_id) === providerDetail)}
+          features={features}
+          lang={lang}
+          onClose={() => setProviderDetail(null)}
+        />
+      )}
     </div>
   );
 }

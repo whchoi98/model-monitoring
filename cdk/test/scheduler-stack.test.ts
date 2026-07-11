@@ -53,6 +53,12 @@ describe("SchedulerStack", () => {
     }));
   });
 
+  it("ParityRun은 rate(12 hours) 스케줄을 사용한다 (v2.12.0에서 일 1회→12시간)", () => {
+    template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({
+      ScheduleExpression: "rate(12 hours)",
+    }));
+  });
+
   it("TaskDefinition이 3개 생성된다", () => {
     template.resourceCountIs("AWS::ECS::TaskDefinition", 3);
   });
