@@ -48,14 +48,18 @@ describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
 });
 
 describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () => {
-  test("Bedrock(Claude) → Converse API + InvokeModel API 두 탭, 각각 설명 포함", () => {
+  test("Bedrock(Claude) → Converse + InvokeModel + Messages 세 탭, 각각 설명 포함", () => {
     const ex = codeExamples("us.anthropic.claude-haiku-4-5-20251001-v1:0");
-    expect(ex.map((e) => e.api)).toEqual(["Converse API", "InvokeModel API"]);
+    expect(ex.map((e) => e.api)).toEqual(["Converse API", "InvokeModel API", "Messages API"]);
     expect(ex[0].code).toContain("converse_stream");
     expect(ex[0].code).toContain("us.anthropic.claude-haiku-4-5-20251001-v1:0");
     expect(ex[0].description.length).toBeGreaterThan(10); // API 의미 설명
     expect(ex[1].code).toContain("invoke_model");
     expect(ex[1].description).toContain("네이티브");
+    // Messages API — anthropic SDK의 AnthropicBedrock 클라이언트 (SigV4로 Bedrock 호출)
+    expect(ex[2].code).toContain("AnthropicBedrock");
+    expect(ex[2].code).toContain("us.anthropic.claude-haiku-4-5-20251001-v1:0");
+    expect(ex[2].description).toContain("Anthropic");
   });
   test("Bedrock(Nova) → Converse API 단일 탭", () => {
     const ex = codeExamples("us.amazon.nova-2-lite-v1:0");

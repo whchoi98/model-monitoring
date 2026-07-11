@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.11.2 — 2026-07-11
+
+### Fixed
+- **Model Explorer: Messages API example missing on Bedrock Claude cards**: Bedrock Claude cards only showed Converse/InvokeModel tabs. Added a third tab — Anthropic Messages API via the `AnthropicBedrock` client (anthropic SDK, SigV4, no Anthropic API key) — matching the Bedrock Central reference (Converse / InvokeModel / Messages all visible).
+- **모델 탐색: Bedrock Claude 카드에 Messages API 예제 누락**: Converse/InvokeModel 두 탭만 표시되던 것을 수정 — anthropic SDK의 `AnthropicBedrock` 클라이언트(SigV4, Anthropic API 키 불필요)로 호출하는 Messages API 탭을 추가해 Bedrock Central 참조안처럼 3개 API가 모두 표기되도록 함.
+
 ## v2.11.1 — 2026-07-11
 
 ### Fixed
