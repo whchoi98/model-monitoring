@@ -3,8 +3,8 @@
 각 프로브는 실제 API 요청을 보내고 응답 '내용'을 검사해 supported/unsupported/broken을
 판정한다. 클라이언트는 prober.py의 기존 헬퍼를 재사용한다 (5개 provider path 공용).
 
-비용 통제: max_tokens 기본 64 (reasoning만 2048 — thinking budget 요구),
-caching 프로브만 2회 호출.
+비용 통제: max_tokens 기본 256 (structured_output 512, reasoning 2048 — thinking budget 요구),
+caching 프로브만 2회 호출. 64는 코드펜스 JSON·canary 응답이 절단돼 false-Broken을 유발했음 (run #1).
 """
 
 from __future__ import annotations
@@ -24,9 +24,19 @@ from parity.engine import (
 )
 
 CANARY = "PARITY_OK_7391"
-_MAX_TOKENS = 64
+_MAX_TOKENS = 256
+_JSON_MAX_TOKENS = 512
 _REASONING_MAX_TOKENS = 2048
 _REASONING_BUDGET = 1024
+
+
+def max_tokens_for(feature: str) -> int:
+    """피처별 max_tokens 예산 — 절단으로 인한 false-Broken 방지가 목적."""
+    if feature == "reasoning":
+        return _REASONING_MAX_TOKENS
+    if feature == "structured_output":
+        return _JSON_MAX_TOKENS
+    return _MAX_TOKENS
 # 캐싱 프로브용 장문 시스템 텍스트 — provider 최소 캐시 토큰(1024+)을 넘기기 위한 패딩.
 _CACHE_PAD = ("모니터링 패리티 런의 캐싱 프로브를 위한 컨텍스트 패딩 문단입니다. " * 220).strip()
 
@@ -121,7 +131,7 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
         def fn():
             r = converse(system=[{"text": "JSON 객체만 출력. 다른 텍스트 금지."}],
                          messages=[{"role": "user", "content": [{"text": _JSON_PROMPT}]}],
-                         inferenceConfig={"maxTokens": _MAX_TOKENS})
+                         inferenceConfig={"maxTokens": _JSON_MAX_TOKENS})
             text = "".join(b.get("text", "") for b in r["output"]["message"]["content"])
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
         return _run(fn)
@@ -209,6 +219,7 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
     if feature == "structured_output":
         def fn():
             r = invoke({"system": "JSON 객체만 출력. 다른 텍스트 금지.",
+                        "max_tokens": _JSON_MAX_TOKENS,
                         "messages": [{"role": "user", "content": _JSON_PROMPT}]})
             text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
@@ -287,7 +298,7 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
 
     if feature == "structured_output":
         def fn():
-            r = client.messages.create(model=actual_id, max_tokens=_MAX_TOKENS,
+            r = client.messages.create(model=actual_id, max_tokens=_JSON_MAX_TOKENS,
                                        system="JSON 객체만 출력. 다른 텍스트 금지.",
                                        messages=[{"role": "user", "content": _JSON_PROMPT}])
             text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
@@ -367,7 +378,7 @@ def probe_chat_completions(client, actual_id: str, feature: str) -> ProbeOutcome
 
     if feature == "structured_output":
         def fn():
-            r = client.chat.completions.create(model=actual_id, max_completion_tokens=_MAX_TOKENS,
+            r = client.chat.completions.create(model=actual_id, max_completion_tokens=_JSON_MAX_TOKENS,
                                                response_format={"type": "json_object"},
                                                messages=[{"role": "user", "content": _JSON_PROMPT}])
             text = r.choices[0].message.content
@@ -442,7 +453,7 @@ def probe_responses(client, actual_id: str, feature: str) -> ProbeOutcome:
 
     if feature == "structured_output":
         def fn():
-            r = client.responses.create(model=actual_id, max_output_tokens=_MAX_TOKENS, input=_JSON_PROMPT,
+            r = client.responses.create(model=actual_id, max_output_tokens=_JSON_MAX_TOKENS, input=_JSON_PROMPT,
                                         text={"format": {"type": "json_object"}})
             text = getattr(r, "output_text", "")
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}

@@ -95,3 +95,26 @@ def test_check_cached_tokens():
     assert check_cached_tokens({"cached_tokens": 0}) is False
     assert check_cached_tokens({}) is False
     assert check_cached_tokens(None) is False
+
+
+# ---------------------------------------------------------------------------
+# 피처별 토큰 예산 — 첫 실런에서 64토큰 절단으로 structured_output 전량 false-Broken
+# (모델은 정상 JSON을 반환했으나 닫는 }가 잘림). 회귀 방지.
+# ---------------------------------------------------------------------------
+
+def test_max_tokens_budget_prevents_truncation():
+    from parity.probes import max_tokens_for
+
+    # 코드펜스 + 들여쓰기 JSON + 한국어 값도 절단 없이 담을 수 있어야 한다
+    assert max_tokens_for("structured_output") >= 512
+    # 일반 텍스트 프로브도 canary 접두사 + 짧은 답변에 충분해야 한다 (64는 부족했음)
+    assert max_tokens_for("basic") >= 256
+    assert max_tokens_for("system_instructions") >= 256
+    # reasoning은 thinking budget(1024)보다 커야 텍스트가 남는다
+    assert max_tokens_for("reasoning") > 1024
+
+
+def test_check_json_object_rejects_truncated_json():
+    # max_tokens 절단 시나리오 — 닫는 }가 없으면 반드시 False (조용한 오탐 방지)
+    truncated = '```json\n{\n  "city": "서울",\n  "country": "대한민국",\n  '
+    assert check_json_object(truncated, "city") is False

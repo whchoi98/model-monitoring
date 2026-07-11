@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.11.1 — 2026-07-11
+
+### Fixed
+- **Parity probe token budget — false-Broken fix**: run #1 evidence showed every Claude `structured_output` cell Broken because `max_tokens=64` truncated the (valid) fenced JSON before its closing `}`, and Fable 5 `system_instructions` returned empty text under the same budget. Introduced per-feature budgets (`max_tokens_for`): structured_output 512, default 256, reasoning unchanged at 2048. Regression tests assert the budgets and that truncated JSON is still rejected.
+- **패리티 프로브 토큰 예산 — false-Broken 수정**: 첫 런 증거에서 Claude 전 모델의 `structured_output`이 Broken — 모델은 정상 JSON을 반환했으나 `max_tokens=64`로 닫는 `}` 이전에 절단된 것이 원인. Fable 5 `system_instructions`의 빈 응답도 동일 계열. 피처별 예산(`max_tokens_for`) 도입: structured_output 512, 기본 256, reasoning 2048 유지. 예산 회귀 테스트 + 절단 JSON 거부 테스트 추가.
+
 ## v2.11.0 — 2026-07-11
 
 ### Added
