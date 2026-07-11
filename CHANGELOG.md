@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.14.2 — 2026-07-11
+
+### Fixed
+- **Final feature-expansion follow-ups (run #8 evidence)**: bare-404 responses (Mantle has no batches endpoint) and explicit tool-schema rejections ("does not match any of the expected tags") now classify as cleanly unsupported; adaptive_thinking probe budget raised to 8000 tokens matching the reference request (at 2048 the model accepted but skipped thinking).
+- **피처 확장 최종 후속 (run #8 증거)**: 본문 없는 404(Mantle batches 엔드포인트 미제공)와 도구 스키마 명시 거부("does not match any of the expected tags")를 깨끗한 미지원으로 분류. adaptive_thinking 예산을 참조 요청과 동일한 8000 토큰으로 상향(2048에서는 수락 후 thinking 생략).
+
 ## v2.14.1 — 2026-07-11
 
 ### Fixed

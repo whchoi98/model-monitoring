@@ -249,3 +249,19 @@ def test_batches_probe_builds_snapshot_without_type_error():
     assert out.status == "supported"
     assert out.evidence["batch_id"] == "batch-1"
     assert out.evidence["request"]["model"] == "model-x"
+
+
+@pytest.mark.parametrize("msg", [
+    # Mantle에 batches 엔드포인트 자체가 없음 — 본문 없는 404 (run #8 실측)
+    "NotFoundError: Error code: 404",
+    # Bedrock InvokeModel의 도구 스키마 거부 — 허용 tool 목록 명시 (run #8 실측)
+    "ValidationException: tools.0: Input tag 'web_search_20250305' found using 'type' does not match any of the expected tags: 'bash_20250124', 'custom'",
+])
+def test_clean_unsupported_errors_v2142(msg):
+    assert classify_error(msg) == "unsupported"
+
+
+def test_adaptive_thinking_budget_matches_reference():
+    # 참조 증거의 요청은 max_tokens 8000 — 2048에서는 adaptive가 thinking을 생략함 (run #8 실측)
+    from parity.probes import _ADAPTIVE_MAX_TOKENS
+    assert _ADAPTIVE_MAX_TOKENS >= 8000

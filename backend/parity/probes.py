@@ -28,6 +28,7 @@ _MAX_TOKENS = 256
 _JSON_MAX_TOKENS = 512
 _REASONING_MAX_TOKENS = 2048
 _REASONING_BUDGET = 1024
+_ADAPTIVE_MAX_TOKENS = 8000  # 참조 증거와 동일 — 2048에서는 adaptive가 thinking 생략 (run #8)
 
 
 def max_tokens_for(feature: str) -> int:
@@ -195,7 +196,7 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
         # adaptive는 모델이 추론 여부를 스스로 결정하므로 추론을 요구하는 문제 + effort high로 유도.
         kw = dict(
             messages=[{"role": "user", "content": [{"text": "처음 20개 소수의 합을 구하세요. 신중하게 단계적으로 생각하세요."}]}],
-            inferenceConfig={"maxTokens": _REASONING_MAX_TOKENS},
+            inferenceConfig={"maxTokens": _ADAPTIVE_MAX_TOKENS},
             additionalModelRequestFields={"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}},
         )
         def fn():
@@ -304,7 +305,7 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(model_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", max_tokens=_MAX_TOKENS, **body))
 
     if feature == "adaptive_thinking":
-        body = {"max_tokens": _REASONING_MAX_TOKENS, "thinking": {"type": "adaptive"},
+        body = {"max_tokens": _ADAPTIVE_MAX_TOKENS, "thinking": {"type": "adaptive"},
                 "output_config": {"effort": "high"},
                 "messages": [{"role": "user", "content": "처음 20개 소수의 합을 구하세요. 신중하게 단계적으로 생각하세요."}]}
         def fn():
@@ -430,7 +431,7 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
     if feature == "adaptive_thinking":
-        kw = dict(max_tokens=_REASONING_MAX_TOKENS, thinking={"type": "adaptive"},
+        kw = dict(max_tokens=_ADAPTIVE_MAX_TOKENS, thinking={"type": "adaptive"},
                   messages=[{"role": "user", "content": "처음 20개 소수의 합을 구하세요. 신중하게 단계적으로 생각하세요."}])
         def fn():
             r = client.messages.create(model=actual_id, extra_body={"output_config": {"effort": "high"}}, **kw)
