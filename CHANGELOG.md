@@ -7,6 +7,18 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.13.0 — 2026-07-11
+
+### Added
+- **Evidence modal with Request/Response JSON**: every parity probe now stores a request snapshot (long strings trimmed with original length noted) in its evidence; the cell modal is restyled as an EVIDENCE panel — `feature · surface · model_id` header, status pill + latency + verdict sentence, and collapsible Error / Request JSON / Response JSON sections (collapsed on success, expanded on failure).
+- **증거 모달 Request/Response JSON**: 모든 패리티 프로브가 요청 스냅샷(장문은 원 길이 표기와 함께 절단)을 증거에 저장. 셀 모달을 EVIDENCE 패널로 개편 — `feature · surface · model_id` 헤더, 상태 pill + latency + 판정 문장, 접이식 Error / Request JSON / Response JSON 섹션 (성공 시 접힘, 실패 시 펼침).
+
+### Changed
+- **Parity matrix rows**: first column now shows the feature name (bold, on every row) with the model id in monospace beneath — matching the Feature Parity reference layout.
+- **Model Explorer Messages API note**: the Bedrock Claude Messages API tab now also mentions the Bedrock Mantle `/anthropic` endpoint (bearer token, some regions e.g. us-east-1) as an alternative path — verified live 2026-07-11.
+- **패리티 매트릭스 행**: 첫 컬럼을 피처명(굵게, 매 행) + 모델 id(모노스페이스)로 변경 — 참조 레이아웃과 일치.
+- **모델 탐색 Messages API 설명**: Bedrock Mantle `/anthropic` 엔드포인트(bearer 토큰, us-east-1 등 일부 리전) 경로 병기 (2026-07-11 실측).
+
 ## v2.12.0 — 2026-07-11
 
 ### Added

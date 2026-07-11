@@ -152,3 +152,20 @@ def test_diff_statuses_empty_prev_marks_all_new():
     assert changes == [
         {"model_id": "m1", "surface": "converse", "feature": "basic", "before": None, "after": "supported"}
     ]
+
+
+# ---------------------------------------------------------------------------
+# 증거용 요청 스냅샷 (v2.13.0) — 셀 클릭 시 Request JSON 표시용, 장문은 절단
+# ---------------------------------------------------------------------------
+
+def test_req_snapshot_trims_long_strings_and_keeps_structure():
+    from parity.probes import _req_snapshot
+
+    pad = "x" * 5000
+    snap = _req_snapshot("model-1", system=[{"text": pad}], max_tokens=64,
+                         messages=[{"role": "user", "content": "hi"}])
+    assert snap["model"] == "model-1"
+    assert snap["max_tokens"] == 64
+    assert snap["messages"][0]["content"] == "hi"
+    trimmed = snap["system"][0]["text"]
+    assert len(trimmed) < 300 and "5000 chars" in trimmed  # 절단 + 원 길이 표기
