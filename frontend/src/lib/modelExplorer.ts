@@ -131,7 +131,7 @@ print(result["content"][0]["text"])`,
         label: "Python (anthropic SDK)",
         api: "Messages API",
         description:
-          "Anthropic 네이티브 API를 Bedrock 위에서 그대로 쓰는 방식 — anthropic SDK의 AnthropicBedrock 클라이언트가 Messages 형식 요청을 SigV4로 서명해 Bedrock으로 전달합니다. Claude 전용 파라미터를 Anthropic 문서 그대로 사용하면서 과금·권한은 AWS 계정으로 관리할 때 사용합니다.",
+          "Anthropic 네이티브 API를 Bedrock 위에서 그대로 쓰는 방식 — anthropic SDK의 AnthropicBedrock 클라이언트가 Messages 형식 요청을 SigV4로 서명해 Bedrock으로 전달합니다. Claude 전용 파라미터를 Anthropic 문서 그대로 사용하면서 과금·권한은 AWS 계정으로 관리할 때 사용합니다. 참고: Bedrock Mantle /anthropic 엔드포인트(bearer 토큰, us-east-1 등 일부 리전)로도 동일한 Messages 형식 호출이 가능합니다.",
         language: "python",
         code: `from anthropic import AnthropicBedrock
 

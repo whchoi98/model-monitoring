@@ -55,12 +55,14 @@ class ProbeOutcome:
     error: str | None = None
 
 
-def _run(fn: Callable[[], tuple[bool, dict]]) -> ProbeOutcome:
-    """공통 실행 래퍼 — 시간 측정 + 오류 분류."""
+def _run(fn: Callable[[], tuple[bool, dict]], request: dict | None = None) -> ProbeOutcome:
+    """공통 실행 래퍼 — 시간 측정 + 오류 분류. request 스냅샷은 성공/실패 모두 증거에 포함."""
     start = time.time()
     try:
         passed, evidence = fn()
         latency = (time.time() - start) * 1000
+        if request:
+            evidence.setdefault("request", request)
         if passed:
             return ProbeOutcome("supported", latency, evidence)
         evidence.setdefault("reason", "evidence check failed")
@@ -68,11 +70,29 @@ def _run(fn: Callable[[], tuple[bool, dict]]) -> ProbeOutcome:
     except Exception as exc:  # noqa: BLE001 — provider 오류 전체를 분류 대상으로
         latency = (time.time() - start) * 1000
         msg = f"{type(exc).__name__}: {exc}"
-        return ProbeOutcome(classify_error(msg), latency, {}, error=msg[:1500])
+        evidence = {"request": request} if request else {}
+        return ProbeOutcome(classify_error(msg), latency, evidence, error=msg[:1500])
 
 
 def _snippet(text: Any) -> str:
     return str(text)[:300] if text else ""
+
+
+def _req_snapshot(model: str, **kw: Any) -> dict:
+    """증거용 요청 스냅샷 (v2.13.0) — 셀 클릭 시 Request JSON으로 표시.
+
+    캐시 패딩 같은 장문 문자열은 잘라서 저장 (DB 비대 방지, 원 길이 표기).
+    """
+    def trim(v: Any) -> Any:
+        if isinstance(v, str) and len(v) > 200:
+            return f"{v[:200]}… ({len(v)} chars)"
+        if isinstance(v, dict):
+            return {k: trim(x) for k, x in v.items()}
+        if isinstance(v, (list, tuple)):
+            return [trim(x) for x in v]
+        return v
+
+    return {"model": model, **{k: trim(v) for k, v in kw.items()}}
 
 
 # ---------------------------------------------------------------------------
@@ -84,81 +104,86 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
         return client.converse(modelId=model_id, **kw)
 
     if feature == "basic":
+        kw = dict(messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
+                  inferenceConfig={"maxTokens": _MAX_TOKENS})
         def fn():
-            r = converse(messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
-                         inferenceConfig={"maxTokens": _MAX_TOKENS})
+            r = converse(**kw)
             text = "".join(b.get("text", "") for b in r["output"]["message"]["content"])
             return bool(text.strip()), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **kw))
 
     if feature == "streaming":
+        kw = dict(messages=[{"role": "user", "content": [{"text": "1부터 30까지 세어보세요."}]}],
+                  inferenceConfig={"maxTokens": _MAX_TOKENS})
         def fn():
-            r = client.converse_stream(modelId=model_id,
-                                       messages=[{"role": "user", "content": [{"text": "1부터 30까지 세어보세요."}]}],
-                                       inferenceConfig={"maxTokens": _MAX_TOKENS})
+            r = client.converse_stream(modelId=model_id, **kw)
             events = sum(1 for e in r["stream"] if "contentBlockDelta" in e)
             return check_stream_events(events), {"content_events": events}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, api="converse_stream", **kw))
 
     if feature == "system_instructions":
+        kw = dict(system=[{"text": _SYSTEM_PROMPT}],
+                  messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
+                  inferenceConfig={"maxTokens": _MAX_TOKENS})
         def fn():
-            r = converse(system=[{"text": _SYSTEM_PROMPT}],
-                         messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
-                         inferenceConfig={"maxTokens": _MAX_TOKENS})
+            r = converse(**kw)
             text = "".join(b.get("text", "") for b in r["output"]["message"]["content"])
             return check_canary(text, CANARY), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **kw))
 
     if feature == "tool_use":
+        kw = dict(
+            messages=[{"role": "user", "content": [{"text": _TOOL_PROMPT}]}],
+            toolConfig={
+                "tools": [{"toolSpec": {"name": "echo", "description": _ECHO_TOOL_DESC,
+                                        "inputSchema": {"json": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}}],
+                "toolChoice": {"tool": {"name": "echo"}},
+            },
+            inferenceConfig={"maxTokens": _MAX_TOKENS},
+        )
         def fn():
-            r = converse(
-                messages=[{"role": "user", "content": [{"text": _TOOL_PROMPT}]}],
-                toolConfig={
-                    "tools": [{"toolSpec": {"name": "echo", "description": _ECHO_TOOL_DESC,
-                                            "inputSchema": {"json": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}}],
-                    "toolChoice": {"tool": {"name": "echo"}},
-                },
-                inferenceConfig={"maxTokens": _MAX_TOKENS},
-            )
+            r = converse(**kw)
             tool_call = None
             for b in r["output"]["message"]["content"]:
                 if "toolUse" in b:
                     tool_call = {"name": b["toolUse"]["name"], "arguments": b["toolUse"]["input"]}
             return check_tool_roundtrip(tool_call, CANARY), {"tool_call": tool_call}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **kw))
 
     if feature == "structured_output":
+        kw = dict(system=[{"text": "JSON 객체만 출력. 다른 텍스트 금지."}],
+                  messages=[{"role": "user", "content": [{"text": _JSON_PROMPT}]}],
+                  inferenceConfig={"maxTokens": _JSON_MAX_TOKENS})
         def fn():
-            r = converse(system=[{"text": "JSON 객체만 출력. 다른 텍스트 금지."}],
-                         messages=[{"role": "user", "content": [{"text": _JSON_PROMPT}]}],
-                         inferenceConfig={"maxTokens": _JSON_MAX_TOKENS})
+            r = converse(**kw)
             text = "".join(b.get("text", "") for b in r["output"]["message"]["content"])
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **kw))
 
     if feature == "reasoning":
+        kw = dict(
+            messages=[{"role": "user", "content": [{"text": "17 x 23은? 단계적으로 생각하세요."}]}],
+            inferenceConfig={"maxTokens": _REASONING_MAX_TOKENS},
+            additionalModelRequestFields={"thinking": {"type": "enabled", "budget_tokens": _REASONING_BUDGET}},
+        )
         def fn():
-            r = converse(
-                messages=[{"role": "user", "content": [{"text": "17 x 23은? 단계적으로 생각하세요."}]}],
-                inferenceConfig={"maxTokens": _REASONING_MAX_TOKENS},
-                additionalModelRequestFields={"thinking": {"type": "enabled", "budget_tokens": _REASONING_BUDGET}},
-            )
+            r = converse(**kw)
             has_reasoning = any("reasoningContent" in b for b in r["output"]["message"]["content"])
             return has_reasoning, {"content_types": [list(b.keys())[0] for b in r["output"]["message"]["content"]]}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **kw))
 
     if feature == "caching":
+        kw = dict(
+            system=[{"text": _CACHE_PAD}, {"cachePoint": {"type": "default"}}],
+            messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
+            inferenceConfig={"maxTokens": _MAX_TOKENS},
+        )
         def fn():
-            kw = dict(
-                system=[{"text": _CACHE_PAD}, {"cachePoint": {"type": "default"}}],
-                messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
-                inferenceConfig={"maxTokens": _MAX_TOKENS},
-            )
             converse(**kw)
             r2 = converse(**kw)
             usage = r2.get("usage", {})
             return check_cached_tokens(usage), {"second_usage": usage}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
@@ -175,16 +200,17 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
         return json.loads(r["body"].read())
 
     if feature == "basic":
+        body = {"messages": [{"role": "user", "content": _BASIC_PROMPT}]}
         def fn():
-            r = invoke({"messages": [{"role": "user", "content": _BASIC_PROMPT}]})
+            r = invoke(body)
             text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
             return bool(text.strip()), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, max_tokens=_MAX_TOKENS, **body))
 
     if feature == "streaming":
+        base = {"anthropic_version": "bedrock-2023-05-31", "max_tokens": _MAX_TOKENS,
+                "messages": [{"role": "user", "content": "1부터 30까지 세어보세요."}]}
         def fn():
-            base = {"anthropic_version": "bedrock-2023-05-31", "max_tokens": _MAX_TOKENS,
-                    "messages": [{"role": "user", "content": "1부터 30까지 세어보세요."}]}
             r = client.invoke_model_with_response_stream(modelId=model_id, body=json.dumps(base))
             events = 0
             for e in r["body"]:
@@ -192,59 +218,63 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
                 if chunk.get("type") == "content_block_delta":
                     events += 1
             return check_stream_events(events), {"content_events": events}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, api="invoke_model_with_response_stream", **base))
 
     if feature == "system_instructions":
+        body = {"system": _SYSTEM_PROMPT, "messages": [{"role": "user", "content": _BASIC_PROMPT}]}
         def fn():
-            r = invoke({"system": _SYSTEM_PROMPT, "messages": [{"role": "user", "content": _BASIC_PROMPT}]})
+            r = invoke(body)
             text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
             return check_canary(text, CANARY), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, max_tokens=_MAX_TOKENS, **body))
 
     if feature == "tool_use":
+        body = {
+            "messages": [{"role": "user", "content": _TOOL_PROMPT}],
+            "tools": [{"name": "echo", "description": _ECHO_TOOL_DESC,
+                       "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
+            "tool_choice": {"type": "tool", "name": "echo"},
+        }
         def fn():
-            r = invoke({
-                "messages": [{"role": "user", "content": _TOOL_PROMPT}],
-                "tools": [{"name": "echo", "description": _ECHO_TOOL_DESC,
-                           "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
-                "tool_choice": {"type": "tool", "name": "echo"},
-            })
+            r = invoke(body)
             tool_call = None
             for b in r.get("content", []):
                 if b.get("type") == "tool_use":
                     tool_call = {"name": b["name"], "arguments": b["input"]}
             return check_tool_roundtrip(tool_call, CANARY), {"tool_call": tool_call}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, max_tokens=_MAX_TOKENS, **body))
 
     if feature == "structured_output":
+        body = {"system": "JSON 객체만 출력. 다른 텍스트 금지.",
+                "max_tokens": _JSON_MAX_TOKENS,
+                "messages": [{"role": "user", "content": _JSON_PROMPT}]}
         def fn():
-            r = invoke({"system": "JSON 객체만 출력. 다른 텍스트 금지.",
-                        "max_tokens": _JSON_MAX_TOKENS,
-                        "messages": [{"role": "user", "content": _JSON_PROMPT}]})
+            r = invoke(body)
             text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **body))
 
     if feature == "reasoning":
+        body = {"max_tokens": _REASONING_MAX_TOKENS,
+                "thinking": {"type": "enabled", "budget_tokens": _REASONING_BUDGET},
+                "messages": [{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}]}
         def fn():
-            r = invoke({"max_tokens": _REASONING_MAX_TOKENS,
-                        "thinking": {"type": "enabled", "budget_tokens": _REASONING_BUDGET},
-                        "messages": [{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}]})
+            r = invoke(body)
             has_thinking = any(b.get("type") == "thinking" for b in r.get("content", []))
             return has_thinking, {"content_types": [b.get("type") for b in r.get("content", [])]}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, **body))
 
     if feature == "caching":
+        body = {
+            "system": [{"type": "text", "text": _CACHE_PAD, "cache_control": {"type": "ephemeral"}}],
+            "messages": [{"role": "user", "content": _BASIC_PROMPT}],
+        }
         def fn():
-            body = {
-                "system": [{"type": "text", "text": _CACHE_PAD, "cache_control": {"type": "ephemeral"}}],
-                "messages": [{"role": "user", "content": _BASIC_PROMPT}],
-            }
             invoke(dict(body))
             r2 = invoke(dict(body))
             usage = r2.get("usage", {})
             return check_cached_tokens(usage), {"second_usage": usage}
-        return _run(fn)
+        return _run(fn, _req_snapshot(model_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", max_tokens=_MAX_TOKENS, **body))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
@@ -255,79 +285,82 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
 
 def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
     if feature == "basic":
+        kw = dict(max_tokens=_MAX_TOKENS, messages=[{"role": "user", "content": _BASIC_PROMPT}])
         def fn():
-            r = client.messages.create(model=actual_id, max_tokens=_MAX_TOKENS,
-                                       messages=[{"role": "user", "content": _BASIC_PROMPT}])
+            r = client.messages.create(model=actual_id, **kw)
             text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
             return bool(text.strip()), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "streaming":
+        kw = dict(max_tokens=_MAX_TOKENS, messages=[{"role": "user", "content": "1부터 30까지 세어보세요."}])
         def fn():
             events = 0
-            with client.messages.stream(model=actual_id, max_tokens=_MAX_TOKENS,
-                                        messages=[{"role": "user", "content": "1부터 30까지 세어보세요."}]) as stream:
+            with client.messages.stream(model=actual_id, **kw) as stream:
                 for _text in stream.text_stream:
                     events += 1
             return check_stream_events(events), {"content_events": events}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, stream=True, **kw))
 
     if feature == "system_instructions":
+        kw = dict(max_tokens=_MAX_TOKENS, system=_SYSTEM_PROMPT,
+                  messages=[{"role": "user", "content": _BASIC_PROMPT}])
         def fn():
-            r = client.messages.create(model=actual_id, max_tokens=_MAX_TOKENS, system=_SYSTEM_PROMPT,
-                                       messages=[{"role": "user", "content": _BASIC_PROMPT}])
+            r = client.messages.create(model=actual_id, **kw)
             text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
             return check_canary(text, CANARY), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "tool_use":
+        kw = dict(
+            max_tokens=_MAX_TOKENS,
+            messages=[{"role": "user", "content": _TOOL_PROMPT}],
+            tools=[{"name": "echo", "description": _ECHO_TOOL_DESC,
+                    "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
+            tool_choice={"type": "tool", "name": "echo"},
+        )
         def fn():
-            r = client.messages.create(
-                model=actual_id, max_tokens=_MAX_TOKENS,
-                messages=[{"role": "user", "content": _TOOL_PROMPT}],
-                tools=[{"name": "echo", "description": _ECHO_TOOL_DESC,
-                        "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
-                tool_choice={"type": "tool", "name": "echo"},
-            )
+            r = client.messages.create(model=actual_id, **kw)
             tool_call = None
             for b in r.content:
                 if getattr(b, "type", "") == "tool_use":
                     tool_call = {"name": b.name, "arguments": b.input}
             return check_tool_roundtrip(tool_call, CANARY), {"tool_call": tool_call}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "structured_output":
+        kw = dict(max_tokens=_JSON_MAX_TOKENS, system="JSON 객체만 출력. 다른 텍스트 금지.",
+                  messages=[{"role": "user", "content": _JSON_PROMPT}])
         def fn():
-            r = client.messages.create(model=actual_id, max_tokens=_JSON_MAX_TOKENS,
-                                       system="JSON 객체만 출력. 다른 텍스트 금지.",
-                                       messages=[{"role": "user", "content": _JSON_PROMPT}])
+            r = client.messages.create(model=actual_id, **kw)
             text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "reasoning":
+        kw = dict(
+            max_tokens=_REASONING_MAX_TOKENS,
+            thinking={"type": "enabled", "budget_tokens": _REASONING_BUDGET},
+            messages=[{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}],
+        )
         def fn():
-            r = client.messages.create(
-                model=actual_id, max_tokens=_REASONING_MAX_TOKENS,
-                thinking={"type": "enabled", "budget_tokens": _REASONING_BUDGET},
-                messages=[{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}],
-            )
+            r = client.messages.create(model=actual_id, **kw)
             has_thinking = any(getattr(b, "type", "") == "thinking" for b in r.content)
             return has_thinking, {"content_types": [getattr(b, "type", "?") for b in r.content]}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "caching":
+        kw = dict(
+            max_tokens=_MAX_TOKENS,
+            system=[{"type": "text", "text": _CACHE_PAD, "cache_control": {"type": "ephemeral"}}],
+            messages=[{"role": "user", "content": _BASIC_PROMPT}],
+        )
         def fn():
-            kw = dict(
-                model=actual_id, max_tokens=_MAX_TOKENS,
-                system=[{"type": "text", "text": _CACHE_PAD, "cache_control": {"type": "ephemeral"}}],
-                messages=[{"role": "user", "content": _BASIC_PROMPT}],
-            )
-            client.messages.create(**kw)
-            r2 = client.messages.create(**kw)
+            client.messages.create(model=actual_id, **kw)
+            r2 = client.messages.create(model=actual_id, **kw)
             usage = {"cache_read_input_tokens": getattr(r2.usage, "cache_read_input_tokens", 0) or 0}
             return check_cached_tokens(usage), {"second_usage": usage}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
@@ -338,72 +371,76 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
 
 def probe_chat_completions(client, actual_id: str, feature: str) -> ProbeOutcome:
     if feature == "basic":
+        kw = dict(max_completion_tokens=_MAX_TOKENS, messages=[{"role": "user", "content": _BASIC_PROMPT}])
         def fn():
-            r = client.chat.completions.create(model=actual_id, max_completion_tokens=_MAX_TOKENS,
-                                               messages=[{"role": "user", "content": _BASIC_PROMPT}])
+            r = client.chat.completions.create(model=actual_id, **kw)
             text = r.choices[0].message.content
             return bool(text and text.strip()), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "streaming":
+        kw = dict(max_completion_tokens=_MAX_TOKENS,
+                  messages=[{"role": "user", "content": "1부터 30까지 세어보세요."}], stream=True)
         def fn():
-            stream = client.chat.completions.create(model=actual_id, max_completion_tokens=_MAX_TOKENS,
-                                                    messages=[{"role": "user", "content": "1부터 30까지 세어보세요."}], stream=True)
+            stream = client.chat.completions.create(model=actual_id, **kw)
             events = sum(1 for c in stream if c.choices and c.choices[0].delta and c.choices[0].delta.content)
             return check_stream_events(events), {"content_events": events}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "system_instructions":
+        kw = dict(max_completion_tokens=_MAX_TOKENS,
+                  messages=[{"role": "system", "content": _SYSTEM_PROMPT},
+                            {"role": "user", "content": _BASIC_PROMPT}])
         def fn():
-            r = client.chat.completions.create(model=actual_id, max_completion_tokens=_MAX_TOKENS,
-                                               messages=[{"role": "system", "content": _SYSTEM_PROMPT},
-                                                         {"role": "user", "content": _BASIC_PROMPT}])
+            r = client.chat.completions.create(model=actual_id, **kw)
             text = r.choices[0].message.content
             return check_canary(text, CANARY), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "tool_use":
+        kw = dict(
+            max_completion_tokens=_MAX_TOKENS,
+            messages=[{"role": "user", "content": _TOOL_PROMPT}],
+            tools=[{"type": "function", "function": {"name": "echo", "description": _ECHO_TOOL_DESC,
+                    "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}],
+            tool_choice={"type": "function", "function": {"name": "echo"}},
+        )
         def fn():
-            r = client.chat.completions.create(
-                model=actual_id, max_completion_tokens=_MAX_TOKENS,
-                messages=[{"role": "user", "content": _TOOL_PROMPT}],
-                tools=[{"type": "function", "function": {"name": "echo", "description": _ECHO_TOOL_DESC,
-                        "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}],
-                tool_choice={"type": "function", "function": {"name": "echo"}},
-            )
+            r = client.chat.completions.create(model=actual_id, **kw)
             tc = r.choices[0].message.tool_calls
             tool_call = {"name": tc[0].function.name, "arguments": tc[0].function.arguments} if tc else None
             return check_tool_roundtrip(tool_call, CANARY), {"tool_call": tool_call}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "structured_output":
+        kw = dict(max_completion_tokens=_JSON_MAX_TOKENS, response_format={"type": "json_object"},
+                  messages=[{"role": "user", "content": _JSON_PROMPT}])
         def fn():
-            r = client.chat.completions.create(model=actual_id, max_completion_tokens=_JSON_MAX_TOKENS,
-                                               response_format={"type": "json_object"},
-                                               messages=[{"role": "user", "content": _JSON_PROMPT}])
+            r = client.chat.completions.create(model=actual_id, **kw)
             text = r.choices[0].message.content
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "reasoning":
+        kw = dict(max_completion_tokens=_REASONING_MAX_TOKENS, reasoning_effort="low",
+                  messages=[{"role": "user", "content": "17 x 23은?"}])
         def fn():
-            r = client.chat.completions.create(model=actual_id, max_completion_tokens=_REASONING_MAX_TOKENS,
-                                               reasoning_effort="low",
-                                               messages=[{"role": "user", "content": "17 x 23은?"}])
+            r = client.chat.completions.create(model=actual_id, **kw)
             details = getattr(r.usage, "completion_tokens_details", None)
             rt = getattr(details, "reasoning_tokens", 0) if details else 0
             return bool(rt and rt > 0), {"reasoning_tokens": rt}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "caching":
+        kw = dict(max_completion_tokens=_MAX_TOKENS,
+                  messages=[{"role": "system", "content": _CACHE_PAD}, {"role": "user", "content": _BASIC_PROMPT}])
         def fn():
-            msgs = [{"role": "system", "content": _CACHE_PAD}, {"role": "user", "content": _BASIC_PROMPT}]
-            client.chat.completions.create(model=actual_id, max_completion_tokens=_MAX_TOKENS, messages=msgs)
-            r2 = client.chat.completions.create(model=actual_id, max_completion_tokens=_MAX_TOKENS, messages=msgs)
+            client.chat.completions.create(model=actual_id, **kw)
+            r2 = client.chat.completions.create(model=actual_id, **kw)
             details = getattr(r2.usage, "prompt_tokens_details", None)
             cached = getattr(details, "cached_tokens", 0) if details else 0
             return check_cached_tokens({"cached_tokens": cached or 0}), {"second_usage": {"cached_tokens": cached}}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
@@ -414,69 +451,71 @@ def probe_chat_completions(client, actual_id: str, feature: str) -> ProbeOutcome
 
 def probe_responses(client, actual_id: str, feature: str) -> ProbeOutcome:
     if feature == "basic":
+        kw = dict(max_output_tokens=_MAX_TOKENS, input=_BASIC_PROMPT)
         def fn():
-            r = client.responses.create(model=actual_id, max_output_tokens=_MAX_TOKENS, input=_BASIC_PROMPT)
+            r = client.responses.create(model=actual_id, **kw)
             text = getattr(r, "output_text", "")
             return bool(text and text.strip()), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "streaming":
+        kw = dict(max_output_tokens=_MAX_TOKENS, input="1부터 30까지 세어보세요.", stream=True)
         def fn():
-            stream = client.responses.create(model=actual_id, max_output_tokens=_MAX_TOKENS,
-                                             input="1부터 30까지 세어보세요.", stream=True)
+            stream = client.responses.create(model=actual_id, **kw)
             events = sum(1 for e in stream if getattr(e, "type", "") == "response.output_text.delta")
             return check_stream_events(events), {"content_events": events}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "system_instructions":
+        kw = dict(max_output_tokens=_MAX_TOKENS, instructions=_SYSTEM_PROMPT, input=_BASIC_PROMPT)
         def fn():
-            r = client.responses.create(model=actual_id, max_output_tokens=_MAX_TOKENS,
-                                        instructions=_SYSTEM_PROMPT, input=_BASIC_PROMPT)
+            r = client.responses.create(model=actual_id, **kw)
             text = getattr(r, "output_text", "")
             return check_canary(text, CANARY), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "tool_use":
+        kw = dict(
+            max_output_tokens=_MAX_TOKENS, input=_TOOL_PROMPT,
+            tools=[{"type": "function", "name": "echo", "description": _ECHO_TOOL_DESC,
+                    "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
+            tool_choice="required",
+        )
         def fn():
-            r = client.responses.create(
-                model=actual_id, max_output_tokens=_MAX_TOKENS, input=_TOOL_PROMPT,
-                tools=[{"type": "function", "name": "echo", "description": _ECHO_TOOL_DESC,
-                        "parameters": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
-                tool_choice="required",
-            )
+            r = client.responses.create(model=actual_id, **kw)
             tool_call = None
             for item in r.output:
                 if getattr(item, "type", "") == "function_call":
                     tool_call = {"name": item.name, "arguments": item.arguments}
             return check_tool_roundtrip(tool_call, CANARY), {"tool_call": tool_call}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "structured_output":
+        kw = dict(max_output_tokens=_JSON_MAX_TOKENS, input=_JSON_PROMPT,
+                  text={"format": {"type": "json_object"}})
         def fn():
-            r = client.responses.create(model=actual_id, max_output_tokens=_JSON_MAX_TOKENS, input=_JSON_PROMPT,
-                                        text={"format": {"type": "json_object"}})
+            r = client.responses.create(model=actual_id, **kw)
             text = getattr(r, "output_text", "")
             return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "reasoning":
+        kw = dict(max_output_tokens=_REASONING_MAX_TOKENS, reasoning={"effort": "low"}, input="17 x 23은?")
         def fn():
-            r = client.responses.create(model=actual_id, max_output_tokens=_REASONING_MAX_TOKENS,
-                                        reasoning={"effort": "low"}, input="17 x 23은?")
+            r = client.responses.create(model=actual_id, **kw)
             details = getattr(r.usage, "output_tokens_details", None)
             rt = getattr(details, "reasoning_tokens", 0) if details else 0
             return bool(rt and rt > 0), {"reasoning_tokens": rt}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "caching":
+        kw = dict(max_output_tokens=_MAX_TOKENS, instructions=_CACHE_PAD, input=_BASIC_PROMPT)
         def fn():
-            kw = dict(model=actual_id, max_output_tokens=_MAX_TOKENS,
-                      instructions=_CACHE_PAD, input=_BASIC_PROMPT)
-            client.responses.create(**kw)
-            r2 = client.responses.create(**kw)
+            client.responses.create(model=actual_id, **kw)
+            r2 = client.responses.create(model=actual_id, **kw)
             details = getattr(r2.usage, "input_tokens_details", None)
             cached = getattr(details, "cached_tokens", 0) if details else 0
             return check_cached_tokens({"cached_tokens": cached or 0}), {"second_usage": {"cached_tokens": cached}}
-        return _run(fn)
+        return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")

@@ -283,40 +283,70 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
       .catch((e) => setError(String(e)));
   }, [runId, cell]);
 
+  const evidence = (data?.evidence ?? {}) as Record<string, unknown>;
+  const request = evidence.request as Record<string, unknown> | undefined;
+  const response: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(evidence)) if (k !== "request") response[k] = v;
+  const errorMsg = data?.error_message ? String(data.error_message) : null;
+  const isOk = cell.status === "supported";
+
+  const verdict = isOk
+    ? "Probe succeeded — 응답 내용이 증거 검사를 통과했습니다."
+    : cell.status === "unsupported"
+      ? "Provider가 기능을 명시적으로 거부했습니다 (깨끗한 미지원 응답 — 버그 아님)."
+      : errorMsg
+        ? `Feature expected but probe failed: ${errorMsg.slice(0, 220)}${errorMsg.length > 220 ? "…" : ""}`
+        : "증거 검사 실패 — 응답은 수신했지만 검증 기준(카나리/JSON/캐시 토큰 등)을 통과하지 못했습니다.";
+
+  const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
+    <details open={!isOk} className="group">
+      <summary className="cursor-pointer select-none text-sm text-gray-400 hover:text-gray-200 py-1">
+        <span className="inline-block w-3 text-[10px] transition-transform group-open:rotate-90">▶</span> {title}
+      </summary>
+      <pre className={`mt-1 rounded-lg p-3 overflow-x-auto text-xs leading-relaxed border ${
+        tone === "error" ? "bg-gray-950 border-rose-500/30 text-rose-300 whitespace-pre-wrap break-all" : "bg-gray-950 border-gray-800 text-gray-200"
+      }`}>
+        {typeof json === "string" ? json : JSON.stringify(json ?? {}, null, 2)}
+      </pre>
+    </details>
+  );
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
       <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
       <div className="relative w-full max-w-2xl max-h-[85vh] overflow-y-auto bg-gray-900 light:bg-white border border-gray-800 rounded-xl shadow-2xl p-6 space-y-4">
-        <button type="button" onClick={onClose} className="absolute top-3 right-3 text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
+        <button type="button" onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
         <div>
-          <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-base font-bold text-gray-100">{cell.model_name}</h2>
-            <span className={`px-2 py-0.5 text-[10px] font-medium rounded-full border ${STATUS_STYLE[cell.status]}`}>
+          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Evidence</div>
+          <h2 className="text-base font-bold text-gray-100 font-mono mt-0.5">
+            {cell.feature} · {SURFACE_LABELS[cell.surface] ?? cell.surface} · {cell.model_id}
+          </h2>
+          <div className="text-xs text-gray-500 mt-0.5">{cell.model_name}</div>
+        </div>
+
+        <div className="bg-gray-950/60 light:bg-gray-50 border border-gray-800 rounded-xl p-4 space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-bold font-mono text-gray-100">{cell.model_name}</span>
+            <span className={`px-2.5 py-0.5 text-[11px] font-medium rounded-full border ${STATUS_STYLE[cell.status]}`}>
               {STATUS_LABEL[cell.status]}
             </span>
           </div>
-          <div className="text-xs text-gray-500 mt-1">
-            {cell.feature} · {SURFACE_LABELS[cell.surface] ?? cell.surface}
-            {cell.latency_ms != null && <> · {Math.round(cell.latency_ms)} ms</>}
+          <div className="text-xs text-gray-500">
+            latency: <span className="text-gray-300 font-semibold tabular-nums">{cell.latency_ms != null ? `${Math.round(cell.latency_ms)} ms` : "-"}</span>
           </div>
-        </div>
-        {error && <div className="text-xs text-rose-400">증거 로드 실패: {error}</div>}
-        {data && (
-          <>
-            {Boolean(data.error_message) && (
-              <div>
-                <div className="text-xs font-semibold text-gray-300 mb-1">오류</div>
-                <pre className="bg-rose-500/10 border border-rose-500/20 rounded-md p-3 text-xs text-rose-300 whitespace-pre-wrap break-all">{String(data.error_message)}</pre>
-              </div>
-            )}
-            <div>
-              <div className="text-xs font-semibold text-gray-300 mb-1">실행 증거 (evidence)</div>
-              <pre className="bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs text-gray-200 leading-relaxed">
-                {JSON.stringify(data.evidence ?? {}, null, 2)}
-              </pre>
+          <p className={`text-sm leading-relaxed ${isOk ? "text-gray-300" : cell.status === "broken" ? "text-rose-300" : "text-amber-300"}`}>
+            {verdict}
+          </p>
+
+          {error && <div className="text-xs text-rose-400">증거 로드 실패: {error}</div>}
+          {data && (
+            <div className="space-y-1 pt-1">
+              {errorMsg && <Section title="Error" json={errorMsg} tone="error" />}
+              {request && <Section title="Request JSON" json={request} />}
+              <Section title="Response JSON" json={response} />
             </div>
-          </>
-        )}
+          )}
+        </div>
       </div>
     </div>
   );
@@ -619,8 +649,10 @@ export default function ParityPanel() {
                 return (
                   <tr key={`${row.feature}|${row.model_id}`} className={`border-b border-gray-800/60 ${firstOfFeature ? "border-t-2 border-t-gray-700" : ""}`}>
                     <td className="px-3 py-1.5 sticky left-0 bg-gray-900 light:bg-white">
-                      <div className="font-medium text-gray-200">{firstOfFeature ? featureLabel?.label_ko ?? row.feature : ""}</div>
-                      <div className="text-gray-500 font-mono text-[10px]">{row.model_name}</div>
+                      <div className="font-semibold text-gray-100" title={featureLabel?.desc_ko}>
+                        {lang === "en" ? row.feature : featureLabel?.label_ko ?? row.feature}
+                      </div>
+                      <div className="text-gray-500 font-mono text-[10px]">{row.model_id}</div>
                     </td>
                     {row.cells.map((cell, j) => (
                       <td key={j} className="px-3 py-1.5">

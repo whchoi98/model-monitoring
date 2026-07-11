@@ -60,6 +60,8 @@ describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () 
     expect(ex[2].code).toContain("AnthropicBedrock");
     expect(ex[2].code).toContain("us.anthropic.claude-haiku-4-5-20251001-v1:0");
     expect(ex[2].description).toContain("Anthropic");
+    // Bedrock Mantle /anthropic 엔드포인트 병기 (bearer 토큰, 일부 리전) — 2026-07-11 실측 병기
+    expect(ex[2].description).toContain("Mantle");
   });
   test("Bedrock(Nova) → Converse API 단일 탭", () => {
     const ex = codeExamples("us.amazon.nova-2-lite-v1:0");
