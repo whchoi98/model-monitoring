@@ -1,16 +1,17 @@
 """패리티 피처 카탈로그 — 무엇을 어떤 surface에서 프로빙할지 정의 (v2.11.0).
 
-surface (5): converse / invoke_model (Bedrock SigV4), messages (Anthropic CP bearer),
+surface (6): converse / invoke_model (Bedrock SigV4), messages (Anthropic CP bearer),
+messages_mantle (Bedrock Mantle /anthropic bearer — v2.13.0, 리전 MANTLE_ANTHROPIC_REGION),
 chat_completions / responses (OpenAI 호환 bearer — Mantle·1P 공용).
 
 적용 규칙:
-- Bedrock Claude → converse + invoke_model. Nova → converse만 (네이티브 스키마 프로브 미구현 → skipped).
+- Bedrock Claude → converse + invoke_model + messages_mantle. Nova → converse만.
 - reasoning 피처는 확장 사고 지원 모델에만 적용 (그 외 skipped).
 """
 
 from __future__ import annotations
 
-SURFACES = ["converse", "invoke_model", "messages", "chat_completions", "responses"]
+SURFACES = ["converse", "invoke_model", "messages", "messages_mantle", "chat_completions", "responses"]
 
 FEATURES: list[dict] = [
     {
@@ -64,8 +65,19 @@ def surfaces_for(model_id: str) -> list[str]:
         return ["chat_completions", "responses"]
     # Bedrock inference profile
     if "anthropic" in model_id:
-        return ["converse", "invoke_model"]
+        return ["converse", "invoke_model", "messages_mantle"]
     return ["converse"]  # Nova 등 — invoke_model 네이티브 프로브 미구현
+
+
+def mantle_fm_id(model_id: str) -> str:
+    """Bedrock Mantle /anthropic용 FM id — 프로파일 접두사(global./us.) 제거.
+
+    실측(2026-07-11): Mantle은 `anthropic.claude-…` FM id만 인식, 프로파일 id는 not_found.
+    """
+    for prefix in ("global.", "us."):
+        if model_id.startswith(prefix):
+            return model_id[len(prefix):]
+    return model_id
 
 
 def is_reasoning_capable(model_id: str) -> bool:

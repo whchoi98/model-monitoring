@@ -24,6 +24,8 @@ _UNSUPPORTED_MARKERS = (
     "invalid parameter",
     "unrecognized request argument",
     "no endpoints support",
+    # Mantle /anthropic 등에서 모델이 해당 엔드포인트/리전에 서빙되지 않음 — 깨끗한 미제공 신호
+    "does not exist",
 )
 
 

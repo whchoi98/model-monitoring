@@ -10,6 +10,8 @@
 ## v2.13.0 — 2026-07-11
 
 ### Added
+- **Mantle Messages surface in parity runs**: Bedrock Claude models now also probe the Bedrock Mantle `/anthropic` (Anthropic Messages-compatible) endpoint in `MANTLE_ANTHROPIC_REGION` (default ap-northeast-1) as a 6th matrix column — SigV4-derived bearer token, FM ids (profile prefix stripped). Live check 2026-07-11: the endpoint exists in ap-northeast-1 but serves no Claude model yet, so cells report as cleanly unsupported (`does not exist` now classifies as unsupported) and will flip automatically when AWS enables models there.
+- **패리티 런에 Mantle Messages surface 추가**: Bedrock Claude 모델이 Bedrock Mantle `/anthropic`(Anthropic Messages 호환) 엔드포인트도 프로빙 — 6번째 매트릭스 컬럼, 리전 `MANTLE_ANTHROPIC_REGION`(기본 ap-northeast-1), SigV4 파생 bearer + FM id(프로파일 접두사 제거). 2026-07-11 실측: 엔드포인트는 실존하나 ap-northeast-1 서빙 모델 없음 → "깨끗한 미지원"으로 기록(`does not exist` → unsupported 분류)되며, 서빙 시작 시 자동으로 Supported 전환.
 - **Evidence modal with Request/Response JSON**: every parity probe now stores a request snapshot (long strings trimmed with original length noted) in its evidence; the cell modal is restyled as an EVIDENCE panel — `feature · surface · model_id` header, status pill + latency + verdict sentence, and collapsible Error / Request JSON / Response JSON sections (collapsed on success, expanded on failure).
 - **증거 모달 Request/Response JSON**: 모든 패리티 프로브가 요청 스냅샷(장문은 원 길이 표기와 함께 절단)을 증거에 저장. 셀 모달을 EVIDENCE 패널로 개편 — `feature · surface · model_id` 헤더, 상태 pill + latency + 판정 문장, 접이식 Error / Request JSON / Response JSON 섹션 (성공 시 접힘, 실패 시 펼침).
 

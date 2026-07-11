@@ -14,7 +14,7 @@ from datetime import datetime, timezone
 
 from database import SessionLocal
 from models import ParityResult, ParityRun
-from parity.catalog import FEATURE_IDS, is_applicable, surfaces_for
+from parity.catalog import FEATURE_IDS, is_applicable, mantle_fm_id, surfaces_for
 from parity.probes import (
     ProbeOutcome,
     probe_chat_completions,
@@ -48,6 +48,21 @@ def _execute(model_id: str, surface: str, feature: str) -> ProbeOutcome:
         return fn(client, model_id, feature)
     if surface == "messages":
         return probe_messages(_get_anthropic_client(), _anthropic_actual_id(model_id), feature)
+    if surface == "messages_mantle":
+        # Bedrock Mantle /anthropic (v2.13.0) — SigV4 파생 bearer + FM id. 리전은 env로 제어.
+        import os
+
+        import anthropic
+        from aws_bedrock_token_generator import provide_token
+
+        region = os.environ.get("MANTLE_ANTHROPIC_REGION", "ap-northeast-1")
+        client = anthropic.Anthropic(
+            api_key=provide_token(region=region),
+            base_url=f"https://bedrock-mantle.{region}.api.aws/anthropic",
+            timeout=60,
+            max_retries=1,
+        )
+        return probe_messages(client, mantle_fm_id(model_id), feature)
     # chat_completions / responses
     region, actual_id = _openai_parts(model_id)
     client = _get_openai_client(_openai_base_url(region))

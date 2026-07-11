@@ -18,11 +18,20 @@ from parity.engine import classify_error, check_canary, check_json_object, check
 # ---------------------------------------------------------------------------
 
 def test_surfaces_for_each_provider_path():
-    assert surfaces_for("global.anthropic.claude-fable-5") == ["converse", "invoke_model"]
+    # Bedrock Claude는 Mantle /anthropic Messages 시험 포함 (v2.13.0, ap-northeast-1)
+    assert surfaces_for("global.anthropic.claude-fable-5") == ["converse", "invoke_model", "messages_mantle"]
     assert surfaces_for("us.amazon.nova-2-lite-v1:0") == ["converse"]  # Nova는 네이티브 스키마 미제공 → InvokeModel skip
     assert surfaces_for("anthropic:claude-sonnet-5") == ["messages"]
     assert surfaces_for("openai:us-east-1:openai.gpt-5.5") == ["chat_completions", "responses"]
     assert surfaces_for("openai:1p:gpt-5.4") == ["chat_completions", "responses"]
+
+
+def test_mantle_fm_id_strips_profile_prefix():
+    from parity.catalog import mantle_fm_id
+
+    # Mantle /anthropic은 Bedrock FM id를 요구 — 프로파일 접두사(global./us.) 제거
+    assert mantle_fm_id("global.anthropic.claude-fable-5") == "anthropic.claude-fable-5"
+    assert mantle_fm_id("us.anthropic.claude-haiku-4-5-20251001-v1:0") == "anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
 def test_feature_catalog_has_seven_features():
@@ -50,6 +59,8 @@ def test_reasoning_only_applicable_to_reasoning_capable():
     "Extra inputs are not permitted: response_format",
     "Invalid parameter: tools is not supported for this model",
     "unknown parameter: 'cache_control'",
+    # Mantle /anthropic에서 모델이 그 리전에 서빙되지 않음 — 깨끗한 미제공 신호 (v2.13.0)
+    "NotFoundError: Error code: 404 - {'error': {'type': 'not_found_error', 'message': \"The model 'anthropic.claude-fable-5' does not exist\"}}",
 ])
 def test_clean_unsupported_errors(msg):
     assert classify_error(msg) == "unsupported"

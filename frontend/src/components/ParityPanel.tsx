@@ -48,6 +48,7 @@ const SURFACE_LABELS: Record<string, string> = {
   converse: "Converse",
   invoke_model: "InvokeModel",
   messages: "Messages",
+  messages_mantle: "Messages (Mantle)",
   chat_completions: "ChatCompletions",
   responses: "Responses",
 };
