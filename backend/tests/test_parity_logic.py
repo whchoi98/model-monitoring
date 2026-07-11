@@ -34,11 +34,11 @@ def test_mantle_fm_id_strips_profile_prefix():
     assert mantle_fm_id("us.anthropic.claude-haiku-4-5-20251001-v1:0") == "anthropic.claude-haiku-4-5-20251001-v1:0"
 
 
-def test_feature_catalog_has_seven_features():
-    assert len(FEATURES) == 7
+def test_feature_catalog_order():
     ids = [f["id"] for f in FEATURES]
     assert ids == ["basic", "streaming", "system_instructions", "tool_use",
-                   "structured_output", "reasoning", "caching"]
+                   "structured_output", "reasoning", "caching",
+                   "adaptive_thinking", "count_tokens", "batches", "web_search", "computer_use"]
 
 
 def test_reasoning_only_applicable_to_reasoning_capable():
@@ -180,3 +180,37 @@ def test_req_snapshot_trims_long_strings_and_keeps_structure():
     assert snap["messages"][0]["content"] == "hi"
     trimmed = snap["system"][0]["text"]
     assert len(trimmed) < 300 and "5000 chars" in trimmed  # 절단 + 원 길이 표기
+
+
+# ---------------------------------------------------------------------------
+# 피처 확장 5종 (v2.14.0) — 피처별 surface 적용 맵
+# ---------------------------------------------------------------------------
+
+def test_feature_catalog_has_twelve_features():
+    ids = [f["id"] for f in FEATURES]
+    assert len(ids) == 12
+    for new in ("adaptive_thinking", "count_tokens", "batches", "web_search", "computer_use"):
+        assert new in ids
+
+
+def test_adaptive_thinking_only_for_fable5():
+    # adaptive thinking은 Fable 5 계열 전용 (참조 증거 화면과 동일 방식)
+    assert is_applicable("adaptive_thinking", "converse", "global.anthropic.claude-fable-5") is True
+    assert is_applicable("adaptive_thinking", "messages", "anthropic:claude-fable-5") is True
+    assert is_applicable("adaptive_thinking", "converse", "global.anthropic.claude-opus-4-8") is False
+
+
+def test_feature_surface_restrictions():
+    # batches는 anthropic SDK 경로(messages/messages_mantle)만
+    assert is_applicable("batches", "messages", "anthropic:claude-haiku-4-5-20251001") is True
+    assert is_applicable("batches", "converse", "global.anthropic.claude-haiku-4-5-20251001-v1:0") is False
+    # web_search는 responses(OpenAI 내장 도구)에는 적용, chat_completions에는 미적용
+    assert is_applicable("web_search", "responses", "openai:1p:gpt-5.5") is True
+    assert is_applicable("web_search", "chat_completions", "openai:1p:gpt-5.5") is False
+    assert is_applicable("web_search", "invoke_model", "us.anthropic.claude-haiku-4-5-20251001-v1:0") is True
+    # computer_use는 anthropic 네이티브 경로만
+    assert is_applicable("computer_use", "invoke_model", "us.anthropic.claude-haiku-4-5-20251001-v1:0") is True
+    assert is_applicable("computer_use", "responses", "openai:1p:gpt-5.5") is False
+    # count_tokens는 OpenAI 경로 미적용 (엔드포인트 없음)
+    assert is_applicable("count_tokens", "messages", "anthropic:claude-haiku-4-5-20251001") is True
+    assert is_applicable("count_tokens", "responses", "openai:1p:gpt-5.5") is False

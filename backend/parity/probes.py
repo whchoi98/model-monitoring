@@ -41,6 +41,11 @@ def max_tokens_for(feature: str) -> int:
 _CACHE_PAD = ("모니터링 패리티 런의 캐싱 프로브를 위한 컨텍스트 패딩 문단입니다. " * 220).strip()
 
 _ECHO_TOOL_DESC = "입력 text를 그대로 반환하는 echo 도구"
+_SEARCH_PROMPT = "오늘 서울의 날씨를 웹에서 검색해 한 문장으로 알려주세요."
+_COMPUTER_TOOL = {"type": "computer_20250124", "name": "computer",
+                  "display_width_px": 1024, "display_height_px": 768}
+_COMPUTER_BETA = "computer-use-2025-01-24"
+_WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_uses": 1}
 _TOOL_PROMPT = f"echo 도구를 text 인자 '{CANARY}' 값으로 호출하세요."
 _JSON_PROMPT = '서울의 정보를 JSON 객체로만 답하세요. 반드시 "city" 키를 포함해야 합니다.'
 _SYSTEM_PROMPT = f"모든 응답을 반드시 '{CANARY}' 로 시작하세요."
@@ -185,6 +190,26 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
             return check_cached_tokens(usage), {"second_usage": usage}
         return _run(fn, _req_snapshot(model_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
+    if feature == "adaptive_thinking":
+        kw = dict(
+            messages=[{"role": "user", "content": [{"text": "17 x 23은? 단계적으로 생각하세요."}]}],
+            inferenceConfig={"maxTokens": _REASONING_MAX_TOKENS},
+            additionalModelRequestFields={"thinking": {"type": "adaptive"}},
+        )
+        def fn():
+            r = converse(**kw)
+            has_thinking = any("reasoningContent" in b for b in r["output"]["message"]["content"])
+            return has_thinking, {"content_types": [list(b.keys())[0] for b in r["output"]["message"]["content"]]}
+        return _run(fn, _req_snapshot(model_id, **kw))
+
+    if feature == "count_tokens":
+        payload = {"converse": {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}]}}
+        def fn():
+            r = client.count_tokens(modelId=model_id, input=payload)
+            tokens = r.get("inputTokens", 0)
+            return bool(tokens and tokens > 0), {"input_tokens": tokens}
+        return _run(fn, _req_snapshot(model_id, api="count_tokens", input=payload))
+
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
 
@@ -276,6 +301,45 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
             return check_cached_tokens(usage), {"second_usage": usage}
         return _run(fn, _req_snapshot(model_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", max_tokens=_MAX_TOKENS, **body))
 
+    if feature == "adaptive_thinking":
+        body = {"max_tokens": _REASONING_MAX_TOKENS, "thinking": {"type": "adaptive"},
+                "messages": [{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}]}
+        def fn():
+            r = invoke(body)
+            has_thinking = any(b.get("type") == "thinking" for b in r.get("content", []))
+            return has_thinking, {"content_types": [b.get("type") for b in r.get("content", [])]}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "count_tokens":
+        native = {"anthropic_version": "bedrock-2023-05-31", "max_tokens": _MAX_TOKENS,
+                  "messages": [{"role": "user", "content": _BASIC_PROMPT}]}
+        def fn():
+            r = client.count_tokens(modelId=model_id, input={"invokeModel": {"body": json.dumps(native)}})
+            tokens = r.get("inputTokens", 0)
+            return bool(tokens and tokens > 0), {"input_tokens": tokens}
+        return _run(fn, _req_snapshot(model_id, api="count_tokens", **native))
+
+    if feature == "web_search":
+        body = {"max_tokens": _MAX_TOKENS, "tools": [dict(_WEB_SEARCH_TOOL)],
+                "messages": [{"role": "user", "content": _SEARCH_PROMPT}]}
+        def fn():
+            r = invoke(body)
+            types = [b.get("type") for b in r.get("content", [])]
+            accepted = r.get("stop_reason") is not None
+            return accepted, {"content_types": types, "stop_reason": r.get("stop_reason"),
+                              "server_tool_used": any(t in ("server_tool_use", "web_search_tool_result") for t in types)}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "computer_use":
+        body = {"max_tokens": _MAX_TOKENS, "anthropic_beta": [_COMPUTER_BETA],
+                "tools": [dict(_COMPUTER_TOOL)],
+                "messages": [{"role": "user", "content": "화면을 스크린샷으로 캡처하세요."}]}
+        def fn():
+            r = invoke(body)
+            types = [b.get("type") for b in r.get("content", [])]
+            return r.get("stop_reason") is not None, {"content_types": types, "stop_reason": r.get("stop_reason")}
+        return _run(fn, _req_snapshot(model_id, **body))
+
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
 
@@ -361,6 +425,57 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
             usage = {"cache_read_input_tokens": getattr(r2.usage, "cache_read_input_tokens", 0) or 0}
             return check_cached_tokens(usage), {"second_usage": usage}
         return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
+
+    if feature == "adaptive_thinking":
+        kw = dict(max_tokens=_REASONING_MAX_TOKENS, thinking={"type": "adaptive"},
+                  messages=[{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}])
+        def fn():
+            r = client.messages.create(model=actual_id, **kw)
+            has_thinking = any(getattr(b, "type", "") == "thinking" for b in r.content)
+            return has_thinking, {"content_types": [getattr(b, "type", "?") for b in r.content]}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "count_tokens":
+        kw = dict(messages=[{"role": "user", "content": _BASIC_PROMPT}])
+        def fn():
+            r = client.messages.count_tokens(model=actual_id, **kw)
+            tokens = getattr(r, "input_tokens", 0) or 0
+            return tokens > 0, {"input_tokens": tokens}
+        return _run(fn, _req_snapshot(actual_id, api="messages.count_tokens", **kw))
+
+    if feature == "batches":
+        params = dict(model=actual_id, max_tokens=16,
+                      messages=[{"role": "user", "content": _BASIC_PROMPT}])
+        def fn():
+            batch = client.messages.batches.create(
+                requests=[{"custom_id": "parity-probe-1", "params": params}])
+            status = client.messages.batches.retrieve(batch.id)
+            try:  # 비용·잔여 작업 방지 — 상태 확인 후 즉시 취소 (실패해도 판정 무관)
+                client.messages.batches.cancel(batch.id)
+            except Exception:  # noqa: BLE001
+                pass
+            processing = getattr(status, "processing_status", None)
+            return bool(batch.id and processing), {"batch_id": batch.id, "processing_status": processing}
+        return _run(fn, _req_snapshot(actual_id, api="messages.batches submit→retrieve→cancel", **params))
+
+    if feature == "web_search":
+        kw = dict(max_tokens=_MAX_TOKENS, tools=[dict(_WEB_SEARCH_TOOL)],
+                  messages=[{"role": "user", "content": _SEARCH_PROMPT}])
+        def fn():
+            r = client.messages.create(model=actual_id, **kw)
+            types = [getattr(b, "type", "?") for b in r.content]
+            return r.stop_reason is not None, {"content_types": types, "stop_reason": r.stop_reason,
+                                               "server_tool_used": any(t in ("server_tool_use", "web_search_tool_result") for t in types)}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "computer_use":
+        kw = dict(max_tokens=_MAX_TOKENS, tools=[dict(_COMPUTER_TOOL)],
+                  messages=[{"role": "user", "content": "화면을 스크린샷으로 캡처하세요."}])
+        def fn():
+            r = client.beta.messages.create(model=actual_id, betas=[_COMPUTER_BETA], **kw)
+            types = [getattr(b, "type", "?") for b in r.content]
+            return r.stop_reason is not None, {"content_types": types, "stop_reason": r.stop_reason}
+        return _run(fn, _req_snapshot(actual_id, betas=[_COMPUTER_BETA], **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
@@ -517,5 +632,15 @@ def probe_responses(client, actual_id: str, feature: str) -> ProbeOutcome:
             cached = getattr(details, "cached_tokens", 0) if details else 0
             return check_cached_tokens({"cached_tokens": cached or 0}), {"second_usage": {"cached_tokens": cached}}
         return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
+
+    if feature == "web_search":
+        kw = dict(max_output_tokens=_JSON_MAX_TOKENS, tools=[{"type": "web_search"}], input=_SEARCH_PROMPT)
+        def fn():
+            r = client.responses.create(model=actual_id, **kw)
+            types = [getattr(item, "type", "?") for item in getattr(r, "output", []) or []]
+            completed = getattr(r, "status", "") == "completed" or bool(getattr(r, "output_text", ""))
+            return completed, {"output_types": types, "status": getattr(r, "status", None),
+                               "search_used": any("web_search" in t for t in types)}
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
