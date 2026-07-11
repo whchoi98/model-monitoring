@@ -32,7 +32,8 @@ Internal ALB
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
                 ├── /efficiency   — 0-100 Token Efficiency Score (weighted)
-                └── /analysis     — Stop reason 분포 + Output length 분포
+                ├── /analysis     — Stop reason 분포 + Output length 분포
+                └── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 28 models × 1 workload preset (round-robin 6 categories)
