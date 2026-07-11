@@ -127,6 +127,25 @@ response = client.invoke_model(
 result = json.loads(response["body"].read())
 print(result["content"][0]["text"])`,
       },
+      {
+        label: "Python (anthropic SDK)",
+        api: "Messages API",
+        description:
+          "Anthropic 네이티브 API를 Bedrock 위에서 그대로 쓰는 방식 — anthropic SDK의 AnthropicBedrock 클라이언트가 Messages 형식 요청을 SigV4로 서명해 Bedrock으로 전달합니다. Claude 전용 파라미터를 Anthropic 문서 그대로 사용하면서 과금·권한은 AWS 계정으로 관리할 때 사용합니다.",
+        language: "python",
+        code: `from anthropic import AnthropicBedrock
+
+# Bedrock 경유 — AWS 자격 증명(SigV4) 사용, Anthropic API 키 불필요
+client = AnthropicBedrock(aws_region="ap-northeast-2")
+
+with client.messages.stream(
+    model="${id}",
+    max_tokens=512,
+    messages=[{"role": "user", "content": "안녕하세요!"}],
+) as stream:
+    for text in stream.text_stream:
+        print(text, end="")`,
+      },
     ];
   }
 
