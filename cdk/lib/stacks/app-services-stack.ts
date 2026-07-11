@@ -88,6 +88,13 @@ export class AppServicesStack extends cdk.Stack {
         resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
       }),
       new iam.PolicyStatement({
+        // bearer 인증 흐름의 두 번째 필수 액션 — 403 실측상 resource scope가 * 뿐.
+        sid: "BedrockMantleBearer",
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock-mantle:CallWithBearerToken"],
+        resources: ["*"],
+      }),
+      new iam.PolicyStatement({
         sid: "SESSendEmail",
         effect: iam.Effect.ALLOW,
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
