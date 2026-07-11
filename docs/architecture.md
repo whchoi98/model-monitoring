@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(28개 카탈로그)을 5분 주기로 자동 측정하고, 일 1회 모델×API surface×피처 패리티 런(v2.11.0)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(28개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
 
 ### 데이터 흐름 (Critical Path)
 
@@ -28,7 +28,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
 EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
-   └─ cron(0 1 * * ? *) → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
+   └─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
 ```
 
 ### 컴포넌트 (Layer별)
@@ -71,7 +71,7 @@ EventBridge Scheduler
 |--------|------|
 | EventBridge Scheduler `AutoProberSchedule` | rate(5 min) → AutoProber TaskDef |
 | EventBridge Scheduler `InsightsSchedule` | rate(5 min) → Insights TaskDef |
-| EventBridge Scheduler `ParityRunSchedule` | cron(0 1 * * ? *) 일 1회 → ParityRun TaskDef (v2.11.0) |
+| EventBridge Scheduler `ParityRunSchedule` | rate(12 hours) → ParityRun TaskDef (v2.12.0에서 일 1회→12h) |
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
@@ -127,7 +127,7 @@ EventBridge Scheduler
 | 018 | ECR repository 교체 (`-v2`, Fargate image cache silent bug 우회) |
 | 019 | OpenAI/Bedrock-Mantle provider path 추가 (gpt-5.4, gpt-5.5, 4 channels) |
 | 020 | OpenAI 1P direct (api.openai.com) provider path 추가 (gpt-5.4/5.5, 2 channels) |
-| 021 | 패리티 런 엔진 — 실행-증거 프로브 매트릭스 (HTTP 200 불충분, 일 1회 Fargate 스윕) |
+| 021 | 패리티 런 엔진 — 실행-증거 프로브 매트릭스 (HTTP 200 불충분, 12시간 주기 Fargate 스윕) |
 
 ### 운영 / Operations
 
@@ -141,7 +141,7 @@ EventBridge Scheduler
 
 ### System Overview
 
-Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 28-model catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a daily model × API-surface × feature parity sweep (v2.11.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
+Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 28-model catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
 
 ### Critical Path
 
@@ -157,7 +157,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
 EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
-   └─ cron(0 1 * * ? *) → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
+   └─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
 ```
 
 ### Components by Layer

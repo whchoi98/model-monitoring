@@ -234,6 +234,26 @@ def get_categories():
     ]
 
 
+@router.get("/anomalies")
+def get_anomalies(
+    response: Response,
+    hours: int = Query(12, ge=1, le=168),
+    db: Session = Depends(get_db),
+):
+    """최근 N시간 프로브 실패 요약 — 대시보드 상단 이상 징후 박스용 (v2.12.0)."""
+    from anomalies import summarize_anomalies
+
+    response.headers["Cache-Control"] = "public, max-age=0, s-maxage=60"
+    since = datetime.now(timezone.utc) - timedelta(hours=hours)
+    rows = (
+        db.query(ProbeResult.model_name, ProbeResult.status,
+                 ProbeResult.error_message, ProbeResult.timestamp)
+        .filter(ProbeResult.timestamp >= since)
+        .all()
+    )
+    return {"hours": hours, **summarize_anomalies(rows)}
+
+
 @router.post("/trigger")
 def trigger_probe():
     """Manually trigger an immediate auto-probe cycle."""

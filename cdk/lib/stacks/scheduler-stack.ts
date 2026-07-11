@@ -295,9 +295,9 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "ParityRunSchedule", {
-      // 일 1회 (KST 오전 10시 = UTC 01:00) — 전체 스윕 ~350 프로브, 저비용(max_tokens 소량)
-      schedule: scheduler.ScheduleExpression.cron({ minute: "0", hour: "1" }),
-      description: "Daily Bedrock feature parity sweep",
+      // 12시간 주기 (v2.12.0, 이전 일 1회) — 전체 스윕 ~350 프로브, 저비용(max_tokens 소량)
+      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(12)),
+      description: "Bedrock feature parity sweep (every 12 hours)",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: parityTaskDef,
         vpcSubnets: props.appSubnets,

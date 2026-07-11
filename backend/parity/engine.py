@@ -92,3 +92,25 @@ def check_cached_tokens(usage: Optional[dict[str, Any]]) -> bool:
 def check_stream_events(content_event_count: int) -> bool:
     """streaming 증거: 콘텐츠 델타 이벤트가 2개 이상 수신됐는가."""
     return content_event_count >= 2
+
+
+def diff_statuses(
+    prev: dict[tuple, str], cur: dict[tuple, str]
+) -> list[dict[str, Any]]:
+    """런 간 변경 감지 — (model_id, surface, feature) 키별 상태 비교.
+
+    현재 런 기준: 상태가 바뀐 셀 + 신규 셀(before None)만 반환.
+    이전 런에만 있던 셀(모델 제외 등)은 무시. 키 순 정렬로 결정적 출력.
+    """
+    changes: list[dict[str, Any]] = []
+    for key in sorted(cur):
+        before = prev.get(key)
+        after = cur[key]
+        if before == after:
+            continue
+        model_id, surface, feature = key
+        changes.append({
+            "model_id": model_id, "surface": surface, "feature": feature,
+            "before": before, "after": after,
+        })
+    return changes

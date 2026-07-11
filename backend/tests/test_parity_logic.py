@@ -118,3 +118,37 @@ def test_check_json_object_rejects_truncated_json():
     # max_tokens 절단 시나리오 — 닫는 }가 없으면 반드시 False (조용한 오탐 방지)
     truncated = '```json\n{\n  "city": "서울",\n  "country": "대한민국",\n  '
     assert check_json_object(truncated, "city") is False
+
+
+# ---------------------------------------------------------------------------
+# 런 간 변경 감지 (v2.12.0) — 이전 완료 런 대비 상태가 바뀐 셀만 반환
+# ---------------------------------------------------------------------------
+
+def test_diff_statuses_reports_changed_and_new_cells():
+    from parity.engine import diff_statuses
+
+    prev = {
+        ("m1", "converse", "basic"): "supported",
+        ("m1", "converse", "caching"): "broken",
+        ("m9", "converse", "basic"): "supported",  # 현재 런에 없음 → 무시
+    }
+    cur = {
+        ("m1", "converse", "basic"): "supported",   # 동일 → 제외
+        ("m1", "converse", "caching"): "supported", # 변경 → 포함
+        ("m2", "responses", "basic"): "broken",     # 신규 셀 → before None
+    }
+    changes = diff_statuses(prev, cur)
+    assert {(c["model_id"], c["surface"], c["feature"], c["before"], c["after"]) for c in changes} == {
+        ("m1", "converse", "caching", "broken", "supported"),
+        ("m2", "responses", "basic", None, "broken"),
+    }
+
+
+def test_diff_statuses_empty_prev_marks_all_new():
+    from parity.engine import diff_statuses
+
+    cur = {("m1", "converse", "basic"): "supported"}
+    changes = diff_statuses({}, cur)
+    assert changes == [
+        {"model_id": "m1", "surface": "converse", "feature": "basic", "before": None, "after": "supported"}
+    ]

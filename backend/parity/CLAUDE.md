@@ -12,7 +12,7 @@
 - `runner.py` — `run_parity()`: ParityRun row 생성 → job 팬아웃 (skipped는 프로브 없이 기록) → ThreadPoolExecutor(4) → 결과 메인 스레드 일괄 저장 (스레드별 DB 세션 금지)
 
 ## Entry Points
-- 스케줄: EventBridge 일 1회 01:00 UTC → Fargate `python -m parity_runner --once` (모델 discovery 후 `run_parity()`)
+- 스케줄: EventBridge 12시간 주기(rate 12 hours) → Fargate `python -m parity_runner --once` (모델 discovery 후 `run_parity()`)
 - 수동: `POST /api/parity/trigger` (JWT) — backend 프로세스 내 백그라운드 스레드 (Fargate 아님)
 
 ## Gotchas

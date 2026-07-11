@@ -59,7 +59,7 @@ npm run dev
 - **Model Cards**: Dashboard grid showing latest metrics per model
 - **Trend Charts**: Time-series visualization of TTFT, latency, and TPS
 - **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, pricing, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)
-- **Parity Run** (`/parity`, v2.11.0): daily Fargate sweep (01:00 UTC) probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
+- **Parity Run** (`/parity`, v2.11.0): Fargate sweep every 12 hours probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
 - **Comparison Lab**: one prompt → N models in parallel via `/api/compare/run` (SSE, auth)
 
 ## Common Tasks

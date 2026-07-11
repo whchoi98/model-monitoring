@@ -64,6 +64,11 @@ Returns time-series data. Default: 24 hours. Supported: 1, 3, 6, 12, 24, 72, 168
 ### POST /api/auto-probe/trigger
 Trigger an immediate probe cycle.
 
+### GET /api/auto-probe/anomalies?hours=12
+Probe-failure summary for the last N hours (1-168, default 12) — v2.12.0. Returns
+`total_probes`, `total_failures`, and per-model `models` (failures, total, last_error,
+last_at), sorted by failure count. Powers the dashboard anomaly banner.
+
 ---
 
 ## Manual Probe (Auth Required)
@@ -176,7 +181,9 @@ Feature catalog (7 features with Korean labels/descriptions) + 5 API surfaces.
 
 ### GET /api/parity/latest
 Latest completed run: `run` (id, started/finished, totals, running flag) + slim `results`
-(model_id, model_name, surface, feature, status, latency_ms). `Cache-Control: s-maxage=60`.
+(model_id, model_name, surface, feature, status, latency_ms) + `previous_run_id` and
+`changes` (cells whose status differs from the previous completed run; new cells have
+`before: null`) — v2.12.0. `Cache-Control: s-maxage=60`.
 
 ### GET /api/parity/evidence?run_id=&model_id=&surface=&feature=
 Full evidence for one matrix cell: evidence JSON (response snippet, tool call, usage, reason),
@@ -184,7 +191,7 @@ latency, error_message. 404 if the cell does not exist.
 
 ### POST /api/parity/trigger (Auth Required)
 Start a manual parity run in a backend background thread (~3 min). Rejects if already running.
-The daily scheduled run uses a separate Fargate task instead (`python -m parity_runner --once`).
+The 12-hour scheduled run uses a separate Fargate task instead (`python -m parity_runner --once`).
 
 ---
 

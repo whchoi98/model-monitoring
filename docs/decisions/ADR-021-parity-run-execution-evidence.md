@@ -27,7 +27,7 @@
 - 오류 분류: provider의 "깨끗한 미지원 거부" 시그니처(`unsupported_parameter` 등) →
   `unsupported`, 그 외 오류·증거 실패 → `broken`, 해당 없음(비-reasoning 모델의 reasoning) → `skipped`
 - 저장: `parity_runs` / `parity_results` (run당 결과 + 증거 JSON + latency + error)
-- 실행: 일 1회 EventBridge cron(01:00 UTC) → 전용 Fargate one-shot (`parity_runner --once`,
+- 실행: 12시간 주기 EventBridge rate(12 hours) — v2.12.0에서 일 1회에서 단축 → 전용 Fargate one-shot (`parity_runner --once`,
   ADR-003과 동일 패턴) + `/api/parity/trigger`(JWT)의 backend 내 스레드 수동 실행
 - UI: `/parity` 매트릭스 + 셀 클릭 시 증거 모달 (`/api/parity/evidence`)
 
@@ -39,4 +39,4 @@
 - (−) 프로브 자체 결함이 오판을 만들 수 있음 — 실제로 run #1에서 `max_tokens=64` 절단이
   structured_output 전량 false-Broken을 유발, v2.11.1에서 피처별 토큰 예산(`max_tokens_for`)으로 수정.
   **Broken 판정은 증거(response_snippet)로 프로브/모델 어느 쪽 결함인지 확인 후 신뢰할 것**
-- (−) 일 1회 실런 비용 발생 (호출당 max_tokens 256~2048로 상한, caching 피처만 2회 호출)
+- (−) 12시간마다 실런 비용 발생 (호출당 max_tokens 256~2048로 상한, caching 피처만 2회 호출)
