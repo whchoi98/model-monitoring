@@ -16,14 +16,14 @@ const WINDOW_OPTIONS = [
 ];
 
 const CHANNEL_BG: Record<string, string> = {
-  "Bedrock Global": "bg-orange-500/10 border-orange-500/30 text-orange-300",
-  "Bedrock US": "bg-pink-500/10 border-pink-500/30 text-pink-300",
-  "Anthropic (CP on AWS)": "bg-purple-500/10 border-purple-500/30 text-purple-300",
+  "Bedrock Global": "bg-orange-500/10 light:bg-gray-900/50 border-orange-500/30 text-orange-300",
+  "Bedrock US": "bg-pink-500/10 light:bg-gray-900/50 border-pink-500/30 text-pink-300",
+  "Anthropic (CP on AWS)": "bg-purple-500/10 light:bg-gray-900/50 border-purple-500/30 text-purple-300",
   // OpenAI channels — Mantle regions + 1P direct (green family).
-  "OpenAI us-east-1": "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
-  "OpenAI us-east-2": "bg-green-500/10 border-green-500/30 text-green-300",
-  "OpenAI us-west-2": "bg-teal-500/10 border-teal-500/30 text-teal-300",
-  "OpenAI 1P": "bg-lime-500/10 border-lime-500/30 text-lime-300",
+  "OpenAI us-east-1": "bg-emerald-500/10 light:bg-gray-900/50 border-emerald-500/30 text-emerald-300",
+  "OpenAI us-east-2": "bg-green-500/10 light:bg-gray-900/50 border-green-500/30 text-green-300",
+  "OpenAI us-west-2": "bg-teal-500/10 light:bg-gray-900/50 border-teal-500/30 text-teal-300",
+  "OpenAI 1P": "bg-lime-500/10 light:bg-gray-900/50 border-lime-500/30 text-lime-300",
 };
 
 const ERROR_BUCKET_LABELS_KO: Record<string, string> = {

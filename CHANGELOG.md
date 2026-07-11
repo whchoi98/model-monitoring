@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.8.4 — 2026-07-11
+
+### Fixed
+- **White theme: tinted panel cards now render as clean white cards** (matching the dashboard): reliability channel cards and the cost gradient card keep their colored titles/borders for identity, but the card body is white in the light theme via a new `light:` Tailwind variant (`html.light &`). Dark theme unchanged.
+- **화이트 테마 카드 정리**: 신뢰성 채널 카드·비용 그라데이션 카드의 색 틴트 배경을 라이트에서 대시보드와 동일한 흰색 카드로 전환 (채널 식별용 제목·보더 색은 유지). 신규 `light:` Tailwind 변형 도입. 다크 테마는 변경 없음.
+
+### Changed
+- **`APP_VERSION` v2.8.3 → v2.8.4** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.8.3 — 2026-07-11
 
 ### Fixed
