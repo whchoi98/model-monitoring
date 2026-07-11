@@ -37,8 +37,8 @@ describe("SchedulerStack", () => {
     template = Template.fromStack(scheduler);
   });
 
-  it("Schedule이 2개 생성된다 (AutoProber + Insights)", () => {
-    template.resourceCountIs("AWS::Scheduler::Schedule", 2);
+  it("Schedule이 3개 생성된다 (AutoProber + Insights + ParityRun)", () => {
+    template.resourceCountIs("AWS::Scheduler::Schedule", 3);
   });
 
   it("AutoProber는 rate(5 minutes) 스케줄을 사용한다", () => {
@@ -53,8 +53,8 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("TaskDefinition이 2개 생성된다", () => {
-    template.resourceCountIs("AWS::ECS::TaskDefinition", 2);
+  it("TaskDefinition이 3개 생성된다", () => {
+    template.resourceCountIs("AWS::ECS::TaskDefinition", 3);
   });
 
   it("Task는 Fargate, awsvpc, X86_64로 설정된다", () => {

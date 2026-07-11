@@ -226,6 +226,14 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/insights",
     );
 
+    // 패리티 런 (v2.11.0) — 모델×surface×피처 실행-증거 스윕. autoprober와 동일 권한.
+    const parityTaskDef = buildTaskDef(
+      "ParityRunTaskDef",
+      autoProberTaskRole,
+      ["python", "-m", "parity_runner", "--once"],
+      "/ecs/parityrun",
+    );
+
     // ---------------------------------------------------------------------
     // 4-1) Scheduler invoke role (ADR-011).
     //    L2 EcsRunFargateTask가 자동 생성하는 role은 ecs:RunTask Resource를 task def의
@@ -249,6 +257,7 @@ export class SchedulerStack extends cdk.Stack {
         resources: [
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${autoProberTaskDef.family}:*`,
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${insightsTaskDef.family}:*`,
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${parityTaskDef.family}:*`,
         ],
       }),
     );
@@ -277,6 +286,20 @@ export class SchedulerStack extends cdk.Stack {
       description: "5분 주기로 Bedrock 모니터링 프로빙",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: autoProberTaskDef,
+        vpcSubnets: props.appSubnets,
+        securityGroups: [schedulerTaskSg],
+        assignPublicIp: false,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
+      }),
+    });
+
+    new scheduler.Schedule(this, "ParityRunSchedule", {
+      // 일 1회 (KST 오전 10시 = UTC 01:00) — 전체 스윕 ~350 프로브, 저비용(max_tokens 소량)
+      schedule: scheduler.ScheduleExpression.cron({ minute: "0", hour: "1" }),
+      description: "Daily Bedrock feature parity sweep",
+      target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
+        taskDefinition: parityTaskDef,
         vpcSubnets: props.appSubnets,
         securityGroups: [schedulerTaskSg],
         assignPublicIp: false,

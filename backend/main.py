@@ -21,6 +21,7 @@ from routers import cost as cost_router
 from routers import reliability as reliability_router
 from routers import efficiency as efficiency_router
 from routers import analysis as analysis_router
+from routers import parity as parity_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -213,6 +214,7 @@ app.include_router(cost_router.router)
 app.include_router(reliability_router.router)
 app.include_router(efficiency_router.router)
 app.include_router(analysis_router.router)
+app.include_router(parity_router.router)
 
 
 @app.get("/api/health", tags=["health"])

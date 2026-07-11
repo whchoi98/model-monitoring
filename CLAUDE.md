@@ -33,11 +33,13 @@ Internal ALB
                 ├── /reliability  — Family/channel success rate + error buckets
                 ├── /efficiency   — 0-100 Token Efficiency Score (weighted)
                 ├── /analysis     — Stop reason 분포 + Output length 분포
-                └── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
+                ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
+                └── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 28 models × 1 workload preset (round-robin 6 categories)
-  └── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
+  ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
+  └── ParityRun Fargate Task   → 일 1회 (01:00 UTC) 모델×surface×피처 실행-증거 스윕 (v2.11.0)
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)

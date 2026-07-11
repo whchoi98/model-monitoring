@@ -1,0 +1,81 @@
+"""패리티 피처 카탈로그 — 무엇을 어떤 surface에서 프로빙할지 정의 (v2.11.0).
+
+surface (5): converse / invoke_model (Bedrock SigV4), messages (Anthropic CP bearer),
+chat_completions / responses (OpenAI 호환 bearer — Mantle·1P 공용).
+
+적용 규칙:
+- Bedrock Claude → converse + invoke_model. Nova → converse만 (네이티브 스키마 프로브 미구현 → skipped).
+- reasoning 피처는 확장 사고 지원 모델에만 적용 (그 외 skipped).
+"""
+
+from __future__ import annotations
+
+SURFACES = ["converse", "invoke_model", "messages", "chat_completions", "responses"]
+
+FEATURES: list[dict] = [
+    {
+        "id": "basic",
+        "label_ko": "기본 응답",
+        "desc_ko": "논스트리밍 단건 요청 — 비어 있지 않은 텍스트 응답을 검증",
+    },
+    {
+        "id": "streaming",
+        "label_ko": "스트리밍",
+        "desc_ko": "스트림 요청 — 2개 이상의 콘텐츠 델타 이벤트 수신을 검증",
+    },
+    {
+        "id": "system_instructions",
+        "label_ko": "시스템 지시",
+        "desc_ko": "system 필드로 카나리 단어 강제 — 응답에 카나리가 실제 반영되는지 검증",
+    },
+    {
+        "id": "tool_use",
+        "label_ko": "도구 호출",
+        "desc_ko": "echo 도구 강제(tool_choice) — 카나리 인자가 도구 호출로 왕복하는지 검증",
+    },
+    {
+        "id": "structured_output",
+        "label_ko": "구조화 출력",
+        "desc_ko": "JSON 출력 강제 — 필수 키를 가진 유효한 JSON인지 검증",
+    },
+    {
+        "id": "reasoning",
+        "label_ko": "확장 추론",
+        "desc_ko": "thinking/reasoning 활성 — 추론 토큰 사용 또는 추론 블록 존재를 검증",
+    },
+    {
+        "id": "caching",
+        "label_ko": "프롬프트 캐싱",
+        "desc_ko": "동일 프롬프트 반복 — 두 번째 응답의 cached tokens > 0 검증",
+    },
+]
+
+FEATURE_IDS = [f["id"] for f in FEATURES]
+
+# 확장 추론 지원 패밀리 (prober._is_reasoning_model과 정합 — 여기서는 카탈로그 자체 규칙으로 유지)
+_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "gpt-5")
+
+
+def surfaces_for(model_id: str) -> list[str]:
+    """모델 키 스킴(ADR-019/020)에 따라 프로빙할 surface 목록."""
+    if model_id.startswith("anthropic:"):
+        return ["messages"]
+    if model_id.startswith("openai:"):
+        return ["chat_completions", "responses"]
+    # Bedrock inference profile
+    if "anthropic" in model_id:
+        return ["converse", "invoke_model"]
+    return ["converse"]  # Nova 등 — invoke_model 네이티브 프로브 미구현
+
+
+def is_reasoning_capable(model_id: str) -> bool:
+    return any(m in model_id for m in _REASONING_MARKERS)
+
+
+def is_applicable(feature_id: str, surface: str, model_id: str) -> bool:
+    """(feature, surface, model) 조합에 프로브를 실행할지. False면 skipped."""
+    if surface not in surfaces_for(model_id):
+        return False
+    if feature_id == "reasoning" and not is_reasoning_capable(model_id):
+        return False
+    return True
