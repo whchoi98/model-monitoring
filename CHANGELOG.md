@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.14.1 — 2026-07-11
+
+### Fixed
+- **Feature-expansion follow-ups from run #7 evidence**: added missing IAM actions `bedrock:CountTokens` and `bedrock-mantle:CountTokens` (29+14 cells were 403-broken); fixed the batches probe TypeError (`_req_snapshot` model collision); strengthened the adaptive_thinking probe with `output_config: {effort: high}` and a harder prompt (accepted requests were returning no thinking block); classified Bedrock's generic "request is not valid" rejection and "not yet available" (Mantle live web search) as cleanly unsupported.
+- **피처 확장 후속 (run #7 증거 기반)**: IAM `bedrock:CountTokens`·`bedrock-mantle:CountTokens` 추가(43셀 403 해소), batches 프로브 TypeError 수정(`_req_snapshot` model 충돌), adaptive_thinking 프로브에 `output_config effort high`+난이도 있는 프롬프트(수락은 되나 thinking 블록 미출력 문제), Bedrock generic "request is not valid" 거부와 "not yet available"(Mantle live 웹 검색)을 깨끗한 미지원으로 분류.
+
 ## v2.14.0 — 2026-07-11
 
 ### Added

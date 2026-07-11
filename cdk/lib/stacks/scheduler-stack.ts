@@ -80,7 +80,7 @@ export class SchedulerStack extends cdk.Stack {
         new iam.PolicyStatement({
           sid: "BedrockInvokeModel",
           effect: iam.Effect.ALLOW,
-          actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream"],
+          actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "bedrock:CountTokens"],
           // global.* inference profile은 cross-region 라우팅이라 region-less foundation-model
           // ARN 권한도 필요.
           resources: [
@@ -94,7 +94,7 @@ export class SchedulerStack extends cdk.Stack {
           // bearer가 태스크 롤 권한을 그대로 사용하므로 bedrock-mantle 액션이 필요.
           sid: "BedrockMantleInference",
           effect: iam.Effect.ALLOW,
-          actions: ["bedrock-mantle:CreateInference"],
+          actions: ["bedrock-mantle:CreateInference", "bedrock-mantle:CountTokens"],
           resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
         }),
         new iam.PolicyStatement({
