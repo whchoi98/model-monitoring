@@ -7,6 +7,15 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.9.1 — 2026-07-11
+
+### Changed
+- **Nav order**: "모델 탐색" menu moved to sit right after "대시보드" on all pages.
+- **내비 순서**: "모델 탐색" 메뉴를 전 페이지에서 "대시보드" 바로 다음으로 이동.
+- **`APP_VERSION` v2.9.0 → v2.9.1** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.9.0 — 2026-07-11
 
 ### Added
