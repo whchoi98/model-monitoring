@@ -80,6 +80,14 @@ export class AppServicesStack extends cdk.Stack {
         ],
       }),
       new iam.PolicyStatement({
+        // messages_mantle 패리티 프로브 (v2.13.0) — 수동 트리거는 backend 프로세스에서
+        // 실행되므로 backend role에도 동일 권한 필요 (SigV4 파생 bearer가 롤 권한 사용).
+        sid: "BedrockMantleInference",
+        effect: iam.Effect.ALLOW,
+        actions: ["bedrock-mantle:CreateInference"],
+        resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
+      }),
+      new iam.PolicyStatement({
         sid: "SESSendEmail",
         effect: iam.Effect.ALLOW,
         actions: ["ses:SendEmail", "ses:SendRawEmail"],
