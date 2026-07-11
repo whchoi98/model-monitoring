@@ -349,6 +349,9 @@ export class SchedulerStack extends cdk.Stack {
           `Resource::arn:aws:bedrock:*::foundation-model/*`,
           `Resource::arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
           `Resource::arn:aws:bedrock:*:${this.account}:inference-profile/*`,
+          // messages_mantle 프로브 (v2.13.0) — Mantle project id는 리전별 'default'뿐이라
+          // 계정 scope 내 project/* 로 제한. 리전은 MANTLE_ANTHROPIC_REGION로 가변.
+          `Resource::arn:aws:bedrock-mantle:*:${this.account}:project/*`,
           "Resource::*",
         ],
       },

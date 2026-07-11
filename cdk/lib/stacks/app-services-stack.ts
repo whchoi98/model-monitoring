@@ -357,6 +357,8 @@ export class AppServicesStack extends cdk.Stack {
             `Resource::arn:aws:bedrock:*::foundation-model/*`,
             `Resource::arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
             `Resource::arn:aws:bedrock:*:${this.account}:inference-profile/*`,
+            // messages_mantle 수동 트리거 (v2.13.0) — 계정 scope project/* 로 제한.
+            `Resource::arn:aws:bedrock-mantle:*:${this.account}:project/*`,
           ],
         },
         {
