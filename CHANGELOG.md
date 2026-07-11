@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.14.0 — 2026-07-11
+
+### Added
+- **Five new parity features** (catalog 7 → 12): `adaptive_thinking` (thinking type adaptive, thinking-block evidence, Fable 5 only), `count_tokens` (endpoint round-trip, input_tokens > 0), `batches` (Message Batches submit → status → cancel), `web_search` and `computer_use` (server-tool definition acceptance; web_search also probes the OpenAI Responses built-in tool). Per-feature surface maps keep non-implemented combinations as skipped; ~536 probes per run.
+- **패리티 피처 5종 추가** (카탈로그 7 → 12): `adaptive_thinking`(thinking type adaptive, thinking 블록 증거, Fable 5 전용), `count_tokens`(엔드포인트 왕복, input_tokens > 0), `batches`(Message Batches submit→status→cancel), `web_search`·`computer_use`(서버측 도구 정의 수락 — web_search는 OpenAI Responses 내장 도구도 프로빙). 피처별 surface 맵으로 미구현 조합은 skipped 유지, 런당 ~536 프로브.
+
 ## v2.13.0 — 2026-07-11
 
 ### Added

@@ -49,12 +49,48 @@ FEATURES: list[dict] = [
         "label_ko": "프롬프트 캐싱",
         "desc_ko": "동일 프롬프트 반복 — 두 번째 응답의 cached tokens > 0 검증",
     },
+    # --- v2.14.0 확장 5종 ---
+    {
+        "id": "adaptive_thinking",
+        "label_ko": "적응형 추론",
+        "desc_ko": "thinking type: adaptive — 모델이 추론 예산을 스스로 조절, thinking 블록 존재 검증 (Fable 5 전용)",
+    },
+    {
+        "id": "count_tokens",
+        "label_ko": "토큰 카운트",
+        "desc_ko": "Count Tokens 엔드포인트 왕복 — input_tokens > 0 검증",
+    },
+    {
+        "id": "batches",
+        "label_ko": "배치",
+        "desc_ko": "Message Batches submit→status 왕복 — 배치 생성·상태 조회 검증 (조회 후 취소)",
+    },
+    {
+        "id": "web_search",
+        "label_ko": "웹 검색 도구",
+        "desc_ko": "서버측 web_search 도구 정의 수락 검증 — 도구 포함 요청이 정상 완료되는지",
+    },
+    {
+        "id": "computer_use",
+        "label_ko": "컴퓨터 사용 도구",
+        "desc_ko": "computer use 도구 정의 수락 검증 (beta 헤더 포함)",
+    },
 ]
 
 FEATURE_IDS = [f["id"] for f in FEATURES]
 
 # 확장 추론 지원 패밀리 (prober._is_reasoning_model과 정합 — 여기서는 카탈로그 자체 규칙으로 유지)
 _REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "gpt-5")
+
+# 피처별 surface 제한 (v2.14.0) — 미기재 피처는 모든 surface 허용.
+# 검사 방법을 구현한 surface만 나열: 그 외 조합은 skipped (프로브 없음 ≠ 미지원).
+_FEATURE_SURFACES: dict[str, frozenset[str]] = {
+    "adaptive_thinking": frozenset({"converse", "invoke_model", "messages", "messages_mantle"}),
+    "count_tokens": frozenset({"converse", "invoke_model", "messages", "messages_mantle"}),
+    "batches": frozenset({"messages", "messages_mantle"}),
+    "web_search": frozenset({"invoke_model", "messages", "messages_mantle", "responses"}),
+    "computer_use": frozenset({"invoke_model", "messages", "messages_mantle"}),
+}
 
 
 def surfaces_for(model_id: str) -> list[str]:
@@ -88,6 +124,11 @@ def is_applicable(feature_id: str, surface: str, model_id: str) -> bool:
     """(feature, surface, model) 조합에 프로브를 실행할지. False면 skipped."""
     if surface not in surfaces_for(model_id):
         return False
+    allowed = _FEATURE_SURFACES.get(feature_id)
+    if allowed is not None and surface not in allowed:
+        return False
     if feature_id == "reasoning" and not is_reasoning_capable(model_id):
+        return False
+    if feature_id == "adaptive_thinking" and "fable-5" not in model_id:
         return False
     return True
