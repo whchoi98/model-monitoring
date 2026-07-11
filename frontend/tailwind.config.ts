@@ -1,4 +1,5 @@
 import type { Config } from "tailwindcss";
+import plugin from "tailwindcss/plugin";
 
 const config: Config = {
   content: ["./src/**/*.{ts,tsx}"],
@@ -125,7 +126,11 @@ const config: Config = {
       },
     },
   },
-  plugins: [require("@tailwindcss/typography")],
+  plugins: [
+    require("@tailwindcss/typography"),
+    // light: 변형 — html.light일 때만 적용 (다크 기본이라 dark:가 아닌 light:가 예외 처리 방향).
+    plugin(({ addVariant }) => addVariant("light", "html.light &")),
+  ],
 };
 
 export default config;

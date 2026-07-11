@@ -137,7 +137,7 @@ export default function CostDashboardPanel() {
             {summary ? summary.total_output_tokens.toLocaleString() : "—"}
           </div>
         </div>
-        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 border border-blue-500/30 rounded-xl p-4">
+        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 light:bg-none light:bg-gray-900/50 border border-blue-500/30 rounded-xl p-4">
           <div className="text-xs text-blue-300">
             {lang === "en" ? "30-day projection" : "30일 예상"}
           </div>
