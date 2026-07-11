@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.2.0) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.11.2 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -12,7 +12,7 @@
 - **Frontend**: Next.js 14 standalone + React 18 + Tailwind + Recharts + react-markdown + FloatingChat
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
 - **Edge**: CloudFront VPC Origin → Internal ALB (HTTPS-only) → ECS Fargate × 2 (backend, frontend)
-- **Scheduling**: EventBridge Scheduler → AutoProber + Insights Fargate Tasks (모두 `rate(5 minutes)`)
+- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`) + ParityRun (일 1회 01:00 UTC) Fargate Tasks
 - **AI**: Claude Sonnet 4.6 챗봇 (4 tools, dynamic followups), Haiku 4.5 인사이트 잡
 
 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/).
@@ -63,7 +63,11 @@ model-monitoring/
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
 │   ├── schemas.py           # Pydantic; ProbeResultResponse.stop_reason Optional
 │   ├── database.py          # pool_size=5, max_overflow=5, pool_recycle=300, pool_timeout=10
+│   ├── retention.py         # RETENTION_DAYS 초과 probe_results → probe_results_hourly 집계 이관
+│   ├── parity_runner.py     # CLI entry: `python -m parity_runner --once` (ParityRun Fargate task)
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
+│   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py
+│   ├── parity/              # 패리티 런 엔진 (v2.11.0): catalog.py(surface×피처), engine.py(판정 순수 로직), probes.py(5 surface 실행기), runner.py(오케스트레이터)
 │   └── routers/
 │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
 │       ├── admin.py         # /api/admin/* — reset-monitoring-data, users CRUD (admin only)
@@ -77,11 +81,15 @@ model-monitoring/
 │       ├── cost.py          # /api/cost/* — summary, channel-compare, trend
 │       ├── reliability.py   # /api/reliability/multi-channel — family/channel grouped
 │       ├── efficiency.py    # /api/efficiency/score — 0-100 weighted score per category
-│       └── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0 신규)
+│       ├── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0 신규)
+│       ├── compare.py       # /api/compare/run — Comparison Lab: 1 prompt → N models 병렬, SSE (auth)
+│       └── parity.py        # /api/parity/* — catalog, latest, evidence, trigger(auth) (v2.11.0 신규)
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
 │   │   │   ├── page.tsx           # Dashboard (status + 28 cards + trend + workload filter)
+│   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
+│   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx
@@ -97,19 +105,23 @@ model-monitoring/
 │   │   │   ├── AnalysisPanel.tsx        # v2.1.0 신규
 │   │   │   ├── InsightsPanel.tsx        # SSE stream-regenerate
 │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt
+│   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x)
+│   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
 │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
 │   │   ├── hooks/                       # useAutoRefresh, useProbeStream, useChatStream
 │   │   └── lib/
 │   │       ├── api.ts                   # 모든 fetch 함수 (auth token mgmt)
 │   │       ├── i18n.ts + i18n-context.tsx  # KO/EN
-│   │       ├── sortModels.ts            # FAMILY_ORDER 10 entries, groupByFamily
+│   │       ├── sortModels.ts            # FAMILY_ORDER, groupByFamily, channelRank
 │   │       ├── pricing.ts               # backend/pricing.py mirror
+│   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
+│   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (v2.9.0)
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / middleware.ts
 ├── cdk/                                  # 8 stacks (TypeScript)
 └── docs/
     ├── architecture.md
-    ├── decisions/ADR-001~019.md
+    ├── decisions/ADR-001~021.md
     └── runbooks/deploy.md, rollback.md, ...
 ```
 
@@ -127,11 +139,13 @@ REGION=ap-northeast-2; ACCT=061525506239
 TAG="v$(date +%s)"   # NEVER use :latest in production task def
 docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-backend:$TAG backend/
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
-docker tag bedrock-monitor-backend:$TAG $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:$TAG
-docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend:$TAG
+docker tag bedrock-monitor-backend:$TAG $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
+docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 
-# Register new task def with explicit tag + update service
-# (see docs/runbooks/deploy.md for full procedure including autoprober schedule)
+# Deploy (digest 고정 — CDK가 :latest로 되돌리는 사고 방지, ADR-018)
+# cd cdk && npx cdk deploy BedrockMonitor-AppServices BedrockMonitor-Scheduler --require-approval never \
+#   -c backendImage="<repo>:$TAG@sha256:<digest>" -c frontendImage="<repo>:$TAG@sha256:<digest>"
+# (see docs/runbooks/deploy.md for full procedure including autoprober/parityrun schedules)
 
 # Verify
 curl https://d36s7ml54xwemr.cloudfront.net/api/auto-probe/status

@@ -169,6 +169,25 @@ Stop-reason distribution + output-length histograms.
 
 ---
 
+## Parity Run (Public read, trigger = Auth Required) — v2.11.0
+
+### GET /api/parity/catalog
+Feature catalog (7 features with Korean labels/descriptions) + 5 API surfaces.
+
+### GET /api/parity/latest
+Latest completed run: `run` (id, started/finished, totals, running flag) + slim `results`
+(model_id, model_name, surface, feature, status, latency_ms). `Cache-Control: s-maxage=60`.
+
+### GET /api/parity/evidence?run_id=&model_id=&surface=&feature=
+Full evidence for one matrix cell: evidence JSON (response snippet, tool call, usage, reason),
+latency, error_message. 404 if the cell does not exist.
+
+### POST /api/parity/trigger (Auth Required)
+Start a manual parity run in a backend background thread (~3 min). Rejects if already running.
+The daily scheduled run uses a separate Fargate task instead (`python -m parity_runner --once`).
+
+---
+
 ## Admin (Admin Only — `username == "admin"`)
 
 ### GET /api/admin/users · DELETE /api/admin/users/{username} · POST /api/admin/users/{username}/approve

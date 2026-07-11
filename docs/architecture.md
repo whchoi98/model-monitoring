@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock의 LLM 모델 성능을 5분 주기로 자동 측정하고 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(28개 카탈로그)을 5분 주기로 자동 측정하고, 일 1회 모델×API surface×피처 패리티 런(v2.11.0)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
 
 ### 데이터 흐름 (Critical Path)
 
@@ -27,7 +27,8 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
 
 EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 모델 프로빙 → RDS
-   └─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
+   └─ cron(0 1 * * ? *) → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
 ```
 
 ### 컴포넌트 (Layer별)
@@ -63,15 +64,17 @@ EventBridge Scheduler
 |--------|------|
 | AgentCore Memory `BedrockMonitorChatMemory` | 사용자 대화 30일 보존 |
 | AgentCore IAM Managed Policy | backend Task Role에 attach |
-| Bedrock Runtime (us-east-1) | Sonnet/Haiku/Opus 4.x, Nova 2 Lite |
+| Bedrock Runtime | 모니터링 카탈로그 28개: Claude Fable 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 6채널 + OpenAI GPT 5.4/5.5 (Bedrock Mantle 5 + 1P direct 2) |
 
 #### 주기 잡 / Scheduling
 | 리소스 | 역할 |
 |--------|------|
 | EventBridge Scheduler `AutoProberSchedule` | rate(5 min) → AutoProber TaskDef |
-| EventBridge Scheduler `InsightsSchedule` | rate(30 min) → Insights TaskDef |
+| EventBridge Scheduler `InsightsSchedule` | rate(5 min) → Insights TaskDef |
+| EventBridge Scheduler `ParityRunSchedule` | cron(0 1 * * ? *) 일 1회 → ParityRun TaskDef (v2.11.0) |
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
+| ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
 
 #### 네트워크 / Network
 | 리소스 | 역할 |
@@ -84,7 +87,7 @@ EventBridge Scheduler
 #### 관측 / Observability
 | 리소스 | 역할 |
 |--------|------|
-| CloudWatch Log Groups | `/ecs/{backend,frontend,autoprober,insights}` (14d) |
+| CloudWatch Log Groups | `/ecs/{backend,frontend,autoprober,insights,parityrun}` (14d) |
 | CloudWatch Alarms × 7 | ALB 5xx ratio, ALB latency, ECS task 수 ×2, RDS CPU/Storage/Connections |
 | CloudWatch Dashboard `BedrockMonitor-v2` | 5 widgets + alarm status grid |
 | SNS Topic `bedrock-monitor-alarms` | 알람 fan-out |
@@ -99,12 +102,12 @@ EventBridge Scheduler
 | AgentCore | - | AgentCore Memory + IAM |
 | AppServices | Network·Data·Cluster·AgentCore | Fargate ×2, ALB, ALB logs |
 | Edge | AppServices | CloudFront, WAF, CF logs |
-| Scheduler | Network·Data·Cluster·AgentCore | EventBridge ×2, TaskDef ×2 |
+| Scheduler | Network·Data·Cluster·AgentCore | EventBridge ×3, TaskDef ×3 |
 | Observability | AppServices·Cluster·Data | Alarms, Dashboard, SNS |
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-019 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-021 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -124,6 +127,7 @@ EventBridge Scheduler
 | 018 | ECR repository 교체 (`-v2`, Fargate image cache silent bug 우회) |
 | 019 | OpenAI/Bedrock-Mantle provider path 추가 (gpt-5.4, gpt-5.5, 4 channels) |
 | 020 | OpenAI 1P direct (api.openai.com) provider path 추가 (gpt-5.4/5.5, 2 channels) |
+| 021 | 패리티 런 엔진 — 실행-증거 프로브 매트릭스 (HTTP 200 불충분, 일 1회 Fargate 스윕) |
 
 ### 운영 / Operations
 
@@ -137,7 +141,7 @@ EventBridge Scheduler
 
 ### System Overview
 
-Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes AWS Bedrock LLM models every 5 minutes and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
+Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 28-model catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a daily model × API-surface × feature parity sweep (v2.11.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
 
 ### Critical Path
 
@@ -152,7 +156,8 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
 
 EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 28 models → RDS
-   └─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
+   └─ cron(0 1 * * ? *) → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
 ```
 
 ### Components by Layer
@@ -167,7 +172,7 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-019 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-021 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 

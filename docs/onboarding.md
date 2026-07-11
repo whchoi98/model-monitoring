@@ -58,6 +58,9 @@ npm run dev
 - **Manual Probe**: Authenticated SSE streaming probe via `/api/probes/run`
 - **Model Cards**: Dashboard grid showing latest metrics per model
 - **Trend Charts**: Time-series visualization of TTFT, latency, and TPS
+- **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, pricing, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)
+- **Parity Run** (`/parity`, v2.11.0): daily Fargate sweep (01:00 UTC) probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
+- **Comparison Lab**: one prompt → N models in parallel via `/api/compare/run` (SSE, auth)
 
 ## Common Tasks
 
@@ -69,5 +72,6 @@ npm run dev
 | Redeploy frontend (prod) | `aws ecs update-service --cluster bedrock-monitor --service frontend --force-new-deployment` |
 | View backend logs (prod) | `aws logs tail /ecs/backend --follow` |
 | View autoprober logs | `aws logs tail /ecs/autoprober --since 1h` |
+| View parity run logs | `aws logs tail /ecs/parityrun --since 1d` |
 | Trigger probe (local) | `curl -X POST http://localhost:8000/api/auto-probe/trigger` |
 | Access DB (local) | `docker exec -it monitoring-postgres psql -U postgres -d monitoring` |

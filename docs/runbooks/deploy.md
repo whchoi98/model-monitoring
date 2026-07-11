@@ -70,7 +70,8 @@ BE_ARN=$(aws ecs register-task-definition --region $REGION \
 aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
-# Autoprober schedule도 동일하게 (별도 Fargate Task)
+# Autoprober / Insights / ParityRun schedule도 동일하게 (각각 별도 Fargate Task — backend image 공용)
+# ParityRun (v2.11.0): family BedrockMonitorSchedulerParityRunTaskDef*, schedule cron(0 1 * * ? *)
 aws ecs describe-task-definition --task-definition BedrockMonitorSchedulerAutoProberTaskDef* \
   --region $REGION > /tmp/td-ap.json
 # ... (위와 동일하게 image 교체 + register) ...

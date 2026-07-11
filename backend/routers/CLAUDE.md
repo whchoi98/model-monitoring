@@ -1,7 +1,7 @@
 # Backend Routers — API Endpoint Handlers
 
 ## Role
-FastAPI router modules defining all API endpoints (14 routers, registered in `main.py`).
+FastAPI router modules defining all API endpoints (15 routers, registered in `main.py`).
 
 ## Files
 - `auth.py` — `/api/auth/*` — login (public), register (EmailStr enforced), email approval, `/me` (JWT)
@@ -18,6 +18,7 @@ FastAPI router modules defining all API endpoints (14 routers, registered in `ma
 - `reliability.py` — `/api/reliability/multi-channel` — family/channel success rate + error buckets
 - `efficiency.py` — `/api/efficiency/score` — 0-100 weighted Token Efficiency Score per category
 - `analysis.py` — `/api/analysis/*` — stop-reason distribution + output-length histograms
+- `parity.py` — `/api/parity/*` — catalog, latest (완료 런 매트릭스, s-maxage=60), evidence (셀별 증거), trigger (JWT, backend 내 백그라운드 스레드 — 스케줄 런과 달리 Fargate 아님)
 
 ## Conventions
 - All routers use `prefix="/api/..."` and appropriate `tags`
