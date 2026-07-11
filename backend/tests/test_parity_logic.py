@@ -214,3 +214,38 @@ def test_feature_surface_restrictions():
     # count_tokens는 OpenAI 경로 미적용 (엔드포인트 없음)
     assert is_applicable("count_tokens", "messages", "anthropic:claude-haiku-4-5-20251001") is True
     assert is_applicable("count_tokens", "responses", "openai:1p:gpt-5.5") is False
+
+
+# ---------------------------------------------------------------------------
+# v2.14.1 후속 — run #7 실측 기반 수정 회귀 테스트
+# ---------------------------------------------------------------------------
+
+@pytest.mark.parametrize("msg", [
+    # Bedrock InvokeModel의 generic 검증 거부 — 서버측 도구 미지원 신호 (run #7 실측)
+    "ValidationException: The provided request is not valid",
+    # Mantle web_search live 모드 미제공 (run #7 실측)
+    "BadRequestError: Live web access is not yet available. Set external_web_access: false",
+])
+def test_clean_unsupported_errors_v2141(msg):
+    assert classify_error(msg) == "unsupported"
+
+
+def test_batches_probe_builds_snapshot_without_type_error():
+    # run #7 회귀: _req_snapshot() got multiple values for argument 'model'
+    from types import SimpleNamespace
+    from parity.probes import probe_messages
+
+    class _Batches:
+        def create(self, requests):
+            assert requests[0]["params"]["model"] == "model-x"
+            return SimpleNamespace(id="batch-1")
+        def retrieve(self, bid):
+            return SimpleNamespace(processing_status="in_progress")
+        def cancel(self, bid):
+            return None
+
+    client = SimpleNamespace(messages=SimpleNamespace(batches=_Batches()))
+    out = probe_messages(client, "model-x", "batches")
+    assert out.status == "supported"
+    assert out.evidence["batch_id"] == "batch-1"
+    assert out.evidence["request"]["model"] == "model-x"

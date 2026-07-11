@@ -26,6 +26,11 @@ _UNSUPPORTED_MARKERS = (
     "no endpoints support",
     # Mantle /anthropic 등에서 모델이 해당 엔드포인트/리전에 서빙되지 않음 — 깨끗한 미제공 신호
     "does not exist",
+    # Bedrock InvokeModel의 generic 검증 거부 — 프로브 형태는 고정이므로 도구/파라미터
+    # 미지원 신호로 해석 (프로브 자체 결함이면 전 모델 동시 발생으로 드러남)
+    "request is not valid",
+    # 기능이 아직 미개방 (예: Mantle web_search live 모드)
+    "not yet available",
 )
 
 

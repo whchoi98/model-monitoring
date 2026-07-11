@@ -191,10 +191,12 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(model_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
 
     if feature == "adaptive_thinking":
+        # 참조 증거와 동일 형태: thinking adaptive + output_config effort high.
+        # adaptive는 모델이 추론 여부를 스스로 결정하므로 추론을 요구하는 문제 + effort high로 유도.
         kw = dict(
-            messages=[{"role": "user", "content": [{"text": "17 x 23은? 단계적으로 생각하세요."}]}],
+            messages=[{"role": "user", "content": [{"text": "처음 20개 소수의 합을 구하세요. 신중하게 단계적으로 생각하세요."}]}],
             inferenceConfig={"maxTokens": _REASONING_MAX_TOKENS},
-            additionalModelRequestFields={"thinking": {"type": "adaptive"}},
+            additionalModelRequestFields={"thinking": {"type": "adaptive"}, "output_config": {"effort": "high"}},
         )
         def fn():
             r = converse(**kw)
@@ -303,7 +305,8 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
 
     if feature == "adaptive_thinking":
         body = {"max_tokens": _REASONING_MAX_TOKENS, "thinking": {"type": "adaptive"},
-                "messages": [{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}]}
+                "output_config": {"effort": "high"},
+                "messages": [{"role": "user", "content": "처음 20개 소수의 합을 구하세요. 신중하게 단계적으로 생각하세요."}]}
         def fn():
             r = invoke(body)
             has_thinking = any(b.get("type") == "thinking" for b in r.get("content", []))
@@ -428,12 +431,12 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
 
     if feature == "adaptive_thinking":
         kw = dict(max_tokens=_REASONING_MAX_TOKENS, thinking={"type": "adaptive"},
-                  messages=[{"role": "user", "content": "17 x 23은? 단계적으로 생각하세요."}])
+                  messages=[{"role": "user", "content": "처음 20개 소수의 합을 구하세요. 신중하게 단계적으로 생각하세요."}])
         def fn():
-            r = client.messages.create(model=actual_id, **kw)
+            r = client.messages.create(model=actual_id, extra_body={"output_config": {"effort": "high"}}, **kw)
             has_thinking = any(getattr(b, "type", "") == "thinking" for b in r.content)
             return has_thinking, {"content_types": [getattr(b, "type", "?") for b in r.content]}
-        return _run(fn, _req_snapshot(actual_id, **kw))
+        return _run(fn, _req_snapshot(actual_id, output_config={"effort": "high"}, **kw))
 
     if feature == "count_tokens":
         kw = dict(messages=[{"role": "user", "content": _BASIC_PROMPT}])
@@ -444,11 +447,10 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(actual_id, api="messages.count_tokens", **kw))
 
     if feature == "batches":
-        params = dict(model=actual_id, max_tokens=16,
-                      messages=[{"role": "user", "content": _BASIC_PROMPT}])
+        params = dict(max_tokens=16, messages=[{"role": "user", "content": _BASIC_PROMPT}])
         def fn():
             batch = client.messages.batches.create(
-                requests=[{"custom_id": "parity-probe-1", "params": params}])
+                requests=[{"custom_id": "parity-probe-1", "params": {"model": actual_id, **params}}])
             status = client.messages.batches.retrieve(batch.id)
             try:  # 비용·잔여 작업 방지 — 상태 확인 후 즉시 취소 (실패해도 판정 무관)
                 client.messages.batches.cancel(batch.id)

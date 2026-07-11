@@ -70,6 +70,7 @@ export class AppServicesStack extends cdk.Stack {
         actions: [
           "bedrock:InvokeModel",
           "bedrock:InvokeModelWithResponseStream",
+          "bedrock:CountTokens",
         ],
         // global.* inference profile은 cross-region 라우팅이라 region-less foundation-model
         // ARN (arn:aws:bedrock:::foundation-model/*) 권한도 필요. 모든 region scope 허용.
@@ -84,7 +85,7 @@ export class AppServicesStack extends cdk.Stack {
         // 실행되므로 backend role에도 동일 권한 필요 (SigV4 파생 bearer가 롤 권한 사용).
         sid: "BedrockMantleInference",
         effect: iam.Effect.ALLOW,
-        actions: ["bedrock-mantle:CreateInference"],
+        actions: ["bedrock-mantle:CreateInference", "bedrock-mantle:CountTokens"],
         resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
       }),
       new iam.PolicyStatement({
