@@ -7,6 +7,17 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.10.0 — 2026-07-11
+
+### Added
+- **Parity Run page (`/parity`)**: new nav menu documenting how a Bedrock feature-parity run works — Korean translation of the 5-step process (scheduled sweep via EventBridge/Step Functions, agent-maintained feature catalog in DynamoDB, model × region × API-surface fan-out, execution-evidence probes, classification & storage) with the original English available via the language toggle, a 20-capture result gallery (deduplicated, WebP-optimized 9.5MB → 2.2MB, click-to-enlarge lightbox), and a link to the full HTML report (2026-07-08).
+- **패리티 런 페이지 (`/parity`)**: Bedrock 기능 패리티 런의 동작 방식을 문서화한 신규 메뉴 — 5단계 프로세스(EventBridge/Step Functions 예약 스윕, DynamoDB 에이전트 관리 피처 카탈로그, 모델×리전×API surface 팬아웃, 실행-증거 프로브, 분류·저장)의 한국어 번역(EN 토글 시 원문), 결과 스크린샷 20장 갤러리(중복 제거·WebP 최적화 9.5MB→2.2MB, 클릭 확대), 전체 HTML 리포트(2026-07-08) 링크.
+
+### Changed
+- **`APP_VERSION` v2.9.2 → v2.10.0** (`frontend/src/lib/version.ts`).
+
+---
+
 ## v2.9.2 — 2026-07-11
 
 ### Added
