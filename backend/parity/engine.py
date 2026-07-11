@@ -31,6 +31,10 @@ _UNSUPPORTED_MARKERS = (
     "request is not valid",
     # 기능이 아직 미개방 (예: Mantle web_search live 모드)
     "not yet available",
+    # 고정 엔드포인트에 대한 본문 없는 404 (예: Mantle batches 미제공)
+    "error code: 404",
+    # 도구 스키마의 명시적 거부 — 허용 tool 태그 목록 반환 (Bedrock InvokeModel)
+    "does not match any of the expected",
 )
 
 
