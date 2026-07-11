@@ -47,29 +47,40 @@ describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
   });
 });
 
-describe("codeExamples — 채널에 맞는 SDK 예제", () => {
-  test("Bedrock → boto3 converse_stream", () => {
+describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () => {
+  test("Bedrock(Claude) → Converse API + InvokeModel API 두 탭, 각각 설명 포함", () => {
     const ex = codeExamples("us.anthropic.claude-haiku-4-5-20251001-v1:0");
-    expect(ex.length).toBeGreaterThan(0);
+    expect(ex.map((e) => e.api)).toEqual(["Converse API", "InvokeModel API"]);
     expect(ex[0].code).toContain("converse_stream");
     expect(ex[0].code).toContain("us.anthropic.claude-haiku-4-5-20251001-v1:0");
+    expect(ex[0].description.length).toBeGreaterThan(10); // API 의미 설명
+    expect(ex[1].code).toContain("invoke_model");
+    expect(ex[1].description).toContain("네이티브");
   });
-  test("Anthropic CP → anthropic SDK + base_url + workspace 헤더", () => {
-    const code = codeExamples("anthropic:claude-fable-5")[0].code;
-    expect(code).toContain("aws-external-anthropic");
-    expect(code).toContain("anthropic-workspace");
-    expect(code).toContain('"claude-fable-5"');
+  test("Bedrock(Nova) → Converse API 단일 탭", () => {
+    const ex = codeExamples("us.amazon.nova-2-lite-v1:0");
+    expect(ex.map((e) => e.api)).toEqual(["Converse API"]);
   });
-  test("OpenAI Mantle → openai SDK + mantle base_url + ABSK", () => {
-    const code = codeExamples("openai:us-east-2:openai.gpt-5.5")[0].code;
-    expect(code).toContain("bedrock-mantle.us-east-2");
-    expect(code).toContain("ABSK");
-    expect(code).toContain('"openai.gpt-5.5"');
+  test("Anthropic CP → Messages API 표기 + 설명", () => {
+    const ex = codeExamples("anthropic:claude-fable-5");
+    expect(ex[0].api).toBe("Messages API");
+    expect(ex[0].description).toContain("Anthropic");
+    expect(ex[0].code).toContain("aws-external-anthropic");
+    expect(ex[0].code).toContain("anthropic-workspace");
+    expect(ex[0].code).toContain('"claude-fable-5"');
   });
-  test("OpenAI 1P → api.openai.com Responses API", () => {
-    const code = codeExamples("openai:1p:gpt-5.5")[0].code;
-    expect(code).toContain("responses");
-    expect(code).toContain('"gpt-5.5"');
+  test("OpenAI Mantle → Responses API 표기", () => {
+    const ex = codeExamples("openai:us-east-2:openai.gpt-5.5");
+    expect(ex[0].api).toBe("Responses API");
+    expect(ex[0].description.length).toBeGreaterThan(10);
+    expect(ex[0].code).toContain("bedrock-mantle.us-east-2");
+    expect(ex[0].code).toContain("ABSK");
+  });
+  test("OpenAI 1P → Responses API 표기", () => {
+    const ex = codeExamples("openai:1p:gpt-5.5");
+    expect(ex[0].api).toBe("Responses API");
+    expect(ex[0].code).toContain("responses");
+    expect(ex[0].code).toContain('"gpt-5.5"');
   });
 });
 

@@ -9,6 +9,10 @@
 
 ## v2.9.2 — 2026-07-11
 
+### Added
+- **Model Explorer: API-type tabs with explanations** — code examples are now labeled by API (Bedrock: Converse API + InvokeModel API for Claude models; Anthropic CP: Messages API; OpenAI: Responses API) with a short description of what each API means, shown when a model card is selected.
+- **모델 탐색 코드 예제에 API 종류 탭 + 설명** — Converse API/InvokeModel API(Bedrock), Messages API(Anthropic CP), Responses API(OpenAI)로 표기하고, 카드 선택 시 각 API가 의미하는 바를 설명으로 표시. Claude 계열 Bedrock 모델은 InvokeModel 네이티브 예제 추가.
+
 ### Fixed
 - **/models 페이지 자체의 내비 순서 누락 수정**: v2.9.1 재배치가 다른 페이지에만 적용되고 모델 탐색 페이지의 활성 탭은 끝에 남아 있었음.
 - **`APP_VERSION` v2.9.1 → v2.9.2**.
