@@ -53,6 +53,20 @@ describe("SchedulerStack", () => {
     }));
   });
 
+  it("Task role은 bedrock-mantle:CreateInference를 허용한다 (v2.13.0 messages_mantle — SigV4 파생 bearer)", () => {
+    template.hasResourceProperties("AWS::IAM::Role", Match.objectLike({
+      Policies: Match.arrayWith([
+        Match.objectLike({
+          PolicyDocument: Match.objectLike({
+            Statement: Match.arrayWith([
+              Match.objectLike({ Action: "bedrock-mantle:CreateInference" }),
+            ]),
+          }),
+        }),
+      ]),
+    }));
+  });
+
   it("ParityRun은 rate(12 hours) 스케줄을 사용한다 (v2.12.0에서 일 1회→12시간)", () => {
     template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({
       ScheduleExpression: "rate(12 hours)",

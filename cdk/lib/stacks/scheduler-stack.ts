@@ -89,6 +89,14 @@ export class SchedulerStack extends cdk.Stack {
             `arn:aws:bedrock:*:${this.account}:inference-profile/*`,
           ],
         }),
+        new iam.PolicyStatement({
+          // messages_mantle 패리티 프로브 (v2.13.0) — Mantle /anthropic은 SigV4 파생
+          // bearer가 태스크 롤 권한을 그대로 사용하므로 bedrock-mantle 액션이 필요.
+          sid: "BedrockMantleInference",
+          effect: iam.Effect.ALLOW,
+          actions: ["bedrock-mantle:CreateInference"],
+          resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
+        }),
       ],
     });
 
