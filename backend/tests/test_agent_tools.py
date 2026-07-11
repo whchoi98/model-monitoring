@@ -28,7 +28,9 @@ def session():
     s.close()
 
 
-NOW = datetime(2026, 7, 10, 12, 0, 0, tzinfo=timezone.utc)
+# 실제 현재 시각 기준 — 고정 날짜로 시딩하면 하루만 지나도 조회 윈도우를 벗어나
+# CI에서 0포인트로 실패한다 (2026-07-11 실사고). get_trend가 datetime.now()를 쓰기 때문.
+NOW = datetime.now(timezone.utc).replace(minute=0, second=0, microsecond=0)
 
 
 def _seed_cycles(s, *, hours, per_hour=12, model_names=("Model A",)):
