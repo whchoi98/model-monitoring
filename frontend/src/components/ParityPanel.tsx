@@ -83,39 +83,29 @@ interface ProviderStat {
   health: number; // supported / (supported + broken)
 }
 
-const DONUT_COLORS: Record<Status, string> = {
-  supported: "#34d399",
-  unsupported: "#fbbf24",
-  broken: "#fb7185",
-  skipped: "#4b5563",
+const BAR_COLORS: Record<Status, string> = {
+  supported: "bg-emerald-400",
+  unsupported: "bg-amber-400",
+  broken: "bg-rose-400",
+  skipped: "bg-gray-600",
 };
 
-function Donut({ counts, health }: { counts: Record<Status, number>; health: number }) {
+// provider 카드의 상태 분포 — 도넛 대신 가로 세그먼트 막대 (v2.16.3, 피처 요약행과 통일)
+function HealthBar({ counts, health }: { counts: Record<Status, number>; health: number }) {
   const total = Math.max(1, (Object.values(counts) as number[]).reduce((a, b) => a + b, 0));
-  const R = 34;
-  const C = 2 * Math.PI * R;
-  let offset = 0;
   const order: Status[] = ["supported", "unsupported", "broken", "skipped"];
   return (
-    <svg viewBox="0 0 88 88" className="w-24 h-24 shrink-0" role="img" aria-label={`healthy ${health}%`}>
-      {order.map((s) => {
-        const frac = (counts[s] ?? 0) / total;
-        const seg = (
-          <circle
-            key={s}
-            cx="44" cy="44" r={R} fill="none"
-            stroke={DONUT_COLORS[s]} strokeWidth="9"
-            strokeDasharray={`${frac * C} ${C}`}
-            strokeDashoffset={-offset * C}
-            transform="rotate(-90 44 44)"
-          />
-        );
-        offset += frac;
-        return seg;
-      })}
-      <text x="44" y="42" textAnchor="middle" className="fill-gray-100" fontSize="17" fontWeight="700">{health}%</text>
-      <text x="44" y="56" textAnchor="middle" className="fill-gray-500" fontSize="8" letterSpacing="1">HEALTHY</text>
-    </svg>
+    <div className="w-24 shrink-0" role="img" aria-label={`healthy ${health}%`}>
+      <div className="text-2xl font-bold text-gray-100 tabular-nums leading-none">{health}%</div>
+      <div className="text-[9px] tracking-widest text-gray-500 mt-0.5">HEALTHY</div>
+      <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-800 mt-2">
+        {order.map((st) =>
+          counts[st] > 0 ? (
+            <div key={st} className={BAR_COLORS[st]} style={{ width: `${(100 * counts[st]) / total}%` }} />
+          ) : null,
+        )}
+      </div>
+    </div>
   );
 }
 
@@ -578,7 +568,7 @@ export default function ParityPanel() {
               onClick={() => setProviderDetail(p.provider)}
               className="text-left bg-gray-900/50 border border-gray-800 hover:border-blue-500/60 rounded-xl p-4 flex items-center gap-4 transition-colors"
             >
-              <Donut counts={p.counts} health={p.health} />
+              <HealthBar counts={p.counts} health={p.health} />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold text-gray-100">{p.provider}</span>
