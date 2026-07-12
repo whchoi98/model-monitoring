@@ -492,7 +492,7 @@ export default function ParityPanel() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* 헤더 + 요약 */}
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>

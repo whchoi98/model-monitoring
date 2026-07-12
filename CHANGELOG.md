@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.16.0 — 2026-07-12
+
+### Added
+- **Mobile responsive layout**: a shared `AppHeader` component replaces the header duplicated across all 9 pages — desktop keeps the current horizontal nav (lg+), narrow screens get a hamburger menu with a vertical dropdown (page-specific actions included). The manual-probe sidebar stacks vertically on mobile and panel paddings tighten on small screens. Same URLs — layout adapts purely by viewport width.
+- **모바일 반응형 레이아웃**: 9개 페이지에 중복돼 있던 헤더를 공용 `AppHeader`로 통합 — 데스크톱(lg+)은 기존 가로 내비 그대로, 좁은 화면은 햄버거(☰) 세로 드롭다운(페이지별 버튼 포함). 수동 프로브 사이드바는 모바일에서 세로 스택, 패널 패딩은 소형 화면에서 축소. URL 변경 없음 — 뷰포트 폭만으로 레이아웃 전환.
+
 ## v2.15.1 — 2026-07-12
 
 ### Fixed

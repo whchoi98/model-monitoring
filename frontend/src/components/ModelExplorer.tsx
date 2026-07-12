@@ -202,7 +202,7 @@ export default function ModelExplorer() {
   }
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div>
         <h2 className="text-xl font-bold text-gray-100">
           {lang === "en" ? "Model Explorer" : "모델 탐색"}

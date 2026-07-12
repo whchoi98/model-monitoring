@@ -97,7 +97,7 @@ export default function AnalysisPanel() {
     : 1;
 
   return (
-    <div className="p-6 space-y-6">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
       <div className="flex flex-wrap items-center gap-3">
         <h2 className="text-xl font-semibold text-gray-100">
           {lang === "en" ? "Output Analysis" : "출력 분석"}
