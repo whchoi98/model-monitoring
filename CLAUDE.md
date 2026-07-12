@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.12.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.15.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -64,14 +64,15 @@ model-monitoring/
 │   ├── schemas.py           # Pydantic; ProbeResultResponse.stop_reason Optional
 │   ├── database.py          # pool_size=5, max_overflow=5, pool_recycle=300, pool_timeout=10
 │   ├── retention.py         # RETENTION_DAYS 초과 probe_results → probe_results_hourly 집계 이관
+│   ├── anomalies.py         # 최근 N시간 프로브 실패 요약 (대시보드 이상 징후 박스, v2.12.0)
 │   ├── parity_runner.py     # CLI entry: `python -m parity_runner --once` (ParityRun Fargate task)
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py
-│   ├── parity/              # 패리티 런 엔진 (v2.11.0): catalog.py(surface×피처), engine.py(판정 순수 로직), probes.py(5 surface 실행기), runner.py(오케스트레이터)
+│   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×19 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
 │   └── routers/
 │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
 │       ├── admin.py         # /api/admin/* — reset-monitoring-data, users CRUD (admin only)
-│       ├── auto_probe.py    # /api/auto-probe/* — status(DB-sourced), latest, trend, categories, trigger
+│       ├── auto_probe.py    # /api/auto-probe/* — status(DB-sourced), latest, trend, categories, trigger, anomalies(12h 실패 요약)
 │       ├── probes.py        # /api/probes/run — SSE streaming probe (auth)
 │       ├── results.py       # /api/results/* — stored results query + stats
 │       ├── models.py        # /api/models — AVAILABLE_MODELS list
@@ -83,7 +84,7 @@ model-monitoring/
 │       ├── efficiency.py    # /api/efficiency/score — 0-100 weighted score per category
 │       ├── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0 신규)
 │       ├── compare.py       # /api/compare/run — Comparison Lab: 1 prompt → N models 병렬, SSE (auth)
-│       └── parity.py        # /api/parity/* — catalog, latest, evidence, trigger(auth) (v2.11.0 신규)
+│       └── parity.py        # /api/parity/* — catalog, latest(+직전 런 diff), evidence, trigger(auth)
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
@@ -121,7 +122,7 @@ model-monitoring/
 ├── cdk/                                  # 8 stacks (TypeScript)
 └── docs/
     ├── architecture.md
-    ├── decisions/ADR-001~021.md
+    ├── decisions/ADR-001~023.md
     └── runbooks/deploy.md, rollback.md, ...
 ```
 

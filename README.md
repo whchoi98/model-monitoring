@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.11.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.15.1-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 [![English](https://img.shields.io/badge/lang-English-blue.svg)](#english)
 [![한국어](https://img.shields.io/badge/lang-한국어-red.svg)](#한국어)
@@ -26,7 +26,7 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 
 - **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured-json, creative-writing) across all 28 monitored channels.
 - **Eight analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt).
-- **Daily parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
+- **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 19 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
 - **Multi-channel comparison** — Same model family invoked through Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), OpenAI GPT via Bedrock Mantle (Path 4), and OpenAI 1P direct / api.openai.com (Path 5) in parallel for true apples-to-apples evaluation.
 - **AI chatbot with tools** — Claude Sonnet 4.6 chatbot answers natural-language questions over the time-series store using four custom Bedrock tools; dynamic follow-up suggestions generated per turn.
 - **CDK-managed infrastructure** — Eight TypeScript stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability) with reusable L3 constructs, immutable ECR tags, and idempotent lifespan migrations.
@@ -134,7 +134,7 @@ model-monitoring/
 │   ├── prober.py                 # 28-model AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI (Mantle + 1P)
 │   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
 │   ├── pricing.py                # token unit price table
-│   └── routers/                  # 14 router modules (auth, admin, analysis, cost, …)
+│   └── routers/                  # 15 router modules (auth, admin, analysis, cost, …)
 ├── frontend/                     # Next.js 14 standalone + 6 routes
 │   ├── src/app/                  # /, /models, /parity, /prompts, /cost, /reliability, /efficiency, /analysis
 │   ├── src/components/           # 30+ React components (dashboard, panels, chat)
@@ -144,7 +144,7 @@ model-monitoring/
 │   └── lib/constructs/           # reusable FargateServiceConstruct (L3)
 ├── docs/
 │   ├── architecture.md           # full system design
-│   ├── decisions/                # ADR-001 through ADR-019
+│   ├── decisions/                # ADR-001 through ADR-023
 │   ├── runbooks/                 # deploy, rollback procedures
 │   └── CHANGELOG.md              # Keep-a-Changelog format
 └── Makefile                      # `make verify` runs CDK lint + tests + ruff + tsc
@@ -224,7 +224,7 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic
 
 - **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, 구조화 JSON, 창작)를 라운드로빈으로 28개 모니터링 채널에 호출합니다.
 - **8개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt).
-- **일일 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
+- **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 19 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
 - **다중 채널 비교** — 동일 모델 family를 Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), OpenAI GPT via Bedrock Mantle (Path 4), OpenAI 1P direct / api.openai.com (Path 5) 다섯 채널로 병렬 호출하여 정확한 동일 조건 비교를 제공합니다.
 - **AI 챗봇 + 도구** — Claude Sonnet 4.6 챗봇이 4개의 Bedrock 커스텀 도구를 사용해 시계열 데이터에 대한 자연어 질의에 응답하며, 매 턴마다 동적 후속 질문을 생성합니다.
 - **CDK 기반 인프라** — TypeScript로 작성된 8개 스택(Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)과 재사용 가능한 L3 construct, 불변 ECR tag, 멱등 lifespan 마이그레이션을 제공합니다.
@@ -332,7 +332,7 @@ model-monitoring/
 │   ├── prober.py                 # 28개 모델 AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI (Mantle + 1P)
 │   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
 │   ├── pricing.py                # 토큰 단가 테이블
-│   └── routers/                  # 14개 라우터 (auth, admin, analysis, cost, …)
+│   └── routers/                  # 15개 라우터 (auth, admin, analysis, cost, …)
 ├── frontend/                     # Next.js 14 standalone + 6 라우트
 │   ├── src/app/                  # /, /models, /parity, /prompts, /cost, /reliability, /efficiency, /analysis
 │   ├── src/components/           # 30+ React 컴포넌트 (대시보드, 패널, 챗)
@@ -342,7 +342,7 @@ model-monitoring/
 │   └── lib/constructs/           # 재사용 가능한 FargateServiceConstruct (L3)
 ├── docs/
 │   ├── architecture.md           # 전체 시스템 설계
-│   ├── decisions/                # ADR-001 ~ ADR-019
+│   ├── decisions/                # ADR-001 ~ ADR-023
 │   ├── runbooks/                 # 배포 / 롤백 절차
 │   └── CHANGELOG.md              # Keep a Changelog 형식
 └── Makefile                      # `make verify` — CDK lint + tests + ruff + tsc 일괄 실행

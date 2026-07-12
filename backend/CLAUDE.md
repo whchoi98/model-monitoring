@@ -18,8 +18,9 @@ separate scheduled Fargate tasks (reusing this image), NOT in-process.
 - `auto_prober.py` — `run_cycle()` one-shot probe cycle (NOT a daemon; invoked by a scheduled Fargate task)
 - `auto_prober_runner.py` — CLI entrypoint: `python -m auto_prober_runner --once`
 - `insights_runner.py` — CLI entrypoint for the scheduled Insights task
-- `parity_runner.py` — CLI entrypoint for the daily ParityRun task: `python -m parity_runner --once`
-- `parity/` — 패리티 런 엔진 (v2.11.0): `catalog.py` (surface×feature 카탈로그, `surfaces_for`/`is_applicable`), `engine.py` (판정 순수 로직 — `classify_error`, 증거 검사), `probes.py` (5개 surface 실행기, `max_tokens_for` 피처별 예산), `runner.py` (ThreadPoolExecutor 4, 결과 일괄 저장)
+- `parity_runner.py` — CLI entrypoint for the ParityRun task (`rate(12 hours)`): `python -m parity_runner --once`
+- `parity/` — 패리티 런 엔진: `catalog.py` (6 surface × 19 feature, `surfaces_for`/`is_applicable`/`_FEATURE_SURFACES`), `engine.py` (판정 순수 로직 — `classify_error`, 증거 검사), `probes.py` (surface별 실행기 + `_req_snapshot` 요청 증거, `max_tokens_for` 피처별 예산), `runner.py` (ThreadPoolExecutor 4, 결과 일괄 저장)
+- `anomalies.py` — 최근 N시간 프로브 실패의 모델별 요약 (`/api/auto-probe/anomalies`, v2.12.0)
 - `retention.py` — `RETENTION_DAYS` 초과 `probe_results` → `probe_results_hourly` 집계 이관
 - `agent/` — chatbot core: `bedrock.py` (CHAT/INSIGHTS model IDs), `tools.py` (4 Bedrock tools), `memory.py` (AgentCore), `streaming.py`
 - `auth.py` — JWT creation/validation, bcrypt hashing, environment config

@@ -107,7 +107,7 @@ EventBridge Scheduler
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-021 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-023 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -128,6 +128,8 @@ EventBridge Scheduler
 | 019 | OpenAI/Bedrock-Mantle provider path 추가 (gpt-5.4, gpt-5.5, 4 channels) |
 | 020 | OpenAI 1P direct (api.openai.com) provider path 추가 (gpt-5.4/5.5, 2 channels) |
 | 021 | 패리티 런 엔진 — 실행-증거 프로브 매트릭스 (HTTP 200 불충분, 12시간 주기 Fargate 스윕) |
+| 022 | Mantle /anthropic surface — SigV4 파생 bearer + IAM 액션 체인 |
+| 023 | 패리티 피처 19종 확장 — 적용 맵(skipped≠unsupported)·정직한 제외·요청 스냅샷 |
 
 ### 운영 / Operations
 
@@ -172,7 +174,7 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-021 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-023 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 
