@@ -47,6 +47,16 @@ _COMPUTER_TOOL = {"type": "computer_20250124", "name": "computer",
                   "display_width_px": 1024, "display_height_px": 768}
 _COMPUTER_BETA = "computer-use-2025-01-24"
 _WEB_SEARCH_TOOL = {"type": "web_search_20250305", "name": "web_search", "max_uses": 1}
+# v2.15.0 확장 — 참조 도구 수준 피처
+_PDF_URL = "https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf"
+_JSON_SCHEMA = {"type": "object", "properties": {"city": {"type": "string"}},
+                "required": ["city"], "additionalProperties": False}
+_MEMORY_TOOL = {"type": "memory_20250818", "name": "memory"}
+_MEMORY_BETA = "context-management-2025-06-27"
+_CODE_EXEC_TOOL = {"type": "code_execution_20250522", "name": "code_execution"}
+_CODE_EXEC_BETA = "code-execution-2025-05-22"
+_STRUCTURED_BETA = "structured-outputs-2025-11-13"
+_FILES_BETA = "files-api-2025-04-14"
 _TOOL_PROMPT = f"echo 도구를 text 인자 '{CANARY}' 값으로 호출하세요."
 _JSON_PROMPT = '서울의 정보를 JSON 객체로만 답하세요. 반드시 "city" 키를 포함해야 합니다.'
 _SYSTEM_PROMPT = f"모든 응답을 반드시 '{CANARY}' 로 시작하세요."
@@ -213,6 +223,19 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
             return bool(tokens and tokens > 0), {"input_tokens": tokens}
         return _run(fn, _req_snapshot(model_id, api="count_tokens", input=payload))
 
+
+    if feature == "reasoning_effort":
+        kw = dict(
+            messages=[{"role": "user", "content": [{"text": _BASIC_PROMPT}]}],
+            inferenceConfig={"maxTokens": _MAX_TOKENS},
+            additionalModelRequestFields={"output_config": {"effort": "low"}},
+        )
+        def fn():
+            r = converse(**kw)
+            text = "".join(b.get("text", "") for b in r["output"]["message"]["content"])
+            return bool(text.strip()), {"response_snippet": _snippet(text), "stop_reason": r.get("stopReason")}
+        return _run(fn, _req_snapshot(model_id, **kw))
+
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
 
@@ -338,6 +361,57 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
         body = {"max_tokens": _MAX_TOKENS, "anthropic_beta": [_COMPUTER_BETA],
                 "tools": [dict(_COMPUTER_TOOL)],
                 "messages": [{"role": "user", "content": "화면을 스크린샷으로 캡처하세요."}]}
+        def fn():
+            r = invoke(body)
+            types = [b.get("type") for b in r.get("content", [])]
+            return r.get("stop_reason") is not None, {"content_types": types, "stop_reason": r.get("stop_reason")}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+
+    if feature == "reasoning_effort":
+        body = {"max_tokens": _MAX_TOKENS, "output_config": {"effort": "low"},
+                "messages": [{"role": "user", "content": _BASIC_PROMPT}]}
+        def fn():
+            r = invoke(body)
+            return r.get("stop_reason") is not None, {"stop_reason": r.get("stop_reason")}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "json_schema":
+        body = {"max_tokens": _JSON_MAX_TOKENS, "anthropic_beta": [_STRUCTURED_BETA],
+                "output_format": {"type": "json_schema", "schema": _JSON_SCHEMA},
+                "messages": [{"role": "user", "content": _JSON_PROMPT}]}
+        def fn():
+            r = invoke(body)
+            text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
+            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "url_sources":
+        body = {"max_tokens": _MAX_TOKENS,
+                "messages": [{"role": "user", "content": [
+                    {"type": "document", "source": {"type": "url", "url": _PDF_URL}},
+                    {"type": "text", "text": "이 문서의 내용을 한 문장으로 요약하세요."},
+                ]}]}
+        def fn():
+            r = invoke(body)
+            text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
+            return bool(text.strip()), {"response_snippet": _snippet(text)}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "memory_tool":
+        body = {"max_tokens": _MAX_TOKENS, "anthropic_beta": [_MEMORY_BETA],
+                "tools": [dict(_MEMORY_TOOL)],
+                "messages": [{"role": "user", "content": "지금까지의 기억을 확인해 주세요."}]}
+        def fn():
+            r = invoke(body)
+            types = [b.get("type") for b in r.get("content", [])]
+            return r.get("stop_reason") is not None, {"content_types": types, "stop_reason": r.get("stop_reason")}
+        return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "code_execution":
+        body = {"max_tokens": _MAX_TOKENS, "anthropic_beta": [_CODE_EXEC_BETA],
+                "tools": [dict(_CODE_EXEC_TOOL)],
+                "messages": [{"role": "user", "content": "파이썬으로 2+2를 계산하세요."}]}
         def fn():
             r = invoke(body)
             types = [b.get("type") for b in r.get("content", [])]
@@ -480,6 +554,68 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
             return r.stop_reason is not None, {"content_types": types, "stop_reason": r.stop_reason}
         return _run(fn, _req_snapshot(actual_id, betas=[_COMPUTER_BETA], **kw))
 
+
+    if feature == "reasoning_effort":
+        kw = dict(max_tokens=_MAX_TOKENS, messages=[{"role": "user", "content": _BASIC_PROMPT}])
+        def fn():
+            r = client.messages.create(model=actual_id, extra_body={"output_config": {"effort": "low"}}, **kw)
+            return r.stop_reason is not None, {"stop_reason": r.stop_reason}
+        return _run(fn, _req_snapshot(actual_id, output_config={"effort": "low"}, **kw))
+
+    if feature == "json_schema":
+        kw = dict(max_tokens=_JSON_MAX_TOKENS, messages=[{"role": "user", "content": _JSON_PROMPT}])
+        def fn():
+            r = client.messages.create(
+                model=actual_id,
+                extra_body={"output_format": {"type": "json_schema", "schema": _JSON_SCHEMA}},
+                extra_headers={"anthropic-beta": _STRUCTURED_BETA}, **kw)
+            text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
+            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
+        return _run(fn, _req_snapshot(actual_id, output_format={"type": "json_schema", "schema": _JSON_SCHEMA}, **kw))
+
+    if feature == "url_sources":
+        kw = dict(max_tokens=_MAX_TOKENS, messages=[{"role": "user", "content": [
+            {"type": "document", "source": {"type": "url", "url": _PDF_URL}},
+            {"type": "text", "text": "이 문서의 내용을 한 문장으로 요약하세요."},
+        ]}])
+        def fn():
+            r = client.messages.create(model=actual_id, **kw)
+            text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
+            return bool(text.strip()), {"response_snippet": _snippet(text)}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "memory_tool":
+        kw = dict(max_tokens=_MAX_TOKENS, tools=[dict(_MEMORY_TOOL)],
+                  messages=[{"role": "user", "content": "지금까지의 기억을 확인해 주세요."}])
+        def fn():
+            r = client.beta.messages.create(model=actual_id, betas=[_MEMORY_BETA], **kw)
+            types = [getattr(b, "type", "?") for b in r.content]
+            return r.stop_reason is not None, {"content_types": types, "stop_reason": r.stop_reason}
+        return _run(fn, _req_snapshot(actual_id, betas=[_MEMORY_BETA], **kw))
+
+    if feature == "code_execution":
+        kw = dict(max_tokens=_MAX_TOKENS, tools=[dict(_CODE_EXEC_TOOL)],
+                  messages=[{"role": "user", "content": "파이썬으로 2+2를 계산하세요."}])
+        def fn():
+            r = client.beta.messages.create(model=actual_id, betas=[_CODE_EXEC_BETA], **kw)
+            types = [getattr(b, "type", "?") for b in r.content]
+            return r.stop_reason is not None, {"content_types": types, "stop_reason": r.stop_reason}
+        return _run(fn, _req_snapshot(actual_id, betas=[_CODE_EXEC_BETA], **kw))
+
+    if feature == "files_api":
+        def fn():
+            page = client.beta.files.list(extra_headers={"anthropic-beta": _FILES_BETA})
+            files = list(getattr(page, "data", []) or [])
+            return True, {"files_listed": len(files)}
+        return _run(fn, _req_snapshot(actual_id, api="GET /v1/files (beta)"))
+
+    if feature == "models_api":
+        def fn():
+            r = client.models.retrieve(actual_id)
+            rid = getattr(r, "id", None)
+            return rid == actual_id, {"retrieved_id": rid}
+        return _run(fn, _req_snapshot(actual_id, api="GET /v1/models/{model}"))
+
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
 
@@ -559,6 +695,34 @@ def probe_chat_completions(client, actual_id: str, feature: str) -> ProbeOutcome
             cached = getattr(details, "cached_tokens", 0) if details else 0
             return check_cached_tokens({"cached_tokens": cached or 0}), {"second_usage": {"cached_tokens": cached}}
         return _run(fn, _req_snapshot(actual_id, note="동일 요청 2회 — 2번째 usage로 캐시 판정", **kw))
+
+
+    if feature == "reasoning_effort":
+        kw = dict(max_completion_tokens=_REASONING_MAX_TOKENS, reasoning_effort="high",
+                  messages=[{"role": "user", "content": _BASIC_PROMPT}])
+        def fn():
+            r = client.chat.completions.create(model=actual_id, **kw)
+            ok = bool(r.choices)
+            return ok, {"finish_reason": r.choices[0].finish_reason if ok else None}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "json_schema":
+        kw = dict(max_completion_tokens=_JSON_MAX_TOKENS,
+                  response_format={"type": "json_schema",
+                                   "json_schema": {"name": "city_info", "strict": True, "schema": _JSON_SCHEMA}},
+                  messages=[{"role": "user", "content": _JSON_PROMPT}])
+        def fn():
+            r = client.chat.completions.create(model=actual_id, **kw)
+            text = r.choices[0].message.content
+            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "models_api":
+        def fn():
+            r = client.models.retrieve(actual_id)
+            rid = getattr(r, "id", None)
+            return rid == actual_id, {"retrieved_id": rid}
+        return _run(fn, _req_snapshot(actual_id, api="GET /v1/models/{model}"))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
@@ -644,6 +808,24 @@ def probe_responses(client, actual_id: str, feature: str) -> ProbeOutcome:
             completed = getattr(r, "status", "") == "completed" or bool(getattr(r, "output_text", ""))
             return completed, {"output_types": types, "status": getattr(r, "status", None),
                                "search_used": any("web_search" in t for t in types)}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+
+    if feature == "reasoning_effort":
+        kw = dict(max_output_tokens=_REASONING_MAX_TOKENS, reasoning={"effort": "high"}, input=_BASIC_PROMPT)
+        def fn():
+            r = client.responses.create(model=actual_id, **kw)
+            return getattr(r, "status", "") == "completed", {"status": getattr(r, "status", None)}
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "json_schema":
+        kw = dict(max_output_tokens=_JSON_MAX_TOKENS, input=_JSON_PROMPT,
+                  text={"format": {"type": "json_schema", "name": "city_info",
+                                   "schema": _JSON_SCHEMA, "strict": True}})
+        def fn():
+            r = client.responses.create(model=actual_id, **kw)
+            text = getattr(r, "output_text", "")
+            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
         return _run(fn, _req_snapshot(actual_id, **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
