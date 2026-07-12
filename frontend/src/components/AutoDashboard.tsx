@@ -188,7 +188,7 @@ export default function AutoDashboard() {
   const hasData = results.length > 0;
 
   return (
-    <div className="p-6 space-y-6 max-w-7xl mx-auto">
+    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       {/* 최근 12시간 이상 징후 (v2.12.0) */}
       {anomalies && (
         anomalies.total_failures > 0 ? (

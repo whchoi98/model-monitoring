@@ -11,6 +11,7 @@ import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
 import CostDashboardPanel from "@/components/CostDashboardPanel";
 import { APP_VERSION } from "@/lib/version";
+import AppHeader, { useNavItems } from "@/components/AppHeader";
 import ThemeToggle from "@/components/ThemeToggle";
 
 export default function CostPage() {
@@ -24,6 +25,7 @@ export default function CostPage() {
 function Inner() {
   const t = useT();
   const { lang, setLang } = useLang();
+  const navItems = useNavItems("cost");
   const [user, setUser] = useState<AuthUser | null>(null);
   const [authChecked, setAuthChecked] = useState(false);
   const [loginModalOpen, setLoginModalOpen] = useState(false);
@@ -48,48 +50,7 @@ function Inner() {
 
   return (
     <div className="min-h-screen">
-      <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-100">{t.appTitle}</h1>
-              <p className="text-xs text-gray-500">{t.appDesc}</p>
-              <span className="text-[10px] text-gray-600 font-mono tabular-nums">{APP_VERSION}</span>
-            </div>
-          </div>
-          <div className="flex items-center gap-3">
-            <div className="flex bg-gray-800/50 rounded-lg p-0.5">
-              <button onClick={() => setLang("ko")} className={`px-2 py-1 text-xs font-medium rounded-md ${lang === "ko" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-gray-200"}`}>KO</button>
-              <button onClick={() => setLang("en")} className={`px-2 py-1 text-xs font-medium rounded-md ${lang === "en" ? "bg-gray-600 text-white" : "text-gray-400 hover:text-gray-200"}`}>EN</button>
-              <ThemeToggle />
-            </div>
-            <nav className="flex bg-gray-800/50 rounded-lg p-0.5">
-              <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.dashboardTab}</Link>
-              <Link href="/models" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Models" : "모델 탐색"}</Link>
-              <Link href="/parity" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Parity Run" : "패리티 런"}</Link>
-              <Link href="/" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{t.manualProbeTab}</Link>
-              <Link href="/prompts" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Prompts" : "프롬프트"}</Link>
-              <span className="px-4 py-1.5 text-sm font-medium rounded-md bg-blue-600 text-white">{lang === "en" ? "Cost" : "비용"}</span>
-              <Link href="/reliability" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Reliability" : "신뢰성"}</Link>
-              <Link href="/efficiency" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Efficiency" : "효율성"}</Link>
-              <Link href="/analysis" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Analysis" : "분석"}</Link>
-                        </nav>
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">{user.username}</span>
-                <button onClick={handleLogout} className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg">{t.logout}</button>
-              </div>
-            ) : (
-              <button onClick={() => setLoginModalOpen(true)} className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg">{lang === "en" ? "Login" : "로그인"}</button>
-            )}
-          </div>
-        </div>
-      </header>
+      <AppHeader items={navItems} user={user} onLoginClick={() => setLoginModalOpen(true)} onLogout={handleLogout} />
 
       <CostDashboardPanel />
 

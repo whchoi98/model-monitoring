@@ -25,6 +25,7 @@ import LoginForm from "@/components/LoginForm";
 import FloatingChat from "@/components/chat/FloatingChat";
 import Link from "next/link";
 import { APP_VERSION } from "@/lib/version";
+import AppHeader, { useNavItems } from "@/components/AppHeader";
 import ThemeToggle from "@/components/ThemeToggle";
 
 const DEFAULT_CONFIG: ProbeConfig = {
@@ -65,6 +66,13 @@ function HomeContent() {
   const [loginModalOpen, setLoginModalOpen] = useState(false);
 
   const stream = useProbeStream();
+
+  // 공용 헤더 내비 — 대시보드/수동 프로브는 페이지 내 탭이라 onClick으로 덮어씀
+  const baseNav = useNavItems(topTab === "dashboard" ? "dashboard" : "manual");
+  const navItems = baseNav.map((i) =>
+    i.key === "dashboard" ? { ...i, href: undefined, onClick: () => setTopTab("dashboard") }
+    : i.key === "manual" ? { ...i, href: undefined, onClick: () => setTopTab("manual") }
+    : i);
 
   // Check existing token on mount
   useEffect(() => {
@@ -120,161 +128,23 @@ function HomeContent() {
   return (
     <div className="min-h-screen">
       {/* Header */}
-      <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800">
-        <div className="flex items-center justify-between px-6 py-3">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
-              <svg
-                className="w-5 h-5 text-white"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M13 10V3L4 14h7v7l9-11h-7z"
-                />
-              </svg>
-            </div>
-            <div>
-              <h1 className="text-lg font-bold text-gray-100">
-                {t.appTitle}
-              </h1>
-              <p className="text-xs text-gray-500">
-                {t.appDesc}
-              </p>
-              <span className="text-[10px] text-gray-600 font-mono tabular-nums">
-                {APP_VERSION}
-              </span>
-            </div>
-          </div>
-
-          <div className="flex items-center gap-3">
-            {/* Language Selector */}
-            <div className="flex bg-gray-800/50 rounded-lg p-0.5">
-              <button
-                onClick={() => setLang("ko")}
-                className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-                  lang === "ko"
-                    ? "bg-gray-600 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                KO
-              </button>
-              <button
-                onClick={() => setLang("en")}
-                className={`px-2 py-1 text-xs font-medium rounded-md transition-colors ${
-                  lang === "en"
-                    ? "bg-gray-600 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                EN
-              </button>
-              <ThemeToggle />
-            </div>
-
-            {/* Top Tab Navigation */}
-            <nav className="flex bg-gray-800/50 rounded-lg p-0.5">
-              <button
-                onClick={() => setTopTab("dashboard")}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  topTab === "dashboard"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {t.dashboardTab}
-              </button>
-              <Link href="/models" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Models" : "모델 탐색"}</Link>
-              <Link href="/parity" className="px-4 py-1.5 text-sm font-medium rounded-md text-gray-400 hover:text-gray-200">{lang === "en" ? "Parity Run" : "패리티 런"}</Link>
-              <button
-                onClick={() => setTopTab("manual")}
-                className={`px-4 py-1.5 text-sm font-medium rounded-md transition-colors ${
-                  topTab === "manual"
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
-              >
-                {t.manualProbeTab}
-              </button>
-              <Link
-                href="/prompts"
-                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
-              >
-                {lang === "en" ? "Prompts" : "프롬프트"}
-              </Link>
-              <Link
-                href="/cost"
-                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
-              >
-                {lang === "en" ? "Cost" : "비용"}
-              </Link>
-              <Link
-                href="/reliability"
-                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
-              >
-                {lang === "en" ? "Reliability" : "신뢰성"}
-              </Link>
-              <Link
-                href="/efficiency"
-                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
-              >
-                {lang === "en" ? "Efficiency" : "효율성"}
-              </Link>
-              <Link
-                href="/analysis"
-                className="px-4 py-1.5 text-sm font-medium rounded-md transition-colors text-gray-400 hover:text-gray-200"
-              >
-                {lang === "en" ? "Analysis" : "분석"}
-              </Link>
-                        </nav>
-
-            {/* User info / Login / Logout */}
-            {user ? (
-              <div className="flex items-center gap-2">
-                <span className="text-xs text-gray-400">{user.username}</span>
-                <button
-                  onClick={handleLogout}
-                  className="px-3 py-1.5 text-xs font-medium text-gray-400 hover:text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg transition-colors"
-                >
-                  {t.logout}
-                </button>
-              </div>
-            ) : (
-              <button
-                onClick={() => setLoginModalOpen(true)}
-                className="px-3 py-1.5 text-xs font-medium text-white bg-blue-600 hover:bg-blue-500 rounded-lg transition-colors"
-              >
-                {lang === "en" ? "Login" : "로그인"}
-              </button>
-            )}
-
-            <button
-              onClick={() => setHistoryOpen(true)}
-              className="flex items-center gap-2 px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 rounded-lg transition-colors text-sm"
-            >
-              <svg
-                className="w-4 h-4"
-                fill="none"
-                viewBox="0 0 24 24"
-                stroke="currentColor"
-                strokeWidth={2}
-              >
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"
-                />
-              </svg>
-              {t.history}
-            </button>
-          </div>
-        </div>
-      </header>
+      <AppHeader
+        items={navItems}
+        user={user}
+        onLoginClick={() => setLoginModalOpen(true)}
+        onLogout={handleLogout}
+        actions={
+          <button
+            onClick={() => setHistoryOpen(true)}
+            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 rounded-lg transition-colors text-xs"
+          >
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
+            {t.history}
+          </button>
+        }
+      />
 
       {/* Dashboard Tab */}
       {topTab === "dashboard" && <AutoDashboard />}
@@ -285,9 +155,9 @@ function HomeContent() {
       )}
 
       {topTab === "manual" && user && (
-        <div className="flex">
+        <div className="flex flex-col lg:flex-row">
           {/* Left Sidebar - Config */}
-          <aside className="w-96 flex-shrink-0 border-r border-gray-800 bg-gray-950 sticky top-[57px] h-[calc(100vh-57px)] overflow-y-auto">
+          <aside className="w-full lg:w-96 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-800 bg-gray-950 lg:sticky lg:top-[57px] lg:h-[calc(100vh-57px)] overflow-y-auto">
             <div className="p-4 space-y-6">
               <ModelSelector
                 selectedModels={config.model_ids}
