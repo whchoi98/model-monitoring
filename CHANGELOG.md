@@ -7,6 +7,15 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.16.2 — 2026-07-12
+
+### Fixed
+- **Model Explorer i18n**: API descriptions, code comments, link labels, and the copy button now follow the selected language (they were Korean-only under EN).
+- **Parity page i18n**: the feature catalog now serves `label_en`/`desc_en` so feature names, tooltips, and the changes banner localize; evidence-modal verdict sentences are bilingual.
+- **Terminology**: "깨끗한 미지원" → "명시적 미지원" (UI·주석·문서) — 더 자연스러운 한국어 표현.
+- **모델 탐색 i18n**: API 설명·코드 주석·링크 라벨·복사 버튼이 선택 언어를 따르도록 수정 (EN에서도 한글이 출력되던 문제).
+- **패리티 페이지 i18n**: 카탈로그에 `label_en`/`desc_en` 추가 — 피처명·툴팁·변경 배너 현지화, 증거 모달 판정 문장 이중언어화.
+
 ## v2.16.1 — 2026-07-12
 
 ### Changed

@@ -33,6 +33,8 @@ interface Feature {
   id: string;
   label_ko: string;
   desc_ko: string;
+  label_en?: string;
+  desc_en?: string;
 }
 
 interface ParityChange {
@@ -126,8 +128,10 @@ function ProviderDrawer({
   lang: string;
   onClose: () => void;
 }) {
-  const featureLabel = (id: string) =>
-    lang === "en" ? id : features.find((f) => f.id === id)?.label_ko ?? id;
+  const featureLabel = (id: string) => {
+    const f = features.find((x) => x.id === id);
+    return (lang === "en" ? f?.label_en : f?.label_ko) ?? id;
+  };
 
   // Broken — 피처별 그룹: 실패 채널 수 / 검사 채널 수 + 대상 모델·surface
   const brokenByFeature = useMemo(() => {
@@ -144,7 +148,7 @@ function ProviderDrawer({
       .sort((a, b) => b[1].broken.length - a[1].broken.length);
   }, [cells]);
 
-  // 깨끗한 미지원 — (feature, surface) 고유 조합 칩
+  // 명시적 미지원 — (feature, surface) 고유 조합 칩
   const unsupportedChips = useMemo(() => {
     const set = new Map<string, { feature: string; surface: string }>();
     for (const c of cells) {
@@ -225,8 +229,8 @@ function ProviderDrawer({
         <section>
           <h3 className="text-sm font-semibold text-amber-300 mb-1">
             {lang === "en"
-              ? `Cleanly unsupported (${unsupportedChips.length})`
-              : `깨끗한 미지원 (${unsupportedChips.length})`}
+              ? `Explicitly unsupported (${unsupportedChips.length})`
+              : `명시적 미지원 (${unsupportedChips.length})`}
           </h3>
           <p className="text-[11px] text-gray-500 mb-2">
             {lang === "en"
@@ -271,6 +275,7 @@ function ProviderDrawer({
 }
 
 function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCell; onClose: () => void }) {
+  const { lang } = useLang();
   const [data, setData] = useState<Record<string, unknown> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -292,12 +297,12 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
   const isOk = cell.status === "supported";
 
   const verdict = isOk
-    ? "Probe succeeded — 응답 내용이 증거 검사를 통과했습니다."
+    ? (lang === "en" ? "Probe succeeded — the response content passed the evidence checks." : "프로브 성공 — 응답 내용이 증거 검사를 통과했습니다.")
     : cell.status === "unsupported"
-      ? "Provider가 기능을 명시적으로 거부했습니다 (깨끗한 미지원 응답 — 버그 아님)."
+      ? (lang === "en" ? "The provider explicitly rejected this capability (explicit unsupported response — not a bug)." : "Provider가 기능을 명시적으로 거부했습니다 (명시적 미지원 응답 — 버그 아님).")
       : errorMsg
-        ? `Feature expected but probe failed: ${errorMsg.slice(0, 220)}${errorMsg.length > 220 ? "…" : ""}`
-        : "증거 검사 실패 — 응답은 수신했지만 검증 기준(카나리/JSON/캐시 토큰 등)을 통과하지 못했습니다.";
+        ? `${lang === "en" ? "Feature expected but probe failed" : "동작해야 하는 기능인데 프로브 실패"}: ${errorMsg.slice(0, 220)}${errorMsg.length > 220 ? "…" : ""}`
+        : (lang === "en" ? "Evidence check failed — a response was received but did not pass the checks (canary/JSON/cached tokens…)." : "증거 검사 실패 — 응답은 수신했지만 검증 기준(카나리/JSON/캐시 토큰 등)을 통과하지 못했습니다.");
 
   const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
     <details open={!isOk} className="group">
@@ -459,8 +464,8 @@ export default function ParityPanel() {
       if (rows.length === 0 && (q || statusFilter !== "all")) continue; // 필터에 안 걸린 피처 숨김
       out.push({
         feature: f.id,
-        label: lang === "en" ? f.id : f.label_ko,
-        desc: f.desc_ko,
+        label: (lang === "en" ? f.label_en : f.label_ko) ?? f.id,
+        desc: (lang === "en" ? f.desc_en : f.desc_ko) ?? "",
         counts,
         rows,
       });
@@ -533,12 +538,13 @@ export default function ParityPanel() {
           </div>
           <ul className="space-y-1 text-xs text-gray-300">
             {changes.slice(0, 10).map((c) => {
-              const featureLabel = features.find((f) => f.id === c.feature)?.label_ko ?? c.feature;
+              const fdef = features.find((f) => f.id === c.feature);
+              const featureLabel = (lang === "en" ? fdef?.label_en : fdef?.label_ko) ?? c.feature;
               return (
                 <li key={`${c.model_id}|${c.surface}|${c.feature}`} className="flex items-center gap-2 flex-wrap">
                   <span className="text-gray-400">{c.model_name}</span>
                   <span className="text-gray-600">·</span>
-                  <span>{lang === "en" ? c.feature : featureLabel} / {SURFACE_LABELS[c.surface] ?? c.surface}</span>
+                  <span>{featureLabel} / {SURFACE_LABELS[c.surface] ?? c.surface}</span>
                   <span className="text-gray-600">:</span>
                   <span className={c.before ? "" : "text-gray-500"}>{c.before ?? (lang === "en" ? "new" : "신규")}</span>
                   <span className="text-gray-500">→</span>

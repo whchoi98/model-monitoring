@@ -1,7 +1,7 @@
 """패리티 판정 순수 로직 — 오류 분류 + 실행 증거 검사 (v2.11.0).
 
 원칙: HTTP 200은 증거가 아니다. supported 판정은 응답 '내용'이 증거 검사를 통과했을 때만.
-provider가 기능 미지원을 깨끗한 오류(파라미터 거부 등)로 알려주면 unsupported,
+provider가 기능 미지원을 명시적 미지원 오류(파라미터 거부 등)로 알려주면 unsupported,
 그 외 오류·증거 실패는 broken.
 """
 
@@ -11,7 +11,7 @@ import json
 import re
 from typing import Any, Optional
 
-# 기능 미지원을 나타내는 "깨끗한 오류" 시그니처 (소문자 비교).
+# 기능 미지원을 나타내는 "명시적 미지원 오류" 시그니처 (소문자 비교).
 _UNSUPPORTED_MARKERS = (
     "doesn't support",
     "does not support",
@@ -40,7 +40,7 @@ _UNSUPPORTED_MARKERS = (
 
 
 def classify_error(error_message: str | None) -> str:
-    """오류 메시지 → 'unsupported'(깨끗한 미지원 응답) | 'broken'(그 외)."""
+    """오류 메시지 → 'unsupported'(명시적 미지원 응답) | 'broken'(그 외)."""
     if not error_message:
         return "broken"
     msg = error_message.lower()
