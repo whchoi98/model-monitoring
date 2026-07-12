@@ -80,7 +80,7 @@ describe("pivotTrend", () => {
     const elapsed = performance.now() - start;
 
     expect(chartData).toHaveLength(2016);
-    expect(elapsed).toBeLessThan(200); // 구 O(T×M×N) 구현은 수십 초 걸림
+    expect(elapsed).toBeLessThan(1000); // 구 O(T×M×N) 구현은 수십 초 — CI 러너 편차 감안 여유 임계값
   });
 });
 

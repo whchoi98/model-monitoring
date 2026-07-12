@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.16.3 — 2026-07-12
+
+### Changed
+- Parity provider cards: replace the donut chart with a horizontal segmented bar (health % + status distribution) — visually consistent with the feature summary rows.
+- 패리티 provider 카드: 도넛 그래프를 가로 세그먼트 막대(헬스 % + 상태 분포)로 교체 — 피처 요약행 막대와 시각 언어 통일.
+
 ## v2.16.2 — 2026-07-12
 
 ### Fixed
