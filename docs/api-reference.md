@@ -177,7 +177,7 @@ Stop-reason distribution + output-length histograms.
 ## Parity Run (Public read, trigger = Auth Required) — v2.11.0
 
 ### GET /api/parity/catalog
-Feature catalog (19 features with Korean labels/descriptions) + 6 API surfaces
+Feature catalog (19 features with bilingual labels/descriptions — label_ko/desc_ko + label_en/desc_en, v2.16.2) + 6 API surfaces
 (converse, invoke_model, messages, messages_mantle — Bedrock Mantle `/anthropic`
 in `MANTLE_ANTHROPIC_REGION` (default ap-northeast-1), chat_completions, responses).
 

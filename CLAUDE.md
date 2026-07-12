@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.15.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.16.2 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -97,6 +97,7 @@ model-monitoring/
 │   │   │   ├── efficiency/page.tsx
 │   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
+│   │   │   ├── AppHeader.tsx            # 공용 헤더 — 데스크톱 내비 + 모바일 햄버거, 9개 페이지 공용 (v2.16.0)
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
 │   │   │   ├── ModelStatusGrid.tsx      # family-grouped 28 cards (Bedrock prefix)
 │   │   │   ├── TrendChart.tsx           # MODEL_COLORS 28개 (15 Bedrock + 6 Anthropic CP + 7 OpenAI)
@@ -116,7 +117,7 @@ model-monitoring/
 │   │       ├── sortModels.ts            # FAMILY_ORDER, groupByFamily, channelRank
 │   │       ├── pricing.ts               # backend/pricing.py mirror
 │   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
-│   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (v2.9.0)
+│   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (lang 파라미터로 KO/EN, v2.16.2)
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / middleware.ts
 ├── cdk/                                  # 8 stacks (TypeScript)
