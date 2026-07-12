@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.16.4 — 2026-07-12
+
+### Changed
+- Dashboard model cards: input/output tokens and the probe timestamp now share one line (was two rows).
+- 대시보드 모델 카드: 입력/출력 토큰과 프로빙 시간을 한 줄로 병합 (기존 2줄).
+
 ## v2.16.3 — 2026-07-12
 
 ### Changed

@@ -189,11 +189,12 @@ export default function ModelStatusGrid({ results, onToggleModel, selectedModels
                   </span>
                 </div>
 
-                {/* Tokens */}
-                <div className="flex items-center justify-between pt-1 border-t border-gray-800/50">
-                  <span className="text-xs text-gray-600">
+                {/* Tokens + 프로빙 시간 — 한 줄 (v2.16.4) */}
+                <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-800/50">
+                  <span className="text-xs text-gray-600 truncate">
                     {t.metrics.inputTokens.name}: {r.input_tokens ?? "-"} / {t.metrics.outputTokens.name}: {r.output_tokens ?? "-"}
                   </span>
+                  <span className="text-xs text-gray-600 whitespace-nowrap shrink-0">{formatTime(r.timestamp, t)}</span>
                 </div>
               </div>
             ) : r.status === "overloaded" ? (
@@ -209,10 +210,12 @@ export default function ModelStatusGrid({ results, onToggleModel, selectedModels
               </div>
             )}
 
-            {/* Timestamp */}
-            <div className="mt-2 text-xs text-gray-600 text-right">
-              {formatTime(r.timestamp, t)}
-            </div>
+            {/* Timestamp — 성공 카드는 토큰 행에 병기하므로 오류/과부하 카드에만 표시 */}
+            {r.status !== "success" && (
+              <div className="mt-2 text-xs text-gray-600 text-right">
+                {formatTime(r.timestamp, t)}
+              </div>
+            )}
           </div>
           );
         })}
