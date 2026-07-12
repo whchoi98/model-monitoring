@@ -1,9 +1,10 @@
 # Frontend Components
 
 ## Role
-React UI components for the monitoring dashboard (24 top-level + a `chat/` subfolder). All are client components (`"use client"`).
+React UI components for the monitoring dashboard (25 top-level + a `chat/` subfolder). All are client components (`"use client"`).
 
 ## Key Components
+- `RumProvider.tsx` — RUM(Real User Monitoring, v2.16.5): 자체 호스팅 `public/rum-sdk.min.js`를 next/script로 로드, appName=llm-monitor. `NEXT_PUBLIC_RUM_ENDPOINT/_API_KEY`는 **빌드 타임** 인라인 — 미설정 빌드는 수집 비활성
 - `AppHeader.tsx` — 공용 헤더 (v2.16.0): NavItem 데이터 기반 — 데스크톱(lg+) 가로 내비 / 모바일 햄버거 드롭다운, 페이지별 `actions` 슬롯. 로그인 필요 메뉴(수동 프로브·프롬프트)는 항목 순서상 맨 뒤 (v2.16.1)
 - `AutoDashboard.tsx` — Main dashboard: 최근 12h 이상 징후 배너(/api/auto-probe/anomalies) + status panel + model grid + trend charts + workload/model filters
 - `ModelStatusGrid.tsx` — family-grouped model cards (28 models), color-coded metrics

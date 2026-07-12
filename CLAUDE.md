@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.16.2 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.16.5 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -98,6 +98,7 @@ model-monitoring/
 │   │   │   └── analysis/page.tsx  # v2.1.0 신규
 │   │   ├── components/
 │   │   │   ├── AppHeader.tsx            # 공용 헤더 — 데스크톱 내비 + 모바일 햄버거, 9개 페이지 공용 (v2.16.0)
+│   │   │   ├── RumProvider.tsx          # RUM 수집 — 자체 호스팅 rum-sdk 로드, NEXT_PUBLIC_RUM_* 미설정 시 비활성 (v2.16.5)
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
 │   │   │   ├── ModelStatusGrid.tsx      # family-grouped 28 cards (Bedrock prefix)
 │   │   │   ├── TrendChart.tsx           # MODEL_COLORS 28개 (15 Bedrock + 6 Anthropic CP + 7 OpenAI)
@@ -123,7 +124,7 @@ model-monitoring/
 ├── cdk/                                  # 8 stacks (TypeScript)
 └── docs/
     ├── architecture.md
-    ├── decisions/ADR-001~023.md
+    ├── decisions/ADR-001~024.md
     └── runbooks/deploy.md, rollback.md, ...
 ```
 
@@ -140,6 +141,10 @@ cd frontend && npm run dev
 REGION=ap-northeast-2; ACCT=061525506239
 TAG="v$(date +%s)"   # NEVER use :latest in production task def
 docker build --no-cache --pull --platform linux/arm64 -t bedrock-monitor-backend:$TAG backend/
+# frontend는 RUM build args 필수 (누락 시 RUM 꺼진 이미지) — 값은 .env.example/SSM 참고
+# docker build --no-cache --pull --platform linux/arm64 \
+#   --build-arg NEXT_PUBLIC_RUM_ENDPOINT=... --build-arg NEXT_PUBLIC_RUM_API_KEY=... \
+#   -t bedrock-monitor-frontend:$TAG frontend/
 aws ecr get-login-password --region $REGION | docker login --username AWS --password-stdin $ACCT.dkr.ecr.$REGION.amazonaws.com
 docker tag bedrock-monitor-backend:$TAG $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
@@ -289,6 +294,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `ANTHROPIC_API_KEY` | (CDK 주입, secret) | CP on AWS envelope key |
 | `ANTHROPIC_WORKSPACE_ID` | (CDK 주입, secret) | CP on AWS workspace |
 | `ANTHROPIC_AWS_REGION` | `us-east-2` | CP on AWS endpoint region |
+| `NEXT_PUBLIC_RUM_ENDPOINT` / `_API_KEY` | (선택) | RUM 수집 — **빌드 타임 주입** (frontend docker build `--build-arg`), 미설정 시 수집 비활성 (v2.16.5) |
 | `RETENTION_DAYS` | `60` | 원본 probe_results 보존 일수 (초과분은 probe_results_hourly 집계 이관, 0 이하=비활성) |
 
 ---

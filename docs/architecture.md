@@ -91,6 +91,7 @@ EventBridge Scheduler
 | CloudWatch Alarms × 7 | ALB 5xx ratio, ALB latency, ECS task 수 ×2, RDS CPU/Storage/Connections |
 | CloudWatch Dashboard `BedrockMonitor-v2` | 5 widgets + alarm status grid |
 | SNS Topic `bedrock-monitor-alarms` | 알람 fan-out |
+| RUM (aws-rum-pipeline, v2.16.5) | 프론트 실사용자 모니터링 — 페이지뷰·체류시간·Web Vitals·JS 에러, `NEXT_PUBLIC_RUM_*` 빌드 타임 주입 |
 
 ### CDK 스택 구성
 
@@ -107,7 +108,7 @@ EventBridge Scheduler
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-023 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-024 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -130,6 +131,7 @@ EventBridge Scheduler
 | 021 | 패리티 런 엔진 — 실행-증거 프로브 매트릭스 (HTTP 200 불충분, 12시간 주기 Fargate 스윕) |
 | 022 | Mantle /anthropic surface — SigV4 파생 bearer + IAM 액션 체인 |
 | 023 | 패리티 피처 19종 확장 — 적용 맵(skipped≠unsupported)·정직한 제외·요청 스냅샷 |
+| 024 | RUM 통합 — aws-rum-pipeline + 자체 호스팅 SDK, NEXT_PUBLIC_* 빌드 타임 주입 |
 
 ### 운영 / Operations
 
@@ -174,7 +176,7 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-023 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-024 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 

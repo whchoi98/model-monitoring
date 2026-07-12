@@ -39,8 +39,10 @@ docker tag bedrock-monitor-backend:$TAG \
   $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 
-# Frontend
+# Frontend — ⚠️ RUM build args 누락 시 RUM 꺼진 이미지가 나감 (v2.16.5, .env.example 참고)
 docker build --no-cache --pull --platform linux/arm64 \
+  --build-arg NEXT_PUBLIC_RUM_ENDPOINT="$NEXT_PUBLIC_RUM_ENDPOINT" \
+  --build-arg NEXT_PUBLIC_RUM_API_KEY="$NEXT_PUBLIC_RUM_API_KEY" \
   -t bedrock-monitor-frontend:$TAG frontend/
 docker tag bedrock-monitor-frontend:$TAG \
   $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
