@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.16.5 — 2026-07-12
+
+### Added
+- Real User Monitoring via aws-rum-pipeline: `RumProvider` loads the self-hosted RUM SDK and stamps every event with `appName: llm-monitor` (page views, SPA route dwell time, Core Web Vitals, JS errors). Enabled only when `NEXT_PUBLIC_RUM_ENDPOINT`/`NEXT_PUBLIC_RUM_API_KEY` are provided at build time (Docker build args).
+- aws-rum-pipeline 연동 RUM(Real User Monitoring): `RumProvider`가 자체 호스팅 SDK를 로드해 모든 이벤트에 `appName: llm-monitor`를 스탬핑 (페이지뷰·SPA 체류시간·Core Web Vitals·JS 에러). 빌드 타임 `NEXT_PUBLIC_RUM_*` 주입 시에만 활성화 (Docker build args).
+
 ## v2.16.4 — 2026-07-12
 
 ### Changed
