@@ -4,7 +4,7 @@
 // 모든 셀은 실행-증거 프로브의 판정 결과 (supported/unsupported/broken/skipped).
 // 셀 클릭 → 해당 프로브의 요청 요약·응답 스니펫·오류 등 증거 표시.
 
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import { useLang } from "@/lib/i18n-context";
 import { getToken } from "@/lib/api";
 
@@ -432,23 +432,56 @@ export default function ParityPanel() {
     return q ? modelNames.filter((n) => n.toLowerCase().includes(q)) : modelNames;
   }, [modelNames, search]);
 
-  // (feature, model) 행 구성 — 각 행에 surface별 셀 매핑
-  const matrix = useMemo(() => {
+  // 피처별 그룹 구성 (v2.15.0) — 요약행(분포 카운트) + 모델 행, 접이식
+  const groups = useMemo(() => {
     const byKey = new Map<string, ParityCell>();
     for (const r of results) byKey.set(`${r.feature}|${r.model_id}|${r.surface}`, r);
     const models = Array.from(new Map(results.map((r) => [r.model_id, r.model_name])).entries());
     const q = search.trim().toLowerCase();
-    const rows: { feature: string; model_id: string; model_name: string; cells: (ParityCell | null)[] }[] = [];
+    const out: {
+      feature: string;
+      label: string;
+      desc: string;
+      counts: Record<Status, number>;
+      rows: { model_id: string; model_name: string; cells: (ParityCell | null)[] }[];
+    }[] = [];
     for (const f of features) {
+      const counts: Record<Status, number> = { supported: 0, unsupported: 0, broken: 0, skipped: 0 };
+      for (const r of results) if (r.feature === f.id && r.status !== "skipped") counts[r.status] += 1;
+      const rows: { model_id: string; model_name: string; cells: (ParityCell | null)[] }[] = [];
       for (const [model_id, model_name] of models) {
         if (q && !model_name.toLowerCase().includes(q) && !model_id.toLowerCase().includes(q)) continue;
         const cells = surfaces.map((s) => byKey.get(`${f.id}|${model_id}|${s}`) ?? null);
+        if (!cells.some((c) => c && c.status !== "skipped")) continue; // 전부 미해당인 모델 행 숨김
         if (statusFilter !== "all" && !cells.some((c) => c && c.status === statusFilter)) continue;
-        rows.push({ feature: f.id, model_id, model_name, cells });
+        rows.push({ model_id, model_name, cells });
       }
+      if (rows.length === 0 && (q || statusFilter !== "all")) continue; // 필터에 안 걸린 피처 숨김
+      out.push({
+        feature: f.id,
+        label: lang === "en" ? f.id : f.label_ko,
+        desc: f.desc_ko,
+        counts,
+        rows,
+      });
     }
-    return rows;
-  }, [results, features, surfaces, search, statusFilter]);
+    return out;
+  }, [results, features, surfaces, search, statusFilter, lang]);
+
+  // 접기/펼치기 — 기본: Broken 포함 피처만 펼침. 검색/필터 중에는 전체 펼침.
+  const [expandedFeatures, setExpandedFeatures] = useState<Set<string> | null>(null);
+  const filterActive = search.trim() !== "" || statusFilter !== "all";
+  const effectiveExpanded = useMemo(() => {
+    if (filterActive) return new Set(groups.map((g) => g.feature));
+    if (expandedFeatures) return expandedFeatures;
+    return new Set(groups.filter((g) => g.counts.broken > 0).map((g) => g.feature));
+  }, [filterActive, expandedFeatures, groups]);
+  const toggleFeature = (fid: string) => {
+    if (filterActive) return;
+    const next = new Set(effectiveExpanded);
+    if (next.has(fid)) next.delete(fid); else next.add(fid);
+    setExpandedFeatures(next);
+  };
 
   if (loading) {
     return (
@@ -623,7 +656,25 @@ export default function ParityPanel() {
               </button>
             ))}
           </div>
-          <span className="text-xs text-gray-500">{matrix.length} rows</span>
+          <span className="text-xs text-gray-500">
+            {groups.length} {lang === "en" ? "features" : "피처"}
+          </span>
+          {!filterActive && (
+            <div className="flex gap-1">
+              <button
+                onClick={() => setExpandedFeatures(new Set(groups.map((g) => g.feature)))}
+                className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+              >
+                {lang === "en" ? "Expand all" : "모두 펼치기"}
+              </button>
+              <button
+                onClick={() => setExpandedFeatures(new Set())}
+                className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+              >
+                {lang === "en" ? "Collapse all" : "모두 접기"}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -644,33 +695,74 @@ export default function ParityPanel() {
               </tr>
             </thead>
             <tbody>
-              {matrix.map((row, i) => {
-                const featureLabel = features.find((f) => f.id === row.feature);
-                const firstOfFeature = i === 0 || matrix[i - 1].feature !== row.feature;
+              {groups.map((g) => {
+                const open = effectiveExpanded.has(g.feature);
+                const probed = g.counts.supported + g.counts.unsupported + g.counts.broken;
                 return (
-                  <tr key={`${row.feature}|${row.model_id}`} className={`border-b border-gray-800/60 ${firstOfFeature ? "border-t-2 border-t-gray-700" : ""}`}>
-                    <td className="px-3 py-1.5 sticky left-0 bg-gray-900 light:bg-white">
-                      <div className="font-semibold text-gray-100" title={featureLabel?.desc_ko}>
-                        {lang === "en" ? row.feature : featureLabel?.label_ko ?? row.feature}
-                      </div>
-                      <div className="text-gray-500 font-mono text-[10px]">{row.model_id}</div>
-                    </td>
-                    {row.cells.map((cell, j) => (
-                      <td key={j} className="px-3 py-1.5">
-                        {cell && cell.status !== "skipped" ? (
-                          <button
-                            onClick={() => setSelected(cell)}
-                            className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-transform hover:scale-105 ${STATUS_STYLE[cell.status]}`}
-                            title={`${Math.round(cell.latency_ms ?? 0)} ms — 클릭해서 증거 보기`}
-                          >
-                            {STATUS_LABEL[cell.status]}
-                          </button>
-                        ) : (
-                          <span className="text-gray-600">—</span>
-                        )}
+                  <Fragment key={g.feature}>
+                    {/* 피처 요약행 — 클릭으로 접기/펼치기, 상태 분포 바 표시 */}
+                    <tr
+                      onClick={() => toggleFeature(g.feature)}
+                      className={`border-t-2 border-t-gray-700 border-b border-gray-800/60 bg-gray-900/80 light:bg-gray-50 ${filterActive ? "" : "cursor-pointer hover:bg-gray-800/60"}`}
+                      title={g.desc}
+                    >
+                      <td className="px-3 py-2 sticky left-0 bg-gray-900 light:bg-white">
+                        <div className="flex items-center gap-2">
+                          {!filterActive && (
+                            <span className={`text-[10px] text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
+                          )}
+                          <span className="font-bold text-gray-100 text-sm">{g.label}</span>
+                        </div>
                       </td>
-                    ))}
-                  </tr>
+                      <td className="px-3 py-2" colSpan={surfaces.length}>
+                        <div className="flex items-center gap-3">
+                          <div className="flex h-1.5 w-40 rounded-full overflow-hidden bg-gray-800 shrink-0">
+                            {(["supported", "unsupported", "broken"] as Status[]).map((s) =>
+                              g.counts[s] > 0 ? (
+                                <div
+                                  key={s}
+                                  className={s === "supported" ? "bg-emerald-400" : s === "unsupported" ? "bg-amber-400" : "bg-rose-400"}
+                                  style={{ width: `${(100 * g.counts[s]) / Math.max(1, probed)}%` }}
+                                />
+                              ) : null,
+                            )}
+                          </div>
+                          <span className="text-[11px] text-gray-500 tabular-nums whitespace-nowrap">
+                            <span className="text-emerald-300">{g.counts.supported}</span>
+                            {" · "}
+                            <span className="text-amber-300">{g.counts.unsupported}</span>
+                            {" · "}
+                            <span className={g.counts.broken > 0 ? "text-rose-300 font-semibold" : "text-gray-500"}>{g.counts.broken}</span>
+                            <span className="text-gray-600"> / {probed}</span>
+                          </span>
+                        </div>
+                      </td>
+                    </tr>
+                    {open &&
+                      g.rows.map((row) => (
+                        <tr key={`${g.feature}|${row.model_id}`} className="border-b border-gray-800/60">
+                          <td className="px-3 py-1.5 pl-8 sticky left-0 bg-gray-900 light:bg-white">
+                            <div className="text-gray-300 text-[11px]">{row.model_name}</div>
+                            <div className="text-gray-500 font-mono text-[10px]">{row.model_id}</div>
+                          </td>
+                          {row.cells.map((cell, j) => (
+                            <td key={j} className="px-3 py-1.5">
+                              {cell && cell.status !== "skipped" ? (
+                                <button
+                                  onClick={() => setSelected(cell)}
+                                  className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-transform hover:scale-105 ${STATUS_STYLE[cell.status]}`}
+                                  title={`${Math.round(cell.latency_ms ?? 0)} ms — 클릭해서 증거 보기`}
+                                >
+                                  {STATUS_LABEL[cell.status]}
+                                </button>
+                              ) : (
+                                <span className="text-gray-600">—</span>
+                              )}
+                            </td>
+                          ))}
+                        </tr>
+                      ))}
+                  </Fragment>
                 );
               })}
             </tbody>
@@ -683,7 +775,7 @@ export default function ParityPanel() {
         <div className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "How it works" : "동작 방식"}</div>
         <p>1 · {lang === "en" ? "An EventBridge schedule starts a Fargate sweep every 12 hours (manual trigger runs inside the backend service)." : "EventBridge 스케줄이 12시간마다 Fargate 스윕을 시작합니다 (수동 트리거는 backend 서비스 내에서 실행)."}</p>
         <p>2 · {lang === "en" ? "The monitored model catalog is the source — new models are picked up automatically." : "모니터링 모델 카탈로그가 소스입니다 — 신규 모델은 자동으로 반영됩니다."}</p>
-        <p>3 · {lang === "en" ? "Fan-out across model × API surface (Converse / InvokeModel / Messages / ChatCompletions / Responses) × 7 features." : "모델 × API surface(Converse/InvokeModel/Messages/ChatCompletions/Responses) × 7개 피처로 팬아웃합니다."}</p>
+        <p>3 · {lang === "en" ? "Fan-out across model × API surface (Converse / InvokeModel / Messages / ChatCompletions / Responses) × 19 features." : "모델 × API surface(Converse/InvokeModel/Messages/ChatCompletions/Responses) × 19개 피처로 팬아웃합니다."}</p>
         <p>4 · {lang === "en" ? "Execution-evidence probes: tool canary round-trip, system-instruction canary, JSON validity, cached_tokens on repeat, ≥2 stream deltas — HTTP 200 is never enough." : "실행-증거 프로브: 도구 카나리 왕복, 시스템 지시 카나리, JSON 유효성, 반복 요청의 cached tokens, 스트림 델타 2개 이상 — HTTP 200만으로는 판정하지 않습니다."}</p>
         <p>5 · {lang === "en" ? "Execution evidence (response snippet, tool call, usage, latency, error) is stored in RDS; click any cell to see it. Changes vs the previous run are shown at the top." : "실행 증거(응답 스니펫·도구 호출·usage·지연·오류)는 RDS에 저장됩니다. 셀을 클릭하면 확인할 수 있고, 이전 런 대비 변경사항은 상단에 표시됩니다."}</p>
       </div>

@@ -38,7 +38,9 @@ def test_feature_catalog_order():
     ids = [f["id"] for f in FEATURES]
     assert ids == ["basic", "streaming", "system_instructions", "tool_use",
                    "structured_output", "reasoning", "caching",
-                   "adaptive_thinking", "count_tokens", "batches", "web_search", "computer_use"]
+                   "adaptive_thinking", "count_tokens", "batches", "web_search", "computer_use",
+                   "reasoning_effort", "json_schema", "url_sources", "memory_tool",
+                   "code_execution", "files_api", "models_api"]
 
 
 def test_reasoning_only_applicable_to_reasoning_capable():
@@ -186,9 +188,8 @@ def test_req_snapshot_trims_long_strings_and_keeps_structure():
 # 피처 확장 5종 (v2.14.0) — 피처별 surface 적용 맵
 # ---------------------------------------------------------------------------
 
-def test_feature_catalog_has_twelve_features():
+def test_feature_catalog_v2140_features_present():
     ids = [f["id"] for f in FEATURES]
-    assert len(ids) == 12
     for new in ("adaptive_thinking", "count_tokens", "batches", "web_search", "computer_use"):
         assert new in ids
 
@@ -265,3 +266,34 @@ def test_adaptive_thinking_budget_matches_reference():
     # 참조 증거의 요청은 max_tokens 8000 — 2048에서는 adaptive가 thinking을 생략함 (run #8 실측)
     from parity.probes import _ADAPTIVE_MAX_TOKENS
     assert _ADAPTIVE_MAX_TOKENS >= 8000
+
+
+# ---------------------------------------------------------------------------
+# 피처 확장 2차 (v2.15.0) — 참조 도구 수준 19피처
+# ---------------------------------------------------------------------------
+
+def test_feature_catalog_has_nineteen_features():
+    ids = [f["id"] for f in FEATURES]
+    assert len(ids) == 19
+    for new in ("reasoning_effort", "json_schema", "url_sources",
+                "memory_tool", "code_execution", "files_api", "models_api"):
+        assert new in ids
+
+
+def test_v2150_surface_restrictions():
+    # reasoning_effort는 reasoning 지원 모델만, 전 surface
+    assert is_applicable("reasoning_effort", "responses", "openai:1p:gpt-5.5") is True
+    assert is_applicable("reasoning_effort", "converse", "global.anthropic.claude-haiku-4-5-20251001-v1:0") is False
+    # json_schema는 converse 제외 (Bedrock converse에 스키마 강제 파라미터 없음)
+    assert is_applicable("json_schema", "chat_completions", "openai:1p:gpt-5.4") is True
+    assert is_applicable("json_schema", "converse", "global.anthropic.claude-fable-5") is False
+    assert is_applicable("json_schema", "invoke_model", "global.anthropic.claude-fable-5") is True
+    # 플랫폼 API 계열은 anthropic SDK 경로 위주
+    assert is_applicable("files_api", "messages", "anthropic:claude-fable-5") is True
+    assert is_applicable("files_api", "converse", "global.anthropic.claude-fable-5") is False
+    assert is_applicable("models_api", "chat_completions", "openai:1p:gpt-5.4") is True
+    assert is_applicable("models_api", "responses", "openai:1p:gpt-5.4") is False
+    # 서버 도구/문서 소스는 anthropic 네이티브 경로
+    assert is_applicable("url_sources", "invoke_model", "us.anthropic.claude-haiku-4-5-20251001-v1:0") is True
+    assert is_applicable("memory_tool", "messages_mantle", "global.anthropic.claude-fable-5") is True
+    assert is_applicable("code_execution", "chat_completions", "openai:1p:gpt-5.4") is False

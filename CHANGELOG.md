@@ -7,6 +7,14 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.15.0 — 2026-07-12
+
+### Added
+- **Full feature catalog (12 → 19)**: reasoning_effort (effort param acceptance — Claude output_config / GPT reasoning effort), json_schema (strict schema output with key validation), url_sources (remote PDF document source), memory_tool / code_execution (beta server-tool acceptance), files_api (list round-trip), models_api (model retrieve round-trip). Admin/Usage APIs and MCP connector are intentionally excluded (cannot be probed honestly without an admin key / a live MCP server).
+- **Collapsible feature matrix**: each feature renders as a summary row (bold name, status distribution bar, supported·unsupported·broken counts) that expands to per-model rows on click; features containing Broken cells auto-expand, search/status filters expand everything, plus expand-all / collapse-all buttons.
+- **피처 카탈로그 완성 (12 → 19)**: reasoning_effort(effort 파라미터 수락 — Claude output_config / GPT reasoning effort), json_schema(strict 스키마 출력+키 검증), url_sources(원격 PDF 문서 소스), memory_tool/code_execution(beta 서버 도구 수락), files_api(목록 왕복), models_api(모델 조회 왕복). Admin/Usage API·MCP connector는 정직한 판정 불가(관리자 키/실 MCP 서버 필요)로 의도적 제외.
+- **접이식 피처 매트릭스**: 피처별 요약행(굵은 이름 + 상태 분포 바 + supported·unsupported·broken 카운트) 클릭 시 모델 행 펼침. Broken 포함 피처는 자동 펼침, 검색/상태 필터 시 전체 펼침, 모두 펼치기/접기 버튼 제공.
+
 ## v2.14.2 — 2026-07-11
 
 ### Fixed

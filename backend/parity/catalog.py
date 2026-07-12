@@ -75,6 +75,42 @@ FEATURES: list[dict] = [
         "label_ko": "컴퓨터 사용 도구",
         "desc_ko": "computer use 도구 정의 수락 검증 (beta 헤더 포함)",
     },
+    # --- v2.15.0 확장 7종 (참조 도구 수준) ---
+    {
+        "id": "reasoning_effort",
+        "label_ko": "추론 강도 조절",
+        "desc_ko": "effort 파라미터(low/high) 수락 검증 — Claude output_config, GPT reasoning effort",
+    },
+    {
+        "id": "json_schema",
+        "label_ko": "JSON 스키마 강제",
+        "desc_ko": "strict JSON schema 출력 강제 — 필수 키를 가진 유효 JSON 검증",
+    },
+    {
+        "id": "url_sources",
+        "label_ko": "URL 문서 소스",
+        "desc_ko": "document source type: url — 원격 PDF를 컨텍스트로 수락하고 응답하는지 검증",
+    },
+    {
+        "id": "memory_tool",
+        "label_ko": "메모리 도구",
+        "desc_ko": "memory 도구 정의 수락 검증 (beta 헤더 포함)",
+    },
+    {
+        "id": "code_execution",
+        "label_ko": "코드 실행 도구",
+        "desc_ko": "서버측 code_execution 도구 정의 수락 검증 (beta 헤더 포함)",
+    },
+    {
+        "id": "files_api",
+        "label_ko": "Files API",
+        "desc_ko": "파일 목록 엔드포인트 왕복 — Files API 제공 여부 검증",
+    },
+    {
+        "id": "models_api",
+        "label_ko": "Models API",
+        "desc_ko": "모델 조회 엔드포인트 왕복 — 해당 모델 id가 조회되는지 검증",
+    },
 ]
 
 FEATURE_IDS = [f["id"] for f in FEATURES]
@@ -90,6 +126,16 @@ _FEATURE_SURFACES: dict[str, frozenset[str]] = {
     "batches": frozenset({"messages", "messages_mantle"}),
     "web_search": frozenset({"invoke_model", "messages", "messages_mantle", "responses"}),
     "computer_use": frozenset({"invoke_model", "messages", "messages_mantle"}),
+    # v2.15.0
+    "reasoning_effort": frozenset({"converse", "invoke_model", "messages", "messages_mantle",
+                                   "chat_completions", "responses"}),
+    "json_schema": frozenset({"invoke_model", "messages", "messages_mantle",
+                              "chat_completions", "responses"}),
+    "url_sources": frozenset({"invoke_model", "messages", "messages_mantle"}),
+    "memory_tool": frozenset({"invoke_model", "messages", "messages_mantle"}),
+    "code_execution": frozenset({"invoke_model", "messages", "messages_mantle"}),
+    "files_api": frozenset({"messages", "messages_mantle"}),
+    "models_api": frozenset({"messages", "messages_mantle", "chat_completions"}),
 }
 
 
@@ -127,7 +173,7 @@ def is_applicable(feature_id: str, surface: str, model_id: str) -> bool:
     allowed = _FEATURE_SURFACES.get(feature_id)
     if allowed is not None and surface not in allowed:
         return False
-    if feature_id == "reasoning" and not is_reasoning_capable(model_id):
+    if feature_id in ("reasoning", "reasoning_effort") and not is_reasoning_capable(model_id):
         return False
     if feature_id == "adaptive_thinking" and "fable-5" not in model_id:
         return False
