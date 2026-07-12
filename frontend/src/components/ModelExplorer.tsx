@@ -34,6 +34,7 @@ const CHANNEL_BADGE: Record<ChannelType, string> = {
 };
 
 function CopyButton({ text }: { text: string }) {
+  const { lang } = useLang();
   const [copied, setCopied] = useState(false);
   return (
     <button
@@ -45,7 +46,7 @@ function CopyButton({ text }: { text: string }) {
       }}
       className="px-2 py-1 text-[10px] font-medium rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200 transition-colors"
     >
-      {copied ? "✓ 복사됨" : "복사"}
+      {copied ? (lang === "en" ? "✓ Copied" : "✓ 복사됨") : (lang === "en" ? "Copy" : "복사")}
     </button>
   );
 }
@@ -54,8 +55,8 @@ function DetailModal({ model, onClose }: { model: ModelInfo; onClose: () => void
   const { lang } = useLang();
   const ch = channelOf(model.id);
   const price = getPricing(model.id);
-  const examples = codeExamples(model.id);
-  const links = modelLinks(model.id, model.name);
+  const examples = codeExamples(model.id, lang === "en" ? "en" : "ko");
+  const links = modelLinks(model.id, model.name, lang === "en" ? "en" : "ko");
   const [tab, setTab] = useState(0);
 
   return (

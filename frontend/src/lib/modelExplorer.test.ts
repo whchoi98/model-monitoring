@@ -113,3 +113,19 @@ describe("modelLinks — 문서·대시보드 링크", () => {
     expect(urls).toContain("docs.claude.com");
   });
 });
+
+describe("i18n — lang 파라미터 (v2.16.2)", () => {
+  test("EN 선택 시 설명·링크 라벨·코드 주석이 영어로 출력된다", () => {
+    const ex = codeExamples("us.anthropic.claude-haiku-4-5-20251001-v1:0", "en");
+    expect(ex[0].description).toContain("unified");           // Converse 설명 영어
+    expect(ex[0].description).not.toContain("모니터");
+    expect(ex[2].code).toContain("no Anthropic API key");     // 코드 주석 영어
+    const links = modelLinks("global.anthropic.claude-fable-5", "Bedrock Claude Fable 5 (Global)", "en");
+    expect(links[0].label).toContain("trend");
+    expect(links.some((l) => l.label.includes("documentation") || l.label.includes("docs") || l.label.includes("Docs"))).toBe(true);
+  });
+  test("기본값(ko)은 기존 한국어 출력 유지", () => {
+    const ex = codeExamples("anthropic:claude-fable-5");
+    expect(ex[0].description).toContain("Anthropic 네이티브");
+  });
+});
