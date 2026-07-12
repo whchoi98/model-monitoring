@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.16.1 — 2026-07-12
+
+### Changed
+- Move login-required menus (Manual Probe, Prompts) to the end of the top navigation — public pages (Dashboard, Models, Parity, Cost, Reliability, Efficiency, Analysis) come first.
+- 로그인이 필요한 메뉴(수동 프로브·프롬프트)를 상단 내비 맨 뒤로 이동 — 공개 페이지(대시보드·모델 탐색·패리티 런·비용·신뢰성·효율성·분석)가 앞에 오도록 정렬.
+
 ## v2.16.0 — 2026-07-12
 
 ### Added
