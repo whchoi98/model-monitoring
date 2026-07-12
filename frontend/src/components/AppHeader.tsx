@@ -25,16 +25,17 @@ export function useNavItems(currentKey: string): NavItem[] {
   const t = useT();
   const { lang } = useLang();
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  // 공개 메뉴 먼저, 로그인 필요 메뉴(수동 프로브·프롬프트)는 맨 뒤 (v2.16.1)
   const items: NavItem[] = [
     { key: "dashboard", label: t.dashboardTab, href: "/" },
     { key: "models", label: L("Models", "모델 탐색"), href: "/models" },
     { key: "parity", label: L("Parity Run", "패리티 런"), href: "/parity" },
-    { key: "manual", label: t.manualProbeTab, href: "/" },
-    { key: "prompts", label: L("Prompts", "프롬프트"), href: "/prompts" },
     { key: "cost", label: L("Cost", "비용"), href: "/cost" },
     { key: "reliability", label: L("Reliability", "신뢰성"), href: "/reliability" },
     { key: "efficiency", label: L("Efficiency", "효율성"), href: "/efficiency" },
     { key: "analysis", label: L("Analysis", "분석"), href: "/analysis" },
+    { key: "manual", label: t.manualProbeTab, href: "/" },
+    { key: "prompts", label: L("Prompts", "프롬프트"), href: "/prompts" },
   ];
   return items.map((i) => ({ ...i, active: i.key === currentKey }));
 }
