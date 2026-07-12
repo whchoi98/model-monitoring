@@ -14,6 +14,12 @@ FROM node:20-alpine AS build
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
+# RUM(Real User Monitoring) — NEXT_PUBLIC_*은 빌드 타임에 번들로 인라인되므로
+# build-arg로 주입 (미지정 시 수집 비활성화, RumProvider가 no-op).
+ARG NEXT_PUBLIC_RUM_ENDPOINT
+ARG NEXT_PUBLIC_RUM_API_KEY
+ENV NEXT_PUBLIC_RUM_ENDPOINT=$NEXT_PUBLIC_RUM_ENDPOINT \
+    NEXT_PUBLIC_RUM_API_KEY=$NEXT_PUBLIC_RUM_API_KEY
 # Next.js standalone output (next.config.mjs에 output: "standalone" 설정 필요).
 RUN npm run build
 
