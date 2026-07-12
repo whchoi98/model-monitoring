@@ -297,3 +297,10 @@ def test_v2150_surface_restrictions():
     assert is_applicable("url_sources", "invoke_model", "us.anthropic.claude-haiku-4-5-20251001-v1:0") is True
     assert is_applicable("memory_tool", "messages_mantle", "global.anthropic.claude-fable-5") is True
     assert is_applicable("code_execution", "chat_completions", "openai:1p:gpt-5.4") is False
+
+
+def test_not_yet_supported_is_clean_unsupported():
+    # run #10 실측: 신형 모델의 URL 소스 거부 문구 변형
+    assert classify_error(
+        "ValidationException: URL content sources are not yet supported for this model"
+    ) == "unsupported"

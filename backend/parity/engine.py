@@ -29,8 +29,9 @@ _UNSUPPORTED_MARKERS = (
     # Bedrock InvokeModel의 generic 검증 거부 — 프로브 형태는 고정이므로 도구/파라미터
     # 미지원 신호로 해석 (프로브 자체 결함이면 전 모델 동시 발생으로 드러남)
     "request is not valid",
-    # 기능이 아직 미개방 (예: Mantle web_search live 모드)
+    # 기능이 아직 미개방 (예: Mantle web_search live 모드, 신형 모델의 URL 소스)
     "not yet available",
+    "not yet supported",
     # 고정 엔드포인트에 대한 본문 없는 404 (예: Mantle batches 미제공)
     "error code: 404",
     # 도구 스키마의 명시적 거부 — 허용 tool 태그 목록 반환 (Bedrock InvokeModel)
