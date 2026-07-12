@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.15.1 — 2026-07-12
+
+### Fixed
+- Classify "not yet supported" (URL sources on newer Claude models) as cleanly unsupported — the last 12 false-Broken cells from run #10.
+- "not yet supported"(신형 Claude 모델의 URL 소스 거부 문구)를 깨끗한 미지원으로 분류 — run #10의 잔여 false-Broken 12셀 해소.
+
 ## v2.15.0 — 2026-07-12
 
 ### Added
