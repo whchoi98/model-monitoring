@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Amazon Bedrock LLM Monitor — 멀티 프로바이더 LLM 실측 모니터링</title>
+<meta name="description" content="Bedrock · Anthropic CP on AWS · OpenAI(Mantle/1P) 28개 LLM 채널을 하나의 실시간 화면에서. 실행-증거 기반 피처 패리티 매트릭스 포함.">
+<style>
+  :root{
+    --bg:#0a0f1a; --bg2:#0f1626; --card:#121a2c; --line:#1f2a44;
+    --tx:#e5eaf3; --tx2:#9aa7bd; --tx3:#5f6c85;
+    --blue:#3b82f6; --emerald:#34d399; --amber:#fbbf24; --rose:#fb7185; --violet:#a78bfa;
+  }
+  *{margin:0;padding:0;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{background:var(--bg);color:var(--tx);font-family:'Pretendard',-apple-system,BlinkMacSystemFont,'Segoe UI','Noto Sans KR',sans-serif;line-height:1.6}
+  a{color:inherit;text-decoration:none}
+  .wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+  em{font-style:italic;color:var(--blue)}
+  code,.mono{font-family:ui-monospace,'SF Mono',Menlo,Consolas,monospace}
+
+  nav{position:sticky;top:0;z-index:50;background:rgba(10,15,26,.85);backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+  nav .wrap{display:flex;align-items:center;justify-content:space-between;height:60px}
+  .brand{display:flex;align-items:center;gap:10px;font-weight:800;font-size:15px}
+  .brand .logo{width:28px;height:28px;border-radius:8px;background:var(--blue);display:flex;align-items:center;justify-content:center}
+  .brand svg{width:16px;height:16px}
+  nav ul{display:flex;gap:22px;list-style:none;font-size:13.5px;color:var(--tx2)}
+  nav ul a:hover{color:var(--tx)}
+  .navlinks{display:flex;align-items:center;gap:12px}
+  .btn{display:inline-block;padding:9px 18px;border-radius:10px;font-size:13.5px;font-weight:600;transition:.15s}
+  .btn-primary{background:var(--blue);color:#fff}
+  .btn-primary:hover{background:#2563eb}
+  .btn-ghost{border:1px solid var(--line);color:var(--tx2)}
+  .btn-ghost:hover{color:var(--tx);border-color:var(--tx3)}
+  @media(max-width:860px){nav ul{display:none}}
+
+  header.hero{padding:88px 0 64px;background:
+    radial-gradient(700px 340px at 20% 0%, rgba(59,130,246,.18), transparent),
+    radial-gradient(600px 300px at 85% 10%, rgba(167,139,250,.12), transparent)}
+  .hero h1{font-size:clamp(30px,5vw,46px);font-weight:800;line-height:1.25;letter-spacing:-.02em}
+  .hero p.lead{margin-top:18px;font-size:17px;color:var(--tx2);max-width:640px}
+  .hero .cta{margin-top:28px;display:flex;gap:12px;flex-wrap:wrap}
+  .stats{margin-top:44px;display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px}
+  .stat{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:16px 18px}
+  .stat b{display:block;font-size:24px;font-weight:800;font-variant-numeric:tabular-nums}
+  .stat span{font-size:12px;color:var(--tx3)}
+
+  section{padding:72px 0;border-top:1px solid var(--line)}
+  .kicker{font-size:12px;font-weight:700;letter-spacing:.12em;color:var(--blue);text-transform:uppercase}
+  h2{font-size:clamp(22px,3.4vw,30px);font-weight:800;margin-top:8px;letter-spacing:-.01em}
+  .sub{margin-top:10px;color:var(--tx2);max-width:660px;font-size:15px}
+
+  .grid4{margin-top:36px;display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:14px}
+  .grid3{margin-top:36px;display:grid;grid-template-columns:repeat(auto-fit,minmax(280px,1fr));gap:14px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:20px}
+  .card h3{font-size:15px;font-weight:700;display:flex;align-items:center;gap:8px}
+  .card p{margin-top:8px;font-size:13.5px;color:var(--tx2)}
+  .dot{width:8px;height:8px;border-radius:99px;display:inline-block;flex-shrink:0}
+
+  .quote{margin-top:32px;background:linear-gradient(90deg,rgba(59,130,246,.12),transparent);border-left:3px solid var(--blue);padding:18px 22px;border-radius:0 12px 12px 0;font-size:16px}
+  .quote b{color:var(--blue)}
+
+  .shots{margin-top:36px;display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px}
+  .shot{background:var(--card);border:1px solid var(--line);border-radius:14px;overflow:hidden;transition:.15s}
+  .shot:hover{border-color:var(--blue);transform:translateY(-2px)}
+  .shot img{display:block;width:100%;aspect-ratio:16/10;object-fit:cover;object-position:top;background:#0b1120}
+  .shot.tall img{aspect-ratio:3/4}
+  .shot figcaption{padding:14px 16px;font-size:13px;color:var(--tx2)}
+  .shot figcaption b{display:block;color:var(--tx);font-size:14px;margin-bottom:2px}
+
+  .pipe{margin-top:40px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:0;counter-reset:step}
+  .step{position:relative;padding:20px 22px;border:1px solid var(--line);background:var(--card)}
+  .step:first-child{border-radius:14px 0 0 14px}
+  .step:last-child{border-radius:0 14px 14px 0}
+  .step h4{font-size:14px;font-weight:700}
+  .step h4::before{counter-increment:step;content:counter(step);display:inline-flex;width:22px;height:22px;margin-right:8px;border-radius:99px;background:var(--blue);color:#fff;font-size:12px;align-items:center;justify-content:center}
+  .step p{margin-top:8px;font-size:12.5px;color:var(--tx2)}
+  @media(max-width:860px){.step{border-radius:0!important}.step:first-child{border-radius:14px 14px 0 0!important}.step:last-child{border-radius:0 0 14px 14px!important}}
+
+  .stack{margin-top:32px;display:flex;flex-wrap:wrap;gap:10px}
+  .chip{padding:8px 14px;border:1px solid var(--line);border-radius:99px;font-size:13px;color:var(--tx2);background:var(--card)}
+  .chip b{color:var(--tx)}
+
+  footer{padding:56px 0 72px;border-top:1px solid var(--line);text-align:center}
+  footer h2{margin-bottom:8px}
+  footer p{color:var(--tx2);font-size:15px}
+  footer .cta{margin-top:24px;display:flex;gap:12px;justify-content:center;flex-wrap:wrap}
+  footer small{display:block;margin-top:40px;color:var(--tx3);font-size:12px}
+</style>
+</head>
+<body>
+
+<nav>
+  <div class="wrap">
+    <a class="brand" href="#top">
+      <span class="logo"><svg fill="none" viewBox="0 0 24 24" stroke="#fff" stroke-width="2"><path stroke-linecap="round" stroke-linejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg></span>
+      Bedrock LLM Monitor
+    </a>
+    <ul>
+      <li><a href="#value">핵심 가치</a></li>
+      <li><a href="#features">기능</a></li>
+      <li><a href="#screens">화면 둘러보기</a></li>
+      <li><a href="#architecture">동작 원리</a></li>
+      <li><a href="#stack">기술 스택</a></li>
+    </ul>
+    <div class="navlinks">
+      <a class="btn btn-ghost" href="https://github.com/whchoi98/model-monitoring" target="_blank" rel="noopener">GitHub</a>
+      <a class="btn btn-primary" href="https://llm-monitor.whchoi.net" target="_blank" rel="noopener">라이브 데모 열기</a>
+    </div>
+  </div>
+</nav>
+
+<header class="hero" id="top">
+  <div class="wrap">
+    <h1>LLM 채널 28개를<br>하나의 <em>실시간 화면</em>에서</h1>
+    <p class="lead">Amazon Bedrock · Anthropic Claude Platform on AWS · OpenAI(Bedrock Mantle / 1P direct) —
+      5개 호출 경로의 응답 속도·처리량·신뢰성·비용·기능 패리티를 <b>문서가 아닌 실측</b>으로 비교합니다.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://llm-monitor.whchoi.net" target="_blank" rel="noopener">라이브 데모 열기</a>
+      <a class="btn btn-ghost" href="#screens">화면 둘러보기</a>
+    </div>
+    <div class="stats">
+      <div class="stat"><b>28</b><span>모델 채널</span></div>
+      <div class="stat"><b>5</b><span>Provider 호출 경로</span></div>
+      <div class="stat"><b>6 × 19</b><span>API surface × 패리티 피처</span></div>
+      <div class="stat"><b>5분</b><span>자동 프로빙 주기</span></div>
+      <div class="stat"><b>12시간</b><span>패리티 스윕 주기</span></div>
+    </div>
+  </div>
+</header>
+
+<section id="value">
+  <div class="wrap">
+    <div class="kicker">Why</div>
+    <h2>왜 Bedrock LLM Monitor인가</h2>
+    <p class="sub">멀티 프로바이더 시대에 "어느 경로로 어떤 모델을 쓸지"는 벤치마크 기사가 아니라 내 워크로드의 실측 데이터로 정해야 합니다.</p>
+    <div class="grid4">
+      <div class="card"><h3><span class="dot" style="background:var(--emerald)"></span>실측 기반 판정</h3>
+        <p>모든 지표와 패리티 셀은 5분/12시간마다 실제 API 호출로 만들어집니다. 추정치·문서 인용이 아닙니다.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--blue)"></span>동일 조건 채널 비교</h3>
+        <p>같은 모델 패밀리를 Bedrock Global/US, CP on AWS, Mantle, 1P direct로 병렬 호출해 진짜 사과-대-사과 비교를 제공합니다.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--amber)"></span>비용·신뢰성까지 한 화면</h3>
+        <p>30일 비용 예측, 채널별 성공률·에러 버킷, 0-100 토큰 효율 점수를 성능 지표와 함께 봅니다.</p></div>
+      <div class="card"><h3><span class="dot" style="background:var(--violet)"></span>AI가 요약하는 이상 징후</h3>
+        <p>Claude 챗봇에 자연어로 질의하고, 자동 인사이트 잡이 이상 징후를 한국어로 요약합니다.</p></div>
+    </div>
+    <div class="quote">패리티 런의 원칙 — <b>"HTTP 200은 증거가 아니다."</b> 도구 카나리 왕복, JSON 파싱, 캐시 토큰 카운트 같은
+      <b>응답 내용 검사</b>를 통과해야 Supported이며, 셀을 클릭하면 Request/Response JSON 증거가 그대로 열립니다.</div>
+  </div>
+</section>
+
+<section id="features">
+  <div class="wrap">
+    <div class="kicker">Features</div>
+    <h2>기능</h2>
+    <div class="grid4">
+      <div class="card"><h3>⏱️ 실시간 자동 프로빙</h3><p>EventBridge → Fargate가 5분마다 6개 워크로드(대화·추론·코드·요약·JSON·창작)를 라운드로빈 실측.</p></div>
+      <div class="card"><h3>📈 트렌드 차트</h3><p>TTFT·총 지연·TPS 시계열을 모델 다중 선택·조회 기간·워크로드 필터로 비교.</p></div>
+      <div class="card"><h3>🔬 피처 패리티 매트릭스</h3><p>모델 × 6 API surface × 19 피처를 실행-증거로 판정. 접이식 그룹 + 상태 분포 막대.</p></div>
+      <div class="card"><h3>🧾 증거 모달</h3><p>셀 클릭 → 판정 근거와 Request/Response JSON. 직전 런 대비 변경(diff)은 상단 배너로.</p></div>
+      <div class="card"><h3>🧭 모델 탐색</h3><p>모델 카드별 호출 ID·단가·문서 링크 + Converse/InvokeModel/Messages/Responses 코드 예제.</p></div>
+      <div class="card"><h3>💰 비용 분석</h3><p>30일 비용 예측, 모델별·채널별 비교, 토큰 단가표 기반 산정.</p></div>
+      <div class="card"><h3>🛡️ 신뢰성</h3><p>패밀리/채널별 성공률과 에러 버킷 — 순간 장애도 12시간 패리티 런에 기록됩니다.</p></div>
+      <div class="card"><h3>⚡ 효율성 점수</h3><p>워크로드 카테고리별 0-100 가중 토큰 효율 점수.</p></div>
+      <div class="card"><h3>📊 출력 분석</h3><p>stop reason 분포와 출력 길이 히스토그램으로 응답 품질 패턴 관찰.</p></div>
+      <div class="card"><h3>🤖 AI 챗봇·인사이트</h3><p>Claude + 4개 도구로 시계열 자연어 질의, 5분마다 자동 인사이트 요약.</p></div>
+      <div class="card"><h3>🚨 이상 징후 배너</h3><p>최근 12시간 프로브 실패를 대시보드 최상단에 모델별로 요약.</p></div>
+      <div class="card"><h3>📱 모바일·테마·다국어</h3><p>반응형 레이아웃(햄버거 내비), 다크/화이트 테마, KO/EN 전환.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="screens">
+  <div class="wrap">
+    <div class="kicker">Screens</div>
+    <h2>화면 둘러보기</h2>
+    <p class="sub">아래 화면은 모두 운영 중인 라이브 대시보드의 실제 캡처입니다.</p>
+    <div class="shots">
+      <figure class="shot"><a href="assets/dashboard.png" target="_blank" rel="noopener"><img src="assets/dashboard.png" alt="대시보드" loading="lazy"></a>
+        <figcaption><b>대시보드</b>이상 징후 배너 · 28개 모델 카드 · 워크로드 필터</figcaption></figure>
+      <figure class="shot"><a href="assets/trend.png" target="_blank" rel="noopener"><img src="assets/trend.png" alt="트렌드 차트" loading="lazy"></a>
+        <figcaption><b>트렌드 차트</b>TTFT/지연/TPS 시계열 — 모델 다중 선택 비교</figcaption></figure>
+      <figure class="shot"><a href="assets/parity.png" target="_blank" rel="noopener"><img src="assets/parity.png" alt="패리티 런" loading="lazy"></a>
+        <figcaption><b>패리티 런</b>Provider 헬스 막대 + 접이식 피처 매트릭스</figcaption></figure>
+      <figure class="shot"><a href="assets/evidence.png" target="_blank" rel="noopener"><img src="assets/evidence.png" alt="증거 모달" loading="lazy"></a>
+        <figcaption><b>실행 증거</b>셀 클릭 → 판정 근거 · Request/Response JSON</figcaption></figure>
+      <figure class="shot"><a href="assets/explorer.png" target="_blank" rel="noopener"><img src="assets/explorer.png" alt="모델 탐색" loading="lazy"></a>
+        <figcaption><b>모델 탐색</b>API 탭별 복붙 가능한 코드 예제와 의미 설명</figcaption></figure>
+      <figure class="shot tall"><a href="assets/mobile.png" target="_blank" rel="noopener"><img src="assets/mobile.png" alt="모바일" loading="lazy"></a>
+        <figcaption><b>모바일</b>같은 URL — 뷰포트 폭만으로 레이아웃 적응</figcaption></figure>
+    </div>
+  </div>
+</section>
+
+<section id="architecture">
+  <div class="wrap">
+    <div class="kicker">How it works</div>
+    <h2>동작 원리</h2>
+    <div class="pipe">
+      <div class="step"><h4>수집</h4><p>EventBridge Scheduler가 Fargate one-shot 태스크를 기동 — 5분 프로브 + 12시간 패리티 스윕(~750 프로브).</p></div>
+      <div class="step"><h4>판정</h4><p>응답 내용 검사(카나리 왕복·JSON·캐시 토큰·스트림 델타)로 Supported/Unsupported/Broken 분류. 명시적 거부는 미지원, 그 외 오류는 Broken.</p></div>
+      <div class="step"><h4>저장</h4><p>RDS PostgreSQL에 지표·판정·증거(JSON) 저장. 60일 초과분은 시간별 집계로 이관.</p></div>
+      <div class="step"><h4>시각화·알림</h4><p>Next.js 대시보드 8개 페이지 + 런 간 변경 diff 배너 + AI 인사이트 요약 + CloudWatch 알람.</p></div>
+    </div>
+  </div>
+</section>
+
+<section id="stack">
+  <div class="wrap">
+    <div class="kicker">Stack</div>
+    <h2>기술 스택</h2>
+    <p class="sub">전부 IaC(CDK 8 스택)로 관리하고, 배포는 immutable digest 고정 원칙입니다.</p>
+    <div class="stack">
+      <span class="chip"><b>FastAPI</b> + SQLAlchemy</span>
+      <span class="chip"><b>Next.js 14</b> + React 18 + Tailwind</span>
+      <span class="chip"><b>RDS PostgreSQL 16</b></span>
+      <span class="chip"><b>ECS Fargate</b> ×2 서비스 + 3 스케줄 태스크</span>
+      <span class="chip"><b>EventBridge Scheduler</b></span>
+      <span class="chip"><b>CloudFront</b> VPC Origin → Internal ALB</span>
+      <span class="chip"><b>CDK</b> TypeScript · 8 스택</span>
+      <span class="chip"><b>Recharts</b></span>
+      <span class="chip"><b>Claude</b> 챗봇 · 인사이트</span>
+      <span class="chip"><b>RUM</b> 실사용자 모니터링</span>
+      <span class="chip">GitHub Actions <b>CI</b> (pytest·vitest·jest·cdk-nag)</span>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap">
+    <h2>어느 채널이 빠른지, <em>지금 실측 데이터</em>로 확인하세요</h2>
+    <p>배포 없이 바로 열리는 라이브 대시보드입니다.</p>
+    <div class="cta">
+      <a class="btn btn-primary" href="https://llm-monitor.whchoi.net" target="_blank" rel="noopener">라이브 데모 열기</a>
+      <a class="btn btn-ghost" href="https://github.com/whchoi98/model-monitoring" target="_blank" rel="noopener">GitHub 저장소</a>
+    </div>
+    <small>Amazon Bedrock LLM Monitor · FastAPI + Next.js + CDK · © 2026 whchoi98</small>
+  </div>
+</footer>
+
+</body>
+</html>
