@@ -206,8 +206,10 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | reasoning | 추론 | 복잡 추론 (max_tokens 큼) |
 | code-gen | 코드 생성 | 코드 출력 |
 | summarize | 요약 | 긴 입력 → 짧은 출력 |
-| structured-json | 구조화 JSON | JSON schema 강제 |
-| creative-writing | 창작 | 긴 출력 |
+| structured | JSON 추출 | 텍스트 → JSON-only 추출 |
+| translate | 번역 | 영→한 기술 번역 (뉘앙스 보존) |
+
+정의는 `backend/auto_prober.py` `WORKLOAD_PRESETS`가 source of truth.
 
 ---
 
