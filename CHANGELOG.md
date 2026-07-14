@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.17.1 — 2026-07-14
+
+### Added
+- Historical Stats panel: per-model filter chips (empty selection = all, same rule as the dashboard card filter). Selection persists across time-range changes.
+- 이력 통계 패널: 모델별 선택 필터 칩 추가 (빈 선택 = 전체 — 대시보드 카드 필터와 동일 규칙). 조회 기간을 바꿔도 선택 유지.
+
 ## v2.17.0 — 2026-07-14
 
 ### Added

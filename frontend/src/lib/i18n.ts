@@ -89,6 +89,7 @@ export interface Translations {
   historyTitle: string;
   historyProbes: string;
   historyNoData: string;
+  historyModelFilter: string;
   avg: string;
   range1h: string;
   range6h: string;
@@ -206,6 +207,7 @@ export const ko: Translations = {
   historyTitle: "이력 통계",
   historyProbes: "회 프로빙",
   historyNoData: "선택한 기간에 이력 데이터가 없습니다.",
+  historyModelFilter: "모델 필터",
   avg: "평균",
   range1h: "1시간",
   range6h: "6시간",
@@ -347,6 +349,7 @@ export const en: Translations = {
   historyTitle: "Historical Stats",
   historyProbes: " probes",
   historyNoData: "No historical data available for this time range.",
+  historyModelFilter: "Model filter",
   avg: "Avg",
   range1h: "1 Hour",
   range6h: "6 Hours",
