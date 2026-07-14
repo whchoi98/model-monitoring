@@ -105,6 +105,17 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
   const [stats, setStats] = useState<ModelStats[]>([]);
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
   const [loading, setLoading] = useState(false);
+  // 대시보드와 동일 규칙: 빈 Set = 전체 표시. 조회 기간을 바꿔도 선택은 유지.
+  const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
+  const toggleModel = (name: string) => {
+    setSelectedModels((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+  const clearSelection = () => setSelectedModels(new Set());
 
   const loadStats = useCallback(async () => {
     setLoading(true);
@@ -128,6 +139,9 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
   if (!isOpen) return null;
 
   const sorted = sortStats(stats);
+  const visible = selectedModels.size
+    ? sorted.filter((s) => selectedModels.has(s.model_name))
+    : sorted;
   const timeRanges = getTimeRanges(t);
 
   return (
@@ -182,6 +196,50 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
             ))}
           </div>
 
+          {/* Model Filter — 빈 선택 = 전체 (대시보드 카드 필터와 동일 규칙) */}
+          {sorted.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center gap-3">
+                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
+                  {t.historyModelFilter}
+                </span>
+                <button
+                  onClick={clearSelection}
+                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
+                    selectedModels.size === 0
+                      ? "bg-blue-600 border-blue-600 text-white"
+                      : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200"
+                  }`}
+                >
+                  {t.allModels}
+                </button>
+                {selectedModels.size > 0 && (
+                  <span className="text-xs text-gray-500">
+                    {selectedModels.size}/{sorted.length}
+                  </span>
+                )}
+              </div>
+              <div className="flex flex-wrap gap-1.5">
+                {sorted.map((s) => {
+                  const active = selectedModels.has(s.model_name);
+                  return (
+                    <button
+                      key={s.model_id}
+                      onClick={() => toggleModel(s.model_name)}
+                      className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
+                        active
+                          ? "bg-blue-600/20 border-blue-500/60 text-blue-300"
+                          : "bg-gray-900 border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300"
+                      }`}
+                    >
+                      {s.model_name}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           {/* Loading State */}
           {loading && (
             <div className="flex items-center justify-center py-12">
@@ -190,9 +248,9 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
           )}
 
           {/* Stats Cards */}
-          {!loading && sorted.length > 0 && (
+          {!loading && visible.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {sorted.map((s) => (
+              {visible.map((s) => (
                 <div
                   key={s.model_id}
                   className="rounded-xl border border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-colors"
@@ -248,7 +306,7 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
             </div>
           )}
 
-          {!loading && stats.length === 0 && (
+          {!loading && visible.length === 0 && (
             <div className="text-center py-12">
               <p className="text-gray-500">
                 {t.historyNoData}
