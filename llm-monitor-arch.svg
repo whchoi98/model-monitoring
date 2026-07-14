@@ -70,7 +70,7 @@
   <!-- Scheduled tasks -->
   <rect x="608" y="470" width="230" height="86" rx="12" class="card"/>
   <text class="t name" x="630" y="506">AutoProber</text>
-  <text class="t sub" x="630" y="532">5분 · 28개 채널 실측</text>
+  <text class="t sub" x="630" y="532">5분 · 39개 채널 실측</text>
 
   <rect x="608" y="588" width="230" height="86" rx="12" class="card"/>
   <text class="t name" x="630" y="624">Insights</text>
@@ -102,14 +102,14 @@
   <rect x="1116" y="512" width="228" height="112" rx="12" class="card"/>
   <text class="t name" x="1136" y="550">Bedrock Mantle</text>
   <text class="t sub" x="1136" y="576">OpenAI 호환 /openai/v1</text>
-  <text class="m sub" x="1136" y="600" font-size="12.5">GPT 5개 채널 (3리전)</text>
+  <text class="m sub" x="1136" y="600" font-size="12.5">GPT 13개 채널 (3리전)</text>
 
   <rect x="1116" y="648" width="228" height="112" rx="12" class="card"/>
   <text class="t name" x="1136" y="686">OpenAI 1P</text>
   <text class="t sub" x="1136" y="712">api.openai.com 직접 호출</text>
-  <text class="m sub" x="1136" y="736" font-size="12.5">GPT 2개 모델</text>
+  <text class="m sub" x="1136" y="736" font-size="12.5">GPT 5개 모델</text>
 
-  <text class="m" x="1230" y="800" font-size="14" font-weight="700" fill="#8E4830" text-anchor="middle">총 28개 모델 채널</text>
+  <text class="m" x="1230" y="800" font-size="14" font-weight="700" fill="#8E4830" text-anchor="middle">총 39개 모델 채널</text>
 
   <!-- Flows -->
   <!-- user -> cloudfront -->

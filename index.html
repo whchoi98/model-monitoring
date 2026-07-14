@@ -3,10 +3,10 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
-<title>Amazon Bedrock LLM Monitor — LLM 28개 채널, 문서가 아닌 실측으로</title>
-<meta name="description" content="Bedrock · Anthropic Claude Platform on AWS · OpenAI(Mantle/1P) 28개 LLM 채널의 응답 속도·처리량·신뢰성·비용·기능 패리티를 5분마다 실제 API 호출로 측정하는 실시간 대시보드." />
+<title>Amazon Bedrock LLM Monitor — LLM 39개 채널, 문서가 아닌 실측으로</title>
+<meta name="description" content="Bedrock · Anthropic Claude Platform on AWS · OpenAI(Mantle/1P) 39개 LLM 채널의 응답 속도·처리량·신뢰성·비용·기능 패리티를 5분마다 실제 API 호출로 측정하는 실시간 대시보드." />
 <meta property="og:title" content="Amazon Bedrock LLM Monitor" />
-<meta property="og:description" content="28개 LLM 채널 · 5개 호출 경로 · 6×19 실행-증거 패리티 매트릭스. 추정이 아닌 실측." />
+<meta property="og:description" content="39개 LLM 채널 · 5개 호출 경로 · 6×19 실행-증거 패리티 매트릭스. 추정이 아닌 실측." />
 <meta property="og:type" content="website" />
 <meta property="og:image" content="https://whchoi98.github.io/model-monitoring/assets/dashboard.png" />
 
@@ -222,7 +222,7 @@
 <header class="hero" id="top">
   <div class="wrap">
     <p class="eyebrow">Measured, not quoted — 추정이 아닌 실측</p>
-    <h1>LLM 28개 채널을<br>문서가 아닌 <em>실측</em>으로</h1>
+    <h1>LLM 39개 채널을<br>문서가 아닌 <em>실측</em>으로</h1>
     <p class="lead">Amazon Bedrock · Anthropic Claude Platform on AWS · OpenAI(Bedrock Mantle / 1P direct) —
       5개 호출 경로의 응답 속도·처리량·신뢰성·비용·기능 패리티를 <b>5분마다 실제 API 호출</b>로 비교하는 실시간 대시보드입니다.</p>
     <div class="cta-row">
@@ -230,7 +230,7 @@
       <a class="btn btn-ghost btn-lg" href="#screens">화면 둘러보기</a>
     </div>
     <div class="metrics num" role="list" aria-label="핵심 수치">
-      <div class="metric" role="listitem"><b>28</b><span>모델 채널</span></div>
+      <div class="metric" role="listitem"><b>39</b><span>모델 채널</span></div>
       <div class="metric" role="listitem"><b>5</b><span>Provider 호출 경로</span></div>
       <div class="metric" role="listitem"><b>6×19</b><span>Surface × 패리티 피처</span></div>
       <div class="metric" role="listitem"><b>5<small style="font-size:16px">분</small></b><span>자동 프로빙 주기</span></div>
@@ -322,7 +322,7 @@
     <p class="sub">아래 화면은 모두 실제 운영 대시보드에서 캡처한 화면입니다 — 최신 UI는 라이브 데모에서 직접 확인하세요.</p>
     <div class="shots">
       <figure class="shot"><a href="./assets/dashboard.png" target="_blank" rel="noopener"><img src="./assets/dashboard.png" alt="대시보드 화면 — 이상 징후 배너와 모델 상태 카드, 워크로드 필터" loading="lazy"></a>
-        <figcaption><b>대시보드</b>이상 징후 배너 · 28개 모델 카드 · 워크로드 필터</figcaption></figure>
+        <figcaption><b>대시보드</b>이상 징후 배너 · 모델 카드 그리드 · 워크로드 필터</figcaption></figure>
       <figure class="shot"><a href="./assets/trend.png" target="_blank" rel="noopener"><img src="./assets/trend.png" alt="트렌드 차트 화면 — TTFT, 지연, TPS 시계열 비교" loading="lazy"></a>
         <figcaption><b>트렌드 차트</b>TTFT / 지연 / TPS 시계열 — 모델 다중 선택 비교</figcaption></figure>
       <figure class="shot"><a href="./assets/parity.png" target="_blank" rel="noopener"><img src="./assets/parity.png" alt="패리티 런 화면 — Provider 헬스 막대와 피처 매트릭스" loading="lazy"></a>
@@ -346,7 +346,7 @@
       Insights 태스크가 결과를 AI로 요약합니다.</p>
     <figure class="arch-figure">
       <img src="./llm-monitor-arch.svg" width="1400" height="860" loading="lazy"
-        alt="아키텍처 다이어그램: 사용자 → CloudFront(VPC Origin) → Internal ALB → Next.js 프런트엔드와 FastAPI 백엔드(ECS Fargate) → RDS PostgreSQL 16. EventBridge Scheduler가 AutoProber(5분)·Insights(5분)·ParityRun(12시간) Fargate 태스크를 기동하고, AutoProber와 ParityRun이 Bedrock Global/US, Anthropic CP, Bedrock Mantle, OpenAI 1P — 5개 호출 경로 총 28개 모델 채널을 실측한다.">
+        alt="아키텍처 다이어그램: 사용자 → CloudFront(VPC Origin) → Internal ALB → Next.js 프런트엔드와 FastAPI 백엔드(ECS Fargate) → RDS PostgreSQL 16. EventBridge Scheduler가 AutoProber(5분)·Insights(5분)·ParityRun(12시간) Fargate 태스크를 기동하고, AutoProber와 ParityRun이 Bedrock Global/US, Anthropic CP, Bedrock Mantle, OpenAI 1P — 5개 호출 경로 총 39개 모델 채널을 실측한다.">
     </figure>
     <p class="arch-rot-hint">모바일에서는 다이어그램이 세로로 회전되어 표시됩니다.</p>
     <div class="pipe">
