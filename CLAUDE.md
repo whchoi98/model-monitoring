@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.16.5 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.17.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 28 model cards + trend)
+                ├── /             — Dashboard (status + 39 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -37,7 +37,7 @@ Internal ALB
                 └── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 28 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 39 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   └── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
 
@@ -57,7 +57,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (28개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (39개), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -88,7 +88,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 28 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 39 cards + trend + workload filter)
 │   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
 │   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
@@ -100,8 +100,8 @@ model-monitoring/
 │   │   │   ├── AppHeader.tsx            # 공용 헤더 — 데스크톱 내비 + 모바일 햄버거, 9개 페이지 공용 (v2.16.0)
 │   │   │   ├── RumProvider.tsx          # RUM 수집 — 자체 호스팅 rum-sdk 로드, NEXT_PUBLIC_RUM_* 미설정 시 비활성 (v2.16.5)
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 28 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 28개 (15 Bedrock + 6 Anthropic CP + 7 OpenAI)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 39 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 39개 (15 Bedrock + 6 Anthropic CP + 18 OpenAI)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -167,7 +167,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (28 total) / 모니터링 대상 모델 (총 28개)
+## Monitored Models (39 total) / 모니터링 대상 모델 (총 39개)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
@@ -184,11 +184,15 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 | Family | us-east-1 | us-east-2 | us-west-2 | 1P direct |
 |--------|-----------|-----------|-----------|-----------|
+| GPT 5.6 Sol (v2.17.0) | ✅ | ✅ | — | ✅ |
+| GPT 5.6 Terra (v2.17.0) | ✅ | ✅ | ✅ | ✅ |
+| GPT 5.6 Luna (v2.17.0) | ✅ | ✅ | ✅ | ✅ |
 | GPT 5.5 | ✅ | ✅ | — | ✅ (v2.6.0) |
 | GPT 5.4 | ✅ | ✅ | ✅ | ✅ (v2.6.0) |
 
 - **Mantle (Path 4)** model_id 키: `openai:<region>:openai.gpt-5.x`. 라벨: `OpenAI GPT 5.x (<region>)`. OpenAI-compatible `/openai/v1` + Bedrock bearer 토큰(`OPENAI_API_KEY`, `ABSK-…`). 자세히는 ADR-019.
 - **1P direct (Path 5, v2.6.0)** model_id 키: `openai:1p:gpt-5.x`. 라벨: `OpenAI GPT 5.x (1P)`. `https://api.openai.com/v1` 직접 호출 + **OpenAI platform 키**(`OPENAI_1P_API_KEY`, `sk-proj-…` — Mantle bearer와 호환 불가). native id(`gpt-5.x`, 접두사 없음). 리전 개념 없음(글로벌 라우팅). env: `OPENAI_1P_API_KEY`(SSM `/bedrock-monitor/openai-1p-api-key`), `OPENAI_1P_GPT_54/55_MODEL_ID`, `OPENAI_1P_BASE_URL`(선택). 자세히는 ADR-020.
+- **GPT-5.6 세대 (v2.17.0, 2026-07-14)**: Sol(최상위)/Terra(균형)/Luna(저비용) — Mantle native id `openai.gpt-5.6-{sol,terra,luna}`, 1P native id `gpt-5.6-{sol,terra,luna}`. **Sol은 us-west-2 미제공**. Responses API 전용(5.4/5.5와 동일). Bedrock in-region 가격이 OpenAI 1P와 동일(parity — 5.4/5.5의 10% 마크업 없음): Sol $5/$30, Terra $2.5/$15, Luna $1/$6 per MTok. env: `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID` + `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`.
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 

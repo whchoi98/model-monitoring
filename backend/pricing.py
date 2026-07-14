@@ -25,6 +25,10 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     # OpenAI GPT (Bedrock Mantle). cached-input 미추적 — input/output만.
     "gpt-5.4": {"input": 2.75, "output": 16.50},
     "gpt-5.5": {"input": 5.50, "output": 33.00},
+    # GPT-5.6 세대는 Bedrock in-region 가격이 OpenAI 1P와 동일 (parity — 5.4/5.5식 10% 마크업 없음).
+    "gpt-5.6-sol": {"input": 5.00, "output": 30.00},
+    "gpt-5.6-terra": {"input": 2.50, "output": 15.00},
+    "gpt-5.6-luna": {"input": 1.00, "output": 6.00},
 }
 
 

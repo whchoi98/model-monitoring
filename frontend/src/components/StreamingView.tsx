@@ -31,6 +31,17 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 5.4 (us-east-2)": "bg-green-700",
   "GPT 5.4 (us-west-2)": "bg-green-800",
   "GPT 5.4 (1P)": "bg-green-500",
+  "GPT 5.6 Sol (us-east-1)": "bg-lime-600",
+  "GPT 5.6 Sol (us-east-2)": "bg-lime-700",
+  "GPT 5.6 Sol (1P)": "bg-lime-800",
+  "GPT 5.6 Terra (us-east-1)": "bg-emerald-500",
+  "GPT 5.6 Terra (us-east-2)": "bg-emerald-400",
+  "GPT 5.6 Terra (us-west-2)": "bg-teal-500",
+  "GPT 5.6 Terra (1P)": "bg-teal-400",
+  "GPT 5.6 Luna (us-east-1)": "bg-green-400",
+  "GPT 5.6 Luna (us-east-2)": "bg-green-300",
+  "GPT 5.6 Luna (us-west-2)": "bg-teal-300",
+  "GPT 5.6 Luna (1P)": "bg-lime-500",
 };
 
 function getModelColor(name: string): string {
@@ -68,7 +79,11 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
     // openai:<region>:<actual_id> — region 직접 파싱. 1P direct는 pseudo-region "1p" → "1P" 표기.
     const rawRegion = modelId.split(":")[1] || "";
     const region = rawRegion === "1p" ? "1P" : rawRegion;
-    const fam = modelId.includes("gpt-5.5") ? "GPT 5.5" : modelId.includes("gpt-5.4") ? "GPT 5.4" : "GPT";
+    const fam = modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
+      : modelId.includes("gpt-5.6-terra") ? "GPT 5.6 Terra"
+      : modelId.includes("gpt-5.6-luna") ? "GPT 5.6 Luna"
+      : modelId.includes("gpt-5.5") ? "GPT 5.5"
+      : modelId.includes("gpt-5.4") ? "GPT 5.4" : "GPT";
     return `${fam} (${region})`;
   }
   return modelId;

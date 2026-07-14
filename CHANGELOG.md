@@ -7,6 +7,16 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.17.0 — 2026-07-14
+
+### Added
+- OpenAI GPT-5.6 generation (Sol / Terra / Luna) across all menus — 11 new channels (Bedrock Mantle 8: Sol us-east-1/2, Terra·Luna us-east-1/2/west-2 + 1P direct 3), catalog 28 → 39. Sol is not offered in us-west-2. Responses-API-only like GPT-5.4/5.5. Bedrock in-region pricing at parity with OpenAI 1P (Sol $5/$30, Terra $2.5/$15, Luna $1/$6 per MTok — no 10% markup unlike 5.4/5.5).
+- OpenAI GPT-5.6 세대(Sol/Terra/Luna)를 전 메뉴에 추가 — 신규 11채널 (Bedrock Mantle 8: Sol은 us-east-1/2, Terra·Luna는 us-east-1/2/west-2 + 1P direct 3), 카탈로그 28 → 39. Sol은 us-west-2 미제공. GPT-5.4/5.5와 동일하게 Responses API 전용. Bedrock in-region 가격은 OpenAI 1P와 동일(parity — Sol $5/$30, Terra $2.5/$15, Luna $1/$6 per MTok, 5.4/5.5식 10% 마크업 없음).
+
+### Infra
+- New env vars injected by CDK (AppServices + Scheduler): `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`, `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`.
+- CDK(AppServices + Scheduler)가 주입하는 신규 env: `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`, `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`.
+
 ## v2.16.5 — 2026-07-12
 
 ### Added

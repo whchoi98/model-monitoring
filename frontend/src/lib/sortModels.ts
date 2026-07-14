@@ -12,6 +12,9 @@ export const FAMILY_ORDER = [
   "Claude Sonnet 4.6",
   "Claude Haiku 4.5",
   "Nova 2.0 Lite",
+  "GPT 5.6 Sol",
+  "GPT 5.6 Terra",
+  "GPT 5.6 Luna",
   "GPT 5.5",
   "GPT 5.4",
 ];
