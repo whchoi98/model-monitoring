@@ -162,9 +162,12 @@ _OPENAI_REGION_ENV: dict[str, str] = {
     "us-west-2": "OPENAI_US_WEST_2_BASE_URL",
 }
 
-# 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5는 us-west-2 미제공 → 404).
+# 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
 # (model-id env var, display family, 제공 리전 튜플)
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("us-east-1", "us-east-2")),
+    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("us-east-1", "us-east-2", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("us-east-1", "us-east-2", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1", "us-east-2", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1", "us-east-2")),
 ]
@@ -177,8 +180,11 @@ _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
 # =====================================================================
 _OPENAI_1P_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
-# (model-id env var, display family) — 리전 없음.
+# (model-id env var, display family) — 리전 없음 (글로벌 라우팅).
 _OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = [
+    ("OPENAI_1P_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol"),
+    ("OPENAI_1P_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra"),
+    ("OPENAI_1P_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna"),
     ("OPENAI_1P_GPT_54_MODEL_ID", "GPT 5.4"),
     ("OPENAI_1P_GPT_55_MODEL_ID", "GPT 5.5"),
 ]

@@ -171,9 +171,15 @@ export class AppServicesStack extends cdk.Stack {
       OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
       BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
       BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
+      BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
+      BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
+      BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
       // 1P direct — native ids (접두사 없음). base_url은 코드 기본값(api.openai.com) 사용.
       OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
       OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
+      OPENAI_1P_GPT_56_SOL_MODEL_ID: "gpt-5.6-sol",
+      OPENAI_1P_GPT_56_TERRA_MODEL_ID: "gpt-5.6-terra",
+      OPENAI_1P_GPT_56_LUNA_MODEL_ID: "gpt-5.6-luna",
     };
 
     // ---------------------------------------------------------------------
