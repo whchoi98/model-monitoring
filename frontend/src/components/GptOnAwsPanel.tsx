@@ -25,20 +25,37 @@ const RANGE_OPTIONS = [
   { hours: 168, labelKo: "7일", labelEn: "7d" },
 ];
 
-// TrendChart의 OpenAI 계열 색과 동일 계보 — 페이지 간 색 일관성 유지.
-const CHANNEL_COLORS: Record<string, string> = {
-  "OpenAI GPT 5.4 (us-east-1)": "#34d399",
-  "OpenAI GPT 5.4 (us-east-2)": "#059669",
-  "OpenAI GPT 5.4 (us-west-2)": "#10b981",
-  "OpenAI GPT 5.5 (us-east-1)": "#10a37f",
-  "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
-  "OpenAI GPT 5.6 Terra (us-east-1)": "#a3e635",
-  "OpenAI GPT 5.6 Terra (us-east-2)": "#65a30d",
-  "OpenAI GPT 5.6 Terra (us-west-2)": "#4d7c0f",
+// 이중 인코딩으로 8개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
+// (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 3색 × family 3패턴으로 교체)
+const REGION_COLORS: Record<string, string> = {
+  "us-east-1": "#3b82f6", // blue
+  "us-east-2": "#f59e0b", // amber
+  "us-west-2": "#10b981", // emerald
 };
 
+const FAMILY_DASH: Record<string, string | undefined> = {
+  "GPT 5.6 Terra": undefined, // 실선
+  "GPT 5.5": "7 4",           // 파선
+  "GPT 5.4": "2 4",           // 점선
+};
+
+function regionOf(name: string): string {
+  const m = name.match(/\((us-[a-z]+-\d)\)/);
+  return m ? m[1] : "";
+}
+
+function familyOf(name: string): string {
+  if (name.includes("5.6 Terra")) return "GPT 5.6 Terra";
+  if (name.includes("5.5")) return "GPT 5.5";
+  return "GPT 5.4";
+}
+
 function color(name: string): string {
-  return CHANNEL_COLORS[name] || "#9ca3af";
+  return REGION_COLORS[regionOf(name)] || "#9ca3af";
+}
+
+function dash(name: string): string | undefined {
+  return FAMILY_DASH[familyOf(name)];
 }
 
 function ttfbColor(ms: number | null): string {
@@ -121,7 +138,7 @@ function BenchChart({
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {names.map((n) => (
               <Line key={n} type="monotone" dataKey={n} stroke={color(n)} dot={false}
-                    strokeWidth={1.8} connectNulls />
+                    strokeWidth={1.8} strokeDasharray={dash(n)} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>
@@ -246,8 +263,14 @@ export default function GptOnAwsPanel() {
               )}
             </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            {latest.channels.map((c) => (
+          {/* family별 열 배치: 1열 GPT 5.6 Terra · 2열 GPT 5.5 · 3열 GPT 5.4 (모바일은 세로 스택) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] as const).map((fam) => (
+              <div key={fam} className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-1">
+                  {fam}
+                </h3>
+                {latest.channels.filter((c) => c.family === fam).map((c) => (
               <button key={c.model_id} type="button"
                    onClick={() => toggleChannel(c.model_name)}
                    className={`text-left rounded-xl border p-4 space-y-2 transition-colors bg-gray-900/50 light:bg-white ${
@@ -302,6 +325,8 @@ export default function GptOnAwsPanel() {
                   </div>
                 )}
               </button>
+                ))}
+              </div>
             ))}
           </div>
 
