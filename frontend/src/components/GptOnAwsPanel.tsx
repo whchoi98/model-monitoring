@@ -82,14 +82,20 @@ function toChartData(
 }
 
 function BenchChart({
-  trend, metric, title,
+  trend, metric, title, selected,
 }: {
   trend: GptBenchTrend | null;
   metric: "median_ttfb_ms" | "median_ttft_ms" | "median_gap_ms";
   title: string;
+  selected: Set<string>;
 }) {
   const ct = useChartTheme();
-  const { rows, names } = useMemo(() => toChartData(trend, metric), [trend, metric]);
+  // 대시보드와 동일 규칙: 빈 선택 = 전체 표시.
+  const filtered = useMemo(() => {
+    if (!trend || selected.size === 0) return trend;
+    return { ...trend, series: trend.series.filter((s) => selected.has(s.model_name)) };
+  }, [trend, selected]);
+  const { rows, names } = useMemo(() => toChartData(filtered, metric), [filtered, metric]);
 
   const fmtTick = (ts: string) => {
     const d = new Date(ts);
@@ -132,6 +138,17 @@ export default function GptOnAwsPanel() {
   const [trend, setTrend] = useState<GptBenchTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 대시보드 카드 필터와 동일 규칙: 빈 Set = 전체. 카드 클릭으로 토글.
+  const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set());
+  const toggleChannel = (name: string) => {
+    setSelectedChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+  const clearChannels = () => setSelectedChannels(new Set());
 
   const load = useCallback(async () => {
     setError(null);
@@ -203,16 +220,41 @@ export default function GptOnAwsPanel() {
       {/* 스코어 카드 */}
       {!loading && latest && latest.channels.length > 0 && (
         <>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span>{L("Latest cycle", "최신 사이클")}:</span>
-            <span className="font-mono">
-              {latest.cycle_ts ? new Date(latest.cycle_ts).toLocaleString() : "-"}
-            </span>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>{L("Latest cycle", "최신 사이클")}:</span>
+              <span className="font-mono">
+                {latest.cycle_ts ? new Date(latest.cycle_ts).toLocaleString() : "-"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500">
+                {L("Click cards to filter charts", "카드를 클릭하면 그래프 채널이 선택됩니다")}
+              </span>
+              <button
+                onClick={clearChannels}
+                className={`px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedChannels.size === 0
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {L("All", "전체")}
+              </button>
+              {selectedChannels.size > 0 && (
+                <span className="text-gray-500">{selectedChannels.size}/{latest.channels.length}</span>
+              )}
+            </div>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
             {latest.channels.map((c) => (
-              <div key={c.model_id}
-                   className="rounded-xl border border-gray-800 bg-gray-900/50 light:bg-white p-4 space-y-2">
+              <button key={c.model_id} type="button"
+                   onClick={() => toggleChannel(c.model_name)}
+                   className={`text-left rounded-xl border p-4 space-y-2 transition-colors bg-gray-900/50 light:bg-white ${
+                     selectedChannels.has(c.model_name)
+                       ? "border-blue-500 ring-1 ring-blue-500/50"
+                       : "border-gray-800 hover:border-gray-600"
+                   }`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -259,17 +301,17 @@ export default function GptOnAwsPanel() {
                     {c.last_error}
                   </div>
                 )}
-              </div>
+              </button>
             ))}
           </div>
 
           {/* 시계열 그래프 */}
           <div className="grid grid-cols-1 gap-4">
-            <BenchChart trend={trend} metric="median_ttfb_ms"
+            <BenchChart trend={trend} metric="median_ttfb_ms" selected={selectedChannels}
                         title={L("TTFB trend (median per cycle)", "TTFB 추이 (사이클 median)")} />
-            <BenchChart trend={trend} metric="median_ttft_ms"
+            <BenchChart trend={trend} metric="median_ttft_ms" selected={selectedChannels}
                         title={L("TTFT trend (median per cycle)", "TTFT 추이 (사이클 median)")} />
-            <BenchChart trend={trend} metric="median_gap_ms"
+            <BenchChart trend={trend} metric="median_gap_ms" selected={selectedChannels}
                         title={L("GAP (thinking) trend", "GAP(thinking) 추이")} />
           </div>
         </>

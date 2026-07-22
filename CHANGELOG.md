@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.18.1 — 2026-07-22
+
+### Added
+- GPT on AWS: score cards are now clickable channel filters for the trend charts (empty selection = all — same rule as the dashboard), with an "All" reset and N/8 counter.
+- GPT on AWS: 스코어 카드 클릭으로 그래프 채널 선택(빈 선택 = 전체 — 대시보드와 동일 규칙), "전체" 초기화 버튼과 N/8 카운터 추가.
+
 ## v2.18.0 — 2026-07-22
 
 ### Added
