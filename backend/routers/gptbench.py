@@ -61,6 +61,27 @@ class TrendResponse(BaseModel):
     series: list[TrendSeries] = []
 
 
+# 사이클은 채널 단위로 커밋되므로 실행 중(~7분)에는 max(cycle_ts)가 부분 사이클이다.
+# 데드라인(13분) + 여유 = 14분 이상 지난 사이클만 "완료"로 간주하고, 최신이 진행 중이면
+# 직전 사이클로 폴백한다 (2026-07-22 "카드 4개만 보임" 실사고).
+_CYCLE_COMPLETE_AFTER = timedelta(minutes=14)
+
+
+def _as_aware(dt: datetime) -> datetime:
+    return dt if dt.tzinfo else dt.replace(tzinfo=timezone.utc)
+
+
+def _latest_complete_cycle(db: Session) -> Optional[datetime]:
+    cycles = [r[0] for r in (db.query(GptBenchResult.cycle_ts).distinct()
+                             .order_by(GptBenchResult.cycle_ts.desc()).limit(2))]
+    if not cycles:
+        return None
+    newest = cycles[0]
+    if datetime.now(timezone.utc) - _as_aware(newest) >= _CYCLE_COMPLETE_AFTER:
+        return newest
+    return cycles[1] if len(cycles) > 1 else newest
+
+
 def _median(vals: list) -> Optional[float]:
     vals = [v for v in vals if v is not None]
     return round(statistics.median(vals), 1) if vals else None
@@ -76,8 +97,8 @@ def _p95(vals: list) -> Optional[float]:
 
 @router.get("/latest", response_model=LatestResponse)
 def latest(db: Session = Depends(get_db)):
-    """최신 사이클의 채널별 집계 — 스코어 카드용."""
-    last_cycle = db.query(func.max(GptBenchResult.cycle_ts)).scalar()
+    """최신 **완료** 사이클의 채널별 집계 — 스코어 카드용 (진행 중 사이클은 직전으로 폴백)."""
+    last_cycle = _latest_complete_cycle(db)
     if last_cycle is None:
         return LatestResponse()
     rows = (db.query(GptBenchResult)
@@ -120,9 +141,13 @@ def trend(
 ):
     """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 8채널 규모라 Python 집계로 충분."""
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    rows = (db.query(GptBenchResult)
-            .filter(GptBenchResult.cycle_ts >= since)
-            .order_by(GptBenchResult.cycle_ts.asc()).all())
+    query = (db.query(GptBenchResult)
+             .filter(GptBenchResult.cycle_ts >= since))
+    # 진행 중 사이클의 부분 median이 그래프 끝점을 왜곡하지 않도록 완료 사이클까지만 포함.
+    cutoff = _latest_complete_cycle(db)
+    if cutoff is not None:
+        query = query.filter(GptBenchResult.cycle_ts <= cutoff)
+    rows = query.order_by(GptBenchResult.cycle_ts.asc()).all()
 
     grouped: dict[str, dict[datetime, list[GptBenchResult]]] = {}
     names: dict[str, str] = {}

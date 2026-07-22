@@ -95,11 +95,12 @@ def test_run_cycle_deadline_skips_channels(bench_env, session_factory, monkeypat
     assert len(res["skipped_channels"]) == 8
 
 
-def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0):
+def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0, start_min_ago=20):
+    """사이클 시드 — 기본은 모두 '완료'(14분 이상 경과) 사이클."""
     s = session_factory()
     now = datetime.now(timezone.utc)
     for c in range(cycles):
-        cts = now - timedelta(minutes=15 * c)
+        cts = now - timedelta(minutes=start_min_ago + 15 * c)
         for ch in range(channels):
             for run_no in range(1, runs + 1):
                 s.add(models.GptBenchResult(
@@ -155,3 +156,35 @@ def test_trend_series_grouped_by_cycle(session_factory, client):
 def test_latest_empty_db(client):
     data = client.get("/api/gptbench/latest").json()
     assert data["cycle_ts"] is None and data["channels"] == []
+
+
+def test_latest_skips_in_progress_cycle(session_factory, client):
+    """진행 중(14분 미경과·부분 커밋) 사이클은 건너뛰고 직전 완료 사이클을 반환.
+
+    2026-07-22 실사고: 채널 단위 커밋 때문에 실행 중 사이클의 4채널만 노출됨.
+    """
+    _seed(session_factory, cycles=1, channels=8, runs=2, start_min_ago=20)  # 완료 사이클 (8채널)
+    # 진행 중 사이클: 3분 전 시작, 4채널만 커밋된 상태
+    s = session_factory()
+    cts = datetime.now(timezone.utc) - timedelta(minutes=3)
+    for ch in range(4):
+        s.add(models.GptBenchResult(
+            cycle_ts=cts, timestamp=cts, model_id=f"openai:us-east-{ch+1}:m",
+            model_name=f"OpenAI GPT 5.4 (r{ch})", family="GPT 5.4", region=f"r{ch}",
+            run_no=1, status="success", ttfb_ms=800, ttft_ms=1700, gap_ms=900,
+        ))
+    s.commit(); s.close()
+
+    data = client.get("/api/gptbench/latest").json()
+    assert len(data["channels"]) == 8  # 부분(4채널) 사이클이 아니라 완료 사이클
+
+    # trend도 진행 중 사이클 끝점을 제외
+    tr = client.get("/api/gptbench/trend?hours=24").json()
+    assert all(len(sr["points"]) == 1 for sr in tr["series"])
+
+
+def test_latest_uses_only_cycle_even_if_fresh(session_factory, client):
+    """사이클이 하나뿐이면 진행 중이어도 그것을 반환 (첫 배포 직후 빈 화면 방지)."""
+    _seed(session_factory, cycles=1, channels=2, runs=2, start_min_ago=3)
+    data = client.get("/api/gptbench/latest").json()
+    assert len(data["channels"]) == 2
