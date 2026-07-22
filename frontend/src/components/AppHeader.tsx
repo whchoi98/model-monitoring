@@ -20,7 +20,7 @@ export interface NavItem {
   active?: boolean;
 }
 
-/** 표준 9개 내비 항목 — currentKey 항목에 active 표시. 페이지에서 필요 시 항목을 덮어쓴다. */
+/** 표준 10개 내비 항목 — currentKey 항목에 active 표시. 페이지에서 필요 시 항목을 덮어쓴다. */
 export function useNavItems(currentKey: string): NavItem[] {
   const t = useT();
   const { lang } = useLang();
@@ -34,6 +34,7 @@ export function useNavItems(currentKey: string): NavItem[] {
     { key: "reliability", label: L("Reliability", "신뢰성"), href: "/reliability" },
     { key: "efficiency", label: L("Efficiency", "효율성"), href: "/efficiency" },
     { key: "analysis", label: L("Analysis", "분석"), href: "/analysis" },
+    { key: "gptbench", label: "GPT on AWS", href: "/gpt-on-aws" },
     { key: "manual", label: t.manualProbeTab, href: "/" },
     { key: "prompts", label: L("Prompts", "프롬프트"), href: "/prompts" },
   ];

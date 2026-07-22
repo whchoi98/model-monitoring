@@ -797,3 +797,57 @@ export async function fetchOutputLength(window: string = "7d", category?: string
   if (!res.ok) throw new Error(`fetchOutputLength failed: ${res.statusText}`);
   return res.json();
 }
+
+// ── GPT on AWS 벤치 (v2.18.0) ────────────────────────────────────────────
+
+export interface GptBenchCard {
+  model_id: string;
+  model_name: string;
+  family: string;
+  region: string;
+  runs: number;
+  success: number;
+  median_ttfb_ms: number | null;
+  median_ttft_ms: number | null;
+  median_gap_ms: number | null;
+  p95_ttft_ms: number | null;
+  cache_hit_rate: number | null;
+  median_reasoning_tokens: number | null;
+  last_error: string | null;
+}
+
+export interface GptBenchLatest {
+  cycle_ts: string | null;
+  channels: GptBenchCard[];
+}
+
+export interface GptBenchTrendPoint {
+  cycle_ts: string;
+  median_ttfb_ms: number | null;
+  median_ttft_ms: number | null;
+  median_gap_ms: number | null;
+  errors: number;
+}
+
+export interface GptBenchTrendSeries {
+  model_id: string;
+  model_name: string;
+  points: GptBenchTrendPoint[];
+}
+
+export interface GptBenchTrend {
+  hours: number;
+  series: GptBenchTrendSeries[];
+}
+
+export async function fetchGptBenchLatest(): Promise<GptBenchLatest> {
+  const res = await fetch(`${BASE}/api/gptbench/latest`);
+  if (!res.ok) throw new Error(`fetchGptBenchLatest failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchGptBenchTrend(hours: number = 24): Promise<GptBenchTrend> {
+  const res = await fetch(`${BASE}/api/gptbench/trend?hours=${hours}`);
+  if (!res.ok) throw new Error(`fetchGptBenchTrend failed: ${res.statusText}`);
+  return res.json();
+}
