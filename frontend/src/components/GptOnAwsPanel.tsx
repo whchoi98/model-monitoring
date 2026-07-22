@@ -180,7 +180,8 @@ export default function GptOnAwsPanel() {
     }
   }, [hours]);
 
-  useEffect(() => { setLoading(true); load(); }, [load]);
+  // 카드는 항상 표시 — 최초 로드에만 스피너, 이후(기간 변경·자동 갱신)엔 기존 카드를 유지한 채 제자리 갱신.
+  useEffect(() => { if (!latest) setLoading(true); load(); }, [load]); // eslint-disable-line react-hooks/exhaustive-deps
   // 15분 주기 수집이므로 60초 자동 갱신이면 충분.
   useEffect(() => {
     const id = setInterval(load, 60000);
