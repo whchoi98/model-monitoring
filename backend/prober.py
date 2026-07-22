@@ -95,6 +95,11 @@ def _discover_anthropic_models() -> None:
             api_key=api_key,
             base_url=_anthropic_base_url(),
             default_headers=_anthropic_default_headers(),
+            # 디스커버리는 best-effort — backend lifespan(기동)에서 호출되므로 시간 상한 필수.
+            # CP 조직 비활성 기간에 느린 500 + SDK 재시도가 기동을 지연시켜 ELB 헬스체크
+            # 실패 → 배포 롤백을 유발한 실사고 (2026-07-22, v2.18.1 배포).
+            timeout=10.0,
+            max_retries=1,
         )
         models_page = client.models.list(limit=100)
         all_ids = [m.id for m in models_page.data]
