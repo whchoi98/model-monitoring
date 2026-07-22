@@ -25,20 +25,37 @@ const RANGE_OPTIONS = [
   { hours: 168, labelKo: "7일", labelEn: "7d" },
 ];
 
-// TrendChart의 OpenAI 계열 색과 동일 계보 — 페이지 간 색 일관성 유지.
-const CHANNEL_COLORS: Record<string, string> = {
-  "OpenAI GPT 5.4 (us-east-1)": "#34d399",
-  "OpenAI GPT 5.4 (us-east-2)": "#059669",
-  "OpenAI GPT 5.4 (us-west-2)": "#10b981",
-  "OpenAI GPT 5.5 (us-east-1)": "#10a37f",
-  "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
-  "OpenAI GPT 5.6 Terra (us-east-1)": "#a3e635",
-  "OpenAI GPT 5.6 Terra (us-east-2)": "#65a30d",
-  "OpenAI GPT 5.6 Terra (us-west-2)": "#4d7c0f",
+// 이중 인코딩으로 8개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
+// (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 3색 × family 3패턴으로 교체)
+const REGION_COLORS: Record<string, string> = {
+  "us-east-1": "#3b82f6", // blue
+  "us-east-2": "#f59e0b", // amber
+  "us-west-2": "#10b981", // emerald
 };
 
+const FAMILY_DASH: Record<string, string | undefined> = {
+  "GPT 5.6 Terra": undefined, // 실선
+  "GPT 5.5": "7 4",           // 파선
+  "GPT 5.4": "2 4",           // 점선
+};
+
+function regionOf(name: string): string {
+  const m = name.match(/\((us-[a-z]+-\d)\)/);
+  return m ? m[1] : "";
+}
+
+function familyOf(name: string): string {
+  if (name.includes("5.6 Terra")) return "GPT 5.6 Terra";
+  if (name.includes("5.5")) return "GPT 5.5";
+  return "GPT 5.4";
+}
+
 function color(name: string): string {
-  return CHANNEL_COLORS[name] || "#9ca3af";
+  return REGION_COLORS[regionOf(name)] || "#9ca3af";
+}
+
+function dash(name: string): string | undefined {
+  return FAMILY_DASH[familyOf(name)];
 }
 
 function ttfbColor(ms: number | null): string {
@@ -82,14 +99,20 @@ function toChartData(
 }
 
 function BenchChart({
-  trend, metric, title,
+  trend, metric, title, selected,
 }: {
   trend: GptBenchTrend | null;
   metric: "median_ttfb_ms" | "median_ttft_ms" | "median_gap_ms";
   title: string;
+  selected: Set<string>;
 }) {
   const ct = useChartTheme();
-  const { rows, names } = useMemo(() => toChartData(trend, metric), [trend, metric]);
+  // 대시보드와 동일 규칙: 빈 선택 = 전체 표시.
+  const filtered = useMemo(() => {
+    if (!trend || selected.size === 0) return trend;
+    return { ...trend, series: trend.series.filter((s) => selected.has(s.model_name)) };
+  }, [trend, selected]);
+  const { rows, names } = useMemo(() => toChartData(filtered, metric), [filtered, metric]);
 
   const fmtTick = (ts: string) => {
     const d = new Date(ts);
@@ -115,7 +138,7 @@ function BenchChart({
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {names.map((n) => (
               <Line key={n} type="monotone" dataKey={n} stroke={color(n)} dot={false}
-                    strokeWidth={1.8} connectNulls />
+                    strokeWidth={1.8} strokeDasharray={dash(n)} connectNulls />
             ))}
           </LineChart>
         </ResponsiveContainer>
@@ -132,6 +155,17 @@ export default function GptOnAwsPanel() {
   const [trend, setTrend] = useState<GptBenchTrend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  // 대시보드 카드 필터와 동일 규칙: 빈 Set = 전체. 카드 클릭으로 토글.
+  const [selectedChannels, setSelectedChannels] = useState<Set<string>>(new Set());
+  const toggleChannel = (name: string) => {
+    setSelectedChannels((prev) => {
+      const next = new Set(prev);
+      if (next.has(name)) next.delete(name);
+      else next.add(name);
+      return next;
+    });
+  };
+  const clearChannels = () => setSelectedChannels(new Set());
 
   const load = useCallback(async () => {
     setError(null);
@@ -203,16 +237,47 @@ export default function GptOnAwsPanel() {
       {/* 스코어 카드 */}
       {!loading && latest && latest.channels.length > 0 && (
         <>
-          <div className="flex items-center gap-2 text-xs text-gray-500">
-            <span>{L("Latest cycle", "최신 사이클")}:</span>
-            <span className="font-mono">
-              {latest.cycle_ts ? new Date(latest.cycle_ts).toLocaleString() : "-"}
-            </span>
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div className="flex items-center gap-2 text-xs text-gray-500">
+              <span>{L("Latest cycle", "최신 사이클")}:</span>
+              <span className="font-mono">
+                {latest.cycle_ts ? new Date(latest.cycle_ts).toLocaleString() : "-"}
+              </span>
+            </div>
+            <div className="flex items-center gap-2 text-xs">
+              <span className="text-gray-500">
+                {L("Click cards to filter charts", "카드를 클릭하면 그래프 채널이 선택됩니다")}
+              </span>
+              <button
+                onClick={clearChannels}
+                className={`px-2.5 py-1 rounded-full border transition-colors ${
+                  selectedChannels.size === 0
+                    ? "bg-blue-600 border-blue-600 text-white"
+                    : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200"
+                }`}
+              >
+                {L("All", "전체")}
+              </button>
+              {selectedChannels.size > 0 && (
+                <span className="text-gray-500">{selectedChannels.size}/{latest.channels.length}</span>
+              )}
+            </div>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
-            {latest.channels.map((c) => (
-              <div key={c.model_id}
-                   className="rounded-xl border border-gray-800 bg-gray-900/50 light:bg-white p-4 space-y-2">
+          {/* family별 열 배치: 1열 GPT 5.6 Terra · 2열 GPT 5.5 · 3열 GPT 5.4 (모바일은 세로 스택) */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+            {(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] as const).map((fam) => (
+              <div key={fam} className="space-y-3">
+                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-1">
+                  {fam}
+                </h3>
+                {latest.channels.filter((c) => c.family === fam).map((c) => (
+              <button key={c.model_id} type="button"
+                   onClick={() => toggleChannel(c.model_name)}
+                   className={`text-left rounded-xl border p-4 space-y-2 transition-colors bg-gray-900/50 light:bg-white ${
+                     selectedChannels.has(c.model_name)
+                       ? "border-blue-500 ring-1 ring-blue-500/50"
+                       : "border-gray-800 hover:border-gray-600"
+                   }`}>
                 <div className="flex items-center justify-between gap-2">
                   <div className="flex items-center gap-2 min-w-0">
                     <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
@@ -259,17 +324,19 @@ export default function GptOnAwsPanel() {
                     {c.last_error}
                   </div>
                 )}
+              </button>
+                ))}
               </div>
             ))}
           </div>
 
           {/* 시계열 그래프 */}
           <div className="grid grid-cols-1 gap-4">
-            <BenchChart trend={trend} metric="median_ttfb_ms"
+            <BenchChart trend={trend} metric="median_ttfb_ms" selected={selectedChannels}
                         title={L("TTFB trend (median per cycle)", "TTFB 추이 (사이클 median)")} />
-            <BenchChart trend={trend} metric="median_ttft_ms"
+            <BenchChart trend={trend} metric="median_ttft_ms" selected={selectedChannels}
                         title={L("TTFT trend (median per cycle)", "TTFT 추이 (사이클 median)")} />
-            <BenchChart trend={trend} metric="median_gap_ms"
+            <BenchChart trend={trend} metric="median_gap_ms" selected={selectedChannels}
                         title={L("GAP (thinking) trend", "GAP(thinking) 추이")} />
           </div>
         </>
