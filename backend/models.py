@@ -171,6 +171,38 @@ class ParityResult(Base):
     error_message = Column(Text, nullable=True)
 
 
+class GptBenchResult(Base):
+    """GPT on AWS 벤치 호출 1건 (v2.18.0) — gptbench.run_cycle()이 15분마다 채널당 10건 기록.
+
+    probe_results와 분리: TTFB/GAP은 프로브에 없는 지표이고, ~55.8k 고정 프롬프트의
+    비용·트래픽 프로파일이 달라 독립 보관·독립 보존정책이 가능해야 한다.
+    """
+
+    __tablename__ = "gpt_bench_results"
+    __table_args__ = (
+        Index("ix_gpt_bench_results_cycle_ts", "cycle_ts"),
+        Index("ix_gpt_bench_results_model_cycle", "model_id", "cycle_ts"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    cycle_ts = Column(DateTime(timezone=True), nullable=False)   # 사이클 시작 시각 (그룹 키)
+    timestamp = Column(DateTime(timezone=True), nullable=False)  # 개별 호출 시각
+    model_id = Column(Text, nullable=False)     # openai:<region>:<actual_id>
+    model_name = Column(Text, nullable=False)   # "OpenAI GPT 5.4 (us-east-1)"
+    family = Column(Text, nullable=False)       # "GPT 5.4" | "GPT 5.5" | "GPT 5.6 Terra"
+    region = Column(Text, nullable=False)
+    run_no = Column(Integer, nullable=False)    # 1..RUNS_PER_CHANNEL
+    status = Column(Text, nullable=False)       # success | error
+    ttfb_ms = Column(Float, nullable=True)
+    ttft_ms = Column(Float, nullable=True)
+    gap_ms = Column(Float, nullable=True)       # ttft - ttfb ≈ thinking
+    input_tokens = Column(Integer, nullable=True)
+    cached_tokens = Column(Integer, nullable=True)
+    reasoning_tokens = Column(Integer, nullable=True)
+    output_tokens = Column(Integer, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
 def ensure_performance_indexes(engine) -> None:
     """기존 DB에 성능 인덱스를 멱등하게 생성 (main.py lifespan에서 호출).
 

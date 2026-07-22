@@ -255,6 +255,15 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/parityrun",
     );
 
+    // GPT on AWS 벤치 (v2.18.0) — Mantle 8채널 × 10회 TTFB/TTFT 측정, 15분 주기.
+    // OpenAI bearer 키(secret)만 사용 — bedrock IAM 불필요하지만 autoprober role 재사용 (패턴 통일).
+    const gptBenchTaskDef = buildTaskDef(
+      "GptBenchTaskDef",
+      autoProberTaskRole,
+      ["python", "-m", "gptbench_runner", "--once"],
+      "/ecs/gptbench",
+    );
+
     // ---------------------------------------------------------------------
     // 4-1) Scheduler invoke role (ADR-011).
     //    L2 EcsRunFargateTask가 자동 생성하는 role은 ecs:RunTask Resource를 task def의
@@ -321,6 +330,20 @@ export class SchedulerStack extends cdk.Stack {
       description: "Bedrock feature parity sweep (every 12 hours)",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: parityTaskDef,
+        vpcSubnets: props.appSubnets,
+        securityGroups: [schedulerTaskSg],
+        assignPublicIp: false,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
+      }),
+    });
+
+    new scheduler.Schedule(this, "GptBenchSchedule", {
+      // 15분 주기 — 사이클(8채널 × 워밍업1 + 10회 순차) ~6-9분, 데드라인 13분 (겹침 방지)
+      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(15)),
+      description: "GPT on AWS bench: Mantle TTFB/TTFT every 15 minutes",
+      target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
+        taskDefinition: gptBenchTaskDef,
         vpcSubnets: props.appSubnets,
         securityGroups: [schedulerTaskSg],
         assignPublicIp: false,

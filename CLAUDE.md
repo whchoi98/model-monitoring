@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.17.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.18.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -34,12 +34,14 @@ Internal ALB
                 ├── /efficiency   — 0-100 Token Efficiency Score (weighted)
                 ├── /analysis     — Stop reason 분포 + Output length 분포
                 ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
-                └── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
+                ├── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
+                └── /gpt-on-aws   — GPT on AWS (Mantle 8채널 TTFB/TTFT 벤치, 15분 주기, v2.18.0)
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 39 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
-  └── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
+  ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
+  └── GptBench Fargate Task    → 15분 주기 Mantle GPT 8채널 × 10회 TTFB/TTFT 벤치 (v2.18.0)
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
@@ -66,6 +68,8 @@ model-monitoring/
 │   ├── retention.py         # RETENTION_DAYS 초과 probe_results → probe_results_hourly 집계 이관
 │   ├── anomalies.py         # 최근 N시간 프로브 실패 요약 (대시보드 이상 징후 박스, v2.12.0)
 │   ├── parity_runner.py     # CLI entry: `python -m parity_runner --once` (ParityRun Fargate task)
+│   ├── gptbench.py          # GPT on AWS 벤치 사이클 (Mantle 8채널 × 10회, TTFB/TTFT/GAP, v2.18.0)
+│   ├── gptbench_runner.py   # CLI entry: `python -m gptbench_runner --once` (15분 스케줄)
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py
 │   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×19 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
@@ -84,13 +88,15 @@ model-monitoring/
 │       ├── efficiency.py    # /api/efficiency/score — 0-100 weighted score per category
 │       ├── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0 신규)
 │       ├── compare.py       # /api/compare/run — Comparison Lab: 1 prompt → N models 병렬, SSE (auth)
-│       └── parity.py        # /api/parity/* — catalog, latest(+직전 런 diff), evidence, trigger(auth)
+│       ├── parity.py        # /api/parity/* — catalog, latest(+직전 런 diff), evidence, trigger(auth)
+│       └── gptbench.py      # /api/gptbench/* — latest(스코어 카드), trend(사이클 시계열) (v2.18.0)
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
 │   │   │   ├── page.tsx           # Dashboard (status + 39 cards + trend + workload filter)
 │   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
 │   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
+│   │   │   ├── gpt-on-aws/page.tsx # GPT on AWS 벤치 (v2.18.0)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx

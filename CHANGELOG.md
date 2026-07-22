@@ -7,6 +7,16 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.18.0 — 2026-07-22
+
+### Added
+- **GPT on AWS** page (`/gpt-on-aws`): precision latency bench for Bedrock Mantle (3P) GPT channels — GPT 5.4 ×3 US regions + GPT 5.5 ×2 + GPT 5.6 Terra ×3 (8 channels). Every 15 minutes a scheduled Fargate task runs 10 sequential calls per channel with the fixed ~55.8k-token cached prompt (docs/benchmarks methodology): TTFB (first stream event) / TTFT (first text delta) / GAP (≈ thinking). Page shows per-channel score cards (median TTFB/TTFT/GAP, p95, cache hit rate, success) and per-cycle median trend charts with time-range control.
+- **GPT on AWS** 페이지(`/gpt-on-aws`): Bedrock Mantle(3P) GPT 채널 정밀 레이턴시 벤치 — GPT 5.4 ×3리전 + 5.5 ×2 + 5.6 Terra ×3 (8채널). 15분마다 스케줄 태스크가 채널당 10회 순차 호출(~55.8k 토큰 고정 캐시 프롬프트, docs/benchmarks 방법론): TTFB/TTFT/GAP(≈thinking). 채널별 스코어 카드(median·p95·캐시 히트율·성공률)와 사이클별 median 시계열 그래프 + 기간 조절 제공.
+
+### Infra
+- New table `gpt_bench_results`, router `/api/gptbench/{latest,trend}` (public read), EventBridge schedule `rate(15 minutes)` → GptBench Fargate task (backend image, `python -m gptbench_runner --once`).
+- 신규 테이블 `gpt_bench_results`, 라우터 `/api/gptbench/{latest,trend}`(공개 조회), EventBridge `rate(15 minutes)` → GptBench Fargate 태스크 (backend 이미지 공용).
+
 ## v2.17.1 — 2026-07-14
 
 ### Added
