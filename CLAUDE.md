@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 39 model cards + trend)
+                ├── /             — Dashboard (status + 41 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -38,7 +38,7 @@ Internal ALB
                 └── /gpt-on-aws   — GPT on AWS (Mantle 8채널 TTFB/TTFT 벤치, 15분 주기, v2.18.0)
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 39 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 41 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
   └── GptBench Fargate Task    → 15분 주기 Mantle GPT 8채널 × 10회 TTFB/TTFT 벤치 (v2.18.0)
@@ -59,7 +59,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (39개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (41개), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -93,7 +93,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 39 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 41 cards + trend + workload filter)
 │   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
 │   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
 │   │   │   ├── gpt-on-aws/page.tsx # GPT on AWS 벤치 (v2.18.0)
@@ -106,8 +106,8 @@ model-monitoring/
 │   │   │   ├── AppHeader.tsx            # 공용 헤더 — 데스크톱 내비 + 모바일 햄버거, 9개 페이지 공용 (v2.16.0)
 │   │   │   ├── RumProvider.tsx          # RUM 수집 — 자체 호스팅 rum-sdk 로드, NEXT_PUBLIC_RUM_* 미설정 시 비활성 (v2.16.5)
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 39 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 39개 (15 Bedrock + 6 Anthropic CP + 18 OpenAI)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 41 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 42개 라벨 (17 Bedrock + 7 Anthropic CP + 18 OpenAI — CP Opus 5는 복구 대비 선등록)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -173,11 +173,12 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (39 total) / 모니터링 대상 모델 (총 39개)
+## Monitored Models (41 total) / 모니터링 대상 모델 (총 41개)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
 | Claude Fable 5 | ✅ | ✅ | ✅ |
+| Claude Opus 5 (v2.19.0) | ✅ | ✅ | ⏳ 조직 복구 시 자동 |
 | Claude Opus 4.8 | ✅ | ✅ | ✅ |
 | Claude Opus 4.7 | ✅ | ✅ | ✅ |
 | Claude Opus 4.6 | ✅ | ✅ | — |

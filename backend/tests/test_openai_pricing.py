@@ -20,7 +20,9 @@ def test_estimate_cost_openai():
 
 def test_existing_pricing_unbroken():
     assert pricing.get_pricing("us.anthropic.claude-fable-5") == {"input": 10.0, "output": 50.0}
-    assert pricing.get_pricing("anthropic:claude-opus-4-8") == {"input": 15.0, "output": 75.0}
+    # Opus 4.8은 $5/$25 — 2026-07-24 공식 가격 확인 (기존 $15/$75는 Opus 4.1 단가로 오기재였음)
+    assert pricing.get_pricing("anthropic:claude-opus-4-8") == {"input": 5.0, "output": 25.0}
+    assert pricing.get_pricing("global.anthropic.claude-opus-5") == {"input": 5.0, "output": 25.0}
 
 
 def test_channel_openai():
