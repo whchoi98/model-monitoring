@@ -9,6 +9,10 @@
 
 ## v2.19.0 — 2026-07-24
 
+### Fixed
+- Pricing table: Claude Opus 4.8 / 4.7 / 4.6 corrected from \$15/\$75 to the official \$5/\$25 per MTok (\$15/\$75 is Opus 4.1's rate). Cost dashboards recalculate retroactively at the corrected rate (user decision: display consistency over historical accuracy).
+- 가격표: Claude Opus 4.8/4.7/4.6을 \$15/\$75 → 공식 \$5/\$25 per MTok로 교정 (\$15/\$75는 Opus 4.1 단가). 비용 대시보드는 교정 단가로 소급 재계산 (사용자 결정: 표시 일관성 우선).
+
 ### Added
 - Claude Opus 5 (launched 2026-07-24) across all menus — Bedrock Global/US inference profiles (`global./us.anthropic.claude-opus-5`, both verified live), catalog 39 → 41. CP on AWS target pre-registered (auto-discovers when the org recovers → 42). Reasoning model (temperature rejected). Pricing $5/$25 per MTok (official).
 - Claude Opus 5 전 메뉴 추가 (2026-07-24 출시) — Bedrock Global/US 추론 프로파일 2채널 (실측 검증), 카탈로그 39 → 41. CP on AWS 타깃 선등록 (조직 복구 시 자동 발견 → 42). reasoning 모델 (temperature 거부). 가격 $5/$25 per MTok (공식).
