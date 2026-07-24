@@ -51,7 +51,7 @@ Returns auto-prober state.
   "last_run_time": "2026-04-16T16:48:53Z",
   "next_run_time": "2026-04-16T16:53:53Z",
   "interval_seconds": 300,
-  "model_count": 39
+  "model_count": 41
 }
 ```
 

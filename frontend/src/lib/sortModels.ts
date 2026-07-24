@@ -5,6 +5,7 @@
 // 모델명 라벨은 backend에서 "Bedrock " 또는 "Anthropic " prefix가 붙은 형태로 응답.
 export const FAMILY_ORDER = [
   "Claude Fable 5",
+  "Claude Opus 5",
   "Claude Opus 4.8",
   "Claude Opus 4.7",
   "Claude Opus 4.6",

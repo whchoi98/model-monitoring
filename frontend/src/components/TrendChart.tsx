@@ -31,6 +31,8 @@ interface Props {
 const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Fable 5 (Global)": "#2dd4bf",
   "Bedrock Claude Fable 5 (US)": "#0d9488",
+  "Bedrock Claude Opus 5 (Global)": "#f43f5e",
+  "Bedrock Claude Opus 5 (US)": "#be123c",
   "Bedrock Claude Opus 4.8 (Global)": "#fb7185",
   "Bedrock Claude Opus 4.8 (US)": "#e11d48",
   "Bedrock Claude Opus 4.7 (Global)": "#f97316",
@@ -45,6 +47,7 @@ const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Haiku 4.5 (US)": "#a855f7",
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
   "Anthropic Claude Fable 5 (US)": "#115e59",
+  "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
@@ -72,6 +75,7 @@ const MODEL_COLORS: Record<string, string> = {
 
 const FAMILY_FALLBACK: [string, string][] = [
   ["Fable 5", "#0d9488"],
+  ["Opus 5", "#f43f5e"],
   ["Opus 4.8", "#e11d48"],
   ["Opus 4.7", "#ef4444"],
   ["Opus 4.6", "#f59e0b"],
