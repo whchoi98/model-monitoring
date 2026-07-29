@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 41 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 42 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    └─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
 ```
@@ -64,7 +64,7 @@ EventBridge Scheduler
 |--------|------|
 | AgentCore Memory `BedrockMonitorChatMemory` | 사용자 대화 30일 보존 |
 | AgentCore IAM Managed Policy | backend Task Role에 attach |
-| Bedrock Runtime | 모니터링 카탈로그 41개: Claude Fable 5 / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 6채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna (Bedrock Mantle 13 + 1P direct 5) |
+| Bedrock Runtime | 모니터링 카탈로그 42개: Claude Fable 5 / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 6채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna (Bedrock Mantle 13 + 1P direct 5) |
 
 #### 주기 잡 / Scheduling
 | 리소스 | 역할 |
@@ -159,7 +159,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 41 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 42 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    └─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
 ```
