@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from auto_prober import auto_prober
 from database import get_db
 from models import ProbeRun, ProbeResult
+from visibility import visible_only
 from schemas import ProbeResultResponse
 
 router = APIRouter(prefix="/api/auto-probe", tags=["auto-probe"])
@@ -132,7 +133,7 @@ def get_latest(
         if not latest_run:
             return []
         results = (
-            db.query(ProbeResult)
+            visible_only(db.query(ProbeResult), ProbeResult.model_name)
             .filter(ProbeResult.run_id == latest_run.id)
             .order_by(ProbeResult.model_name)
             .all()
@@ -150,7 +151,7 @@ def get_latest(
         return []
 
     results = (
-        db.query(ProbeResult)
+        visible_only(db.query(ProbeResult), ProbeResult.model_name)
         .filter(ProbeResult.run_id == latest_run.id)
         .order_by(ProbeResult.model_name)
         .all()
@@ -194,7 +195,7 @@ def get_trend(
     )
     if category:
         q = q.filter(ProbeResult.category == category)
-    rows = q.order_by(ProbeResult.timestamp).all()
+    rows = visible_only(q, ProbeResult.model_name).order_by(ProbeResult.timestamp).all()
 
     # 24h 초과 조회는 시간 버킷 평균으로 다운샘플링 — 168h 원본은 56k행/13MB JSON이라
     # 전송·Recharts 렌더링 모두 마비. 5분 해상도는 24h 이하에서만 유지한다.
@@ -246,8 +247,9 @@ def get_anomalies(
     response.headers["Cache-Control"] = "public, max-age=0, s-maxage=60"
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     rows = (
-        db.query(ProbeResult.model_name, ProbeResult.status,
-                 ProbeResult.error_message, ProbeResult.timestamp)
+        visible_only(db.query(ProbeResult.model_name, ProbeResult.status,
+                              ProbeResult.error_message, ProbeResult.timestamp),
+                     ProbeResult.model_name)
         .filter(ProbeResult.timestamp >= since)
         .all()
     )

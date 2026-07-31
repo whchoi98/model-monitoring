@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.19.1 — 2026-07-31
+
+### Changed
+- OpenAI 1P direct (Path 5, 5 channels) excluded from comparison/monitoring exposure per user decision — capability preserved, not deleted. Three-layer switch: CDK `ENABLE_OPENAI_1P=false` (env/secret not injected → prober silently skips registration), backend `visibility.py` read-layer filter hiding `"(1P)"` labels from all query APIs (results, auto-probe latest/trend/anomalies, cost, reliability, efficiency, analysis, chatbot tools) while DB rows are retained, frontend `EXCLUDED_FAMILIES` hard-filter. Active catalog 42 → 37. Background: the stored 1P key was revoked (401) as of 2026-07-31. Re-enable path: CDK flag true + valid key in SSM + `HIDDEN_MODEL_PATTERNS=""` + remove frontend filter entry.
+- OpenAI 1P direct (Path 5, 5개 채널)를 사용자 결정으로 비교·모니터링 노출에서 제외 — 기능(코드)은 보존. 3중 스위치: CDK `ENABLE_OPENAI_1P=false`(env 미주입 → prober가 등록 조용히 skip), backend `visibility.py` 조회 계층 필터(`"(1P)"` 라벨을 모든 조회 API에서 숨김, DB 행은 보존), frontend `EXCLUDED_FAMILIES` 하드필터. 활성 카탈로그 42 → 37. 배경: 저장된 1P 키가 2026-07-31 기준 폐기(401) 상태. 재노출: CDK 플래그 true + 유효 키 SSM 저장 + `HIDDEN_MODEL_PATTERNS=""` + 프런트 필터 항목 제거.
+
 ## v2.19.0 — 2026-07-24
 
 ### Fixed

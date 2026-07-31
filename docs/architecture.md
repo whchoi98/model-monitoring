@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(28개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 37개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
 
 ### 데이터 흐름 (Critical Path)
 
@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 42 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 37 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    └─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
 ```
@@ -64,7 +64,7 @@ EventBridge Scheduler
 |--------|------|
 | AgentCore Memory `BedrockMonitorChatMemory` | 사용자 대화 30일 보존 |
 | AgentCore IAM Managed Policy | backend Task Role에 attach |
-| Bedrock Runtime | 모니터링 카탈로그 42개: Claude Fable 5 / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 6채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna (Bedrock Mantle 13 + 1P direct 5) |
+| Bedrock Runtime | 모니터링 카탈로그 활성 37개: Claude Fable 5 / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 6채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna (Bedrock Mantle 13; 1P direct 5는 v2.19.1부터 휴면/비노출) |
 
 #### 주기 잡 / Scheduling
 | 리소스 | 역할 |
@@ -145,7 +145,7 @@ EventBridge Scheduler
 
 ### System Overview
 
-Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 28-model catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
+Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 37-channel active catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
 
 ### Critical Path
 
@@ -159,7 +159,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 42 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 37 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    └─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
 ```

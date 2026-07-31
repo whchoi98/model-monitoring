@@ -81,7 +81,7 @@ def _seed(session, *, now=None):
     session.add_all(
         [
             result(runs["recent_auto"], "Bedrock Claude Haiku 4.5 (US)", "chat-short", 100.0),
-            result(runs["recent_auto"], "OpenAI GPT 5.5 (1P)", "reasoning", 200.0),
+            result(runs["recent_auto"], "OpenAI GPT 5.5 (us-east-1)", "reasoning", 200.0),
             result(runs["old_auto"], "Bedrock Claude Haiku 4.5 (US)", "chat-short", 300.0),
             result(runs["recent_manual"], "Bedrock Claude Haiku 4.5 (US)", "chat-short", 400.0),
         ]
@@ -119,7 +119,7 @@ def test_trend_category_filter(db_env):
         "/api/auto-probe/trend", params={"hours": 24, "category": "reasoning"}
     ).json()
 
-    assert [r["model_name"] for r in rows] == ["OpenAI GPT 5.5 (1P)"]
+    assert [r["model_name"] for r in rows] == ["OpenAI GPT 5.5 (us-east-1)"]
 
 
 def test_trend_does_not_select_large_text_columns(db_env):

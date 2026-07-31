@@ -32,6 +32,10 @@ export interface SchedulerStackProps extends cdk.StackProps {
   readonly agentCoreMemoryAccessPolicy: iam.IManagedPolicy;
 }
 
+// OpenAI 1P direct(Path 5) 노출 스위치 — 2026-07-31 사용자 결정으로 비활성(키 폐기 상태).
+// 코드·SSM 파라미터·프로버 경로는 전부 보존 — true로 되돌리고 유효 키를 SSM에 넣으면 즉시 복원.
+const ENABLE_OPENAI_1P = false;
+
 export class SchedulerStack extends cdk.Stack {
   public readonly autoProberSchedule: scheduler.Schedule;
   public readonly insightsSchedule: scheduler.Schedule;
@@ -203,12 +207,14 @@ export class SchedulerStack extends cdk.Stack {
           BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
           BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
           BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
-          // 1P direct — native ids. base_url은 코드 기본값(api.openai.com) 사용.
-          OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
-          OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
-          OPENAI_1P_GPT_56_SOL_MODEL_ID: "gpt-5.6-sol",
-          OPENAI_1P_GPT_56_TERRA_MODEL_ID: "gpt-5.6-terra",
-          OPENAI_1P_GPT_56_LUNA_MODEL_ID: "gpt-5.6-luna",
+          // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.
+          ...(ENABLE_OPENAI_1P ? {
+            OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
+            OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
+            OPENAI_1P_GPT_56_SOL_MODEL_ID: "gpt-5.6-sol",
+            OPENAI_1P_GPT_56_TERRA_MODEL_ID: "gpt-5.6-terra",
+            OPENAI_1P_GPT_56_LUNA_MODEL_ID: "gpt-5.6-luna",
+          } : {}),
         },
         secrets: {
           DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -221,7 +227,7 @@ export class SchedulerStack extends cdk.Stack {
           ANTHROPIC_API_KEY: ecs.Secret.fromSsmParameter(anthropicApiKeyParam),
           ANTHROPIC_WORKSPACE_ID: ecs.Secret.fromSsmParameter(anthropicWorkspaceIdParam),
           OPENAI_API_KEY: ecs.Secret.fromSsmParameter(openaiApiKeyParam),
-          OPENAI_1P_API_KEY: ecs.Secret.fromSsmParameter(openai1pApiKeyParam),
+          ...(ENABLE_OPENAI_1P ? { OPENAI_1P_API_KEY: ecs.Secret.fromSsmParameter(openai1pApiKeyParam) } : {}),
         },
         logging: ecs.LogDrivers.awsLogs({
           logGroup,

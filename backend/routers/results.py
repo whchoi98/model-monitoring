@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from visibility import visible_only
 from schemas import ModelStats, ProbeResultResponse, StatsResponse
 
 router = APIRouter(prefix="/api/results", tags=["results"])
@@ -42,7 +43,7 @@ def list_results(
     db: Session = Depends(get_db),
 ):
     """List probe results with optional filters."""
-    query = db.query(ProbeResult)
+    query = visible_only(db.query(ProbeResult), ProbeResult.model_name)
 
     if model_id:
         query = query.filter(ProbeResult.model_id == model_id)
@@ -71,7 +72,8 @@ def get_stats(
     Only successful probes are included in the statistics.
     category 지정 시 그 workload preset 카테고리의 결과만 집계.
     """
-    query = db.query(ProbeResult).filter(ProbeResult.status == "success")
+    query = visible_only(db.query(ProbeResult).filter(ProbeResult.status == "success"),
+                         ProbeResult.model_name)
 
     if start_time:
         query = query.filter(ProbeResult.timestamp >= start_time)
@@ -147,7 +149,7 @@ def get_latest_results(
     )
 
     results = (
-        db.query(ProbeResult)
+        visible_only(db.query(ProbeResult), ProbeResult.model_name)
         .join(subq, ProbeResult.id == subq.c.max_id)
         .order_by(ProbeResult.timestamp.desc())
         .all()

@@ -23,6 +23,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from visibility import visible_only
 from pricing import estimate_cost_usd
 
 logger = logging.getLogger(__name__)
@@ -108,7 +109,8 @@ def get_efficiency_score(
     category 미지정 시 전체. 지정 시 그 카테고리만 (공정 비교 권장: 같은 prompt 기준).
     """
     since = datetime.now(timezone.utc) - _parse_window(window)
-    q = db.query(ProbeResult).filter(ProbeResult.timestamp >= since)
+    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(
+        ProbeResult.timestamp >= since)
     if category:
         q = q.filter(ProbeResult.category == category)
     rows = q.all()

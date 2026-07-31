@@ -22,6 +22,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from visibility import visible_only
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
@@ -96,7 +97,7 @@ def get_stop_reasons(
     """모델별 stop_reason 분포 (success status만 집계)."""
     cutoff = datetime.now(timezone.utc) - _parse_window(window)
 
-    q = db.query(ProbeResult).filter(
+    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(
         ProbeResult.timestamp >= cutoff,
         ProbeResult.status == "success",
     )
@@ -203,7 +204,7 @@ def get_output_length(
     """모델별 output_tokens 분포 통계 + 히스토그램."""
     cutoff = datetime.now(timezone.utc) - _parse_window(window)
 
-    q = db.query(ProbeResult).filter(
+    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(
         ProbeResult.timestamp >= cutoff,
         ProbeResult.status == "success",
         ProbeResult.output_tokens.isnot(None),
