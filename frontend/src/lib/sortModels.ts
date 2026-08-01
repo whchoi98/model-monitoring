@@ -21,7 +21,9 @@ export const FAMILY_ORDER = [
 ];
 
 // 모니터링 catalogue에서 제외된 모델 (ADR-017). backend silent bug 대비 frontend hard-filter.
-const EXCLUDED_FAMILIES = ["Opus 4.5", "Sonnet 4.5"];
+// "(1P)": OpenAI 1P direct 채널 — 2026-07-31 사용자 결정으로 비교에서 제외(비노출).
+// 백엔드 등록은 env로 꺼졌고(ENABLE_OPENAI_1P), 이 필터는 과거 DB 행의 노출을 막는 이중 방어.
+const EXCLUDED_FAMILIES = ["Opus 4.5", "Sonnet 4.5", "(1P)"];
 
 export function isExcludedModel(modelName: string): boolean {
   return EXCLUDED_FAMILIES.some((p) => modelName.includes(p));

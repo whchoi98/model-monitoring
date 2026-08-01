@@ -20,6 +20,7 @@ from fastapi import Depends
 
 from database import get_db
 from models import ProbeResult
+from visibility import hidden_patterns
 from pricing import get_pricing, estimate_cost_usd
 
 logger = logging.getLogger(__name__)
@@ -89,6 +90,7 @@ def get_cost_summary(
         )
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
+        .filter(*[~ProbeResult.model_name.contains(p) for p in hidden_patterns()])
         .group_by(ProbeResult.model_id, ProbeResult.model_name)
         .all()
     )
@@ -155,6 +157,7 @@ def get_channel_compare(
         )
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
+        .filter(*[~ProbeResult.model_name.contains(p) for p in hidden_patterns()])
         .group_by(ProbeResult.model_id)
         .all()
     )
@@ -218,6 +221,7 @@ def get_cost_trend(
         )
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
+        .filter(*[~ProbeResult.model_name.contains(p) for p in hidden_patterns()])
         .all()
     )
 

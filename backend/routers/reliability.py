@@ -17,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from visibility import visible_only
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reliability", tags=["reliability"])
@@ -139,7 +140,7 @@ def get_multi_channel(
     """동일 family를 채널별로 집계해 가용성/실패 모드 비교."""
     since = datetime.now(timezone.utc) - _parse_window(window)
     rows = (
-        db.query(ProbeResult)
+        visible_only(db.query(ProbeResult), ProbeResult.model_name)
         .filter(ProbeResult.timestamp >= since)
         .all()
     )

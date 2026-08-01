@@ -13,6 +13,7 @@ from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from models import ProbeResult, ProbeRun
+from visibility import visible_only
 
 
 def get_latest_results(db: Session, model_id: Optional[str] = None) -> Dict[str, Any]:
@@ -29,7 +30,7 @@ def get_latest_results(db: Session, model_id: Optional[str] = None) -> Dict[str,
     if not latest_run:
         return {"run_id": None, "results": []}
 
-    q = db.query(ProbeResult).filter(ProbeResult.run_id == latest_run.id)
+    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(ProbeResult.run_id == latest_run.id)
     if model_id:
         q = q.filter(ProbeResult.model_id == model_id)
     rows = q.order_by(ProbeResult.model_name).all()
@@ -64,7 +65,8 @@ def _fetch_metric_rows(db: Session, hours: int, metric: str):
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     metric_col = getattr(ProbeResult, metric)
     return (
-        db.query(ProbeResult.timestamp, ProbeResult.model_id, ProbeResult.model_name, metric_col)
+        visible_only(db.query(ProbeResult.timestamp, ProbeResult.model_id,
+                              ProbeResult.model_name, metric_col), ProbeResult.model_name)
         .join(ProbeRun, ProbeResult.run_id == ProbeRun.id)
         .filter(
             ProbeRun.is_auto == 1,

@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.18.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.19.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 42 model cards + trend)
+                ├── /             — Dashboard (status + 37 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -38,7 +38,7 @@ Internal ALB
                 └── /gpt-on-aws   — GPT on AWS (Mantle 8채널 TTFB/TTFT 벤치, 15분 주기, v2.18.0)
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 42 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 37 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
   └── GptBench Fargate Task    → 15분 주기 Mantle GPT 8채널 × 10회 TTFB/TTFT 벤치 (v2.18.0)
@@ -59,7 +59,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (42개), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/1P), AVAILABLE_MODELS (37개 활성 + 1P 5개 휴면), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -93,7 +93,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 42 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 37 cards + trend + workload filter)
 │   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
 │   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
 │   │   │   ├── gpt-on-aws/page.tsx # GPT on AWS 벤치 (v2.18.0)
@@ -106,8 +106,8 @@ model-monitoring/
 │   │   │   ├── AppHeader.tsx            # 공용 헤더 — 데스크톱 내비 + 모바일 햄버거, 9개 페이지 공용 (v2.16.0)
 │   │   │   ├── RumProvider.tsx          # RUM 수집 — 자체 호스팅 rum-sdk 로드, NEXT_PUBLIC_RUM_* 미설정 시 비활성 (v2.16.5)
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 42 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 42개 라벨 (17 Bedrock + 7 Anthropic CP + 18 OpenAI — CP Opus 5는 복구 대비 선등록)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 37 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 라벨 (17 Bedrock + 7 Anthropic CP + 13 OpenAI Mantle 활성; 1P 5개는 휴면)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -173,7 +173,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (42 total) / 모니터링 대상 모델 (총 42개)
+## Monitored Models (37 active) / 모니터링 대상 모델 (활성 37개 — 1P 5개 휴면 제외)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
@@ -189,7 +189,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 **OpenAI (Bedrock Mantle, in-region)** — 신규 v2.4.0:
 
-| Family | us-east-1 | us-east-2 | us-west-2 | 1P direct |
+| Family | us-east-1 | us-east-2 | us-west-2 | 1P direct (휴면) |
 |--------|-----------|-----------|-----------|-----------|
 | GPT 5.6 Sol (v2.17.0) | ✅ | ✅ | — | ✅ |
 | GPT 5.6 Terra (v2.17.0) | ✅ | ✅ | ✅ | ✅ |
@@ -198,7 +198,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | GPT 5.4 | ✅ | ✅ | ✅ | ✅ (v2.6.0) |
 
 - **Mantle (Path 4)** model_id 키: `openai:<region>:openai.gpt-5.x`. 라벨: `OpenAI GPT 5.x (<region>)`. OpenAI-compatible `/openai/v1` + Bedrock bearer 토큰(`OPENAI_API_KEY`, `ABSK-…`). 자세히는 ADR-019.
-- **1P direct (Path 5, v2.6.0)** model_id 키: `openai:1p:gpt-5.x`. 라벨: `OpenAI GPT 5.x (1P)`. `https://api.openai.com/v1` 직접 호출 + **OpenAI platform 키**(`OPENAI_1P_API_KEY`, `sk-proj-…` — Mantle bearer와 호환 불가). native id(`gpt-5.x`, 접두사 없음). 리전 개념 없음(글로벌 라우팅). env: `OPENAI_1P_API_KEY`(SSM `/bedrock-monitor/openai-1p-api-key`), `OPENAI_1P_GPT_54/55_MODEL_ID`, `OPENAI_1P_BASE_URL`(선택). 자세히는 ADR-020.
+- **1P direct (Path 5, v2.6.0 — v2.19.1부터 휴면/비노출)** model_id 키: `openai:1p:gpt-5.x`. 라벨: `OpenAI GPT 5.x (1P)`. `https://api.openai.com/v1` 직접 호출 + **OpenAI platform 키**(`OPENAI_1P_API_KEY`, `sk-proj-…` — Mantle bearer와 호환 불가). native id(`gpt-5.x`, 접두사 없음). 리전 개념 없음(글로벌 라우팅). env: `OPENAI_1P_API_KEY`(SSM `/bedrock-monitor/openai-1p-api-key`), `OPENAI_1P_GPT_54/55_MODEL_ID`, `OPENAI_1P_BASE_URL`(선택). 자세히는 ADR-020. **2026-07-31 사용자 결정으로 비교에서 제외(비노출)**: 코드·DB 행은 보존, CDK `ENABLE_OPENAI_1P=false`로 env 미주입(등록 skip) + backend `visibility.py` `(1P)` 라벨 조회 필터 + frontend `EXCLUDED_FAMILIES` 하드필터. 재노출 = CDK 플래그 true + 유효 키 SSM 저장 + `HIDDEN_MODEL_PATTERNS=""` env + EXCLUDED_FAMILIES에서 제거.
 - **GPT-5.6 세대 (v2.17.0, 2026-07-14)**: Sol(최상위)/Terra(균형)/Luna(저비용) — Mantle native id `openai.gpt-5.6-{sol,terra,luna}`, 1P native id `gpt-5.6-{sol,terra,luna}`. **Sol은 us-west-2 미제공**. Responses API 전용(5.4/5.5와 동일). Bedrock in-region 가격이 OpenAI 1P와 동일(parity — 5.4/5.5의 10% 마크업 없음): Sol $5/$30, Terra $2.5/$15, Luna $1/$6 per MTok. env: `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID` + `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`.
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
