@@ -158,6 +158,8 @@ docker push $ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG
 # Deploy (digest 고정 — CDK가 :latest로 되돌리는 사고 방지, ADR-018)
 # cd cdk && npx cdk deploy BedrockMonitor-AppServices BedrockMonitor-Scheduler --require-approval never \
 #   -c backendImage="<repo>:$TAG@sha256:<digest>" -c frontendImage="<repo>:$TAG@sha256:<digest>"
+#   ⚠️ <repo>는 레지스트리 호스트 포함 전체 URI ($ACCT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2).
+#      repo 이름만 넘기면 ECS가 docker.io/library/…로 해석 → pull 실패 → 서킷 브레이커 롤백 (2026-08-01 실사고)
 # (see docs/runbooks/deploy.md for full procedure including autoprober/parityrun schedules)
 
 # Verify
