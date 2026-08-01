@@ -84,3 +84,18 @@ def test_hidden_patterns_parsing(monkeypatch):
     assert visibility.hidden_patterns() == ["(1P)"]
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", " (1P) , Opus 4.5 ")
     assert visibility.hidden_patterns() == ["(1P)", "Opus 4.5"]
+
+
+def test_insights_stats_exclude_1p(session_factory):
+    """AI 인사이트 잡의 통계 수집도 1P 채널을 제외한다 (v2.19.2)."""
+    from insights_runner import collect_stats_for_window
+
+    _seed(session_factory)
+    s = session_factory()
+    try:
+        stats = collect_stats_for_window(s, "6h")
+    finally:
+        s.close()
+    text = str(stats)
+    assert "(1P)" not in text
+    assert "OpenAI GPT 5.4 (us-east-1)" in text

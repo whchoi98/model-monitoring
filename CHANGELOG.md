@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.19.2 — 2026-08-01
+
+### Changed
+- AI insights job (Haiku 4.5) now excludes hidden `"(1P)"` channels from its stats collection (`insights_runner.collect_stats_for_window` / `run_once`) — completes the v2.19.1 exposure removal for AI-generated analysis. Chatbot tools were already filtered in v2.19.1.
+- AI 인사이트 잡(Haiku 4.5)의 통계 수집(`insights_runner`)에서도 숨김 `"(1P)"` 채널을 제외 — v2.19.1 비노출 조치를 AI 생성 분석까지 확장. 챗봇 tools는 v2.19.1에서 이미 필터 적용됨.
+
 ## v2.19.1 — 2026-07-31
 
 ### Changed
