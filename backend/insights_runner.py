@@ -22,6 +22,7 @@ from typing import Any, Dict, List
 
 from database import SessionLocal
 from models import Insight, ProbeResult, ProbeRun
+from visibility import visible_only
 
 logger = logging.getLogger(__name__)
 
@@ -152,7 +153,7 @@ def collect_stats_for_window(db, window_spec: str) -> Dict[str, Any]:
     delta = parse_window(window_spec)
     since = datetime.now(timezone.utc) - delta
     rows = (
-        db.query(ProbeResult)
+        visible_only(db.query(ProbeResult), ProbeResult.model_name)
         .filter(ProbeResult.timestamp >= since)
         .all()
     )
@@ -186,7 +187,8 @@ def run_once(window_spec: str = "6h") -> int:
             return 0
 
         run_ids = [r.id for r in runs]
-        rows = db.query(ProbeResult).filter(ProbeResult.run_id.in_(run_ids)).all()
+        rows = (visible_only(db.query(ProbeResult), ProbeResult.model_name)
+                .filter(ProbeResult.run_id.in_(run_ids)).all())
         if not rows:
             logger.info("ProbeResult 없음 - insight skip")
             return 0
