@@ -1,16 +1,18 @@
 # Amazon Bedrock LLM Monitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.18.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.21.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
-[![English](https://img.shields.io/badge/lang-English-blue.svg)](#english)
-[![한국어](https://img.shields.io/badge/lang-한국어-red.svg)](#한국어)
+<a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
+<a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
 
 A real-time observability dashboard for Amazon Bedrock + Anthropic CP on AWS LLM channels — speed, throughput, reliability, cost, and output quality.
 
 Amazon Bedrock + Anthropic CP on AWS LLM 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드입니다.
 
 ---
+
+<a id="english"></a>
 
 # English
 
@@ -114,6 +116,24 @@ curl -N -H "Authorization: Bearer $TOKEN" \
   -d '{"model_ids":["global.anthropic.claude-haiku-4-5-20251001-v1:0"],"prompt":"hello","max_tokens":50}'
 ```
 
+## iPhone / iPad App (PWA)
+
+The dashboard installs as a full-screen standalone app on iPhone and iPad — no App Store required (v2.21.0).
+
+**Install**: open the dashboard in Safari → Share → "Add to Home Screen". The installed app keeps its own login session separate from Safari, so sign in once inside the app for authenticated features.
+
+**How it is implemented** (all paths under `frontend/`):
+
+| Piece | File | Notes |
+|-------|------|-------|
+| Web app manifest | `src/app/manifest.ts` | Served by Next.js at `/manifest.webmanifest` (`display: standalone`, dark theme/background colors) |
+| App icons | `src/app/icon.png` (512), `src/app/apple-icon.png` (180), `public/icons/*` | Next.js file conventions auto-inject the icon `<link>` tags; `public/icons` carries the manifest set including Android `maskable` variants (art scaled into the 80% safe zone). Regenerated with a Pillow script (1024 px master → LANCZOS downscale) |
+| iOS meta tags | `src/app/layout.tsx` | `metadata.appleWebApp` (capable, black-translucent status bar, app title) + a separate `viewport` export with `viewport-fit=cover` |
+| Safe areas | `src/app/globals.css` | Applied only under `@media (display-mode: standalone)`: the sticky header gains `env(safe-area-inset-top)` (notch / Dynamic Island) and the body gains side/bottom insets (home indicator). Regular browser tabs are unaffected |
+| Caching | `src/middleware.ts` | The `no-store` matcher excludes the PWA static assets (same treatment as `favicon.ico`) so CloudFront may cache them |
+
+A service worker is deliberately **not** used: offline caching would show stale metrics on a real-time dashboard, and iOS home-screen install does not require one.
+
 ## Configuration
 
 | Variable | Description | Default |
@@ -136,9 +156,9 @@ model-monitoring/
 │   ├── prober.py                 # 40-model (+5 dormant 1P) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI Mantle/Global
 │   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
 │   ├── pricing.py                # token unit price table
-│   └── routers/                  # 15 router modules (auth, admin, analysis, cost, …)
-├── frontend/                     # Next.js 14 standalone + 6 routes
-│   ├── src/app/                  # /, /models, /parity, /prompts, /cost, /reliability, /efficiency, /analysis
+│   └── routers/                  # 16 router modules (auth, admin, analysis, cost, gptbench, …)
+├── frontend/                     # Next.js 14 standalone + 10 routes (installable PWA)
+│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA icons
 │   ├── src/components/           # 30+ React components (dashboard, panels, chat)
 │   └── src/lib/                  # api client, i18n, sortModels, pricing mirror, version
 ├── cdk/                          # 8 CDK TypeScript stacks
@@ -147,8 +167,8 @@ model-monitoring/
 ├── docs/
 │   ├── architecture.md           # full system design
 │   ├── decisions/                # ADR-001 through ADR-025
-│   ├── runbooks/                 # deploy, rollback procedures
-│   └── CHANGELOG.md              # Keep-a-Changelog format
+│   └── runbooks/                 # deploy, rollback procedures
+├── CHANGELOG.md                  # Keep a Changelog format (bilingual, repo root)
 └── Makefile                      # `make verify` runs CDK lint + tests + ruff + tsc
 ```
 
@@ -211,6 +231,8 @@ This project is licensed under the [MIT License](LICENSE).
 - Email: whchoi98@gmail.com
 
 ---
+
+<a id="korean"></a>
 
 # 한국어
 
@@ -314,6 +336,24 @@ curl -N -H "Authorization: Bearer $TOKEN" \
   -d '{"model_ids":["global.anthropic.claude-haiku-4-5-20251001-v1:0"],"prompt":"안녕","max_tokens":50}'
 ```
 
+## iPhone / iPad 앱 (PWA)
+
+대시보드를 iPhone·iPad에서 전체화면 standalone 앱으로 설치해 사용할 수 있습니다 — App Store 불필요 (v2.21.0).
+
+**설치**: Safari에서 대시보드 접속 → 공유 → "홈 화면에 추가". 설치형 앱은 Safari와 로그인 세션이 분리되므로, 인증이 필요한 기능은 앱 안에서 한 번 로그인하면 됩니다.
+
+**구현 방법** (모든 경로는 `frontend/` 기준):
+
+| 구성 요소 | 파일 | 설명 |
+|-----------|------|------|
+| Web app manifest | `src/app/manifest.ts` | Next.js가 `/manifest.webmanifest`로 서빙 (`display: standalone`, 다크 theme/background 색상) |
+| 앱 아이콘 | `src/app/icon.png` (512), `src/app/apple-icon.png` (180), `public/icons/*` | Next.js 파일 컨벤션이 아이콘 `<link>` 태그를 자동 주입. `public/icons`는 Android `maskable` 변형(아트를 80% 안전영역으로 축소) 포함 manifest용 세트. Pillow 스크립트로 재생성 (1024px 원본 → LANCZOS 다운스케일) |
+| iOS 메타태그 | `src/app/layout.tsx` | `metadata.appleWebApp`(capable, 반투명 상태바, 앱 타이틀) + 별도 `viewport` export의 `viewport-fit=cover` |
+| Safe area | `src/app/globals.css` | `@media (display-mode: standalone)` 한정 적용: sticky 헤더에 `env(safe-area-inset-top)`(노치/Dynamic Island), body에 좌우/하단 인셋(홈 인디케이터). 일반 브라우저 탭은 무영향 |
+| 캐싱 | `src/middleware.ts` | `no-store` matcher에서 PWA 정적 자산 제외(`favicon.ico`와 동일 취급) — CloudFront 캐시 허용 |
+
+서비스워커는 의도적으로 **미도입**: 실시간 대시보드에서 오프라인 캐시는 낡은 지표를 보여주는 반기능이고, iOS 홈 화면 설치에는 필요하지 않습니다.
+
 ## 환경 설정
 
 | 변수명 | 설명 | 기본값 |
@@ -336,9 +376,9 @@ model-monitoring/
 │   ├── prober.py                 # 40개(+1P 5개 휴면) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI (Mantle + Global + 1P)
 │   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
 │   ├── pricing.py                # 토큰 단가 테이블
-│   └── routers/                  # 15개 라우터 (auth, admin, analysis, cost, …)
-├── frontend/                     # Next.js 14 standalone + 6 라우트
-│   ├── src/app/                  # /, /models, /parity, /prompts, /cost, /reliability, /efficiency, /analysis
+│   └── routers/                  # 16개 라우터 (auth, admin, analysis, cost, gptbench, …)
+├── frontend/                     # Next.js 14 standalone + 10 라우트 (설치형 PWA)
+│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA 아이콘
 │   ├── src/components/           # 30+ React 컴포넌트 (대시보드, 패널, 챗)
 │   └── src/lib/                  # API 클라이언트, i18n, sortModels, pricing 미러, version
 ├── cdk/                          # 8개 CDK TypeScript 스택
@@ -347,8 +387,8 @@ model-monitoring/
 ├── docs/
 │   ├── architecture.md           # 전체 시스템 설계
 │   ├── decisions/                # ADR-001 ~ ADR-025
-│   ├── runbooks/                 # 배포 / 롤백 절차
-│   └── CHANGELOG.md              # Keep a Changelog 형식
+│   └── runbooks/                 # 배포 / 롤백 절차
+├── CHANGELOG.md                  # Keep a Changelog 형식 (bilingual, 저장소 루트)
 └── Makefile                      # `make verify` — CDK lint + tests + ruff + tsc 일괄 실행
 ```
 
