@@ -202,6 +202,9 @@ export class SchedulerStack extends cdk.Stack {
           OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
           OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
           OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
+          // global CRIS(global.openai.*)는 bedrock-mantle 호스트 미지원 — bedrock-runtime
+          // OpenAI-compat 엔드포인트(Seoul)로만 호출 가능. GPT-5.6 Global 채널 3개용 (v2.20.0).
+          OPENAI_GLOBAL_BASE_URL: "https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1",
           BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
           BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
           BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
@@ -294,6 +297,9 @@ export class SchedulerStack extends cdk.Stack {
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${autoProberTaskDef.family}:*`,
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${insightsTaskDef.family}:*`,
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${parityTaskDef.family}:*`,
+          // gptbench도 wildcard 필요 — 누락 시 수동 register-task-definition으로 revision이
+          // bump되는 순간 스케줄이 silent fail (ADR-011과 동일 시나리오).
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${gptBenchTaskDef.family}:*`,
         ],
       }),
     );

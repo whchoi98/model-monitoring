@@ -30,6 +30,13 @@ describe("channelOf — 5개 provider path 판별", () => {
     expect(ch.type).toBe("openai-1p");
     expect(ch.endpoint).toBe("https://api.openai.com/v1");
   });
+  test("OpenAI Bedrock Global CRIS (v2.20.0)", () => {
+    const ch = channelOf("openai:global:global.openai.gpt-5.6-sol");
+    expect(ch.type).toBe("openai-mantle");
+    // global 프로파일은 bedrock-mantle 호스트 미지원 — Seoul bedrock-runtime OpenAI-compat만 가능.
+    expect(ch.endpoint).toBe("https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1");
+    expect(ch.label).toContain("Global");
+  });
 });
 
 describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
@@ -44,6 +51,9 @@ describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
   });
   test("OpenAI 1P는 native id", () => {
     expect(nativeId("openai:1p:gpt-5.4")).toBe("gpt-5.4");
+  });
+  test("OpenAI Global CRIS는 global. 접두사 포함 프로파일 id", () => {
+    expect(nativeId("openai:global:global.openai.gpt-5.6-terra")).toBe("global.openai.gpt-5.6-terra");
   });
 });
 
@@ -87,6 +97,13 @@ describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () 
     expect(ex[0].api).toBe("Responses API");
     expect(ex[0].code).toContain("responses");
     expect(ex[0].code).toContain('"gpt-5.5"');
+  });
+  test("OpenAI Global CRIS → Responses API + Seoul bedrock-runtime base_url", () => {
+    const ex = codeExamples("openai:global:global.openai.gpt-5.6-luna");
+    expect(ex[0].api).toBe("Responses API");
+    expect(ex[0].code).toContain("bedrock-runtime.ap-northeast-2");
+    expect(ex[0].code).not.toContain("bedrock-mantle.global"); // 존재하지 않는 호스트 회귀 방지
+    expect(ex[0].code).toContain("global.openai.gpt-5.6-luna");
   });
 });
 

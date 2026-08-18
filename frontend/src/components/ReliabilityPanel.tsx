@@ -19,7 +19,8 @@ const CHANNEL_BG: Record<string, string> = {
   "Bedrock Global": "bg-orange-500/10 light:bg-gray-900/50 border-orange-500/30 text-orange-300",
   "Bedrock US": "bg-pink-500/10 light:bg-gray-900/50 border-pink-500/30 text-pink-300",
   "Anthropic (CP on AWS)": "bg-purple-500/10 light:bg-gray-900/50 border-purple-500/30 text-purple-300",
-  // OpenAI channels — Mantle regions + 1P direct (green family).
+  // OpenAI channels — Global CRIS + Mantle regions + 1P direct (green family).
+  "OpenAI Global": "bg-cyan-500/10 light:bg-gray-900/50 border-cyan-500/30 text-cyan-300",
   "OpenAI us-east-1": "bg-emerald-500/10 light:bg-gray-900/50 border-emerald-500/30 text-emerald-300",
   "OpenAI us-east-2": "bg-green-500/10 light:bg-gray-900/50 border-green-500/30 text-green-300",
   "OpenAI us-west-2": "bg-teal-500/10 light:bg-gray-900/50 border-teal-500/30 text-teal-300",

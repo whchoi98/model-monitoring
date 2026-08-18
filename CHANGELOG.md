@@ -7,6 +7,20 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.20.0 — 2026-08-18
+
+### Added
+- OpenAI GPT-5.6 (Sol/Terra/Luna) Bedrock **Global cross-region inference** channels — 3 new monitored channels (active catalog 37 → 40), announced by AWS on 2026-08-17 (5.6 generation only; 5.4/5.5 unsupported). Key scheme `openai:global:global.openai.gpt-5.6-*` (pseudo-region `global`, profile id derived by prepending `global.` — no new model-id env), label `OpenAI GPT 5.6 * (Global)`. Called via the Seoul bedrock-runtime OpenAI-compat endpoint (`OPENAI_GLOBAL_BASE_URL`, reuses the existing Mantle bearer key) because the bedrock-mantle host does not support global profiles. Pricing is channel-split with `-global` suffix keys since Global CRIS is cheaper than in-region (Sol $5/$30, Terra $2/$12, Luna $0.20/$1.20 per MTok). See ADR-025.
+- OpenAI GPT-5.6 (Sol/Terra/Luna) Bedrock **Global cross-region inference** 채널 3개 추가 (활성 카탈로그 37 → 40) — 2026-08-17 AWS 발표(5.6 세대만, 5.4/5.5 미지원). 키 스킴 `openai:global:global.openai.gpt-5.6-*`(pseudo-region `global`, 프로파일 id는 `global.` 접두사 파생 — 신규 model-id env 없음), 라벨 `OpenAI GPT 5.6 * (Global)`. global 프로파일은 bedrock-mantle 호스트 미지원이라 Seoul bedrock-runtime OpenAI-compat 엔드포인트(`OPENAI_GLOBAL_BASE_URL`, 기존 Mantle bearer 키 재사용)로 호출. Global CRIS 단가가 in-region보다 저렴해 `-global` suffix 키로 가격 분리 (Sol $5/$30, Terra $2/$12, Luna $0.20/$1.20 per MTok). ADR-025 참조.
+
+### Fixed
+- Pricing table: GPT-5.6 in-region rates corrected to reflect the 2026-07-30 AWS price reduction (Luna -80%, Terra -20%; Sol unchanged at the official $5.50/$33 — the previous "1P parity $5/$30" entry was stale). Cost dashboards recalculate retroactively at the corrected rates (same policy as the v2.19.0 Opus correction).
+- 가격 테이블: GPT-5.6 in-region 단가를 2026-07-30 AWS 인하 반영으로 교정 (Luna -80%, Terra -20%; Sol은 공식 $5.50/$33 — 기존 "1P parity $5/$30" 기재는 낡은 값). 비용 대시보드는 교정 단가로 소급 재계산 (v2.19.0 Opus 교정과 동일 정책).
+
+### Infra
+- EventBridge Scheduler invoke role: added the missing `gptbench` task-def family `:*` wildcard to `ecs:RunTask` (ADR-011 hardening — prevents silent schedule failure after a manual task-def revision bump).
+- EventBridge Scheduler invoke role의 `ecs:RunTask`에 누락돼 있던 `gptbench` task-def family `:*` wildcard 추가 (ADR-011 예방 — 수동 revision bump 후 스케줄 silent fail 방지).
+
 ## v2.19.2 — 2026-08-01
 
 ### Changed
