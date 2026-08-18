@@ -57,6 +57,8 @@ tools/parity는 전부 동적이라 무변경 자동 편입 (parity는 12h 런�
   1P 전용 단가 분리는 기존 follow-up 그대로 (휴면/비노출이라 표시 영향 없음)
 - (−) gptbench(`_BENCH_SPECS`)는 별도 카탈로그라 `/gpt-on-aws` 벤치에 Global
   채널이 자동 추가되지 않음 — 포함하려면 별도 결정 (15분 주기 비용 증가)
+  → **2026-08-18 사용자 승인으로 v2.20.1에서 Terra Global 1채널 편입** (8→9채널,
+  ~+$20/일 추정; Sol/Luna는 벤치 대상 자체가 아니라 제외 유지)
 - 배포 검증: autoprober 로그에서 Global 3채널 첫 `success` 확인 필수 —
   `bedrock-runtime.ap-northeast-2` 호스트는 기존 Mantle 호스트(NAT egress)와
   달리 **BedrockRuntime interface VPC endpoint를 경유**하므로 로컬 라이브 검증과

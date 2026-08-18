@@ -35,13 +35,13 @@ Internal ALB
                 ├── /analysis     — Stop reason 분포 + Output length 분포
                 ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
                 ├── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
-                └── /gpt-on-aws   — GPT on AWS (Mantle 8채널 TTFB/TTFT 벤치, 15분 주기, v2.18.0)
+                └── /gpt-on-aws   — GPT on AWS (Mantle 9채널 TTFB/TTFT 벤치 — Terra Global 포함 v2.20.1, 15분 주기)
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 40 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
-  └── GptBench Fargate Task    → 15분 주기 Mantle GPT 8채널 × 10회 TTFB/TTFT 벤치 (v2.18.0)
+  └── GptBench Fargate Task    → 15분 주기 Mantle GPT 9채널 × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1)
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
@@ -68,7 +68,7 @@ model-monitoring/
 │   ├── retention.py         # RETENTION_DAYS 초과 probe_results → probe_results_hourly 집계 이관
 │   ├── anomalies.py         # 최근 N시간 프로브 실패 요약 (대시보드 이상 징후 박스, v2.12.0)
 │   ├── parity_runner.py     # CLI entry: `python -m parity_runner --once` (ParityRun Fargate task)
-│   ├── gptbench.py          # GPT on AWS 벤치 사이클 (Mantle 8채널 × 10회, TTFB/TTFT/GAP, v2.18.0)
+│   ├── gptbench.py          # GPT on AWS 벤치 사이클 (Mantle 9채널 × 10회 — Terra Global 포함 v2.20.1, TTFB/TTFT/GAP)
 │   ├── gptbench_runner.py   # CLI entry: `python -m gptbench_runner --once` (15분 스케줄)
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py

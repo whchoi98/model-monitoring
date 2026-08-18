@@ -29,10 +29,12 @@ INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sente
 
 # (family, model-id env var, 제공 리전) — prober._OPENAI_MODEL_SPECS의 3P(Mantle) 서브셋.
 # GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra).
+# pseudo-region "global" = Terra의 Global CRIS 채널 (v2.20.1, 2026-08-18 사용자 승인) —
+# 5.4/5.5는 global 프로파일 미지원. 모델 id는 in-region id에 "global." 접두사 파생 (prober와 동일 규약).
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),
     ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1", "us-east-2")),
-    ("GPT 5.6 Terra", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),
+    ("GPT 5.6 Terra", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", ("global", "us-east-1", "us-east-2", "us-west-2")),
 ]
 
 # ~55.8k 토큰 고정 컨텍스트 — 벤치 스크립트와 동일 (변경 시 캐시 무효 + 측정 연속성 깨짐 주의).
@@ -87,12 +89,21 @@ def bench_channels() -> list[dict]:
                 "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
                 "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
                 "us-west-2": "OPENAI_US_WEST_2_BASE_URL",
+                "global": "OPENAI_GLOBAL_BASE_URL",
             }[region]):
                 continue
+            if region == "global":
+                # Global CRIS 프로파일 id = "global." + in-region id, 라벨 "(Global)" 대문자 —
+                # prober._register_openai_models와 동일 규약 (키/라벨이 대시보드 채널과 정렬됨).
+                channel_id = f"global.{actual_id}"
+                label = f"OpenAI {family} (Global)"
+            else:
+                channel_id = actual_id
+                label = f"OpenAI {family} ({region})"
             chans.append(dict(
-                family=family, region=region, actual_id=actual_id,
-                model_id=f"openai:{region}:{actual_id}",
-                model_name=f"OpenAI {family} ({region})",
+                family=family, region=region, actual_id=channel_id,
+                model_id=f"openai:{region}:{channel_id}",
+                model_name=label,
             ))
     return chans
 
