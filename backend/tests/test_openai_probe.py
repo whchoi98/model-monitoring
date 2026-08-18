@@ -21,13 +21,21 @@ def test_openai_parts():
     assert actual == "openai.gpt-5.5"
 
 
+def test_openai_parts_global():
+    region, actual = prober._openai_parts("openai:global:global.openai.gpt-5.6-sol")
+    assert region == "global"
+    assert actual == "global.openai.gpt-5.6-sol"
+
+
 def test_openai_base_url(monkeypatch):
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.setenv("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1")
     monkeypatch.setenv("OPENAI_US_WEST_2_BASE_URL", "https://w2/openai/v1")
+    monkeypatch.setenv("OPENAI_GLOBAL_BASE_URL", "https://gl/openai/v1")
     assert prober._openai_base_url("us-east-1") == "https://e1/openai/v1"
     assert prober._openai_base_url("us-east-2") == "https://e2/openai/v1"
     assert prober._openai_base_url("us-west-2") == "https://w2/openai/v1"
+    assert prober._openai_base_url("global") == "https://gl/openai/v1"
 
 
 def test_openai_parts_1p():
@@ -54,9 +62,22 @@ def test_openai_stop_reason():
     assert prober._openai_stop_reason("incomplete", None) == "incomplete"
 
 
+def _isolate_ambient_openai_env(monkeypatch):
+    """배포형 컨테이너(env 전부 주입)에서 pytest를 돌려도 exact-list assert가 깨지지 않도록
+    테스트가 명시하지 않은 OpenAI env를 전부 제거."""
+    for env in (
+        "OPENAI_GLOBAL_BASE_URL",
+        "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID",
+        "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID",
+        "BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID",
+    ):
+        monkeypatch.delenv(env, raising=False)
+
+
 def test_register_openai_models_per_region_availability(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)  # isolate Mantle tests from 1P path
+    _isolate_ambient_openai_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.setenv("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1")
@@ -77,6 +98,32 @@ def test_register_openai_models_per_region_availability(monkeypatch):
     assert "openai:us-west-2:openai.gpt-5.5" not in prober.AVAILABLE_MODELS
 
 
+def test_register_openai_models_global_only_for_56(monkeypatch):
+    """global 채널은 GPT-5.6 세대만 — id는 'global.' 접두사 파생, 라벨은 '(Global)' 대문자."""
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
+    monkeypatch.setenv("OPENAI_GLOBAL_BASE_URL", "https://gl/openai/v1")
+    # us 리전 base_url은 전부 미설정 — global 채널만 격리 검증.
+    for env in ("OPENAI_US_EAST_1_BASE_URL", "OPENAI_US_EAST_2_BASE_URL", "OPENAI_US_WEST_2_BASE_URL"):
+        monkeypatch.delenv(env, raising=False)
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_54_MODEL_ID", "openai.gpt-5.4")
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_55_MODEL_ID", "openai.gpt-5.5")
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "openai.gpt-5.6-sol")
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "openai.gpt-5.6-terra")
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "openai.gpt-5.6-luna")
+    prober._register_openai_models()
+    all_openai = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
+    # gpt-5.4/5.5는 global 미지원(스펙에 없음) — us 리전 env도 없으므로 global 3개가 전부.
+    assert all_openai == [
+        "openai:global:global.openai.gpt-5.6-luna",
+        "openai:global:global.openai.gpt-5.6-sol",
+        "openai:global:global.openai.gpt-5.6-terra",
+    ]
+    assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-5.6-sol"] == "OpenAI GPT 5.6 Sol (Global)"
+    assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-5.6-luna"] == "OpenAI GPT 5.6 Luna (Global)"
+
+
 def test_register_openai_models_skips_without_key(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)  # isolate Mantle tests from 1P path
@@ -89,6 +136,7 @@ def test_register_openai_models_skips_without_key(monkeypatch):
 def test_register_openai_models_partial_skip(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)  # isolate Mantle tests from 1P path
+    _isolate_ambient_openai_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
     monkeypatch.delenv("OPENAI_US_EAST_2_BASE_URL", raising=False)
@@ -273,6 +321,33 @@ def test_openai_1p_probe_streams(monkeypatch):
         client=None,
         model_id="openai:1p:gpt-5.5",
         model_name="OpenAI GPT 5.5 (1P)",
+        prompt="hi",
+        temperature=0.1,
+        max_tokens=64,
+        iteration=1,
+        event_queue=q,
+        run_id=1,
+        db=_FakeSession(),
+    )
+    result = next(b for t, b in (_parse(e) for e in _drain(q)) if t == "result")
+    assert result["status"] == "success"
+    assert result["output_text"] == "ok"
+    assert result["stop_reason"] == "end_turn"
+
+
+def test_openai_global_probe_streams(monkeypatch):
+    """global 채널 (openai:global:global.openai.*) — pseudo-region global의 전체 프로브 경로."""
+    events = [
+        _Ev("response.output_text.delta", delta="ok"),
+        _Ev("response.completed", response=_Resp(4, 1, "completed")),
+    ]
+    _install_fake_openai(monkeypatch, events)
+    monkeypatch.setenv("OPENAI_GLOBAL_BASE_URL", "https://gl/openai/v1")
+    q: Queue = Queue()
+    prober._probe_single_model(
+        client=None,
+        model_id="openai:global:global.openai.gpt-5.6-luna",
+        model_name="OpenAI GPT 5.6 Luna (Global)",
         prompt="hi",
         temperature=0.1,
         max_tokens=64,

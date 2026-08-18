@@ -1,6 +1,6 @@
 // 모델 카드/이력 정렬 공통 유틸.
 // 1차: 모델 family 우선순위 (Fable 5 > Opus 4.8 > Opus 4.7 > Opus 4.6 > Sonnet 5 > Sonnet 4.6 > Haiku 4.5 > Nova ...)
-// 2차: 채널 순서 (Anthropic > Bedrock Global > Bedrock US)
+// 2차: 채널 순서 (Anthropic > Global[Bedrock·OpenAI 공통] > Bedrock US > OpenAI 리전)
 // FAMILY 매칭은 substring `includes` 기반이므로 "Bedrock " prefix 유무에 관계없이 동작.
 // 모델명 라벨은 backend에서 "Bedrock " 또는 "Anthropic " prefix가 붙은 형태로 응답.
 export const FAMILY_ORDER = [
@@ -38,8 +38,11 @@ export function familyRank(name: string): number {
 
 export function channelRank(name: string): number {
   if (name.startsWith("Anthropic ")) return 0;
+  // "(Global)"은 provider 무관 최우선 채널 — Bedrock Global(Claude)과 OpenAI Global
+  // cross-region 프로파일(v2.20.0) 모두 해당. 이 검사가 startsWith("OpenAI ")보다
+  // 반드시 앞에 있어야 OpenAI Global이 리전 채널(rank 3)보다 앞선다 — 순서 바꾸지 말 것.
   if (name.includes("(Global)")) return 1;
-  if (name.startsWith("OpenAI ")) return 3; // OpenAI 자체 채널 티어 (us-east-1 → us-east-2)
+  if (name.startsWith("OpenAI ")) return 3; // OpenAI 리전 채널 티어 (us-east-1 → us-east-2 → us-west-2)
   return 2; // Bedrock US (default)
 }
 

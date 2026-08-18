@@ -163,19 +163,27 @@ def _is_reasoning_model(model_id: str) -> bool:
 # OpenAI GPT via Bedrock Mantle (OpenAI-compatible /openai/v1) — Path 4.
 # model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-5.4).
 # region이 채널 식별자 (같은 model_id를 두 리전에 호출). bearer 토큰 인증.
+# pseudo-region "global" (v2.20.0): Bedrock global cross-region 프로파일 —
+# "openai:global:global.openai.gpt-5.6-sol" 형태 (actual_id 자체에 global. 접두사 포함).
 # =====================================================================
 _OPENAI_REGION_ENV: dict[str, str] = {
     "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
     "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
     "us-west-2": "OPENAI_US_WEST_2_BASE_URL",
+    # pseudo-region "global" (v2.20.0) — Bedrock global cross-region 프로파일(global.openai.*).
+    # bedrock-runtime OpenAI-compat 엔드포인트를 통해서만 호출 가능(bedrock-mantle 호스트는 미지원).
+    # 운영값: https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1 (Seoul 라우팅).
+    "global": "OPENAI_GLOBAL_BASE_URL",
 }
 
 # 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
 # (model-id env var, display family, 제공 리전 튜플)
+# "global"은 GPT-5.6 세대만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
+# global 채널의 모델 id는 in-region id에 "global." 접두사를 파생(등록 루프에서 처리).
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
-    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("us-east-1", "us-east-2")),
-    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("us-east-1", "us-east-2", "us-west-2")),
-    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("us-east-1", "us-east-2", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1", "us-east-2")),
+    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1", "us-east-2", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1", "us-east-2", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1", "us-east-2", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1", "us-east-2")),
 ]
@@ -281,8 +289,16 @@ def _register_openai_models() -> None:
                 env_name = _OPENAI_REGION_ENV.get(region)
                 if not env_name or not os.environ.get(env_name):
                     continue
-                key = f"openai:{region}:{actual_id}"
-                label = f"OpenAI {family} ({region})"
+                if region == "global":
+                    # global cross-region 프로파일 id = "global." + in-region id (AWS 규약).
+                    # 라벨은 Claude 채널과 동일하게 "(Global)" 대문자 — DB model_name에 영구
+                    # 기록되므로 frontend MODEL_COLORS/channelRank가 기대하는 표기와 일치해야 함.
+                    channel_id = f"global.{actual_id}"
+                    label = f"OpenAI {family} (Global)"
+                else:
+                    channel_id = actual_id
+                    label = f"OpenAI {family} ({region})"
+                key = f"openai:{region}:{channel_id}"
                 AVAILABLE_MODELS[key] = label
                 logger.info("Registered OpenAI model: %s -> %s", key, label)
     else:

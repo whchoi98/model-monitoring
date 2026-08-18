@@ -30,18 +30,31 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   // OpenAI GPT (Bedrock Mantle). cached-input 미추적 — input/output만.
   "gpt-5.4": { input: 2.75, output: 16.50 },
   "gpt-5.5": { input: 5.50, output: 33.00 },
-  // GPT-5.6 세대는 Bedrock in-region 가격이 OpenAI 1P와 동일 (parity — 5.4/5.5식 10% 마크업 없음).
-  "gpt-5.6-sol": { input: 5.00, output: 30.00 },
-  "gpt-5.6-terra": { input: 2.50, output: 15.00 },
-  "gpt-5.6-luna": { input: 1.00, output: 6.00 },
+  // GPT-5.6 세대 in-region/Geo 단가 — 2026-07-30 AWS 인하 반영 (Luna -80%, Terra -20%, Sol 불변).
+  // 출처: AWS 공식 모델 카드 (Standard tier, short context ≤272K — 프로브는 항상 이 구간).
+  "gpt-5.6-sol": { input: 5.50, output: 33.00 },
+  "gpt-5.6-terra": { input: 2.20, output: 13.20 },
+  "gpt-5.6-luna": { input: 0.22, output: 1.32 },
+  // Global CRIS(openai:global:global.openai.*)는 in-region보다 저렴한 별도 단가 — "-global" suffix 키.
+  // ⚠️ 새 모델에 global 리전을 추가하면 여기 "-global" 키도 반드시 함께 추가할 것 —
+  // 누락 시 getPricing의 prefix fallback이 in-region 단가로 조용히 매칭돼 과대 산정됨.
+  "gpt-5.6-sol-global": { input: 5.00, output: 30.00 },
+  "gpt-5.6-terra-global": { input: 2.00, output: 12.00 },
+  "gpt-5.6-luna-global": { input: 0.20, output: 1.20 },
 };
 
 /** model_id → ModelPricing. 매칭 실패 시 null. */
 export function getPricing(modelId: string): ModelPricing | null {
   // anthropic:<id> → <id>
   let key = modelId.startsWith("anthropic:") ? modelId.slice("anthropic:".length) : modelId;
-  // openai:<region>:<actual_id> → <actual_id>
-  if (key.startsWith("openai:")) key = key.split(":").slice(2).join(":");
+  // openai:<region>:<actual_id> → <actual_id>. pseudo-region "global"(Bedrock global CRIS)은
+  // in-region과 단가가 달라 base 키에 "-global" suffix를 붙여 구분.
+  let openaiGlobal = false;
+  if (key.startsWith("openai:")) {
+    const segs = key.split(":");
+    openaiGlobal = segs[1] === "global";
+    key = segs.slice(2).join(":");
+  }
   // global.X.Y / us.X.Y → X.Y (Y는 그대로)
   const parts = key.split(".");
   if (parts.length >= 2 && (parts[0] === "global" || parts[0] === "us" || parts[0] === "eu" || parts[0] === "apac")) {
@@ -52,6 +65,7 @@ export function getPricing(modelId: string): ModelPricing | null {
   if (key.startsWith("anthropic.")) key = key.slice("anthropic.".length);
   if (key.startsWith("amazon.")) key = key.slice("amazon.".length);
   if (key.startsWith("openai.")) key = key.slice("openai.".length);
+  if (openaiGlobal) key = `${key}-global`;
 
   // 정확 매칭 우선
   if (PRICE_TABLE[key]) return PRICE_TABLE[key];

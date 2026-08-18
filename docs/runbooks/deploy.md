@@ -190,17 +190,27 @@ curl -i "https://$CF_DOMAIN/api/health"
 # 첫 자동 프로빙 결과 (5분 후).
 curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 
-# OpenAI (v2.6.0+) — 7개 채널 토큰 수 확인 (Mantle 5 + 1P direct 2).
+# OpenAI (v2.20.0 기준) — 16개 채널 토큰 수 확인 (Mantle in-region 13 + Global CRIS 3).
 # Bedrock Mantle 엔드포인트가 stream_options.include_usage를 무시하면
 # input_tokens/output_tokens 가 0 으로 silent drop → TPS·비용도 0.
-# 1P direct 채널(openai:1p:*)은 계정 quota 없으면 insufficient_quota로 status "failed".
-# 첫 프로브 cycle 후 아래 명령으로 7행 + non-zero 토큰 수를 반드시 확인.
+# 1P direct 채널(openai:1p:*)은 v2.19.1부터 휴면(env 미주입 + visibility "(1P)" 필터) — 0행이 정상.
+# Global CRIS 3채널(openai:global:global.openai.gpt-5.6-*)은 v2.20.0 신규 — 첫 success 확인 필수:
+#   bedrock-runtime.ap-northeast-2 호스트는 BedrockRuntime interface VPC endpoint 경유라
+#   로컬 라이브 검증과 Fargate 내부의 네트워크 경로가 다름 (ADR-025).
+# 첫 프로브 cycle 후 아래 명령으로 16행 + non-zero 토큰 수를 반드시 확인.
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.results[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
-# 기댓값: 7개 행 (Mantle 5 + 1P 2), status "success", input_tokens > 0, output_tokens > 0.
+# 기댓값: 16개 행 (Mantle 13 + Global 3), status "success", input_tokens > 0, output_tokens > 0.
 ```
 
 ## 6. 후속 배포 (코드만 변경 시)
+
+⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`)에는 이 이미지-only
+경로와 §2-1(기존 task-def 복사 재등록)을 쓰지 말 것** — 기존 task definition의 env가
+그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
+skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포
+(`BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`, digest 고정 `-c backendImage/-c frontendImage`)로
+backend 서비스와 스케줄 태스크(autoprober/insights/parityrun/gptbench) **양쪽** task def를 갱신할 것.
 
 ```bash
 make build              # backend + frontend 이미지 재빌드
