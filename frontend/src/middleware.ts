@@ -21,5 +21,9 @@ export function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|api|favicon.ico).*)"],
+  // PWA 정적 자산(manifest/앱 아이콘, v2.21.0)도 favicon.ico처럼 no-store 대상에서 제외 —
+  // 내용이 바뀌지 않는 자산이라 CloudFront 캐시를 허용한다.
+  matcher: [
+    "/((?!_next/static|_next/image|api|favicon.ico|icons/|icon.png|apple-icon.png|manifest.webmanifest).*)",
+  ],
 };

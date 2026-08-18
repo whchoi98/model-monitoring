@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.21.0 — 2026-08-18
+
+### Added
+- **iPhone/iPad installable app (PWA)** — Safari Share → "Add to Home Screen" now installs the dashboard as a full-screen standalone app. Web app manifest (`src/app/manifest.ts` → `/manifest.webmanifest`) + generated app icons (emerald pulse glyph on dark gradient; regular + maskable variants, `app/icon.png`·`app/apple-icon.png` conventions) + iOS meta tags (`appleWebApp`, black-translucent status bar) + `viewport-fit=cover` with safe-area padding for the notch/Dynamic Island/home indicator (standalone-only via `display-mode: standalone` media query). Middleware `no-store` matcher excludes the new static PWA assets.
+- **iPhone/iPad 설치형 앱 (PWA)** — Safari 공유 → "홈 화면에 추가"로 대시보드를 전체화면 standalone 앱으로 설치. Web app manifest(`src/app/manifest.ts` → `/manifest.webmanifest`) + 생성 앱 아이콘(다크 그라데이션 + 에메랄드 펄스, 일반/maskable 변형, `app/icon.png`·`apple-icon.png` 컨벤션) + iOS 메타태그(`appleWebApp`, 반투명 상태바) + `viewport-fit=cover`와 노치/Dynamic Island/홈 인디케이터 safe-area 패딩(설치형에서만 적용되는 `display-mode: standalone` 미디어 쿼리). middleware `no-store` matcher에서 신규 PWA 정적 자산 제외.
+
 ## v2.20.1 — 2026-08-18
 
 ### Added

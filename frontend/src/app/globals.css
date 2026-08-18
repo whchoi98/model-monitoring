@@ -195,3 +195,22 @@ html.light .rounded-xl.border {
   animation: blink 1s step-end infinite;
   @apply text-blue-400;
 }
+
+/* ---------------------------------------------------------------------------
+ * iOS PWA(홈 화면 설치) safe-area (v2.21.0)
+ * standalone + black-translucent 상태바 + viewport-fit=cover 조합에서는 콘텐츠가
+ * 노치/Dynamic Island·홈 인디케이터 아래까지 확장된다. 설치형 앱에서만:
+ *  - sticky 헤더에 상태바 높이만큼 상단 패딩 (헤더 배경이 상태바 뒤까지 이어져 자연스러움)
+ *  - 좌우 인셋(가로 모드 노치)과 하단 홈 인디케이터 여백
+ * 일반 브라우저 탭에서는 env() 값이 0이라 영향 없음.
+ * ------------------------------------------------------------------------- */
+@media all and (display-mode: standalone) {
+  header.sticky {
+    padding-top: env(safe-area-inset-top);
+  }
+  body {
+    padding-left: env(safe-area-inset-left);
+    padding-right: env(safe-area-inset-right);
+    padding-bottom: env(safe-area-inset-bottom);
+  }
+}
