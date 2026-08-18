@@ -31,6 +31,7 @@ BENCH_ENV = {
     "OPENAI_US_EAST_1_BASE_URL": "http://e1",
     "OPENAI_US_EAST_2_BASE_URL": "http://e2",
     "OPENAI_US_WEST_2_BASE_URL": "http://w2",
+    "OPENAI_GLOBAL_BASE_URL": "http://gl",
     "BEDROCK_OPENAI_GPT_54_MODEL_ID": "openai.gpt-5.4",
     "BEDROCK_OPENAI_GPT_55_MODEL_ID": "openai.gpt-5.5",
     "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID": "openai.gpt-5.6-terra",
@@ -52,13 +53,28 @@ def _fake_call(ttfb=800.0, ttft=1700.0, error=None):
 
 
 def test_bench_channels_matrix(bench_env):
-    """5.4×3 + 5.5×2(us-west-2 미제공) + terra×3 = 8채널."""
+    """5.4×3 + 5.5×2(us-west-2 미제공) + terra×4(Global 포함, v2.20.1) = 9채널."""
     import gptbench
 
     chans = gptbench.bench_channels()
-    assert len(chans) == 8
+    assert len(chans) == 9
     assert sum(1 for c in chans if c["family"] == "GPT 5.5") == 2
     assert not any(c["family"] == "GPT 5.5" and c["region"] == "us-west-2" for c in chans)
+    # Global CRIS는 Terra만 — id는 global. 접두사 파생, 라벨 "(Global)" 대문자 (prober 규약).
+    glb = [c for c in chans if c["region"] == "global"]
+    assert len(glb) == 1 and glb[0]["family"] == "GPT 5.6 Terra"
+    assert glb[0]["model_id"] == "openai:global:global.openai.gpt-5.6-terra"
+    assert glb[0]["model_name"] == "OpenAI GPT 5.6 Terra (Global)"
+
+
+def test_bench_channels_no_global_env(bench_env, monkeypatch):
+    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널만 조용히 빠지고 기존 8채널 유지."""
+    import gptbench
+
+    monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
+    chans = gptbench.bench_channels()
+    assert len(chans) == 8
+    assert not any(c["region"] == "global" for c in chans)
 
 
 def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
@@ -70,11 +86,11 @@ def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
 
     res = gptbench.run_cycle()
-    assert res["rows"] == 16 and res["errors"] == 0  # 8ch × 2
+    assert res["rows"] == 18 and res["errors"] == 0  # 9ch × 2
 
     s = session_factory()
     rows = s.query(models.GptBenchResult).all()
-    assert len(rows) == 16
+    assert len(rows) == 18
     assert all(r.cycle_ts == rows[0].cycle_ts for r in rows)  # 사이클 그룹 키 동일
     assert rows[0].gap_ms == pytest.approx(900.0)
     s.close()
@@ -92,7 +108,7 @@ def test_run_cycle_deadline_skips_channels(bench_env, session_factory, monkeypat
 
     res = gptbench.run_cycle()
     assert res["rows"] == 0
-    assert len(res["skipped_channels"]) == 8
+    assert len(res["skipped_channels"]) == 9
 
 
 def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0, start_min_ago=20):

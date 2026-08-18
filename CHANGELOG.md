@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.20.1 — 2026-08-18
+
+### Added
+- GPT on AWS bench (`/gpt-on-aws`) now includes the **GPT 5.6 Terra Global CRIS** channel (8 → 9 channels, user-approved). Same key/label convention as the prober (`openai:global:global.openai.gpt-5.6-terra`, `(Global)`); routed via the Seoul bedrock-runtime OpenAI-compat endpoint (`OPENAI_GLOBAL_BASE_URL`). Panel gets a violet region color + updated legend/description. Estimated cost +~$20/day on top of the existing ~$150/day. GPT 5.4/5.5 have no global profile; Sol/Luna remain out of bench scope.
+- GPT on AWS 벤치(`/gpt-on-aws`)에 **GPT 5.6 Terra Global CRIS** 채널 편입 (8 → 9채널, 사용자 승인). prober와 동일한 키/라벨 규약(`openai:global:global.openai.gpt-5.6-terra`, `(Global)`), Seoul bedrock-runtime OpenAI-compat 엔드포인트(`OPENAI_GLOBAL_BASE_URL`) 경유. 패널에 보라색 리전 색상 + 범례/설명 갱신. 비용 추정 기존 ~$150/일 대비 +~$20/일. GPT 5.4/5.5는 global 프로파일 미지원, Sol/Luna는 벤치 대상 아님(기존 결정 유지).
+
 ## v2.20.0 — 2026-08-18
 
 ### Added

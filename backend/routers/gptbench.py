@@ -139,7 +139,7 @@ def trend(
     hours: int = Query(24, ge=1, le=720),
     db: Session = Depends(get_db),
 ):
-    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 8채널 규모라 Python 집계로 충분."""
+    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 9채널 규모라 Python 집계로 충분."""
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     query = (db.query(GptBenchResult)
              .filter(GptBenchResult.cycle_ts >= since))

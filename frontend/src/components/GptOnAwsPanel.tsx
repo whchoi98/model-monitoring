@@ -1,7 +1,8 @@
 "use client";
 
-// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra 8채널을
-// 15분마다 채널당 10회 정밀 측정(TTFB/TTFT/GAP)한 결과의 스코어 카드 + 시계열.
+// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra 9채널
+// (미국 3리전 + Terra Global CRIS, v2.20.1)을 15분마다 채널당 10회
+// 정밀 측정(TTFB/TTFT/GAP)한 결과의 스코어 카드 + 시계열.
 // 방법론은 docs/benchmarks (ttft_bench) 계보: TTFB=첫 스트림 이벤트, GAP≈thinking.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -25,12 +26,13 @@ const RANGE_OPTIONS = [
   { hours: 168, labelKo: "7일", labelEn: "7d" },
 ];
 
-// 이중 인코딩으로 8개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
-// (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 3색 × family 3패턴으로 교체)
+// 이중 인코딩으로 9개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
+// (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 색 × family 3패턴으로 교체)
 const REGION_COLORS: Record<string, string> = {
   "us-east-1": "#3b82f6", // blue
   "us-east-2": "#f59e0b", // amber
   "us-west-2": "#10b981", // emerald
+  "Global": "#a855f7",    // violet — Terra Global CRIS (Seoul 라우팅, v2.20.1)
 };
 
 const FAMILY_DASH: Record<string, string | undefined> = {
@@ -40,7 +42,7 @@ const FAMILY_DASH: Record<string, string | undefined> = {
 };
 
 function regionOf(name: string): string {
-  const m = name.match(/\((us-[a-z]+-\d)\)/);
+  const m = name.match(/\((us-[a-z]+-\d|Global)\)/);
   return m ? m[1] : "";
 }
 
@@ -195,8 +197,8 @@ export default function GptOnAwsPanel() {
           <h1 className="text-2xl font-bold text-gray-100">GPT on AWS</h1>
           <p className="text-sm text-gray-500 mt-1">
             {L(
-              "Bedrock Mantle (3P) precision latency bench — GPT 5.4 / 5.5 / 5.6 Terra × 3 US regions, 10 sequential calls per channel every 15 minutes with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
-              "Bedrock Mantle(3P) 정밀 레이턴시 벤치 — GPT 5.4 / 5.5 / 5.6 Terra × 미국 3리전을 15분마다 채널당 10회 순차 호출 (~55.8k 토큰 고정 캐시 프롬프트). TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
+              "Bedrock Mantle (3P) precision latency bench — GPT 5.4 / 5.5 / 5.6 Terra × 3 US regions + Terra Global CRIS (Seoul-routed), 10 sequential calls per channel every 15 minutes with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
+              "Bedrock Mantle(3P) 정밀 레이턴시 벤치 — GPT 5.4 / 5.5 / 5.6 Terra × 미국 3리전 + Terra Global CRIS(Seoul 라우팅)를 15분마다 채널당 10회 순차 호출 (~55.8k 토큰 고정 캐시 프롬프트). TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
             )}
           </p>
         </div>
