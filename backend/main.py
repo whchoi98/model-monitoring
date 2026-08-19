@@ -187,7 +187,8 @@ def _seed_default_admin():
 app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
-    version="2.0.0",
+    # OpenAPI(/docs)에 노출되는 런타임 버전 — 릴리스 시 CLAUDE.md "Version strings" 목록과 함께 범프.
+    version="2.21.0",
     lifespan=lifespan,
 )
 

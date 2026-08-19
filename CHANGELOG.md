@@ -13,6 +13,10 @@
 - **iPhone/iPad installable app (PWA)** — Safari Share → "Add to Home Screen" now installs the dashboard as a full-screen standalone app. Web app manifest (`src/app/manifest.ts` → `/manifest.webmanifest`) + generated app icons (emerald pulse glyph on dark gradient; regular + maskable variants, `app/icon.png`·`app/apple-icon.png` conventions) + iOS meta tags (`appleWebApp`, black-translucent status bar) + `viewport-fit=cover` with safe-area padding for the notch/Dynamic Island/home indicator (standalone-only via `display-mode: standalone` media query). Middleware `no-store` matcher excludes the new static PWA assets.
 - **iPhone/iPad 설치형 앱 (PWA)** — Safari 공유 → "홈 화면에 추가"로 대시보드를 전체화면 standalone 앱으로 설치. Web app manifest(`src/app/manifest.ts` → `/manifest.webmanifest`) + 생성 앱 아이콘(다크 그라데이션 + 에메랄드 펄스, 일반/maskable 변형, `app/icon.png`·`apple-icon.png` 컨벤션) + iOS 메타태그(`appleWebApp`, 반투명 상태바) + `viewport-fit=cover`와 노치/Dynamic Island/홈 인디케이터 safe-area 패딩(설치형에서만 적용되는 `display-mode: standalone` 미디어 쿼리). middleware `no-store` matcher에서 신규 PWA 정적 자산 제외.
 
+### Fixed
+- Synced runtime-visible version strings during release finalization: FastAPI OpenAPI version was stuck at 2.0.0 (now 2.21.0), `frontend/package.json` at 1.0.0, root CLAUDE.md overview at v2.19.2. Canonical locations are now listed in CLAUDE.md "Version strings".
+- 릴리스 마무리 과정에서 런타임 노출 버전 문자열 동기화: FastAPI OpenAPI 버전이 2.0.0으로 고착(→ 2.21.0), `frontend/package.json` 1.0.0, 루트 CLAUDE.md 개요 v2.19.2 교정. 정식 위치 목록을 CLAUDE.md "Version strings" 절로 신설.
+
 ## v2.20.1 — 2026-08-18
 
 ### Added
