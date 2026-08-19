@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.19.2 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.21.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -254,6 +254,21 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 ---
 
 ## Important Constraints / 중요 제약사항
+
+### Version strings (릴리스 시 함께 범프 — /release 스킬 참조)
+
+버전이 표기되는 위치 전부. 하나라도 빠지면 사용자/문서에 stale 버전이 남는다 (v2.21.0 릴리스에서 FastAPI가 2.0.0으로 고착돼 있던 실사례):
+
+| 위치 | 노출 경로 |
+|------|-----------|
+| `frontend/src/lib/version.ts` `APP_VERSION` | **canonical** — 모든 페이지 헤더 |
+| `backend/main.py` `FastAPI(version=…)` | OpenAPI `/docs`·openapi.json |
+| `frontend/package.json` `version` | 앱 manifest |
+| `README.md` 버전 배지 | GitHub 첫 화면 |
+| `CLAUDE.md` 상단 개요 | 이 파일 |
+| `CHANGELOG.md` 최신 엔트리 + git tag `vX.Y.Z` | 릴리스 기록 |
+
+(`cdk/package.json`은 인프라 패키지 버전이라 앱 버전과 무관 — 범프 대상 아님.)
 
 ### ECR Image Tag Policy (v2.1.0 강화)
 
