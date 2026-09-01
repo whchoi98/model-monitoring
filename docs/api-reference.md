@@ -99,6 +99,7 @@ Returns available model list.
 **Response:**
 ```json
 [
+  { "id": "us.anthropic.claude-fable-5-1", "name": "Bedrock Claude Fable 5.1 (US)" },
   { "id": "us.anthropic.claude-fable-5", "name": "Bedrock Claude Fable 5 (US)" },
   { "id": "us.anthropic.claude-opus-4-8", "name": "Bedrock Claude Opus 4.8 (US)" },
   { "id": "us.anthropic.claude-opus-4-7", "name": "Bedrock Claude Opus 4.7 (US)" }
