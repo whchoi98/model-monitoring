@@ -7,6 +7,14 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.22.1 — 2026-09-01
+
+### Fixed
+- **History view showed "Anthropic Claude Fable 5 (US)" twice and no Fable 5.1 CP entry.** Root cause: the CP on AWS workspace began serving `claude-fable-5-1` at 17:52 UTC on 2026-09-01, and the pre-v2.22.0 substring matcher (`"fable-5" in id`) registered that id under the Fable 5 label — 53 `probe_results` rows for `model_id=anthropic:claude-fable-5-1` carry the wrong `model_name`. `/api/results/stats` labelled each model_id group by its oldest row, so the 5.1 group surfaced as a duplicate Fable 5. Fixes: (1) stats now takes the label from the live catalog (`AVAILABLE_MODELS`, falling back to the newest row); (2) new `label_repair.py` runs at backend startup in its own transaction and rewrites stored `model_name` to the catalog label for any catalogued model_id (`probe_results` + `probe_results_hourly`), so trend/analysis/cost views heal too. The old `_label_renames` block is currently dead in production — its transaction rolls back on the `ALTER TABLE probe_runs` statement timeout at every startup since at least 2026-08-19 (pre-existing, logged as "Migration block failed").
+- **이력 조회에 "Anthropic Claude Fable 5 (US)"가 두 번 보이고 Fable 5.1 CP 항목이 없던 문제.** 원인: CP on AWS 워크스페이스가 2026-09-01 17:52 UTC부터 `claude-fable-5-1`을 서빙했고, v2.22.0 이전 substring 매칭(`"fable-5" in id`)이 이 id를 Fable 5 라벨로 등록 → `model_id=anthropic:claude-fable-5-1` 행 53건의 `model_name`이 오기재. `/api/results/stats`가 model_id 그룹의 가장 오래된 행 라벨을 쓰므로 5.1 그룹이 Fable 5 중복으로 표시됨. 수정: (1) 통계 라벨을 현행 카탈로그(`AVAILABLE_MODELS`, 없으면 최신 행)에서 취득, (2) 신규 `label_repair.py`가 backend 기동 시 별도 트랜잭션으로 카탈로그 model_id의 저장 `model_name`을 카탈로그 라벨로 정정(`probe_results` + `probe_results_hourly`) → 추이/분석/비용 화면도 함께 복구. 기존 `_label_renames` 블록은 같은 트랜잭션의 `ALTER TABLE probe_runs` statement timeout으로 최소 2026-08-19부터 매 기동 롤백되는 상태(기존 문제, "Migration block failed" 로그).
+- `/api/results/stats` called without `start_time`/`run_id` now defaults to the last 24h instead of loading the whole `probe_results` table into ORM objects — an unbounded call OOM-killed the backend container (1024 MB, exit 137, ~2 min outage) on 2026-09-01.
+- `/api/results/stats`를 `start_time`/`run_id` 없이 호출하면 전체 `probe_results`를 ORM으로 적재하던 것을 최근 24h 기본값으로 한정 — 2026-09-01 기간 미지정 호출이 backend 컨테이너 OOM(1024MB, exit 137, 약 2분 중단)을 유발.
+
 ## v2.22.0 — 2026-09-01
 
 ### Added

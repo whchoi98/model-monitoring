@@ -134,6 +134,16 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Model discovery/registration failed (non-fatal)")
 
+    # 저장 행의 model_name을 현행 카탈로그 라벨과 일치시킴 (v2.22.1). 위 `_label_renames`는
+    # 같은 트랜잭션의 ALTER TABLE statement_timeout으로 함께 롤백되는 상태라 별도 트랜잭션.
+    # 카탈로그가 완성된(CP/OpenAI 등록 후) 시점에 실행해야 하므로 여기 위치 고정.
+    try:
+        from label_repair import repair_model_labels
+        from prober import AVAILABLE_MODELS
+        repair_model_labels(engine, AVAILABLE_MODELS)
+    except Exception:
+        logger.exception("Label repair failed (non-fatal)")
+
     logger.info("Database tables ready.")
 
     yield
@@ -188,7 +198,7 @@ app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
     # OpenAPI(/docs)에 노출되는 런타임 버전 — 릴리스 시 CLAUDE.md "Version strings" 목록과 함께 범프.
-    version="2.22.0",
+    version="2.22.1",
     lifespan=lifespan,
 )
 
