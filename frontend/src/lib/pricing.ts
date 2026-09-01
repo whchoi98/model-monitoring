@@ -15,6 +15,7 @@ export interface ModelPricing {
 // 모델 ID prefix를 strip한 base 키로 lookup.
 const PRICE_TABLE: Record<string, ModelPricing> = {
   // Anthropic Claude
+  "claude-fable-5-1": { input: 10.0, output: 50.0 }, // Fable 5.1 — Fable 5와 동일 티어/단가 (v2.22.0)
   "claude-fable-5": { input: 10.0, output: 50.0 },
   "claude-opus-5": { input: 5.0, output: 25.0 },
   "claude-opus-4-8": { input: 5.0, output: 25.0 },

@@ -27,6 +27,9 @@ logger = logging.getLogger(__name__)
 # 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
 AVAILABLE_MODELS: dict[str, str] = {
     # Bedrock - Global cross-region inference profile (ap-northeast-2)
+    # Fable 5.1 (v2.22.0, 2026-09-01): Fable 5와 동일한 Covered Model 제약(provider_data_share 리전 opt-in 기존 적용).
+    # forced tool_choice(type tool/any)는 400 — 패리티 tool_use 프로브는 auto로 대체 (parity/catalog.py).
+    "global.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (Global)",
     "global.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (Global)",
     "global.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (Global)",
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
@@ -37,6 +40,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
     # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용.
+    "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
     "us.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (US)",
     "us.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (US)",
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
@@ -54,7 +58,10 @@ AVAILABLE_MODELS: dict[str, str] = {
 # vendor-hosted endpoint: aws-external-anthropic.<region>.api.aws
 # Key prefix "anthropic:<actual-anthropic-model-id>" 형태로 저장.
 # 시작 시 _discover_anthropic_models()가 /v1/models 응답에서 substring 매칭해 자동 등록.
+# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1)가 될 수 있음 — _match_anthropic_model()이
+#    더 긴 타깃을 포함하는 id를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0).
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
+    ("fable-5-1", "Anthropic Claude Fable 5.1 (US)"),  # v2.22.0 — CP 서빙 시 자동 발견
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
@@ -78,6 +85,20 @@ def _anthropic_default_headers() -> dict[str, str]:
     """CP on AWS 필수 헤더 - workspace-id."""
     ws = os.environ.get("ANTHROPIC_WORKSPACE_ID", "")
     return {"anthropic-workspace-id": ws} if ws else {}
+
+
+def _match_anthropic_model(substring: str, all_ids: list[str]) -> str | None:
+    """/v1/models id 목록에서 타깃 substring에 해당하는 id 하나를 고른다.
+
+    같은 접두를 공유하는 더 긴 타깃(예: 'fable-5' vs 'fable-5-1')이 있으면 그 긴 substring을
+    포함하는 id는 후보에서 제외 — /v1/models가 claude-fable-5-1을 claude-fable-5보다 먼저 돌려주면
+    Fable 5 라벨이 5.1 id에 붙는 오등록이 생기기 때문 (v2.22.0).
+    """
+    longer = [s for s, _ in _ANTHROPIC_TARGETS if s != substring and substring in s]
+    return next(
+        (mid for mid in all_ids if substring in mid and not any(l in mid for l in longer)),
+        None,
+    )
 
 
 def _discover_anthropic_models() -> None:
@@ -107,7 +128,7 @@ def _discover_anthropic_models() -> None:
         models_page = client.models.list(limit=100)
         all_ids = [m.id for m in models_page.data]
         for substring, display_label in _ANTHROPIC_TARGETS:
-            matched = next((mid for mid in all_ids if substring in mid), None)
+            matched = _match_anthropic_model(substring, all_ids)
             if matched:
                 key = f"anthropic:{matched}"
                 AVAILABLE_MODELS[key] = display_label
@@ -151,6 +172,7 @@ def _anthropic_actual_id(model_id: str) -> str:
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
+# "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)도 포함한다.
 _REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "opus-5", "fable-5", "sonnet-5")
 
 

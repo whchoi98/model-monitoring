@@ -7,6 +7,20 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.22.0 — 2026-09-01
+
+### Added
+- **Claude Fable 5.1** joins the monitored catalog in all 3 Claude channels (active catalog 40 → 43): Bedrock Global (`global.anthropic.claude-fable-5-1`, Seoul), Bedrock US (`us.anthropic.claude-fable-5-1`, us-east-1) and Anthropic CP on AWS (pre-registered `fable-5-1` discovery target — auto-registers as soon as the workspace serves it). Both Bedrock inference profiles verified ACTIVE and live-probed (`pong` / `end_turn`) before the change. Same Covered-Model constraints and price tier as Fable 5 ($10 / $50 per MTok). Frontend: `FAMILY_ORDER` (Fable 5.1 on top), `MODEL_COLORS` (3 sky-blue entries), Comparison Lab names, OptimizePrompt targets.
+- **Claude Fable 5.1** 을 Claude 3채널 전부에 모니터링 대상으로 편입 (활성 카탈로그 40 → 43): Bedrock Global(`global.anthropic.claude-fable-5-1`, Seoul), Bedrock US(`us.anthropic.claude-fable-5-1`, us-east-1), Anthropic CP on AWS(`fable-5-1` 발견 타깃 선등록 — 워크스페이스에서 서빙되는 즉시 자동 등록). 두 Bedrock 프로파일은 변경 전 ACTIVE 확인 + 라이브 프로브(`pong` / `end_turn`) 검증. Covered Model 제약·단가 티어는 Fable 5와 동일($10 / $50 per MTok). 프론트: `FAMILY_ORDER` 최상단, `MODEL_COLORS` 3개(sky 계열), Comparison Lab 이름, OptimizePrompt 대상.
+
+### Changed
+- Parity Run `tool_use` probe now uses `tool_choice: auto` + prompt instruction on models that reject forced tool choice (`parity/catalog.py` `supports_forced_tool_choice()` — Fable 5.1 returns 400 on `type: tool`/`any`). Other models keep the forced-tool probe unchanged.
+- 패리티 런 `tool_use` 프로브가 forced tool_choice를 거부하는 모델에서는 `tool_choice: auto` + 프롬프트 지시로 동작 (`parity/catalog.py` `supports_forced_tool_choice()` — Fable 5.1은 `type: tool`/`any`에 400). 그 외 모델은 기존 강제 도구 프로브 그대로.
+
+### Fixed
+- CP on AWS model discovery (`_discover_anthropic_models`) could mislabel a longer model id with a shorter target's label when substrings overlap (`fable-5` ⊂ `fable-5-1`), depending on `/v1/models` ordering. New `_match_anthropic_model()` excludes ids that contain a longer registered target.
+- CP on AWS 모델 자동 발견(`_discover_anthropic_models`)이 substring 접두 충돌(`fable-5` ⊂ `fable-5-1`) 시 `/v1/models` 순서에 따라 긴 id에 짧은 타깃 라벨을 붙일 수 있던 문제 수정. 신규 `_match_anthropic_model()`이 더 긴 등록 타깃을 포함하는 id를 후보에서 제외.
+
 ## v2.21.0 — 2026-08-18
 
 ### Added

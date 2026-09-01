@@ -22,6 +22,7 @@ from parity.engine import (
     check_tool_roundtrip,
     classify_error,
 )
+from parity.catalog import supports_forced_tool_choice
 
 CANARY = "PARITY_OK_7391"
 _MAX_TOKENS = 256
@@ -153,7 +154,8 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
             toolConfig={
                 "tools": [{"toolSpec": {"name": "echo", "description": _ECHO_TOOL_DESC,
                                         "inputSchema": {"json": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}}],
-                "toolChoice": {"tool": {"name": "echo"}},
+                # Fable 5.1은 forced tool_choice를 400으로 거부 → auto + 프롬프트 지시 (catalog.supports_forced_tool_choice)
+                "toolChoice": {"tool": {"name": "echo"}} if supports_forced_tool_choice(model_id) else {"auto": {}},
             },
             inferenceConfig={"maxTokens": _MAX_TOKENS},
         )
@@ -284,7 +286,7 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
             "messages": [{"role": "user", "content": _TOOL_PROMPT}],
             "tools": [{"name": "echo", "description": _ECHO_TOOL_DESC,
                        "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
-            "tool_choice": {"type": "tool", "name": "echo"},
+            "tool_choice": {"type": "tool", "name": "echo"} if supports_forced_tool_choice(model_id) else {"type": "auto"},
         }
         def fn():
             r = invoke(body)
@@ -459,7 +461,7 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
             messages=[{"role": "user", "content": _TOOL_PROMPT}],
             tools=[{"name": "echo", "description": _ECHO_TOOL_DESC,
                     "input_schema": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}],
-            tool_choice={"type": "tool", "name": "echo"},
+            tool_choice={"type": "tool", "name": "echo"} if supports_forced_tool_choice(actual_id) else {"type": "auto"},
         )
         def fn():
             r = client.messages.create(model=actual_id, **kw)

@@ -29,6 +29,8 @@ interface Props {
 // Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.
 // 매칭 안 되면 family substring 기반 fallback.
 const MODEL_COLORS: Record<string, string> = {
+  "Bedrock Claude Fable 5.1 (Global)": "#7dd3fc",
+  "Bedrock Claude Fable 5.1 (US)": "#0ea5e9",
   "Bedrock Claude Fable 5 (Global)": "#2dd4bf",
   "Bedrock Claude Fable 5 (US)": "#0d9488",
   "Bedrock Claude Opus 5 (Global)": "#f43f5e",
@@ -46,6 +48,7 @@ const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Haiku 4.5 (Global)": "#06b6d4",
   "Bedrock Claude Haiku 4.5 (US)": "#a855f7",
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
+  "Anthropic Claude Fable 5.1 (US)": "#0369a1",
   "Anthropic Claude Fable 5 (US)": "#115e59",
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
@@ -76,7 +79,9 @@ const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 5.4 (1P)": "#6ee7b7",
 };
 
+// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에도 포함되므로 5.1이 먼저 와야 함.
 const FAMILY_FALLBACK: [string, string][] = [
+  ["Fable 5.1", "#0ea5e9"],
   ["Fable 5", "#0d9488"],
   ["Opus 5", "#f43f5e"],
   ["Opus 4.8", "#e11d48"],

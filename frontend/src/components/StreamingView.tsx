@@ -9,6 +9,8 @@ interface StreamingViewProps {
 }
 
 const MODEL_COLORS: Record<string, string> = {
+  "Claude Fable 5.1": "bg-sky-700",
+  "Claude Fable 5.1 (Global)": "bg-sky-600",
   "Claude Fable 5": "bg-teal-700",
   "Claude Fable 5 (Global)": "bg-teal-600",
   "Claude Opus 5": "bg-rose-800",
@@ -58,6 +60,10 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
   // We'll derive it from the key patterns
   const modelId = key.split(":").slice(0, -1).join(":");
 
+  // "fable-5"는 "fable-5-1"에도 포함 — 5.1 분기가 먼저 와야 함.
+  if (modelId.includes("fable-5-1")) {
+    return modelId.startsWith("global") ? "Claude Fable 5.1 (Global)" : "Claude Fable 5.1";
+  }
   if (modelId.includes("fable-5")) {
     return modelId.startsWith("global") ? "Claude Fable 5 (Global)" : "Claude Fable 5";
   }

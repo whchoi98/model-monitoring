@@ -67,9 +67,9 @@ FEATURES: list[dict] = [
     {
         "id": "adaptive_thinking",
         "label_ko": "적응형 추론",
-        "desc_ko": "thinking type: adaptive — 모델이 추론 예산을 스스로 조절, thinking 블록 존재 검증 (Fable 5 전용)",
+        "desc_ko": "thinking type: adaptive — 모델이 추론 예산을 스스로 조절, thinking 블록 존재 검증 (Fable 5·5.1 전용)",
         "label_en": "Adaptive thinking",
-        "desc_en": "thinking type: adaptive — the model budgets its own reasoning; verifies a thinking block (Fable 5 only)",
+        "desc_en": "thinking type: adaptive — the model budgets its own reasoning; verifies a thinking block (Fable 5 / 5.1 only)",
     },
     {
         "id": "count_tokens",
@@ -154,7 +154,17 @@ FEATURES: list[dict] = [
 FEATURE_IDS = [f["id"] for f in FEATURES]
 
 # 확장 추론 지원 패밀리 (prober._is_reasoning_model과 정합 — 여기서는 카탈로그 자체 규칙으로 유지)
-_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "gpt-5")
+_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "gpt-5")  # "fable-5"는 fable-5-1도 포함
+
+# forced tool_choice(type "tool"/"any")를 400으로 거부하는 모델 — tool_use 프로브는 auto + 프롬프트
+# 지시로 대체한다 (도구 왕복 자체는 검증). Claude Fable 5.1(2026-08-31 출시):
+# 'tool_choice: type "tool" and "any" are not supported for this model.' (v2.22.0)
+_NO_FORCED_TOOL_CHOICE_MARKERS = ("fable-5-1",)
+
+
+def supports_forced_tool_choice(model_id: str) -> bool:
+    """tool_choice로 특정 도구를 강제할 수 있는 모델인지."""
+    return not any(m in model_id for m in _NO_FORCED_TOOL_CHOICE_MARKERS)
 
 # 피처별 surface 제한 (v2.14.0) — 미기재 피처는 모든 surface 허용.
 # 검사 방법을 구현한 surface만 나열: 그 외 조합은 skipped (프로브 없음 ≠ 미지원).
