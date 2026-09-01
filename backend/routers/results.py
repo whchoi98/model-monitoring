@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
@@ -11,8 +11,13 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from prober import AVAILABLE_MODELS
 from visibility import visible_only
 from schemas import ModelStats, ProbeResultResponse, StatsResponse
+
+# start_time/run_id 없이 호출되면 전체 probe_results(수십만 행)를 ORM으로 적재해 backend 컨테이너가
+# OOM(1024MB, exit 137)으로 죽는다 — 2026-09-01 실사고. 기간 미지정 시 최근 24h로 한정.
+_DEFAULT_STATS_WINDOW = timedelta(hours=24)
 
 router = APIRouter(prefix="/api/results", tags=["results"])
 
@@ -75,6 +80,8 @@ def get_stats(
     query = visible_only(db.query(ProbeResult).filter(ProbeResult.status == "success"),
                          ProbeResult.model_name)
 
+    if start_time is None and run_id is None:
+        start_time = datetime.now(timezone.utc) - _DEFAULT_STATS_WINDOW
     if start_time:
         query = query.filter(ProbeResult.timestamp >= start_time)
     if end_time:
@@ -93,7 +100,9 @@ def get_stats(
 
     model_stats: list[ModelStats] = []
     for model_id, group in model_groups.items():
-        model_name = group[0].model_name
+        # 라벨은 현행 카탈로그가 source of truth. 과거 행의 model_name은 오등록 라벨일 수 있음
+        # (예: CP Fable 5.1이 Fable 5 라벨로 기록된 2026-09-01 사례) — 카탈로그에 없으면 최신 행 라벨.
+        model_name = AVAILABLE_MODELS.get(model_id) or max(group, key=lambda r: r.timestamp).model_name
 
         ttft_values = [r.ttft_ms for r in group if r.ttft_ms is not None]
         latency_values = [r.total_latency_ms for r in group if r.total_latency_ms is not None]
