@@ -414,6 +414,23 @@ def test_effort_rejection_accepts_bedrock_variant_enumeration():
     assert not engine.effort_rejection_names_param(None, "ultra")
 
 
+def test_agent_skills_without_container_is_inconclusive_not_broken():
+    """컨테이너는 코드 실행의 부산물 — 모델이 도구를 안 부르면 inconclusive (스모크 발견)."""
+    no_call = T.NormalizedResponse(content=[{"type": "text", "text": "pdf"}], top={})
+    status, ev = P.probe_agent_skills(_FakeT(resp=no_call), "claude-sonnet-5", "sonnet-5")
+    assert status == "inconclusive" and "did not" in ev["reason"]
+
+    ran_no_container = T.NormalizedResponse(
+        content=[{"type": "server_tool_use", "name": "bash_code_execution"}, {"type": "text", "text": "pdf"}], top={})
+    status, _ = P.probe_agent_skills(_FakeT(resp=ran_no_container), "claude-sonnet-5", "sonnet-5")
+    assert status is False  # 실행됐는데 컨테이너가 없다 → broken
+
+    ok = T.NormalizedResponse(content=[{"type": "server_tool_use", "name": "bash_code_execution"}],
+                              top={"container": {"id": "container_1", "skills": [{"skill_id": "pdf"}]}})
+    status, ev = P.probe_agent_skills(_FakeT(resp=ok), "claude-sonnet-5", "sonnet-5")
+    assert status is True and ev["container_skills"] == ["pdf"]
+
+
 def test_http_request_serializes_dict_error_body(monkeypatch):
     """`json=` 파라미터가 json 모듈을 가려 4xx JSON 본문 직렬화가 터졌던 회귀 (스모크 발견)."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")

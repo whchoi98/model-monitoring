@@ -571,18 +571,26 @@ def probe_computer_use(t, model_id, model_key):
 # ---------------------------------------------------------------- tool infrastructure
 
 def probe_agent_skills(t, model_id, model_key):
-    kw = _msg("In one line, list the names of the skills available to you.", max_tokens=_TOOL_MAX,
+    # 컨테이너는 코드 실행의 부산물이므로 실제 실행을 지시해야 container.id가 생긴다
+    # (질문만 하면 모델이 스킬 메타데이터로 답하고 컨테이너를 만들지 않아 false-broken).
+    kw = _msg("Use the code execution tool to run this bash command: ls /mnt/skills. "
+              "Then reply in one line with what you saw.", max_tokens=_TOOL_MAX,
               tools=[{"type": "code_execution_20260521", "name": "code_execution"}],
               container={"skills": [{"type": "anthropic", "skill_id": "pdf", "version": "latest"}]})
     n = t.messages(model_id, kw)
-    ev = {"request": _req(model_id, kw), "container": n.top.get("container"), "response_snippet": _snippet(n)}
+    container = n.top.get("container") or {}
+    ev = {"request": _req(model_id, kw), "container": _trim(n.top.get("container")),
+          "container_skills": [s.get("skill_id") for s in (container.get("skills") or []) if isinstance(s, dict)],
+          "response_snippet": _snippet(n)}
     if "skills" in t.routes:
         try:
             _, skills = t.request("GET", "/v1/skills")
             ev["skills_listed"] = len(skills.get("data", [])) if isinstance(skills, dict) else None
         except TransportError as exc:
             ev["skills_listed"] = f"error: {str(exc)[:120]}"
-    return bool((n.top.get("container") or {}).get("id")), ev
+    if not container.get("id") and not any(b.get("type") == "server_tool_use" for b in n.content):
+        return "inconclusive", {**ev, "reason": "container.skills accepted but the model did not run code (no container created)"}
+    return bool(container.get("id")), ev
 
 
 def probe_fine_grained_tool_streaming(t, model_id, model_key):
