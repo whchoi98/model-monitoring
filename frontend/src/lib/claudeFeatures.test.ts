@@ -21,6 +21,13 @@ describe("aggregateCell", () => {
     expect(aggregateCell([cell({ status: "not_applicable", verdict: "none" })]).status).toBe("not_applicable");
     expect(aggregateCell([]).status).toBe("empty");
   });
+  test("all unsupported → unsupported; all inconclusive → inconclusive", () => {
+    expect(aggregateCell([cell({ status: "unsupported", verdict: "drift" }), cell({ status: "unsupported", verdict: "drift", model_key: "sonnet-5" })]).status).toBe("unsupported");
+    expect(aggregateCell([cell({ status: "inconclusive", verdict: "none" })]).status).toBe("inconclusive");
+  });
+  test("only skipped (no not_applicable) → skipped", () => {
+    expect(aggregateCell([cell({ status: "skipped", verdict: "none" })]).status).toBe("skipped");
+  });
 });
 
 describe("buildGroups", () => {
@@ -45,6 +52,11 @@ describe("buildGroups", () => {
   test("status filter hides rows without a matching cell", () => {
     const g = buildGroups(features, groups, ["cp", "mantle"], cells, "en", "broken");
     expect(g.map((x) => x.id)).toEqual(["core"]);
+  });
+  test("drift filter keeps only rows with drift cells and counts them", () => {
+    const g = buildGroups(features, groups, ["cp", "mantle"], cells, "ko", "drift");
+    expect(g.map((x) => x.id)).toEqual(["core"]);
+    expect(g[0].rows[0].drift).toBe(1);
   });
 });
 
