@@ -24,9 +24,15 @@ _MAX = 256
 _JSON_MAX = 512
 _THINK_MAX = 3000
 _TOOL_MAX = 1024
-# 캐시 최소 토큰(Fable/Opus 5 = 512, Sonnet 5 = 1,024)을 넉넉히 넘기는 영문 패딩 (~1,800 토큰)
-CACHE_PAD = ("This paragraph is stable context padding for the Claude API Features prompt-caching probe. "
-             "It exists only to exceed the minimum cacheable prefix length of every monitored model. ") * 40
+# 캐시 최소 토큰(Fable/Opus 5 = 512, Sonnet 5 = 1,024)을 넉넉히 넘기는 무해한 영문 패딩 (~2,100 토큰).
+# 내용은 의도적으로 평범한 백과사전식 문장이다 — 구 패딩은 자신을 "probe"로 설명하며 "model"의
+# 최소 길이를 언급해 CP Fable 5(refusal/cyber)·Opus 5(refusal/reasoning_extraction)·
+# Converse Fable 5(content_filtered)에서 안전 거부를 유발했고, 거부된 완료는 캐시를 읽지 않아
+# cache_read가 0으로 남아 broken 오탐 4건이 됐다 (2026-09-05 전체 스윕 실측).
+CACHE_PAD = ("The Baltic Sea is a marginal sea of the Atlantic Ocean enclosed by Northern and Central Europe. "
+             "It drains a basin of roughly 1.6 million square kilometres through the Danish straits. "
+             "Its surface salinity stays low because many rivers empty into it and evaporation is modest. "
+             "Sea ice forms along the northern coasts most winters and clears again by late spring. ") * 25
 _JSON_SCHEMA = {"type": "object", "properties": {"city": {"type": "string"}, "country": {"type": "string"}},
                 "required": ["city", "country"], "additionalProperties": False}
 _ECHO_SCHEMA = {"type": "object", "properties": {"text": {"type": "string", "description": "text to echo"}},
@@ -679,23 +685,28 @@ def probe_context_editing(t, model_id, model_key):
                                  "applied_edits": applied, "stop_reason": n.stop_reason}
 
 
-def _cache_pair(t, model_id, kw_builder) -> tuple[dict, dict, dict]:
+def _cache_pair(t, model_id, kw_builder) -> tuple[dict, NormalizedResponse, NormalizedResponse]:
+    """같은 프롬프트를 두 번 호출한다 — 1번째가 캐시를 쓰고 2번째가 읽어야 증거가 성립한다."""
+    kw = kw_builder()
     if t.surface == "bedrock_converse":
-        kw = kw_builder()
-        n1 = t.converse(model_id, **kw)
-        n2 = t.converse(model_id, **kw)
-    else:
-        kw = kw_builder()
-        n1 = t.messages(model_id, kw)
-        n2 = t.messages(model_id, kw)
-    return kw, n1.usage, n2.usage
+        return kw, t.converse(model_id, **kw), t.converse(model_id, **kw)
+    return kw, t.messages(model_id, kw), t.messages(model_id, kw)
+
+
+def _cache_evidence(model_id: str, kw: dict, n1: NormalizedResponse, n2: NormalizedResponse) -> tuple[dict, str | None]:
+    """캐시 프로브 공통 증거 + 차단 사유. 차단된 완료는 캐시를 읽지 않으므로 측정 자체가 불가하다."""
+    ev = {"request": _req(model_id, kw), "first_usage": n1.usage, "second_usage": n2.usage}
+    return ev, engine.blocked_stop_reason(n1.stop_reason, n2.stop_reason)
 
 
 def probe_automatic_prompt_caching(t, model_id, model_key):
-    kw, u1, u2 = _cache_pair(t, model_id, lambda: _msg(_BASIC_PROMPT, system=CACHE_PAD, cache_control={"type": "ephemeral"}))
-    created = engine.usage_int(u1, "cache_creation_input_tokens")
-    read = engine.usage_int(u2, "cache_read_input_tokens")
-    return (created > 0 or read > 0), {"request": _req(model_id, kw), "first_usage": u1, "second_usage": u2}
+    kw, n1, n2 = _cache_pair(t, model_id, lambda: _msg(_BASIC_PROMPT, system=CACHE_PAD, cache_control={"type": "ephemeral"}))
+    ev, blocked = _cache_evidence(model_id, kw, n1, n2)
+    if blocked:
+        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — cache usage not measurable"}
+    created = engine.usage_int(n1.usage, "cache_creation_input_tokens")
+    read = engine.usage_int(n2.usage, "cache_read_input_tokens")
+    return (created > 0 or read > 0), ev
 
 
 def probe_prompt_caching_5m(t, model_id, model_key):
@@ -704,8 +715,11 @@ def probe_prompt_caching_5m(t, model_id, model_key):
                            "messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX}}
     else:
         builder = lambda: _msg(_BASIC_PROMPT, system=[{"type": "text", "text": CACHE_PAD, "cache_control": {"type": "ephemeral"}}])  # noqa: E731
-    kw, u1, u2 = _cache_pair(t, model_id, builder)
-    return engine.usage_int(u2, "cache_read_input_tokens") > 0, {"request": _req(model_id, kw), "first_usage": u1, "second_usage": u2}
+    kw, n1, n2 = _cache_pair(t, model_id, builder)
+    ev, blocked = _cache_evidence(model_id, kw, n1, n2)
+    if blocked:
+        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — cache read not measurable"}
+    return engine.usage_int(n2.usage, "cache_read_input_tokens") > 0, ev
 
 
 def probe_prompt_caching_1h(t, model_id, model_key):
@@ -714,10 +728,15 @@ def probe_prompt_caching_1h(t, model_id, model_key):
                            "messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX}}
     else:
         builder = lambda: _msg(_BASIC_PROMPT, system=[{"type": "text", "text": CACHE_PAD, "cache_control": {"type": "ephemeral", "ttl": "1h"}}])  # noqa: E731
-    kw, u1, u2 = _cache_pair(t, model_id, builder)
+    kw, n1, n2 = _cache_pair(t, model_id, builder)
+    u1 = n1.usage
+    ev, blocked = _cache_evidence(model_id, kw, n1, n2)
     one_h = engine.usage_int((u1.get("cache_creation") or {}) if isinstance(u1.get("cache_creation"), dict) else {}, "ephemeral_1h_input_tokens")
-    read = engine.usage_int(u2, "cache_read_input_tokens")
-    return (one_h > 0 or read > 0), {"request": _req(model_id, kw), "first_usage": u1, "second_usage": u2, "ephemeral_1h_input_tokens": one_h}
+    ev["ephemeral_1h_input_tokens"] = one_h
+    if blocked:
+        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — 1h cache not measurable"}
+    read = engine.usage_int(n2.usage, "cache_read_input_tokens")
+    return (one_h > 0 or read > 0), ev
 
 
 def probe_token_counting(t, model_id, model_key):

@@ -630,3 +630,89 @@ def test_build_latest_payload_computes_changes_and_drift():
     assert p["run"]["id"] == 2 and p["previous_run_id"] == 1
     assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken", "model_label": "Opus 5"}]
     assert p["drift"][0]["feature"] == "a" and p["results"][0]["verdict"] == "drift"
+
+
+def test_classify_treats_model_level_unavailability_as_unsupported():
+    """Mantle Fable 5는 Covered Model 데이터 보존 옵트인이 없으면 모델 자체를 거부한다 (전체 스윕 발견).
+
+    "data retention mode 'default' is not available for this model"은 플랫폼이 모델 미제공을
+    명시한 깨끗한 거부다 — broken(프로브/전송 결함)으로 기록하면 35행이 전부 오탐이 된다.
+    """
+    dr = ('HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+          '"message": "data retention mode \'default\' is not available for this model"}}')
+    assert engine.classify(dr) == "unsupported"
+    # 인증·타임아웃 등 진짜 장애는 여전히 broken이어야 한다 (마커가 넓어져 장애를 삼키면 안 된다)
+    assert engine.classify("AccessDeniedException: not authorized") == "broken"
+    assert engine.classify("ConnectError: connection refused") == "broken"
+
+
+def test_blocked_stop_reason_flags_refusal_and_content_filter():
+    """안전 거부·콘텐츠 필터로 차단된 완료는 usage 증거를 측정할 수 없다 (전체 스윕 발견).
+
+    CP Fable 5(refusal/cyber)·Opus 5(refusal/reasoning_extraction)·Converse Fable 5(content_filtered)가
+    캐시 패딩을 거부해 cache_read가 0으로 남았다 → broken 오탐. inconclusive로 분류해야 한다.
+    """
+    assert engine.blocked_stop_reason("refusal") == "refusal"
+    assert engine.blocked_stop_reason("content_filtered") == "content_filtered"
+    assert engine.blocked_stop_reason("guardrail_intervened") == "guardrail_intervened"
+    # 두 응답 중 하나만 차단돼도 측정 불가
+    assert engine.blocked_stop_reason("end_turn", "refusal") == "refusal"
+    # 정상 완료·미지정은 차단이 아니다
+    assert engine.blocked_stop_reason("end_turn", "max_tokens") is None
+    assert engine.blocked_stop_reason(None) is None
+    assert engine.blocked_stop_reason() is None
+
+
+def test_cache_pad_is_benign_filler():
+    """캐시 패딩은 안전 거부를 유발하는 표현을 담지 않아야 한다 (전체 스윕 발견).
+
+    구 패딩이 자신을 'probe'로 설명하며 'model' 최소 길이를 언급해 Opus 5에서
+    reasoning_extraction, Fable 5에서 cyber 거부를 유발했다.
+    """
+    low = P.CACHE_PAD.lower()
+    for banned in ("probe", "model", "reverse", "extract", "jailbreak", "bypass"):
+        assert banned not in low, f"CACHE_PAD must not mention {banned!r}"
+    assert P.CACHE_PAD.isascii()
+
+
+def test_cache_probes_report_blocked_completion_as_inconclusive(monkeypatch):
+    """차단된 완료에서 캐시 프로브는 broken이 아니라 inconclusive를 반환한다 (전체 스윕 발견)."""
+    blocked = T.NormalizedResponse(content=[], top={}, usage={"cache_creation_input_tokens": 2203,
+                                                              "cache_read_input_tokens": 0},
+                                   stop_reason="refusal")
+
+    class _T:
+        surface = "cp"
+        routes = frozenset({"messages"})
+
+        def messages(self, model_id, body, **kw):
+            return blocked
+
+    for probe in (P.probe_prompt_caching_5m, P.probe_prompt_caching_1h, P.probe_automatic_prompt_caching):
+        status, ev = probe(_T(), "claude-opus-5", "opus-5")
+        assert status == "inconclusive", probe.__name__
+        assert "refusal" in ev["reason"]
+        # 증거는 그대로 보존돼야 한다 (usage를 숨기지 않는다)
+        assert ev["first_usage"]["cache_creation_input_tokens"] == 2203
+
+
+def test_cache_probes_still_require_cache_read_evidence():
+    """차단 가드가 증거 검사를 약화시키지 않는다 — 정상 완료인데 cache_read가 0이면 broken."""
+    def _resp(usage):
+        return T.NormalizedResponse(content=[{"type": "text", "text": "pong"}], top={}, usage=usage,
+                                    stop_reason="end_turn")
+
+    class _T:
+        surface = "cp"
+        routes = frozenset({"messages"})
+
+        def __init__(self, usage):
+            self._u = usage
+
+        def messages(self, model_id, body, **kw):
+            return _resp(self._u)
+
+    no_read = {"cache_creation_input_tokens": 2203, "cache_read_input_tokens": 0}
+    assert P.probe_prompt_caching_5m(_T(no_read), "claude-opus-5", "opus-5")[0] is False
+    read = {"cache_creation_input_tokens": 0, "cache_read_input_tokens": 2203}
+    assert P.probe_prompt_caching_5m(_T(read), "claude-opus-5", "opus-5")[0] is True

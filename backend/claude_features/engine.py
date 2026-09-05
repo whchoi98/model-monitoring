@@ -21,6 +21,9 @@ _EXTRA_UNSUPPORTED = (
     "unexpected value(s)",
     "is not available on this platform",
     "not available on",
+    # 모델 단위 미제공 — Mantle Fable 5는 Covered Model 데이터 보존 옵트인이 없으면
+    # "data retention mode 'default' is not available for this model"로 거부한다 (전체 스윕 실측)
+    "is not available for this model",
     "no route",
     "http 404",
     "http 405",
@@ -35,6 +38,23 @@ def classify(error_message: str | None) -> str:
         return "unsupported"
     msg = error_message.lower()
     return "unsupported" if any(m in msg for m in _EXTRA_UNSUPPORTED) else "broken"
+
+
+#: 완료가 안전 거부·콘텐츠 필터로 차단됐음을 알리는 stop_reason (Anthropic `refusal` / Bedrock `content_filtered`·`guardrail_intervened`)
+BLOCKED_STOP_REASONS = frozenset({"refusal", "content_filtered", "guardrail_intervened"})
+
+
+def blocked_stop_reason(*stop_reasons: str | None) -> str | None:
+    """안전 거부·콘텐츠 필터로 차단된 첫 stop_reason (없으면 None).
+
+    usage 기반 증거(캐시 읽기 등)는 완료가 실제로 생성돼야 측정된다. 차단된 응답을
+    broken으로 기록하면 피처가 깨진 것처럼 보이고(오탐), supported로 기록하면 증거 없이
+    통과한다 → inconclusive(측정 불가)로 분류해야 한다.
+    """
+    for sr in stop_reasons:
+        if sr in BLOCKED_STOP_REASONS:
+            return sr
+    return None
 
 
 def verdict(documented: str, observed: str) -> str:
