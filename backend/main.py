@@ -23,6 +23,7 @@ from routers import efficiency as efficiency_router
 from routers import analysis as analysis_router
 from routers import parity as parity_router
 from routers import gptbench as gptbench_router
+from routers import features as features_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -198,7 +199,7 @@ app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
     # OpenAPI(/docs)에 노출되는 런타임 버전 — 릴리스 시 CLAUDE.md "Version strings" 목록과 함께 범프.
-    version="2.22.1",
+    version="2.23.0",
     lifespan=lifespan,
 )
 
@@ -228,6 +229,7 @@ app.include_router(efficiency_router.router)
 app.include_router(analysis_router.router)
 app.include_router(parity_router.router)
 app.include_router(gptbench_router.router)
+app.include_router(features_router.router)
 
 
 @app.get("/api/health", tags=["health"])

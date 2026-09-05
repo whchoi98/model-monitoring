@@ -449,3 +449,16 @@ def test_mark_failed_swallows_secondary_errors():
             raise RuntimeError("connection gone")
 
     R._mark_failed(_DB(), object, 1, RuntimeError("original"))  # must not raise
+
+
+def test_build_latest_payload_computes_changes_and_drift():
+    from types import SimpleNamespace as NS
+    from routers.features import build_latest_payload
+    run = NS(id=2, started_at=None, finished_at=None, totals={"supported": 1}, catalog_version="2026-09-05")
+    rows = [NS(feature="a", surface="cp", model_key="opus-5", model_label="Opus 5", model_id="claude-opus-5",
+               status="broken", documented="ga", verdict="drift", latency_ms=10.0)]
+    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported")]
+    p = build_latest_payload(run, rows, prev, 1, running=False)
+    assert p["run"]["id"] == 2 and p["previous_run_id"] == 1
+    assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken", "model_label": "Opus 5"}]
+    assert p["drift"][0]["feature"] == "a" and p["results"][0]["verdict"] == "drift"
