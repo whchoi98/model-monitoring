@@ -401,6 +401,33 @@ def test_http_request_drops_json_content_type_for_multipart(monkeypatch):
     assert "content-type" not in {k.lower() for k in seen["headers"]}
 
 
+def test_http_request_serializes_dict_error_body(monkeypatch):
+    """`json=` 파라미터가 json 모듈을 가려 4xx JSON 본문 직렬화가 터졌던 회귀 (스모크 발견)."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    t = T.CpTransport()
+    body = {"type": "error", "error": {"type": "not_found_error", "message": "model does not exist"}}
+
+    class _R:
+        status_code = 404
+        content = b"{}"
+        def json(self):
+            return body
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError) as exc:
+        t.request("POST", "/v1/messages", json={"model": "m"})
+    assert "not_found_error" in exc.value.message
+    assert engine.classify(str(exc.value)) == "unsupported"
+
+
 def test_trim_replaces_bytes_and_truncates_long_strings():
     snap = P._req("m", {"blob": b"\x00" * 5000, "text": "x" * 500})
     assert snap["blob"] == "<5000 bytes>"

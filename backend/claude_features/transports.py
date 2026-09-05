@@ -13,6 +13,9 @@ from typing import Any
 
 import httpx
 
+#: `request(..., json=...)` 파라미터가 모듈명을 가리므로 오류 직렬화는 별칭으로 한다.
+_json = json
+
 ANTHROPIC_VERSION = "2023-06-01"
 BEDROCK_ANTHROPIC_VERSION = "bedrock-2023-05-31"
 _TIMEOUT = httpx.Timeout(connect=10.0, read=90.0, write=30.0, pool=10.0)
@@ -187,7 +190,7 @@ class _HttpTransport(Transport):
         except ValueError:
             parsed = _snippet_bytes(r.content)
         if r.status_code >= 400:
-            msg = parsed if isinstance(parsed, str) else json.dumps(parsed, ensure_ascii=False)[:1500]
+            msg = parsed if isinstance(parsed, str) else _json.dumps(parsed, ensure_ascii=False)[:1500]
             raise TransportError(r.status_code, msg)
         return r.status_code, parsed
 
