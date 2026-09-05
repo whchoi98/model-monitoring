@@ -66,3 +66,16 @@ describe("surfaceHealth", () => {
     expect(h).toEqual({ supported: 1, broken: 1, health: 50 });
   });
 });
+
+describe("cellBadge", () => {
+  test("skipped + documented GA/Beta → '문서상 지원' (sky), not measured", async () => {
+    const { cellBadge, DOCUMENTED_ONLY_STYLE, STATUS_LABEL, STATUS_STYLE } = await import("./claudeFeatures");
+    expect(cellBadge("skipped", "ga", "ko")).toEqual({ label: "문서상 지원", style: DOCUMENTED_ONLY_STYLE, documentedOnly: true });
+    expect(cellBadge("skipped", "beta", "en").label).toBe("Documented");
+    // 문서상 미제공/unknown이면 그대로 Skipped
+    expect(cellBadge("skipped", "no", "ko")).toEqual({ label: STATUS_LABEL.skipped, style: STATUS_STYLE.skipped, documentedOnly: false });
+    // 측정된 상태는 영향 없음
+    expect(cellBadge("supported", "ga", "ko").label).toBe(STATUS_LABEL.supported);
+    expect(cellBadge("not_applicable", "ga", "ko").label).toBe(STATUS_LABEL.not_applicable);
+  });
+});

@@ -20,7 +20,7 @@ SURFACES = ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_conve
 SURFACE_META: dict[str, dict] = {
     "cp": {"label": "Claude Platform on AWS", "short": "CP on AWS", "group": "cp",
            "region_env": "ANTHROPIC_AWS_REGION", "default_region": "us-east-2"},
-    "mantle": {"label": "Bedrock Mantle /anthropic", "short": "Mantle", "group": "mantle",
+    "mantle": {"label": "Bedrock Mantle", "short": "Mantle", "group": "mantle",
                "region_env": "MANTLE_ANTHROPIC_REGION", "default_region": "us-east-1"},
     "bedrock_messages": {"label": "Bedrock runtime · Messages API", "short": "Messages API", "group": "bedrock",
                          "region_env": "BEDROCK_FEATURES_REGION", "default_region": "ap-northeast-2"},
@@ -40,7 +40,7 @@ def region_for(surface: str) -> str:
 MODELS: list[dict] = [
     {"key": "fable-5-1", "label": "Claude Fable 5.1", "cp": "claude-fable-5-1", "mantle": None,
      "bedrock": "global.anthropic.claude-fable-5-1",
-     "mantle_reason": "Mantle Fable 5.1 = US GovCloud(us-gov-west-1) 전용"},
+     "mantle_reason": "측정 불가 — Mantle의 Fable 5.1은 US GovCloud(us-gov-west-1) 리전 전용 (상용 리전 미서빙)"},
     {"key": "fable-5", "label": "Claude Fable 5", "cp": "claude-fable-5", "mantle": "anthropic.claude-fable-5",
      "bedrock": "global.anthropic.claude-fable-5"},
     {"key": "opus-5", "label": "Claude Opus 5", "cp": "claude-opus-5", "mantle": "anthropic.claude-opus-5",

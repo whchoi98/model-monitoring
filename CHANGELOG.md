@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.23.1 — 2026-09-05
+
+### Changed
+- **Claude API Features UI polish** (`/claude-features`): the Mantle column header now reads "Bedrock Mantle" (was "Bedrock Mantle /anthropic"); a **Note line under the matrix** states that Fable 5.1 cannot be measured on Bedrock Mantle because Mantle serves it only in US GovCloud (us-gov-west-1) — cells stay N/A; cells that are `skipped` for lack of a verification path while the docs say GA/Beta (e.g. 1M context window on Mantle/Bedrock) now render as **"Documented"** (sky badge, explicitly not a measurement) instead of "Skipped"; surface header titles and cell contents are center-aligned; the unsupported verdict wording became "확실한 미지원 응답".
+- **Claude API Features UI 다듬기** (`/claude-features`): Mantle 열 제목을 "Bedrock Mantle"로 변경(기존 "Bedrock Mantle /anthropic"); 표 하단 **참조 줄**에 Fable 5.1은 Mantle이 US GovCloud(us-gov-west-1) 리전에서만 서빙해 측정 불가임을 표기(셀은 N/A 유지); 실측 경로가 없어 `skipped`이지만 문서상 GA/Beta인 셀(예: Mantle/Bedrock의 1M 컨텍스트)은 "Skipped" 대신 **"문서상 지원"**(하늘색 배지, 측정값 아님 명시)으로 표기; surface 헤더 제목과 셀 내용을 가운데 정렬; 미지원 판정 문구를 "확실한 미지원 응답"으로 변경.
+
 ## v2.23.0 — 2026-09-05
 
 ### Added
