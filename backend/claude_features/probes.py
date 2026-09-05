@@ -223,16 +223,21 @@ def probe_context_window_1m(t, model_id, model_key):
 def probe_adaptive_thinking(t, model_id, model_key):
     prompt = "What is the third prime number greater than 100? Think it through, then answer with just the number."
     thinking = {"type": "adaptive", "display": "summarized"}
+    # effort medium에서는 adaptive 모델이 이 정도 문제에 사고를 생략한다(Fable 5.1 Bedrock 실측) →
+    # 사고 여부는 프롬프트 난이도가 아니라 effort가 가른다. high로 고정해 블록을 요구한다.
+    output_config = {"effort": "high"}
     if t.surface == "bedrock_converse":
         kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": _THINK_MAX},
-              "additionalModelRequestFields": {"thinking": thinking, "output_config": {"effort": "medium"}}}
+              "additionalModelRequestFields": {"thinking": thinking, "output_config": output_config}}
         n = t.converse(model_id, **kw)
     else:
-        kw = _msg(prompt, max_tokens=_THINK_MAX, thinking=thinking, output_config={"effort": "medium"})
+        kw = _msg(prompt, max_tokens=_THINK_MAX, thinking=thinking, output_config=output_config)
         n = t.messages(model_id, kw)
     th = engine.find_block(n.content, "thinking")
-    return th is not None, {"request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content],
-                            "thinking_chars": len((th or {}).get("thinking") or ""), "response_snippet": _snippet(n)}
+    return engine.has_thinking_evidence(n.content), {
+        "request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content],
+        "thinking_chars": len((th or {}).get("thinking") or ""),
+        "thinking_signed": bool((th or {}).get("signature")), "response_snippet": _snippet(n)}
 
 
 def probe_extended_thinking(t, model_id, model_key):

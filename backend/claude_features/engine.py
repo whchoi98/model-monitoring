@@ -86,6 +86,18 @@ def diff_runs(prev: dict[tuple, str], cur: dict[tuple, str]) -> list[dict[str, A
     return out
 
 
+def has_thinking_evidence(blocks: list[dict] | None) -> bool:
+    """adaptive thinking 증거: thinking 블록이 있고 요약 텍스트나 서명 중 하나가 실제로 채워졌는가.
+
+    Bedrock의 Fable 5.1은 요약 텍스트를 비워 보내고 signature만 채운다(추론은 실제로 수행) →
+    블록 존재만 보는 검사는 빈 블록도 통과시키고, 텍스트만 보는 검사는 false-broken을 만든다.
+    """
+    b = find_block(blocks, "thinking")
+    if b is None:
+        return False
+    return bool((b.get("thinking") or "").strip() or (b.get("signature") or "").strip())
+
+
 def citation_is_search_result(citation: Any) -> bool:
     """인용 1건이 search_result 출처를 가리키는가 (Anthropic·Converse 양쪽 표기).
 

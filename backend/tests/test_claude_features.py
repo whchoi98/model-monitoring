@@ -401,6 +401,16 @@ def test_http_request_drops_json_content_type_for_multipart(monkeypatch):
     assert "content-type" not in {k.lower() for k in seen["headers"]}
 
 
+def test_has_thinking_evidence_accepts_signature_only_block():
+    """Bedrock Fable 5.1은 요약 텍스트를 비우고 signature만 채운다 (스모크 발견)."""
+    assert engine.has_thinking_evidence([{"type": "thinking", "thinking": "", "signature": "CAQS0gM"}])
+    assert engine.has_thinking_evidence([{"type": "thinking", "thinking": "hmm"}, {"type": "text", "text": "107"}])
+    # 빈 블록·블록 없음은 증거가 아니다
+    assert not engine.has_thinking_evidence([{"type": "thinking", "thinking": "", "signature": ""}])
+    assert not engine.has_thinking_evidence([{"type": "text", "text": "107"}])
+    assert not engine.has_thinking_evidence(None)
+
+
 def test_citation_is_search_result_matches_both_notations():
     """Converse 인용에는 type이 없다 — '아무 인용이나 통과'하던 완화를 실측 shape로 대체 (스모크 발견)."""
     assert engine.citation_is_search_result({"type": "search_result_location", "search_result_index": 0})
