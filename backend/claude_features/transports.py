@@ -1,7 +1,8 @@
-"""세 Claude-on-AWS 엔드포인트 전송기 (v2.23.0) — 하나의 Anthropic Messages JSON 본문을 그대로 흘린다.
+"""네 Claude-on-AWS 엔드포인트 전송기 (v2.23.0) — 하나의 Anthropic Messages JSON 본문을 그대로 흘린다.
 
 SDK를 쓰지 않는 이유: requirements.txt의 anthropic>=0.40.0 미고정 → 빌드 시 1.x 메이저 업.
-raw httpx(CP/Mantle) + boto3(Bedrock)로 본문/헤더를 직접 제어해 판정을 SDK 표면 변화에서 격리한다.
+raw httpx(CP/Mantle/bedrock-runtime Messages API) + boto3(InvokeModel/Converse)로 본문·헤더를 직접 제어해
+판정을 SDK 표면 변화에서 격리한다.
 """
 
 from __future__ import annotations
@@ -189,6 +190,11 @@ class _HttpTransport(Transport):
             parsed = r.json()
         except ValueError:
             parsed = _snippet_bytes(r.content)
+        # bedrock-runtime은 모르는 라우트에 HTTP 200 + coral UnknownOperationException 본문을 준다
+        # (실측 2026-09-05: /v1/messages/count_tokens). 정규화하지 않으면 성공으로 오독된다.
+        if (isinstance(parsed, dict) and isinstance(parsed.get("Output"), dict)
+                and "UnknownOperation" in str(parsed["Output"].get("__type", ""))):
+            raise TransportError(404, "UnknownOperationException: route not available on this endpoint")
         if r.status_code >= 400:
             msg = parsed if isinstance(parsed, str) else _json.dumps(parsed, ensure_ascii=False)[:1500]
             raise TransportError(r.status_code, msg)
@@ -240,6 +246,30 @@ class MantleTransport(_HttpTransport):
         from claude_features.catalog import region_for
         self.region = region or region_for("mantle")
         self.base_url = f"https://bedrock-mantle.{self.region}.api.aws/anthropic"
+        self._token = provide_token(region=self.region)  # 런 동안 재사용 (≤12h)
+
+    def _headers(self, betas=()) -> dict[str, str]:
+        return {"x-api-key": self._token, "anthropic-version": ANTHROPIC_VERSION,
+                "content-type": "application/json", **beta_header(betas)}
+
+
+class BedrockMessagesTransport(_HttpTransport):
+    """bedrock-runtime이 직접 호스팅하는 Anthropic Messages API — `/anthropic/v1/messages`.
+
+    AWS Build 가이드/Endpoints 문서가 신규 앱과 "Migrating from Anthropic APIs"에 권장하는 경로.
+    CRIS 프로파일 id(`global.anthropic.claude-*`) + SigV4 또는 단기 bearer(x-api-key) + anthropic-version/-beta 헤더.
+    모르는 라우트는 coral UnknownOperationException으로 답한다 → `_HttpTransport.request`가 404로 정규화.
+    """
+
+    surface = "bedrock_messages"
+    #: 라우트 부재를 가정하지 않고 전부 실측한다 (이 엔드포인트는 미지원 라우트를 명시적으로 알려준다).
+    routes = frozenset({"messages", "count_tokens", "batches", "files", "models", "skills"})
+
+    def __init__(self, region: str | None = None):
+        from aws_bedrock_token_generator import provide_token
+        from claude_features.catalog import region_for
+        self.region = region or region_for("bedrock_messages")
+        self.base_url = f"https://bedrock-runtime.{self.region}.amazonaws.com/anthropic"
         self._token = provide_token(region=self.region)  # 런 동안 재사용 (≤12h)
 
     def _headers(self, betas=()) -> dict[str, str]:
@@ -375,5 +405,5 @@ class BedrockConverseTransport(Transport):
 
 
 def build_transport(surface: str) -> Transport:
-    return {"cp": CpTransport, "mantle": MantleTransport,
+    return {"cp": CpTransport, "mantle": MantleTransport, "bedrock_messages": BedrockMessagesTransport,
             "bedrock_invoke": BedrockInvokeTransport, "bedrock_converse": BedrockConverseTransport}[surface]()

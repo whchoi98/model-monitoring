@@ -4,7 +4,8 @@
 (strict_tool_use는 structured_outputs, extended_thinking은 adaptive_thinking과 문서상 같은 항목이지만
 검증 강도가 달라 카탈로그에서는 별도 행으로 분리) + 코어 Messages 4(messages_basic/streaming/system_prompt/tool_use)
 + Models API 1.
-열(SURFACES) = cp(Claude Platform on AWS) / mantle(Bedrock Mantle /anthropic) / bedrock_invoke / bedrock_converse.
+열(SURFACES) = cp(Claude Platform on AWS) / mantle(Bedrock Mantle /anthropic) /
+bedrock_messages(bedrock-runtime `/anthropic/v1/messages`) / bedrock_invoke / bedrock_converse.
 documented = 문서상 기대치 {ga|beta|no|unknown}. 1차 출처는 overview Availability 컬럼(Bedrock 단일 컬럼),
 Converse/InvokeModel 차이·Mantle 특례는 AWS 공식 문서와 platform.claude.com Bedrock 두 페이지로 보정.
 출처가 상충하면 notes에 남기고 실측으로 판정한다 (drift 감지가 이 메뉴의 목적).
@@ -14,13 +15,15 @@ from __future__ import annotations
 
 import os
 
-SURFACES = ["cp", "mantle", "bedrock_invoke", "bedrock_converse"]
+SURFACES = ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse"]
 
 SURFACE_META: dict[str, dict] = {
     "cp": {"label": "Claude Platform on AWS", "short": "CP on AWS", "group": "cp",
            "region_env": "ANTHROPIC_AWS_REGION", "default_region": "us-east-2"},
     "mantle": {"label": "Bedrock Mantle /anthropic", "short": "Mantle", "group": "mantle",
                "region_env": "MANTLE_ANTHROPIC_REGION", "default_region": "us-east-1"},
+    "bedrock_messages": {"label": "Bedrock runtime · Messages API", "short": "Messages API", "group": "bedrock",
+                         "region_env": "BEDROCK_FEATURES_REGION", "default_region": "ap-northeast-2"},
     "bedrock_invoke": {"label": "Bedrock runtime · InvokeModel", "short": "InvokeModel", "group": "bedrock",
                        "region_env": "BEDROCK_FEATURES_REGION", "default_region": "ap-northeast-2"},
     "bedrock_converse": {"label": "Bedrock runtime · Converse", "short": "Converse", "group": "bedrock",
@@ -55,7 +58,7 @@ def model_id_for(surface: str, model_key: str) -> str | None:
         return m["cp"]
     if surface == "mantle":
         return m["mantle"]
-    return m["bedrock"]
+    return m["bedrock"]  # bedrock_messages / bedrock_invoke / bedrock_converse 는 같은 CRIS 프로파일 id
 
 
 def model_label(model_key: str) -> str:
@@ -82,8 +85,13 @@ NONE = {"cp": "no", "mantle": "no", "bedrock_invoke": "no", "bedrock_converse": 
 
 def _f(id_: str, group: str, ko: str, en: str, desc_ko: str, desc_en: str, doc: str,
        documented: dict, verification: str, notes: str = "") -> dict:
+    doc_map = dict(documented)
+    # bedrock_messages(bedrock-runtime /anthropic)의 문서 기대치는 InvokeModel을 상속한다 —
+    # 같은 bedrock-runtime 엔드포인트에 같은 Anthropic 본문이므로. 갈라지는 항목만
+    # `_BEDROCK_MESSAGES_OVERRIDES`에서 명시(FEATURES 구축 후 적용).
+    doc_map.setdefault("bedrock_messages", doc_map["bedrock_invoke"])
     return {"id": id_, "group": group, "label_ko": ko, "label_en": en, "desc_ko": desc_ko, "desc_en": desc_en,
-            "doc_url": doc, "documented": dict(documented), "verification": verification, "notes": notes}
+            "doc_url": doc, "documented": doc_map, "verification": verification, "notes": notes}
 
 
 FEATURES: list[dict] = [
@@ -197,6 +205,19 @@ FEATURES: list[dict] = [
 FEATURE_IDS = [f["id"] for f in FEATURES]
 _FEATURE_BY_ID = {f["id"]: f for f in FEATURES}
 
+#: bedrock_messages가 InvokeModel 기대치와 갈라지는 지점 (AWS 문서 + 실측 2026-09-05).
+#: - structured_outputs/strict_tool_use: `output_config.format`·`strict` → 400 "Extra inputs are not permitted"
+#: - token_counting: `/v1/messages/count_tokens` → coral UnknownOperationException (라우트 없음)
+#: - tool_search: AWS 문서는 InvokeModel만 명시 → 이 경로는 기대치 미정(unknown), 실측으로 판정
+_BEDROCK_MESSAGES_OVERRIDES: dict[str, str] = {
+    "structured_outputs": "no",
+    "strict_tool_use": "no",
+    "token_counting": "no",
+    "tool_search": "unknown",
+}
+for _fid, _expected in _BEDROCK_MESSAGES_OVERRIDES.items():
+    _FEATURE_BY_ID[_fid]["documented"]["bedrock_messages"] = _expected
+
 # Converse가 표현할 수 없는 피처 → not_applicable (변환 오류로 판정을 오염시키지 않기 위해 호출하지 않음)
 _CONVERSE_NOT_EXPRESSIBLE = frozenset({
     "bash_tool", "browser_use", "computer_use", "memory_tool", "text_editor",
@@ -205,8 +226,8 @@ _CONVERSE_NOT_EXPRESSIBLE = frozenset({
     "advisor_tool", "code_execution", "web_fetch", "web_search",
 })
 # 검증 경로가 없는 조합 → skipped
-_SKIPPED = frozenset({("context_window_1m", "mantle"), ("context_window_1m", "bedrock_invoke"),
-                      ("context_window_1m", "bedrock_converse")})
+_SKIPPED = frozenset({("context_window_1m", "mantle"), ("context_window_1m", "bedrock_messages"),
+                      ("context_window_1m", "bedrock_invoke"), ("context_window_1m", "bedrock_converse")})
 
 
 def documented_for(feature_id: str, surface: str) -> str:

@@ -8,12 +8,13 @@ from claude_features import catalog, engine, probes as P, transports as T, runne
 
 
 def test_surfaces_and_models():
-    assert catalog.SURFACES == ["cp", "mantle", "bedrock_invoke", "bedrock_converse"]
+    assert catalog.SURFACES == ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse"]
     keys = [m["key"] for m in catalog.MODELS]
     assert keys == ["fable-5-1", "fable-5", "opus-5", "sonnet-5"]
     assert catalog.model_id_for("cp", "fable-5-1") == "claude-fable-5-1"
     assert catalog.model_id_for("mantle", "fable-5-1") is None  # US GovCloud only
     assert catalog.model_id_for("mantle", "opus-5") == "anthropic.claude-opus-5"
+    assert catalog.model_id_for("bedrock_messages", "sonnet-5") == "global.anthropic.claude-sonnet-5"
     assert catalog.model_id_for("bedrock_invoke", "sonnet-5") == "global.anthropic.claude-sonnet-5"
     assert catalog.model_id_for("bedrock_converse", "sonnet-5") == "global.anthropic.claude-sonnet-5"
 
@@ -44,6 +45,7 @@ def test_is_applicable_rules():
     # 1M capability only checkable on CP
     assert catalog.is_applicable("context_window_1m", "cp", "opus-5") == (True, None)
     assert catalog.is_applicable("context_window_1m", "mantle", "opus-5") == (False, "skipped")
+    assert catalog.is_applicable("context_window_1m", "bedrock_messages", "opus-5") == (False, "skipped")
     # extended thinking: adaptive-only models → probe still runs (negative check)
     assert catalog.is_applicable("extended_thinking", "cp", "fable-5") == (True, None)
 
@@ -54,6 +56,11 @@ def test_documented_defaults_from_overview():
     assert catalog.documented_for("structured_outputs", "mantle") == "no"
     assert catalog.documented_for("compaction", "bedrock_converse") == "no"
     assert catalog.documented_for("server_side_fallback", "cp") == "unknown"
+    # bedrock_messages는 InvokeModel 기대치를 상속하고 갈라지는 지점만 override
+    assert catalog.documented_for("adaptive_thinking", "bedrock_messages") == "ga"
+    assert catalog.documented_for("structured_outputs", "bedrock_messages") == "no"
+    assert catalog.documented_for("token_counting", "bedrock_messages") == "no"
+    assert catalog.documented_for("tool_search", "bedrock_messages") == "unknown"
 
 
 @pytest.mark.parametrize("documented,observed,expected", [
@@ -157,6 +164,8 @@ def test_routes_per_surface(monkeypatch):
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
     monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
     assert "batches" in T.CpTransport().routes
+    # bedrock-runtime /anthropic은 모르는 라우트도 명시적으로 답한다 → 전 라우트를 실측한다
+    assert "batches" in T.BedrockMessagesTransport.routes
     assert T.BedrockInvokeTransport.routes == frozenset({"messages", "count_tokens"})
     assert T.BedrockConverseTransport.routes == frozenset({"converse", "count_tokens"})
 
@@ -299,8 +308,49 @@ def test_bedrock_converse_stream_keeps_tool_use_and_reasoning(monkeypatch):
 
 def test_build_transport_dispatch(monkeypatch):
     monkeypatch.setattr(T, "_boto_client", lambda region: object())
+    monkeypatch.setattr("aws_bedrock_token_generator.provide_token", lambda region=None: "tok")
     assert isinstance(T.build_transport("bedrock_invoke"), T.BedrockInvokeTransport)
     assert isinstance(T.build_transport("bedrock_converse"), T.BedrockConverseTransport)
+    assert isinstance(T.build_transport("bedrock_messages"), T.BedrockMessagesTransport)
+
+
+def test_bedrock_messages_transport_headers_and_base(monkeypatch):
+    """bedrock-runtime이 직접 호스팅하는 Anthropic Messages API — SigV4 대신 단기 bearer를 x-api-key로."""
+    monkeypatch.setattr("aws_bedrock_token_generator.provide_token", lambda region=None: "tok")
+    t = T.BedrockMessagesTransport(region="ap-northeast-2")
+    assert t.surface == "bedrock_messages"
+    assert t.base_url == "https://bedrock-runtime.ap-northeast-2.amazonaws.com/anthropic"
+    h = t._headers(["beta-a"])
+    assert h["x-api-key"] == "tok" and h["anthropic-version"] == "2023-06-01"
+    assert h["anthropic-beta"] == "beta-a" and h["content-type"] == "application/json"
+
+
+def test_http_request_maps_coral_unknown_operation_to_404(monkeypatch):
+    """bedrock-runtime은 미지원 라우트에 HTTP 200 + coral UnknownOperationException 본문을 준다 (실측 2026-09-05).
+
+    정규화하지 않으면 count_tokens 프로브가 200 본문을 성공으로 읽어 false-supported가 된다.
+    """
+    monkeypatch.setattr("aws_bedrock_token_generator.provide_token", lambda region=None: "tok")
+    t = T.BedrockMessagesTransport(region="ap-northeast-2")
+
+    class _R:
+        status_code = 200
+        content = b"{}"
+        def json(self):
+            return {"Output": {"__type": "com.amazon.coral.service#UnknownOperationException"}, "Version": "1.0"}
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError) as exc:
+        t.count_tokens("global.anthropic.claude-sonnet-5", {"max_tokens": 8, "messages": []})
+    assert exc.value.status_code == 404 and "UnknownOperation" in exc.value.message
+    assert engine.classify(str(exc.value)) == "unsupported"
 
 
 def test_tiny_pdf_is_valid_pdf_containing_text():
@@ -506,10 +556,10 @@ def test_build_jobs_partitions_applicable_and_predecided():
 def test_default_job_count_matches_spec_estimate():
     jobs, decided = R.build_jobs(None, None, None)
     total = len(jobs) + len(decided)
-    assert total == 39 * 4 * 4  # feature × surface × model
-    # pre-decided 118 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
-    #                 + context_window_1m skipped on mantle/invoke/converse (3 × 4 − 1 overlap = 11)
-    assert (len(jobs), len(decided)) == (506, 118)
+    assert total == 39 * 5 * 4  # feature × surface × model
+    # pre-decided 122 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
+    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 4 − 1 overlap = 15)
+    assert (len(jobs), len(decided)) == (658, 122)
 
 
 def test_smoke_rows_always_carry_verdict_without_network():

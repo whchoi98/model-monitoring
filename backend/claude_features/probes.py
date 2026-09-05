@@ -645,7 +645,7 @@ def probe_tool_search(t, model_id, model_key):
                 for k, d in (("weather", "Current weather for a city"), ("time", "Current time in a timezone"), ("stock", "Stock quote"))]
     kw = _msg("Find the tool that gives weather for Seoul and call it.", max_tokens=_TOOL_MAX,
               tools=[{"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"}, *deferred])
-    betas = ["tool-search-tool-2025-10-19"] if t.surface == "bedrock_invoke" else []
+    betas = ["tool-search-tool-2025-10-19"] if t.surface in ("bedrock_invoke", "bedrock_messages") else []
     n = t.messages(model_id, kw, betas=betas)
     searched = any(b.get("type") == "server_tool_use" and b.get("name") == "tool_search_tool_regex" for b in n.content)
     ev = {"request": _req(model_id, kw, betas=betas), "tool_search_used": searched,
