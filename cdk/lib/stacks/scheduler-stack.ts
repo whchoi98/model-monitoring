@@ -1,11 +1,14 @@
-// SchedulerStack - EventBridge Scheduler + AutoProber / Insights one-shot TaskDefinitions.
+// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify one-shot TaskDefinitions.
 //
 // 책임:
 //   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
 //   - rate(5 minutes) → Insights   Fargate Task (insights_runner --window 6h)
 //     (사용자 요청: 새로고침이 없을 때도 인사이트가 최근 데이터를 반영하도록 5분 주기로 단축)
+//   - rate(12 hours) → ParityRun Fargate Task (parity_runner --once)
+//   - rate(15 minutes) → GptBench Fargate Task (gptbench_runner --once)
+//   - rate(24 hours) → FeaturesVerify Fargate Task (features_runner --once)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
-//   - 두 task 모두 RDS:5432 egress가 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
+//   - 모든 task는 RDS:5432 egress + Bedrock/Mantle 액세스 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
 import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
@@ -205,6 +208,10 @@ export class SchedulerStack extends cdk.Stack {
           // global CRIS(global.openai.*)는 bedrock-mantle 호스트 미지원 — bedrock-runtime
           // OpenAI-compat 엔드포인트(Seoul)로만 호출 가능. GPT-5.6 Global 채널 3개용 (v2.20.0).
           OPENAI_GLOBAL_BASE_URL: "https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1",
+          // Claude API Features 검증 (v2.23.0) — Mantle /anthropic 리전 명시(기본값과 동일하나 코드 의존 제거),
+          // MCP 커넥터 프로브용 공개 read-only MCP 서버 (서버 장애는 inconclusive로 격리).
+          MANTLE_ANTHROPIC_REGION: "ap-northeast-1",
+          FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
           BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
           BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
           BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
@@ -273,6 +280,15 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/gptbench",
     );
 
+    // Claude API Features 검증 (v2.23.0) — 33 문서 피처 × 4 surface × 대표 4모델 실행-증거, 일 1회.
+    // bedrock:* + bedrock-mantle:* IAM 체인이 필요하므로 autoprober role 재사용. CP는 API 키(secret).
+    const featuresTaskDef = buildTaskDef(
+      "FeaturesVerifyTaskDef",
+      autoProberTaskRole,
+      ["python", "-m", "features_runner", "--once"],
+      "/ecs/features",
+    );
+
     // ---------------------------------------------------------------------
     // 4-1) Scheduler invoke role (ADR-011).
     //    L2 EcsRunFargateTask가 자동 생성하는 role은 ecs:RunTask Resource를 task def의
@@ -300,6 +316,7 @@ export class SchedulerStack extends cdk.Stack {
           // gptbench도 wildcard 필요 — 누락 시 수동 register-task-definition으로 revision이
           // bump되는 순간 스케줄이 silent fail (ADR-011과 동일 시나리오).
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${gptBenchTaskDef.family}:*`,
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${featuresTaskDef.family}:*`,
         ],
       }),
     );
@@ -356,6 +373,20 @@ export class SchedulerStack extends cdk.Stack {
       description: "GPT on AWS bench: Mantle TTFB/TTFT every 15 minutes",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: gptBenchTaskDef,
+        vpcSubnets: props.appSubnets,
+        securityGroups: [schedulerTaskSg],
+        assignPublicIp: false,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
+      }),
+    });
+
+    new scheduler.Schedule(this, "FeaturesVerifySchedule", {
+      // 일 1회 (사용자 결정 2026-09-05) — 1런 ≈ 550 API 호출, 토큰 비용 대략 $3~5 (Fable 2종 지배)
+      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(24)),
+      description: "Claude API Features verification: 39 features x CP/Mantle/InvokeModel/Converse, daily",
+      target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
+        taskDefinition: featuresTaskDef,
         vpcSubnets: props.appSubnets,
         securityGroups: [schedulerTaskSg],
         assignPublicIp: false,

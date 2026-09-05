@@ -37,8 +37,8 @@ describe("SchedulerStack", () => {
     template = Template.fromStack(scheduler);
   });
 
-  it("Schedule이 3개 생성된다 (AutoProber + Insights + ParityRun)", () => {
-    template.resourceCountIs("AWS::Scheduler::Schedule", 3);
+  it("Schedule이 5개 생성된다 (AutoProber + Insights + ParityRun + GptBench + FeaturesVerify)", () => {
+    template.resourceCountIs("AWS::Scheduler::Schedule", 5);
   });
 
   it("AutoProber는 rate(5 minutes) 스케줄을 사용한다", () => {
@@ -75,8 +75,8 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("TaskDefinition이 3개 생성된다", () => {
-    template.resourceCountIs("AWS::ECS::TaskDefinition", 3);
+  it("TaskDefinition이 5개 생성된다", () => {
+    template.resourceCountIs("AWS::ECS::TaskDefinition", 5);
   });
 
   it("Task는 Fargate, awsvpc, X86_64로 설정된다", () => {
@@ -148,6 +148,16 @@ describe("SchedulerStack", () => {
           }),
         }),
       ]),
+    }));
+  });
+
+  it("FeaturesVerify는 rate(1 day) 스케줄 + features_runner --once CMD (v2.23.0)", () => {
+    template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({ ScheduleExpression: "rate(1 day)" }));
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({
+        Command: ["python", "-m", "features_runner", "--once"],
+        Environment: Match.arrayWith([Match.objectLike({ Name: "MANTLE_ANTHROPIC_REGION", Value: "ap-northeast-1" })]),
+      })]),
     }));
   });
 });
