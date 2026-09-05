@@ -74,7 +74,7 @@
 | 2 | `adaptive_thinking` | model | `thinking: {type: adaptive, display: summarized}` + `output_config.effort: low`, max_tokens 4000 | `thinking` 블록(+signature) 존재 | ga / ga / ga / ga (Converse: `additionalModelRequestFields`, `reasoningContent`) |
 | 3 | `batch_processing` | model | `POST /v1/messages/batches` 1건 → GET → cancel | `processing_status` | ga / no / no / no (bedrock 두 열은 라우트 부재 → 호출 없이 `unsupported`) |
 | 4 | `citations` | model | `document{source.text, citations.enabled}` + 질문 | `text.citations[]` 존재 | ga / ga / ga / ga (Converse: `DocumentBlock.citations` → `citationsContent`) |
-| 5 | `data_residency` | model | `inference_geo: "us"` | `usage.inference_geo == "us"`; 부정 제어 `"mars"` → 400 | ga / no / no / no |
+| 5 | `data_residency` | model | `inference_geo: "us"` | `usage.inference_geo == "us"`; 부정 제어 `"mars"` → 400 | ga / no / no / no — **Bedrock 3 surface(+Mantle)는 실행하지 않고 `not_applicable` 사전판정** (공식 문서: Bedrock은 엔드포인트/추론 프로파일이 리전을 결정해 `inference_geo` 비적용, v2.23.1) |
 | 6 | `effort` | model | `output_config.effort: low` 수락 + 부정 제어 `effort: "ultra"` → 400 | acceptance+negative | ga / ga / ga / ga |
 | 7 | `fallback_credit` | model | beta `fallback-credit-2026-07-01` + 무해 요청 | acceptance (`stop_details` null 기록) | beta / beta / beta / beta |
 | 8 | `pdf_support` | model | base64 1페이지 PDF(코드 생성, 카나리 텍스트) + 질문 | 카나리 답변 | ga / ga / ga / ga (Converse: `document.source.bytes`) |

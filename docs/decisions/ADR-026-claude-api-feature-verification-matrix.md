@@ -107,7 +107,10 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
 - (+) 문서 상충 지점(Mantle `anthropic-beta` 헤더, Mantle/InvokeModel structured outputs, P-AWS 서버측 fallback)이 실측으로 닫힘.
 - (+) Mantle 리전을 `us-east-1`로 전환해 패리티 런 `messages_mantle` surface도 함께 개선(Supported 셀 증가 예상) — 별도
   코드 변경 없이 공용 env 하나로 두 매트릭스가 동시에 혜택을 받는다.
-- (−) 런당 토큰 비용 대략 $5~7(월 ~$150~210, Fable 지배) — 1런 = 프로브 658 + 사전판정 122 = 780셀, 캐싱·부정 제어
+- (+) **v2.23.1 — `data_residency`는 Bedrock/Mantle에서 `not_applicable`로 사전판정**: 공식 데이터 레지던시 문서가 "Amazon Bedrock에서는 엔드포인트 URL 또는
+  추론 프로파일이 추론 리전을 결정하므로 `inference_geo` 비적용"이라고 명시. 기존 `unsupported`(match) 15셀은 "Bedrock은 데이터 레지던시 미지원"으로
+  읽히는 오해를 낳았다(데이터 레지던시 자체는 리전 선택으로 충족). 카탈로그 `_NOT_APPLICABLE_BY_DOC`으로 일반화.
+- (−) 런당 토큰 비용 대략 $5~7(월 ~$150~210, Fable 지배) — 1런 = 프로브 643 + 사전판정 137 = 780셀(v2.23.1, 이전 658 + 122), 캐싱·부정 제어
   포함 ≈800 API 호출. MCP 프로브는 공개 MCP 서버 의존(장애는 inconclusive로 격리).
 - (−) 신규 피처 추가 시 3단: 카탈로그 행(+documented) → 프로브 함수(5 surface 분기) → 테스트. Converse 표현 불가 목록(`_CONVERSE_NOT_EXPRESSIBLE`) 갱신.
 - (−) `strict_tool_use`/`structured_outputs`/`token_counting` Bedrock 열 drift는 의도적으로 남김(문서 기대치는 그대로 `ga`가 아닌 실측 반영값으로 낮췄으므로 이제 `match` — Bedrock 자체의 플랫폼 갭은 여전히 존재하고 향후 AWS가 지원을 추가하면 실측이 다시 흔들릴 수 있음).
