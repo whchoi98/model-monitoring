@@ -1,7 +1,8 @@
 "use client";
 
 // Claude API Features (v2.23.0) — platform.claude.com "Build with Claude" 33피처(+코어 4, Models API)를
-// Claude Platform on AWS / Bedrock Mantle /anthropic / Bedrock runtime(Messages API · InvokeModel · Converse) 5열에서 실행-증거로 검증.
+// Claude Platform on AWS / Bedrock Mantle / Bedrock runtime(Messages API · InvokeModel · Converse) 5열에서 실행-증거로 검증.
+// 표 하단 "참조" 블록: Mantle에서 측정 불가한 모델(Fable 5.1 = US GovCloud 전용)을 카탈로그 mantle_reason으로 표기 (v2.23.1).
 // 셀 = 피처 × 엔드포인트(대표 모델 4종 집계) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -11,13 +12,13 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, surfaceHealth, DOC_LABEL, STATUS_LABEL, STATUS_STYLE, VERDICT_STYLE,
+  aggregateCell, buildGroups, cellBadge, surfaceHealth, DOC_LABEL, STATUS_LABEL, STATUS_STYLE, VERDICT_STYLE,
   type CellAggregate, type CellStatus, type FeatureCell, type RowView,
 } from "@/lib/claudeFeatures";
 
 const SURFACE_GROUP_LABEL: Record<string, { en: string; ko: string }> = {
   cp: { en: "Claude Platform on AWS", ko: "Claude Platform on AWS" },
-  mantle: { en: "Bedrock Mantle /anthropic", ko: "Bedrock Mantle /anthropic" },
+  mantle: { en: "Bedrock Mantle", ko: "Bedrock Mantle" },
   bedrock: { en: "Bedrock runtime", ko: "Bedrock runtime" },
 };
 
@@ -43,13 +44,13 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: FeatureC
         unsupported: "The endpoint explicitly rejected this capability (clean unsupported response).",
         broken: errorMsg ? `Expected to work but the probe failed: ${errorMsg.slice(0, 220)}` : "Evidence check failed — response received but the documented signal was missing.",
         inconclusive: "Definition accepted, but the model did not exercise the feature (e.g. tool not invoked) — not proof of absence.",
-        skipped: "No verification path on this endpoint (capability endpoint missing).",
+        skipped: "Documented as available, but this endpoint has no verification path (no capability endpoint) — shown as 'Documented', not measured.",
         not_applicable: `Not applicable by design: ${String(evidence.reason ?? "")}` }
     : { supported: "프로브 성공 — 문서가 정한 증거 신호가 응답에 존재합니다.",
-        unsupported: "엔드포인트가 이 기능을 명시적으로 거부했습니다 (깨끗한 미지원 응답).",
+        unsupported: "엔드포인트가 이 기능을 명시적으로 거부했습니다 (확실한 미지원 응답).",
         broken: errorMsg ? `동작해야 하는 기능인데 프로브 실패: ${errorMsg.slice(0, 220)}` : "증거 검사 실패 — 응답은 받았지만 문서상 신호가 없습니다.",
         inconclusive: "정의는 수락됐지만 모델이 기능을 사용하지 않았습니다(도구 미호출 등) — 부재의 증거는 아님.",
-        skipped: "이 엔드포인트에는 검증 경로가 없습니다(capability 엔드포인트 부재).",
+        skipped: "문서상 지원(GA/Beta)이지만 이 엔드포인트에는 실측 경로가 없습니다(capability 엔드포인트 부재) — '문서상 지원'으로 표기, 측정값 아님.",
         not_applicable: `설계상 부적용: ${String(evidence.reason ?? "")}` };
 
   const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
@@ -103,22 +104,25 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: FeatureC
   );
 }
 
-function CellBadge({ agg, onPick }: { agg: CellAggregate; onPick: (c: FeatureCell) => void }) {
+function CellBadge({ agg, documented, onPick }: { agg: CellAggregate; documented?: string; onPick: (c: FeatureCell) => void }) {
   const { lang } = useLang();
   const [open, setOpen] = useState(false);
   if (agg.status === "empty") return <span className="text-gray-600">—</span>;
   const single = agg.cells.length === 1;
   const drift = agg.cells.filter((c) => c.verdict === "drift").length;
+  const badge = cellBadge(agg.status, documented, lang);
   return (
     <div className="relative inline-block">
       <button
         type="button"
         onClick={() => (single ? onPick(agg.cells[0]) : setOpen((o) => !o))}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
-        className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-transform hover:scale-105 ${STATUS_STYLE[agg.status]}`}
-        title={lang === "en" ? "Click for per-model evidence" : "클릭해서 모델별 증거 보기"}
+        className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-transform hover:scale-105 ${badge.style}`}
+        title={badge.documentedOnly
+          ? (lang === "en" ? "Documented as available — no verification path on this endpoint (not measured)" : "문서상 지원 — 이 엔드포인트에는 실측 경로가 없어 측정하지 않음")
+          : (lang === "en" ? "Click for per-model evidence" : "클릭해서 모델별 증거 보기")}
       >
-        {STATUS_LABEL[agg.status]}
+        {badge.label}
         {!single && agg.probed > 0 && <span className="ml-1 text-gray-400">{agg.counts.supported}/{agg.probed}</span>}
         {drift > 0 && <span className="ml-1 text-rose-300">▲{drift}</span>}
       </button>
@@ -128,7 +132,7 @@ function CellBadge({ agg, onPick }: { agg: CellAggregate; onPick: (c: FeatureCel
             <li key={c.model_key}>
               <button type="button" onMouseDown={() => onPick(c)} className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] hover:bg-blue-600/20">
                 <span className="text-gray-300">{c.model_label}</span>
-                <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${STATUS_STYLE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
+                <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${cellBadge(c.status, c.documented, lang).style}`}>{cellBadge(c.status, c.documented, lang).label}</span>
               </button>
             </li>
           ))}
@@ -189,8 +193,8 @@ export default function ClaudeFeaturesPanel() {
         <div>
           <h2 className="text-xl font-bold text-gray-100">{L("Claude API Features", "Claude API 기능 검증")}</h2>
           <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
-            {L("Every documented \"Build with Claude\" feature, executed for real on Claude Platform on AWS, Bedrock Mantle /anthropic and Bedrock runtime (Messages API · InvokeModel · Converse) with Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5. Cells compare what the docs promise with what actually happened.",
-               "공식 \"Build with Claude\" 문서의 모든 피처를 Claude Platform on AWS · Bedrock Mantle /anthropic · Bedrock runtime(Messages API · InvokeModel · Converse)에서 Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다.")}
+            {L("Every documented \"Build with Claude\" feature, executed for real on Claude Platform on AWS, Bedrock Mantle and Bedrock runtime (Messages API · InvokeModel · Converse) with Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5. Cells compare what the docs promise with what actually happened.",
+               "공식 \"Build with Claude\" 문서의 모든 피처를 Claude Platform on AWS, Bedrock Mantle, Bedrock runtime(Messages API, InvokeModel, Converse)에서 Fable 5.1, Fable 5, Opus 5, Sonnet 5로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다.")}
           </p>
           {run && (
             <p className="text-xs text-gray-500 mt-1">
@@ -282,14 +286,14 @@ export default function ClaudeFeaturesPanel() {
               <tr className="border-b border-gray-800">
                 <th rowSpan={2} className="text-left px-3 py-2 text-gray-400 font-medium sticky left-0 bg-gray-900 light:bg-white align-bottom">{L("Feature", "피처")}</th>
                 {colGroups.map((g) => (
-                  <th key={g.group} colSpan={g.ids.length} className="text-left px-3 pt-2 text-gray-300 font-semibold whitespace-nowrap border-l border-gray-800">
+                  <th key={g.group} colSpan={g.ids.length} className="text-center px-3 pt-2 text-gray-300 font-semibold whitespace-nowrap border-l border-gray-800">
                     {SURFACE_GROUP_LABEL[g.group]?.[lang === "en" ? "en" : "ko"] ?? g.group}
                   </th>
                 ))}
               </tr>
               <tr className="border-b border-gray-800">
                 {catalog.surfaces.map((s) => (
-                  <th key={s.id} className="text-left px-3 pb-2 text-gray-500 font-medium whitespace-nowrap border-l border-gray-800">{s.short}</th>
+                  <th key={s.id} className="text-center px-3 pb-2 text-gray-500 font-medium whitespace-nowrap border-l border-gray-800">{s.short}</th>
                 ))}
               </tr>
             </thead>
@@ -319,9 +323,9 @@ export default function ClaudeFeaturesPanel() {
                         </td>
                         {surfaces.map((s) => (
                           <td key={s} className="px-3 py-1.5 border-l border-gray-800/60">
-                            <div className="flex items-center gap-2">
+                            <div className="flex items-center justify-center gap-2">
                               <span className="w-7 text-[9px] text-gray-500 tabular-nums" title={L("documented", "문서")}>{DOC_LABEL[row.documented[s]] ?? "?"}</span>
-                              <CellBadge agg={row.cells[s] ?? aggregateCell([])} onPick={setSelected} />
+                              <CellBadge agg={row.cells[s] ?? aggregateCell([])} documented={row.documented[s]} onPick={setSelected} />
                             </div>
                           </td>
                         ))}
@@ -335,12 +339,31 @@ export default function ClaudeFeaturesPanel() {
         </div>
       )}
 
+      {/* 참조: Mantle에서 측정 불가한 모델(카탈로그 mantle=null → mantle_reason) + 문서상 '비적용' 피처(data_residency) — v2.23.1 */}
+      {run && catalog && (() => {
+        const notes = [
+          ...catalog.models.filter((m) => m.mantle === null).map((m) =>
+            lang === "en"
+              ? `Bedrock Mantle / ${m.label}: not measurable — Mantle serves this model only in US GovCloud regions (us-gov-west-1); shown as N/A.`
+              : `Bedrock Mantle의 ${m.label}: ${m.mantle_reason ?? "측정 불가"} → N/A로 표기.`),
+          L("Data residency (inference_geo): on Amazon Bedrock (incl. Mantle) the inference region is set by the endpoint or inference profile, so the parameter is not applicable — shown as N/A, not Unsupported.",
+            "데이터 레지던시(inference_geo): Amazon Bedrock(Mantle 포함)은 엔드포인트 리전/추론 프로파일이 추론 리전을 결정하므로 파라미터가 비적용입니다. 미지원이 아닌 N/A로 표기합니다."),
+        ];
+        return (
+          <div className="px-1 text-[11px] text-gray-500 leading-relaxed space-y-0.5">
+            {notes.map((n, i) => (
+              <div key={i}><span className="font-semibold text-gray-400">{L("Note", "참조")} {i + 1}: </span>{n}</div>
+            ))}
+          </div>
+        );
+      })()}
+
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-1.5">
         <div className="text-sm font-semibold text-gray-200 mb-1">{L("How to read", "읽는 법")}</div>
-        <p>1 · {L("Rows are the features listed on platform.claude.com/docs/en/build-with-claude/overview (+4 core Messages checks and the Models API). The small GA/Beta/— tag in each cell is what the documentation says for that platform.", "행은 platform.claude.com/docs/en/build-with-claude/overview의 피처 목록(+코어 Messages 4종, Models API)입니다. 셀 앞의 GA/Beta/— 태그가 해당 플랫폼의 문서상 기대치입니다.")}</p>
-        <p>2 · {L("Each cell aggregates Fable 5.1, Fable 5, Opus 5 and Sonnet 5 (Mantle excludes Fable 5.1 — US GovCloud only). Click to open per-model evidence: request snapshot, response signal, error.", "각 셀은 Fable 5.1·Fable 5·Opus 5·Sonnet 5 결과를 집계합니다(Mantle은 Fable 5.1 제외 — US GovCloud 전용). 클릭하면 모델별 증거(요청 스냅샷·응답 신호·오류)를 볼 수 있습니다.")}</p>
-        <p>3 · {L("Drift = documented as available but observed unsupported/broken. Inconclusive = definition accepted but the model did not use the feature. N/A = not applicable by design (e.g. Converse has no field for it).", "드리프트 = 문서상 제공인데 실측 미지원/오류. Inconclusive = 정의는 수락됐지만 모델이 기능을 쓰지 않음. N/A = 설계상 부적용(예: Converse에 해당 필드 없음).")}</p>
-        <p>4 · {L("Runs daily via EventBridge → Fargate (manual trigger runs inside the backend). Evidence is stored in RDS; the previous run is diffed at the top.", "EventBridge → Fargate로 매일 실행(수동 트리거는 backend 내부). 증거는 RDS에 저장되고 직전 런 대비 변경이 상단에 표시됩니다.")}</p>
+        <p>1. {L("Rows are the features listed on platform.claude.com/docs/en/build-with-claude/overview (+4 core Messages checks and the Models API). The small GA/Beta/— tag in each cell is what the documentation says for that platform.", "행은 platform.claude.com/docs/en/build-with-claude/overview의 피처 목록(+코어 Messages 4종, Models API)입니다. 셀 앞의 GA/Beta/— 태그가 해당 플랫폼의 문서상 기대치입니다.")}</p>
+        <p>2. {L("Each cell aggregates Fable 5.1, Fable 5, Opus 5 and Sonnet 5 (Fable 5.1 is not measurable on Bedrock Mantle — US GovCloud only; see the Note under the table). Click to open per-model evidence: request snapshot, response signal, error.", "각 셀은 Fable 5.1, Fable 5, Opus 5, Sonnet 5 결과를 집계합니다(Fable 5.1은 Bedrock Mantle에서 측정 불가 — US GovCloud 리전 전용, 표 하단 참조). 클릭하면 모델별 증거(요청 스냅샷, 응답 신호, 오류)를 볼 수 있습니다.")}</p>
+        <p>3. {L("Drift = documented as available but observed unsupported/broken. Inconclusive = definition accepted but the model did not use the feature. N/A = not applicable by design (e.g. Converse has no field for it; inference_geo on Bedrock). 'Documented' (sky) = the docs say GA/Beta but the endpoint offers no verification path (e.g. 1M context on Mantle/Bedrock) — not a measurement.", "드리프트 = 문서상 제공인데 실측 미지원/오류. Inconclusive = 정의는 수락됐지만 모델이 기능을 쓰지 않음. N/A = 설계상 부적용(예: Converse에 해당 필드 없음, Bedrock의 inference_geo). '문서상 지원'(하늘색) = 문서는 GA/Beta이나 실측 경로가 없는 셀(예: Mantle/Bedrock의 1M 컨텍스트) — 측정값이 아님.")}</p>
+        <p>4. {L("Runs daily via EventBridge → Fargate (manual trigger runs inside the backend). Evidence is stored in RDS; the previous run is diffed at the top.", "EventBridge → Fargate로 매일 실행(수동 트리거는 backend 내부). 증거는 RDS에 저장되고 직전 런 대비 변경이 상단에 표시됩니다.")}</p>
       </div>
 
       {selected && run && <EvidenceModal runId={run.id} cell={selected} onClose={() => setSelected(null)} />}

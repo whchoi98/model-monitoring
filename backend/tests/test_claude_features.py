@@ -598,9 +598,19 @@ def test_default_job_count_matches_spec_estimate():
     jobs, decided = R.build_jobs(None, None, None)
     total = len(jobs) + len(decided)
     assert total == 39 * 5 * 4  # feature × surface × model
-    # pre-decided 122 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
+    # pre-decided 137 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
     #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 4 − 1 overlap = 15)
-    assert (len(jobs), len(decided)) == (658, 122)
+    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 4 − 1 overlap = 15)
+    assert (len(jobs), len(decided)) == (643, 137)
+
+
+def test_data_residency_is_not_applicable_on_bedrock_by_doc():
+    # 공식 문서: Bedrock은 엔드포인트/추론 프로파일이 추론 리전을 결정 → inference_geo "비적용" (미지원이 아님)
+    for s in ("mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse"):
+        assert catalog.is_applicable("data_residency", s, "opus-5") == (False, "not_applicable")
+        assert "inference_geo" in catalog.na_reason("data_residency", s, "opus-5")
+    assert catalog.is_applicable("data_residency", "cp", "opus-5") == (True, None)
+    assert catalog.na_reason("data_residency", "cp", "opus-5") == ""
 
 
 def test_smoke_rows_always_carry_verdict_without_network():

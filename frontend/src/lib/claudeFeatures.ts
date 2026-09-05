@@ -44,6 +44,17 @@ export const VERDICT_STYLE: Record<Verdict, string> = {
 };
 export const DOC_LABEL: Record<string, string> = { ga: "GA", beta: "Beta", no: "—", unknown: "?" };
 
+// 실측 경로가 없어 skipped인 셀(예: 1M 컨텍스트 on Mantle/Bedrock)은 문서 기대치가 GA/Beta면
+// "문서상 지원"으로 표기한다 — 측정값이 아님을 스타일(sky)로 구분 (v2.23.1).
+export const DOCUMENTED_ONLY_STYLE = "bg-sky-500/10 border-sky-500/30 text-sky-300";
+
+export function cellBadge(status: CellStatus, documented: string | undefined, lang: string): { label: string; style: string; documentedOnly: boolean } {
+  if (status === "skipped" && (documented === "ga" || documented === "beta")) {
+    return { label: lang === "en" ? "Documented" : "문서상 지원", style: DOCUMENTED_ONLY_STYLE, documentedOnly: true };
+  }
+  return { label: STATUS_LABEL[status], style: STATUS_STYLE[status], documentedOnly: false };
+}
+
 export interface CellAggregate { status: CellStatus; counts: Record<FeatureStatus, number>; probed: number; cells: FeatureCell[] }
 
 export function aggregateCell(cells: FeatureCell[]): CellAggregate {

@@ -20,7 +20,7 @@ SURFACES = ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_conve
 SURFACE_META: dict[str, dict] = {
     "cp": {"label": "Claude Platform on AWS", "short": "CP on AWS", "group": "cp",
            "region_env": "ANTHROPIC_AWS_REGION", "default_region": "us-east-2"},
-    "mantle": {"label": "Bedrock Mantle /anthropic", "short": "Mantle", "group": "mantle",
+    "mantle": {"label": "Bedrock Mantle", "short": "Mantle", "group": "mantle",
                "region_env": "MANTLE_ANTHROPIC_REGION", "default_region": "us-east-1"},
     "bedrock_messages": {"label": "Bedrock runtime · Messages API", "short": "Messages API", "group": "bedrock",
                          "region_env": "BEDROCK_FEATURES_REGION", "default_region": "ap-northeast-2"},
@@ -40,7 +40,7 @@ def region_for(surface: str) -> str:
 MODELS: list[dict] = [
     {"key": "fable-5-1", "label": "Claude Fable 5.1", "cp": "claude-fable-5-1", "mantle": None,
      "bedrock": "global.anthropic.claude-fable-5-1",
-     "mantle_reason": "Mantle Fable 5.1 = US GovCloud(us-gov-west-1) 전용"},
+     "mantle_reason": "측정 불가 — Mantle의 Fable 5.1은 US GovCloud(us-gov-west-1) 리전 전용 (상용 리전 미서빙)"},
     {"key": "fable-5", "label": "Claude Fable 5", "cp": "claude-fable-5", "mantle": "anthropic.claude-fable-5",
      "bedrock": "global.anthropic.claude-fable-5"},
     {"key": "opus-5", "label": "Claude Opus 5", "cp": "claude-opus-5", "mantle": "anthropic.claude-opus-5",
@@ -72,7 +72,7 @@ GROUPS: list[dict] = [
     {"id": "client_tools", "label_ko": "클라이언트 도구", "label_en": "Client-side tools"},
     {"id": "tool_infra", "label_ko": "도구 인프라", "label_en": "Tool infrastructure"},
     {"id": "context", "label_ko": "컨텍스트 관리", "label_en": "Context management"},
-    {"id": "files_endpoints", "label_ko": "파일 · 엔드포인트", "label_en": "Files & endpoints"},
+    {"id": "files_endpoints", "label_ko": "파일 및 엔드포인트", "label_en": "Files & endpoints"},
 ]
 
 _DOC = "https://platform.claude.com/docs/en/"
@@ -114,8 +114,12 @@ FEATURES: list[dict] = [
        "Create 1-request batch → retrieve → cancel", _DOC + "build-with-claude/batch-processing", CP_ONLY, "evidence"),
     _f("citations", "model", "인용", "Citations", "document + citations.enabled → text.citations[]",
        "document + citations.enabled → text.citations[]", _DOC + "build-with-claude/citations", ALL, "evidence"),
-    _f("data_residency", "model", "데이터 레지던시", "Data residency (inference_geo)", "inference_geo us → usage.inference_geo 에코",
-       "inference_geo us → echoed in usage.inference_geo", _DOC + "manage-claude/data-residency", CP_ONLY, "evidence"),
+    _f("data_residency", "model", "데이터 레지던시 (inference_geo)", "Data residency (inference_geo)",
+       "inference_geo us → usage.inference_geo 에코 (Bedrock은 엔드포인트 리전/추론 프로파일이 리전을 결정해 파라미터 비적용 → N/A)",
+       "inference_geo us → echoed in usage.inference_geo (on Bedrock the endpoint/inference profile sets the region, so the parameter is N/A)",
+       _DOC + "manage-claude/data-residency", CP_ONLY, "evidence",
+       "공식 문서: Amazon Bedrock은 엔드포인트 URL 또는 추론 프로파일이 추론 리전을 결정하므로 inference_geo 비적용(not applicable). "
+       "데이터 레지던시 자체는 리전 선택으로 충족되며 미지원이 아님 → Bedrock/Mantle 셀은 not_applicable"),
     _f("effort", "model", "Effort", "Effort", "output_config.effort low 수락 + 잘못된 값 400(파라미터 검증 증명)",
        "output_config.effort low accepted + invalid value → 400 (proves validation)", _DOC + "build-with-claude/effort", ALL, "negative"),
     _f("fallback_credit", "model", "Fallback 크레딧", "Fallback credit", "beta fallback-credit-2026-07-01 수락 (refusal 없이는 토큰 미발급)",
@@ -155,7 +159,7 @@ FEATURES: list[dict] = [
        "bash_20250124 → tool_use{bash}", _DOC + "agents-and-tools/tool-use/bash-tool", ALL, "evidence"),
     _f("browser_use", "client_tools", "브라우저 사용", "Browser use", "browser_toolset_20260801 → tool_use{toolset browser}",
        "browser_toolset_20260801 → tool_use{toolset browser}", _DOC + "agents-and-tools/tool-use/browser-use-tool", NONE, "evidence",
-       "실측 2026-09-05: CP on AWS·Bedrock InvokeModel·bedrock-runtime Messages API에서 toolset 수락 + tool_use 방출 (문서상 미제공 → undocumented)"),
+       "실측 2026-09-05: CP on AWS, Bedrock InvokeModel, bedrock-runtime Messages API에서 toolset 수락 + tool_use 방출 (문서상 미제공 → undocumented)"),
     _f("computer_use", "client_tools", "컴퓨터 사용", "Computer use", "toolset 20260801 시도 → 400이면 computer_20251124 + beta",
        "Try toolset 20260801 → on 400 fall back to computer_20251124 + beta", _DOC + "agents-and-tools/tool-use/computer-use-tool", ALL_BETA, "evidence",
        "P-AWS/Bedrock은 toolset 미제공, 대표 모델은 toolset 전용 모델군 → 미지원 가능(정상 발견)"),
@@ -226,6 +230,14 @@ _CONVERSE_NOT_EXPRESSIBLE = frozenset({
     "tool_search", "compaction", "mcp_connector", "programmatic_tool_calling", "agent_skills",
     "advisor_tool", "code_execution", "web_fetch", "web_search",
 })
+# 공식 문서가 "비적용(not applicable)"으로 명시한 조합 → not_applicable (미지원과 구분해 오해를 막는다).
+# data_residency: Amazon Bedrock(Mantle 포함)은 엔드포인트 URL/추론 프로파일이 추론 리전을 결정하므로 inference_geo 파라미터가 없다
+# (platform.claude.com/docs/en/manage-claude/data-residency "Model availability" Note). 데이터 레지던시 자체는 리전 선택으로 충족.
+_DATA_RESIDENCY_NA = ("Bedrock은 엔드포인트 리전/추론 프로파일이 추론 리전을 결정하므로 inference_geo 파라미터 비적용(공식 문서 명시), "
+                      "데이터 레지던시 자체는 리전 선택으로 충족")
+_NOT_APPLICABLE_BY_DOC: dict[tuple[str, str], str] = {
+    ("data_residency", s): _DATA_RESIDENCY_NA for s in ("mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse")
+}
 # 검증 경로가 없는 조합 → skipped
 _SKIPPED = frozenset({("context_window_1m", "mantle"), ("context_window_1m", "bedrock_messages"),
                       ("context_window_1m", "bedrock_invoke"), ("context_window_1m", "bedrock_converse")})
@@ -241,6 +253,8 @@ def is_applicable(feature_id: str, surface: str, model_key: str) -> tuple[bool, 
         return False, "not_applicable"
     if surface == "bedrock_converse" and feature_id in _CONVERSE_NOT_EXPRESSIBLE:
         return False, "not_applicable"
+    if (feature_id, surface) in _NOT_APPLICABLE_BY_DOC:
+        return False, "not_applicable"
     if (feature_id, surface) in _SKIPPED:
         return False, "skipped"
     return True, None
@@ -251,6 +265,8 @@ def na_reason(feature_id: str, surface: str, model_key: str) -> str:
         return _MODEL_BY_KEY[model_key].get("mantle_reason", "모델 미제공")
     if surface == "bedrock_converse" and feature_id in _CONVERSE_NOT_EXPRESSIBLE:
         return "Converse API에는 이 피처를 표현하는 필드가 없음"
+    if (feature_id, surface) in _NOT_APPLICABLE_BY_DOC:
+        return _NOT_APPLICABLE_BY_DOC[(feature_id, surface)]
     if (feature_id, surface) in _SKIPPED:
         return "capability 엔드포인트 없음 — 실전송 검증은 비용상 비활성"
     return ""
