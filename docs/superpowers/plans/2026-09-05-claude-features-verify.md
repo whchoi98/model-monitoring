@@ -3290,3 +3290,76 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
 - **Spec coverage**: catalog 39 rows/4 surfaces/documented+verification (T1); transports & SDK-free (T2); probes incl. negative controls, inconclusive, not_applicable, route-less endpoints, computer-use fallback, MCP env (T3–T4); tables/runner/failed status/retention/CLI smoke (T5); API incl. drift + diff (T6); local smoke before deploy (T7, T12); frontend lib+tests, page, nav, panel with drift banner/health cards/evidence modal/trigger (T8–T9); CDK schedule/env/test fix (T10); ADR-026, CHANGELOG, README, CLAUDE, architecture, version 6 places (T11). Spec "Risks" are closed by T7/T12 measurements.
 - **Placeholders**: none — every step has concrete code or exact commands.
 - **Type consistency**: `is_applicable -> (bool, str|None)` used identically in T1/T5; `ProbeOutcome(status, latency_ms, evidence, error)` in T3/T5; `NormalizedResponse.{content,usage,stop_reason,top,events}` in T2/T3/T4; frontend `FeatureCell` fields mirror `build_latest_payload` results (T6/T8/T9); nav key `features` in T9 page + header.
+
+---
+
+## Smoke log
+
+### 2026-09-05 — Task 7 로컬 라이브 스모크 (python3.12, IAM 롤 `VscodeServerStack-VSCode-Role`, SSM 키)
+
+명령 (자격은 `aws ssm get-parameter --with-decryption`으로 export, 값 미출력):
+
+```bash
+python3.12 -m features_runner --smoke --models sonnet-5 --features messages_basic,streaming,system_prompt,tool_use,token_counting
+python3.12 -m features_runner --smoke --models sonnet-5 --json > <scratchpad>/smoke-sonnet5.json
+python3.12 -m features_runner --smoke --models fable-5-1 --features tool_use,strict_tool_use,extended_thinking,adaptive_thinking,advisor_tool,bash_tool,computer_use
+```
+
+**sonnet-5 전체 스윕 (39피처 × 4 surface = 156행, 프로브 결함 수정 후)** — `broken` 0, `inconclusive` 0.
+
+| surface | supported | unsupported | broken | inconclusive | not_applicable | skipped |
+|---|---|---|---|---|---|---|
+| cp | 37 | 1 | 0 | 0 | 1 | 0 |
+| mantle | 0 | 38 | 0 | 0 | 0 | 1 |
+| bedrock_invoke | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_converse | 12 | 8 | 0 | 0 | 18 | 1 |
+
+판정 합계: `match` 100 · `drift` 29 · `undocumented` 2 · `none` 25.
+
+**드리프트 목록 (29)**
+- `mantle` 23건 — 전부 같은 원인: ap-northeast-1 `/anthropic`이 `anthropic.claude-sonnet-5`에 `not_found_error`
+  ("The model 'anthropic.claude-sonnet-5' does not exist"). Opus 4.8은 같은 리전에서 200이므로 자격·전송 문제가 아니라
+  **모델 서빙 리전 문제**(사용자 결정으로 리전은 ap-northeast-1 고정). 문서상 `ga`인 피처가 전부 `unsupported`로 떨어진다.
+  나머지 15건은 문서도 `no`라 `match`(batches/files/models/서버측 도구 등) — Mantle의 404는 실측으로 확인됐다.
+- `bedrock_invoke` 3건 · `bedrock_converse` 3건 — 동일 3피처:
+  - `strict_tool_use`: `tools.0.custom.strict: Extra inputs are not permitted` (문서 ga → 미지원 실측)
+  - `structured_outputs`: `output_config.format: Extra inputs are not permitted` (AWS 문서 ga vs Anthropic Bedrock 페이지 미지원 → **Anthropic 쪽이 맞다**)
+  - `token_counting`: `The provided model doesn't support counting tokens.` — Bedrock `CountTokens`가 Seoul에서 Claude 5 세대를 거부.
+    `global.anthropic.claude-sonnet-5` / 베이스 `anthropic.claude-sonnet-5` / `global.anthropic.claude-{opus-5,fable-5,fable-5-1,sonnet-4-6}` 모두 동일 거부,
+    `us.*`·`apac.*`는 Seoul에서 identifier invalid → 프로파일 형태 문제가 아니라 모델 지원 문제.
+
+**문서 미기재 지원 (undocumented) 2건** — `browser_use`가 `cp`와 `bedrock_invoke`에서 실제 동작
+(`tool_use{name: screenshot, toolset_name: browser}`). 카탈로그 기대치는 4열 전부 `no`.
+
+**닫힌 스펙 리스크**
+- computer use: `computer_toolset_20260801`이 CP·InvokeModel 모두 1차 시도에서 통과(레거시 폴백 미사용) → 스펙의 "toolset 미제공 우려" 해소.
+- `search_results` Converse: 구모델 전용이 아니라 Sonnet 5·Converse에서 `searchResultLocation` 인용까지 정상.
+- `server_side_fallback` CP: `'claude-sonnet-5' does not support the `fallbacks` parameter.` → 문서 기대치 `unknown`이 `unsupported`로 확정(verdict `none` 유지).
+- Ruling H(`files_api`·`agent_skills`는 CP에 beta 헤더 미전송): 두 피처 모두 헤더 없이 200 → 레거시 beta 폴백 불필요.
+- MCP 커넥터: 공개 서버(`https://mcp.deepwiki.com/mcp`) 도달 성공 → `supported`. 서버 장애 시 `inconclusive` 경로는 미발동.
+
+**fable-5-1 부분 스윕 (7피처)** — 기대대로: `tool_use`/`strict_tool_use`가 `tool_choice: auto` + 프롬프트 지시로 왕복 성공(CP),
+`extended_thinking`은 4열 전부 `not_applicable`(adaptive-only 모델의 정확한 거부 문구 확인), `mantle` 7행 전부 `not_applicable`(GovCloud).
+`strict_tool_use`는 Bedrock 두 열에서 sonnet-5와 같은 이유로 `unsupported`(drift).
+
+### 발견·수정한 프로브 결함 4건
+
+| # | 증상 | 근본 원인 | 수정 | 커밋 |
+|---|---|---|---|---|
+| 1 | Mantle 전 행 `broken` + `AttributeError: 'dict' object has no attribute 'dumps'` | `_HttpTransport.request(json=…)` 파라미터가 `json` 모듈을 가려, 4xx **JSON 본문** 직렬화(`json.dumps`)에서 터짐. 문자열 본문 404(streaming)만 정상 분류돼 증상이 부분적이었다 | 모듈 별칭 `_json` 도입 | `3ca2509` |
+| 2 | `effort` bedrock_invoke·bedrock_converse `broken` | 부정 제어 400이 "effort" 문자열을 포함해야 통과 — Bedrock은 필드 경로를 지우고 ``unknown variant `ultra`, expected one of `low`…`xhigh`…`` 만 남긴다 | `engine.effort_rejection_names_param()` — 파라미터 지목 또는 (잘못된 값 + effort 전용 값 `xhigh` 열거)만 인정(아무 400이나 통과시키지 않음) | `52b8b53` |
+| 3 | `agent_skills` cp `broken` (`container: null`) | 컨테이너는 코드 실행의 부산물인데 프롬프트가 "스킬 이름을 말해라"여서 모델이 코드를 실행하지 않았다 | 프롬프트를 실제 `ls /mnt/skills` 실행 지시로 교체(→ `container.id` + `container.skills[pdf@20260709]`), 도구 미호출 시 `broken` 대신 `inconclusive` | `5f0808e` |
+| 4 | `adaptive_thinking` fable-5-1의 Bedrock 두 열 `broken` | `effort: medium`에서 adaptive 모델이 쉬운 문제에 사고를 생략(프롬프트 난이도로는 안 바뀜 — 어려운 프롬프트도 미사고 확인). 또한 Bedrock Fable 5.1은 요약 텍스트를 비우고 `signature`만 채운다 | `effort: high` 고정 + `engine.has_thinking_evidence()`(텍스트 또는 서명) — 빈 블록은 계속 실패 | `0067db2` |
+
+추가로 증거를 **강화**한 1건: `search_results`의 Converse 경로가 "아무 인용이나 있으면 통과"였다(문서 출처 인용도 통과).
+실측 shape에 맞춰 `engine.citation_is_search_result()`로 `search_result_location` / `location.searchResultLocation`만 인정 — `1ac28c4`.
+수정 4건 + 강화 1건 모두 순수 로직 회귀 테스트를 동반한다(`backend/tests/test_claude_features.py`, 총 172 passed).
+
+### 남은 이슈 / 미해결
+
+- `inconclusive` 0건 — 서버측 도구·advisor·MCP 모두 CP에서 증거를 냈으므로 프롬프트 재강화 대상 없음. (Mantle 열은 모델 부재로 도달 전 실패.)
+- Bedrock `CountTokens`의 Claude 5 세대 미지원은 **플랫폼 갭**으로 남긴다(카탈로그 기대치 `ga` 유지 → drift 표시가 제품 의도).
+  기대치를 `no`로 바꾸는 것은 컨트롤러 결정 사항.
+- Mantle 23건 drift도 리전 결정(ap-northeast-1 고정)에 따른 실측 결과로 남긴다. us-east-1은 sonnet-5를 서빙하므로,
+  리전을 옮기면 Mantle 열이 대부분 되살아날 것으로 보이지만 이는 사용자 결정 영역.
+- `browser_use`의 undocumented 지원 2건은 카탈로그 `documented`를 고칠 근거가 될 수 있으나(문서 기대치 변경) 컨트롤러 결정 사항.
