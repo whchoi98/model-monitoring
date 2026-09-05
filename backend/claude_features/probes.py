@@ -299,7 +299,7 @@ def probe_search_results(t, model_id, model_key):
                             "content": [{"text": text}], "citations": {"enabled": True}}}
     n, kw = _doc_question(t, model_id, sr, csr, "What is the code word? Cite your source.")
     cites = [c for b in n.content if b.get("type") == "text" for c in (b.get("citations") or [])]
-    ok = any((c or {}).get("type") == "search_result_location" for c in cites) or (t.surface == "bedrock_converse" and bool(cites))
+    ok = any(engine.citation_is_search_result(c) for c in cites)
     return ok, {"request": _req(model_id, kw), "citations": _trim(cites[:2]), "response_snippet": _snippet(n)}
 
 

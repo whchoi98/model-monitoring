@@ -86,6 +86,20 @@ def diff_runs(prev: dict[tuple, str], cur: dict[tuple, str]) -> list[dict[str, A
     return out
 
 
+def citation_is_search_result(citation: Any) -> bool:
+    """인용 1건이 search_result 출처를 가리키는가 (Anthropic·Converse 양쪽 표기).
+
+    Anthropic: ``{"type": "search_result_location", …}``
+    Converse:  ``{"location": {"searchResultLocation": {"searchResultIndex": 0, …}}}`` — type 필드가 없다.
+    """
+    if not isinstance(citation, dict):
+        return False
+    if citation.get("type") == "search_result_location":
+        return True
+    loc = citation.get("location")
+    return isinstance(loc, dict) and "searchResultLocation" in loc
+
+
 #: effort 전용 허용값 — 이 중 `xhigh`는 다른 파라미터에 등장하지 않아 열거 자체가 지목 증거가 된다.
 EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
 

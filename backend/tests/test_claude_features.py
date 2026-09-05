@@ -401,6 +401,16 @@ def test_http_request_drops_json_content_type_for_multipart(monkeypatch):
     assert "content-type" not in {k.lower() for k in seen["headers"]}
 
 
+def test_citation_is_search_result_matches_both_notations():
+    """Converse 인용에는 type이 없다 — '아무 인용이나 통과'하던 완화를 실측 shape로 대체 (스모크 발견)."""
+    assert engine.citation_is_search_result({"type": "search_result_location", "search_result_index": 0})
+    assert engine.citation_is_search_result({"location": {"searchResultLocation": {"searchResultIndex": 0}}})
+    # 문서 출처 인용은 search_results 증거가 아니다
+    assert not engine.citation_is_search_result({"type": "char_location", "document_index": 0})
+    assert not engine.citation_is_search_result({"location": {"documentChar": {"start": 0}}})
+    assert not engine.citation_is_search_result(None)
+
+
 def test_effort_rejection_accepts_bedrock_variant_enumeration():
     """Bedrock은 필드 경로를 지우고 variant만 남긴다 — 'effort' 문자열만 찾으면 false-broken (스모크 발견)."""
     cp = "HTTP 400: output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'"
