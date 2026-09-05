@@ -3406,6 +3406,136 @@ python3.12 -m features_runner --smoke --surfaces bedrock_messages --models sonne
 - `adaptive_thinking`은 `max_tokens`가 작으면 thinking 토큰이 예산을 다 쓴다(초기 수동 확인에서 16토큰 요청이 thinking 15토큰으로 소진).
   프로브 예산은 그보다 커서 영향 없음.
 
+### Full sweep (4 models × 5 surfaces, 2026-09-05)
+
+Task 12. 계획이 예산 승인한 **단 한 번의 전체 실행**. `python3.12`, IAM 롤 `VscodeServerStack-VSCode-Role`,
+자격은 SSM `--with-decryption`으로 export(값 미출력), `AWS_REGION=ap-northeast-2`,
+**`MANTLE_ANTHROPIC_REGION=us-east-1`**(Task 7의 ap-northeast-1 고정을 컨트롤러가 교체 — Mantle 열이 살아났다).
+
+```bash
+python3.12 -m features_runner --smoke --json > <scratchpad>/smoke-all.json
+```
+
+**실측 규모** — 780셀(= 39피처 × 5 surface × 4모델) = 프로브 658 + 사전판정 122.
+벽시계 **387초**(6분 27초, 4스레드 풀), HTTP 요청 **496**건, 프로브 레이턴시 합 1,588초 / p50 1,970ms / 최대 35,149ms.
+스모크 모드는 캐시 3프로브에만 usage를 남기므로(입력 311,794토큰 / 출력 524토큰) JSON에서 정확한 과금액은 유도되지 않는다 —
+승인된 추정 범위($5~7) 안이다.
+
+#### 수정 후 surface × 모델 (broken 0 · inconclusive 0)
+
+| surface | model | supported | unsupported | broken | inconclusive | skipped | not_applicable |
+|---|---|---|---|---|---|---|---|
+| cp | fable-5-1 | 38 | 0 | 0 | 0 | 0 | 1 |
+| cp | fable-5 | 38 | 0 | 0 | 0 | 0 | 1 |
+| cp | opus-5 | 38 | 0 | 0 | 0 | 0 | 1 |
+| cp | sonnet-5 | 37 | 1 | 0 | 0 | 0 | 1 |
+| mantle | fable-5-1 | 0 | 0 | 0 | 0 | 0 | 39 |
+| mantle | fable-5 | 0 | 38 | 0 | 0 | 1 | 0 |
+| mantle | opus-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| mantle | sonnet-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_messages | fable-5-1 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_messages | fable-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_messages | opus-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_messages | sonnet-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_invoke | fable-5-1 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_invoke | fable-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_invoke | opus-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_invoke | sonnet-5 | 22 | 15 | 0 | 0 | 1 | 1 |
+| bedrock_converse | fable-5-1 | 12 | 8 | 0 | 0 | 1 | 18 |
+| bedrock_converse | fable-5 | 12 | 8 | 0 | 0 | 1 | 18 |
+| bedrock_converse | opus-5 | 12 | 8 | 0 | 0 | 1 | 18 |
+| bedrock_converse | sonnet-5 | 12 | 8 | 0 | 0 | 1 | 18 |
+
+| surface 합계 | supported | unsupported | broken | inconclusive | skipped | not_applicable |
+|---|---|---|---|---|---|---|
+| cp | 151 | 1 | 0 | 0 | 0 | 4 |
+| mantle | 44 | 68 | 0 | 0 | 3 | 41 |
+| bedrock_messages | 88 | 60 | 0 | 0 | 4 | 4 |
+| bedrock_invoke | 88 | 60 | 0 | 0 | 4 | 4 |
+| bedrock_converse | 48 | 32 | 0 | 0 | 4 | 72 |
+| **전체** | **419** | **221** | **0** | **0** | **15** | **125** |
+
+판정 합계: `match` 590 · `drift` 25 · `undocumented` 14 · `none` 151.
+(수정 전 최초 실행: supported 415 · unsupported 186 · **broken 39** · drift 29.)
+
+#### 트리아지: `broken` 39건 → 원인 2개, 수정 2건 (커밋 `6e543b0`)
+
+| 증상 | 행 수 | 근본 원인 | 분류 | 수정 |
+|---|---|---|---|---|
+| 캐시 3프로브 `broken`/약한 통과 — `cache_read_input_tokens`가 2번째 호출에도 0, `output_tokens: 0`, u1 == u2 | 4 broken (+8 약한 통과) | **프로브 결함.** 구 `CACHE_PAD`가 자신을 "probe"로 설명하며 "model"의 최소 캐시 길이를 언급해 **안전 거부**를 유발했다. 직접 재현(3/3 결정적): CP Fable 5 → `stop_reason: refusal`, `stop_details.category: "cyber"`; CP Opus 5 → `refusal` / `reasoning_extraction`("reverse engineering or duplicating model outputs"); Converse Fable 5 → `stopReason: content_filtered`. 거부된 완료는 캐시를 읽지 않으므로 증거 검사가 실패 | (a) 프로브 결함 | `CACHE_PAD`를 무해한 백과사전식 문장으로 교체(~2,100토큰, 최소 1,024 초과 유지) + `engine.blocked_stop_reason()`으로 `refusal`/`content_filtered`/`guardrail_intervened`를 식별해 캐시 3프로브가 **broken 대신 inconclusive** 반환(측정 불가 ≠ 피처 결함) |
+| Mantle Fable 5 전 피처 `broken` — `HTTP 400 "data retention mode 'default' is not available for this model"` | 35 | **깨끗한 거부 문구 누락.** Fable 5는 Covered Model이라 데이터 보존 옵트인이 없는 계정에는 모델 자체가 제공되지 않는다. 계정 단위 조건이며 프로브·전송 결함이 아니다 | (b) 새 거부 문구 | `engine._EXTRA_UNSUPPORTED`에 `"is not available for this model"` 추가 → `unsupported`. `AccessDeniedException`·`ConnectError`는 여전히 `broken`(회귀 테스트가 양방향 고정) |
+
+**증거 검사는 약화하지 않았다 — 오히려 강해졌다.** 캐시 프로브의 판정식(`cache_read > 0`)은 그대로다.
+종전에 `cache_creation > 0`(automatic) / `ephemeral_1h > 0`(1h)라는 **약한 OR 가지**로 통과했던 8행(CP·Converse의 Fable 5·Opus 5)은
+실제로는 거부된 완료였다. 패딩 교체 후 이 행들은 실제 `cache_read` 3,103~3,116토큰을 증거로 남긴다.
+
+재검증(수정 후, 영향 범위만 재실행):
+```bash
+python3.12 -m features_runner --smoke --features automatic_prompt_caching,prompt_caching_5m,prompt_caching_1h --json   # 60행: supported 50 · unsupported 3 · not_applicable 7 · broken 0
+python3.12 -m features_runner --smoke --surfaces mantle --models fable-5 --json                                        # 39행: unsupported 38 · skipped 1 · broken 0
+```
+
+테스트 +5 (`test_claude_features.py` 56 → 61, backend 전체 175 → 180):
+`test_classify_treats_model_level_unavailability_as_unsupported`,
+`test_blocked_stop_reason_flags_refusal_and_content_filter`,
+`test_cache_pad_is_benign_filler`,
+`test_cache_probes_report_blocked_completion_as_inconclusive`,
+`test_cache_probes_still_require_cache_read_evidence`(가드가 증거를 약화하지 않음을 고정).
+
+#### 드리프트 25건 — 클러스터 2개, 개별 피처 갭은 0
+
+| feature | surface | model | 기대 | 실측 | 거부 문구 |
+|---|---|---|---|---|---|
+| messages_basic, streaming, system_prompt, tool_use, adaptive_thinking, extended_thinking, citations, search_results, pdf_support, effort, fallback_credit, compaction, context_editing, automatic_prompt_caching, prompt_caching_5m, prompt_caching_1h, fine_grained_tool_streaming, tool_search, bash_tool, computer_use, memory_tool, text_editor, token_counting (23행) | mantle | fable-5 | ga/beta | unsupported | `data retention mode 'default' is not available for this model` |
+| fallback_credit | mantle | opus-5 | beta | unsupported | ``Unexpected value(s) `fallback-credit-2026-07-01` for the `anthropic-beta` header`` |
+| fallback_credit | mantle | sonnet-5 | beta | unsupported | 위와 동일 |
+
+- **23행은 계정 단위 단일 원인**이다 — 피처별 갭이 아니라 "Mantle us-east-1의 Fable 5가 이 계정에 제공되지 않음" 하나가
+  23개 셀로 펼쳐진 것. Covered Model 데이터 보존 옵트인을 적용하면 한꺼번에 해소될 전망(계정·조직 결정 영역).
+  카탈로그 기대치를 `no`로 낮추거나 `not_applicable`로 사전판정하는 것은 **하지 않았다** — 옵트인이 있는 계정에서는 실제로 동작하므로
+  측정을 지우면 오히려 사실을 숨긴다. 모든 행이 거부 문구를 증거로 보존한다.
+- `fallback_credit` 2행은 Mantle이 해당 beta 헤더를 싣지 않는 **진짜 surface 갭**이다. 그대로 남긴다.
+- Task 7의 Mantle 드리프트 23건(ap-northeast-1 모델 부재)은 **해소됐다** — us-east-1로 옮기면서 opus-5/sonnet-5가 각각 22 supported.
+- Bedrock `CountTokens`의 Claude 5 세대 미지원(기대 `ga`)은 3 Bedrock 열에서 `unsupported`로 나오지만
+  `documented`가 열별로 이미 조정돼 있어 드리프트에 오르지 않는다(bedrock_messages는 Task 13에서 `no`로 override).
+
+#### `undocumented` 14건 — 전부 `browser_use`
+
+`browser_toolset_20260801`이 문서에 없는데도 `tool_use`를 방출: cp 4모델 · mantle 2모델(opus-5/sonnet-5) ·
+bedrock_messages 4모델 · bedrock_invoke 4모델. Converse에는 표현 필드가 없어 `not_applicable`.
+Task 7(cp 2건)·Task 13(bedrock_messages 1건)의 발견이 **4모델 × 4 surface로 일관되게 재현**됐다.
+카탈로그 `documented`를 `no`로 유지하고 `undocumented` 판정으로 드러내는 현행 동작이 의도대로 작동한다 — 기대치 변경은 컨트롤러 결정.
+
+#### 남은 `inconclusive` 0건
+
+수정 후 780셀 전체에 `inconclusive`가 없다. MCP(`mcp.deepwiki.com`)는 이번 실행에서 정상 응답했다 —
+CP에서 `mcp_tool_use` 증거를 냈고 나머지 surface는 `tool type 'mcp_toolset' is not supported`로 깨끗히 거부됐다.
+(공용 서버가 불안정한 회차에는 `probe_mcp_connector`가 `inconclusive`로 떨어지도록 이미 되어 있다.)
+
+#### 기대치와 일치한 사전 확인 항목
+
+- `extended_thinking` → 19행 `not_applicable`(adaptive 전용 모델의 `budget_tokens` 거부). Mantle Fable 5는 데이터 보존 거부가 먼저 걸려 `unsupported`.
+- Mantle Fable 5.1 → 39행 `not_applicable`(US GovCloud 전용).
+- Bedrock 3열 `structured_outputs`/`strict_tool_use`/`token_counting` → `unsupported`(기대 `no` → `match`).
+- Bedrock 열 `batches`/`files`/`models`/`skills` → 라우트 부재로 `unsupported`.
+- `context_window_1m` → capability 엔드포인트가 없는 4열에서 15행 `skipped`.
+- Converse 표현 불가 17피처 × 4모델 → 68행 `not_applicable`.
+
+#### 전체 테스트 스위트 (수정 후)
+
+| 스위트 | 결과 |
+|---|---|
+| `cd backend && python3.12 -m pytest tests/ -q` | **180 passed**, 1 warning (passlib `crypt` DeprecationWarning, 기존) |
+| `ruff check backend/claude_features backend/features_runner.py backend/routers/features.py backend/tests/test_claude_features.py` | **All checks passed!** |
+| `ruff check backend/` | 9 errors — `prober.py`, `routers/{cost,efficiency,gptbench,insights}.py`, `tests/{test_gptbench,test_parity_logic}.py`의 **기존 항목**, 손댄 파일에는 없음 |
+| `cd frontend && npx tsc --noEmit` | 통과 (출력 없음) |
+| `cd frontend && npx vitest run` | **5 files / 49 tests passed** |
+| `cd cdk && npm run lint` | 0 errors, 2 warnings (`test/image-pinning.test.ts`의 `no-explicit-any`, 기존) |
+| `cd cdk && npx tsc --noEmit` | 통과 |
+| `cd cdk && npm test` | **10 suites / 72 tests passed** |
+| `cd cdk && npx cdk synth --all --quiet` | exit 0 (aws-cdk-lib 공지문만 출력) |
+
+
 ---
 
 ### Task 13: Add the 5th surface — Bedrock runtime · Anthropic Messages API (`bedrock_messages`)
