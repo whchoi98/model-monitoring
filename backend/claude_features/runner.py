@@ -125,38 +125,82 @@ def run_features(surfaces=None, features=None, models=None) -> int:
         counts["drift"] = drift
         db.add_all(rows)
         run = db.query(FeatureRun).filter(FeatureRun.id == run_id).first()
-        run.status, run.finished_at, run.totals = "completed", datetime.now(timezone.utc), counts
+        run.status, run.finished_at, run.totals = (
+            "completed",
+            datetime.now(timezone.utc),
+            counts,
+        )
         db.commit()
         logger.info("Features run %d completed: %s", run_id, counts)
-        _prune(db, FeatureRun, FeatureResult)
     except Exception as exc:
-        db.rollback()
-        run = db.query(FeatureRun).filter(FeatureRun.id == run_id).first()
-        if run:
-            run.status, run.finished_at, run.error_message = "failed", datetime.now(timezone.utc), str(exc)[:1500]
-            db.commit()
+        _mark_failed(db, FeatureRun, run_id, exc)
         raise
+    else:
+        # 보존 정리는 런 성공과 분리 — 정리 실패가 완료된 런을 failed로 덮어쓰지 않도록 (non-fatal)
+        try:
+            _prune(db, FeatureRun, FeatureResult)
+        except Exception:  # noqa: BLE001
+            logger.exception("feature run prune failed (non-fatal)")
     finally:
         db.close()
     return run_id
 
 
 def _prune(db, FeatureRun, FeatureResult) -> None:
-    keep = [r.id for r in db.query(FeatureRun.id).order_by(FeatureRun.id.desc()).limit(KEEP_RUNS)]
+    keep = [
+        r.id
+        for r in db.query(FeatureRun.id)
+        .order_by(FeatureRun.id.desc())
+        .limit(KEEP_RUNS)
+    ]
     if not keep:
         return
-    old = [r.id for r in db.query(FeatureRun.id).filter(FeatureRun.id < min(keep)).all()]
+    old = [
+        r.id
+        for r in db.query(FeatureRun.id)
+        .filter(FeatureRun.id < min(keep))
+        .all()
+    ]
     if old:
-        db.query(FeatureResult).filter(FeatureResult.run_id.in_(old)).delete(synchronize_session=False)
-        db.query(FeatureRun).filter(FeatureRun.id.in_(old)).delete(synchronize_session=False)
+        db.query(FeatureResult).filter(
+            FeatureResult.run_id.in_(old)
+        ).delete(synchronize_session=False)
+        db.query(FeatureRun).filter(FeatureRun.id.in_(old)).delete(
+            synchronize_session=False
+        )
         db.commit()
         logger.info("pruned %d old feature runs", len(old))
+
+
+def _mark_failed(db, FeatureRun, run_id: int, exc: Exception) -> None:
+    """실패 상태 기록 — 여기서 난 예외는 원 예외를 가리지 않도록 로그만 남긴다."""
+    try:
+        db.rollback()
+        run = db.query(FeatureRun).filter(FeatureRun.id == run_id).first()
+        if run:
+            run.status, run.finished_at, run.error_message = (
+                "failed",
+                datetime.now(timezone.utc),
+                str(exc)[:1500],
+            )
+            db.commit()
+    except Exception:  # noqa: BLE001
+        logger.exception("failed to mark feature run %d as failed", run_id)
 
 
 def smoke(surfaces=None, features=None, models=None) -> list[dict]:
     """DB 없이 실행해 표로 출력할 결과 목록을 반환 (로컬 라이브 스모크)."""
     jobs, decided = build_jobs(surfaces, features, models)
-    out: list[dict] = [{**d, "latency_ms": None, "error": None, "evidence": {"reason": d["reason"]}} for d in decided]
+    out: list[dict] = [
+        {
+            **d,
+            "verdict": engine.verdict(d["documented"], d["status"]),
+            "latency_ms": None,
+            "error": None,
+            "evidence": {"reason": d["reason"]},
+        }
+        for d in decided
+    ]
 
     def on_result(job: dict, outcome: ProbeOutcome) -> None:
         out.append({**job, "status": outcome.status, "verdict": engine.verdict(job["documented"], outcome.status),

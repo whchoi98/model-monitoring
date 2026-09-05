@@ -36,10 +36,16 @@ def main() -> int:
         if args.json:
             print(json.dumps(rows, ensure_ascii=False, indent=1, default=str))
         else:
-            for r in sorted(rows, key=lambda r: (r["feature"], r["surface"], r["model_key"])):
+            for r in sorted(
+                rows, key=lambda r: (r["feature"], r["surface"], r["model_key"])
+            ):
                 err = (r.get("error") or "")[:110].replace("\n", " ")
-                print(f"{r['feature']:28s} {r['surface']:16s} {r['model_key']:10s} {r['status']:15s} {r['verdict']:12s} "
-                      f"{(r['latency_ms'] or 0):7.0f}ms  {err}")
+                verdict = r.get("verdict", "-")
+                print(
+                    f"{r['feature']:28s} {r['surface']:16s} {r['model_key']:10s} "
+                    f"{r['status']:15s} {verdict:12s} "
+                    f"{(r['latency_ms'] or 0):7.0f}ms  {err}"
+                )
         return 0
 
     from database import create_tables

@@ -433,3 +433,19 @@ def test_default_job_count_matches_spec_estimate():
     # pre-decided 118 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
     #                 + context_window_1m skipped on mantle/invoke/converse (3 × 4 − 1 overlap = 11)
     assert (len(jobs), len(decided)) == (506, 118)
+
+
+def test_smoke_rows_always_carry_verdict_without_network():
+    # mantle + fable-5-1 is pre-decided (not_applicable) → no transport is built, no network call
+    rows = R.smoke(["mantle"], ["messages_basic"], ["fable-5-1"])
+    assert len(rows) == 1
+    assert rows[0]["status"] == "not_applicable" and rows[0]["verdict"] == "none"
+    assert rows[0]["evidence"]["reason"]
+
+
+def test_mark_failed_swallows_secondary_errors():
+    class _DB:
+        def rollback(self):
+            raise RuntimeError("connection gone")
+
+    R._mark_failed(_DB(), object, 1, RuntimeError("original"))  # must not raise
