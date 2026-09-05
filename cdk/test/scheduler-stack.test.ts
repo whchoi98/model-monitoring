@@ -156,7 +156,7 @@ describe("SchedulerStack", () => {
     template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
       ContainerDefinitions: Match.arrayWith([Match.objectLike({
         Command: ["python", "-m", "features_runner", "--once"],
-        Environment: Match.arrayWith([Match.objectLike({ Name: "MANTLE_ANTHROPIC_REGION", Value: "ap-northeast-1" })]),
+        Environment: Match.arrayWith([Match.objectLike({ Name: "MANTLE_ANTHROPIC_REGION", Value: "us-east-1" })]),
       })]),
     }));
   });

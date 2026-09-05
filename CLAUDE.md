@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.22.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.23.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -35,13 +35,15 @@ Internal ALB
                 ├── /analysis     — Stop reason 분포 + Output length 분포
                 ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
                 ├── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
-                └── /gpt-on-aws   — GPT on AWS (Mantle 9채널 TTFB/TTFT 벤치 — Terra Global 포함 v2.20.1, 15분 주기)
+                ├── /gpt-on-aws   — GPT on AWS (Mantle 9채널 TTFB/TTFT 벤치 — Terra Global 포함 v2.20.1, 15분 주기)
+                └── /claude-features — Claude API Features (33 문서 피처 × CP/Mantle/InvokeModel/Converse × 4모델 실행-증거 + 문서 드리프트, v2.23.0)
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 43 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
-  └── GptBench Fargate Task    → 15분 주기 Mantle GPT 9채널 × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1)
+  ├── GptBench Fargate Task    → 15분 주기 Mantle GPT 9채널 × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1)
+  └── FeaturesVerify Fargate Task → 일 1회 Claude API Features 39행(문서 33+코어 4+Models API·분할 2) × 4 surface × 대표 4모델 실행-증거 스윕 (v2.23.0)
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
@@ -73,6 +75,8 @@ model-monitoring/
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py
 │   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×19 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
+│   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×4 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
+│   ├── features_runner.py   # CLI entry: `python -m features_runner --once` (FeaturesVerify Fargate task)
 │   └── routers/
 │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
 │       ├── admin.py         # /api/admin/* — reset-monitoring-data, users CRUD (admin only)
@@ -89,7 +93,8 @@ model-monitoring/
 │       ├── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0 신규)
 │       ├── compare.py       # /api/compare/run — Comparison Lab: 1 prompt → N models 병렬, SSE (auth)
 │       ├── parity.py        # /api/parity/* — catalog, latest(+직전 런 diff), evidence, trigger(auth)
-│       └── gptbench.py      # /api/gptbench/* — latest(스코어 카드), trend(사이클 시계열) (v2.18.0)
+│       ├── gptbench.py      # /api/gptbench/* — latest(스코어 카드), trend(사이클 시계열) (v2.18.0)
+│       └── features.py      # /api/features/* — catalog, latest(+diff+drift), evidence, trigger(auth) (v2.23.0)
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
@@ -97,6 +102,7 @@ model-monitoring/
 │   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
 │   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
 │   │   │   ├── gpt-on-aws/page.tsx # GPT on AWS 벤치 (v2.18.0)
+│   │   │   ├── claude-features/page.tsx # Claude API Features 매트릭스 (v2.23.0)
 │   │   │   ├── prompts/page.tsx   # login-gate + PromptsPanel
 │   │   │   ├── cost/page.tsx
 │   │   │   ├── reliability/page.tsx
@@ -116,6 +122,7 @@ model-monitoring/
 │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt
 │   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x)
 │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
+│   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 4열 매트릭스 + 드리프트 배너 + 증거 모달 + 수동 트리거 (v2.23.0)
 │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
 │   │   ├── hooks/                       # useAutoRefresh, useProbeStream, useChatStream
 │   │   └── lib/
@@ -125,12 +132,13 @@ model-monitoring/
 │   │       ├── pricing.ts               # backend/pricing.py mirror
 │   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
 │   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (lang 파라미터로 KO/EN, v2.16.2)
+│   │       ├── claudeFeatures.ts        # Claude API Features 매트릭스 순수 로직 — 셀 집계·그룹 구성·헬스 계산 (v2.23.0)
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / middleware.ts
 ├── cdk/                                  # 8 stacks (TypeScript)
 └── docs/
     ├── architecture.md
-    ├── decisions/ADR-001~025.md
+    ├── decisions/ADR-001~026.md
     └── runbooks/deploy.md, rollback.md, ...
 ```
 
@@ -208,6 +216,8 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 - **Claude Fable 5.1 (v2.22.0, 2026-09-01)**: 2026-08-31 출시. Bedrock 프로파일 `global.`/`us.anthropic.claude-fable-5-1` (Seoul·us-east-1 모두 ACTIVE, 라이브 converse 검증). Fable 5와 동일 Covered Model 제약(provider_data_share 리전 opt-in 기존 적용) + 동일 단가 $10/$50. **forced `tool_choice`(type tool/any)는 400 거부** → 패리티 `tool_use` 프로브는 `parity/catalog.py` `supports_forced_tool_choice()`로 `auto`+프롬프트 지시로 대체. CP 채널은 `_ANTHROPIC_TARGETS` 선등록(`fable-5-1`) — `fable-5` substring 접두 충돌은 `_match_anthropic_model()`이 처리.
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
+
+**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 43개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(문서 33피처+코어 4+Models API·분할 2) × 4 surface(CP on AWS/Mantle `/anthropic`/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다. Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026.
 
 **라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"`(Mantle) / `"OpenAI <family> (Global)"`(Global CRIS, v2.20.0) / `"OpenAI <family> (1P)"`(1P direct) prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Global(Bedrock·OpenAI 공통, `(Global)` 서픽스) → Bedrock US → OpenAI 리전** (`channelRank` 함수).
 
@@ -330,6 +340,8 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `ANTHROPIC_AWS_REGION` | `us-east-2` | CP on AWS endpoint region |
 | `NEXT_PUBLIC_RUM_ENDPOINT` / `_API_KEY` | (선택) | RUM 수집 — **빌드 타임 주입** (frontend docker build `--build-arg`), 미설정 시 수집 비활성 (v2.16.5) |
 | `RETENTION_DAYS` | `60` | 원본 probe_results 보존 일수 (초과분은 probe_results_hourly 집계 이관, 0 이하=비활성) |
+| `MANTLE_ANTHROPIC_REGION` | `us-east-1` (CDK 주입) | Claude API Features + 패리티 런 `messages_mantle` 공용 Mantle `/anthropic` surface 리전. ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측) → 대표 모델이 서빙되는 us-east-1로 전환(사용자 결정, v2.23.0). env 미주입 시 코드 기본값은 여전히 ap-northeast-1(`parity/runner.py`) |
+| `FEATURES_MCP_SERVER_URL` | (선택) | Claude API Features MCP connector 프로브용 공개 MCP 서버 URL (v2.23.0, 장애 시 inconclusive로 격리) |
 
 ---
 

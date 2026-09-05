@@ -1,6 +1,9 @@
 """Claude API Features 카탈로그 (v2.23.0) — 무엇을 어느 엔드포인트에서 어떤 모델로 검증하는가.
 
-행(FEATURES) = platform.claude.com/docs/en/build-with-claude/overview 의 33개 피처 + 코어 4 + Models API.
+행(FEATURES) = 39개: platform.claude.com/docs/en/build-with-claude/overview 의 33개 문서 피처 매핑 34행
+(strict_tool_use는 structured_outputs, extended_thinking은 adaptive_thinking과 문서상 같은 항목이지만
+검증 강도가 달라 카탈로그에서는 별도 행으로 분리) + 코어 Messages 4(messages_basic/streaming/system_prompt/tool_use)
++ Models API 1.
 열(SURFACES) = cp(Claude Platform on AWS) / mantle(Bedrock Mantle /anthropic) / bedrock_invoke / bedrock_converse.
 documented = 문서상 기대치 {ga|beta|no|unknown}. 1차 출처는 overview Availability 컬럼(Bedrock 단일 컬럼),
 Converse/InvokeModel 차이·Mantle 특례는 AWS 공식 문서와 platform.claude.com Bedrock 두 페이지로 보정.
@@ -17,7 +20,7 @@ SURFACE_META: dict[str, dict] = {
     "cp": {"label": "Claude Platform on AWS", "short": "CP on AWS", "group": "cp",
            "region_env": "ANTHROPIC_AWS_REGION", "default_region": "us-east-2"},
     "mantle": {"label": "Bedrock Mantle /anthropic", "short": "Mantle", "group": "mantle",
-               "region_env": "MANTLE_ANTHROPIC_REGION", "default_region": "ap-northeast-1"},
+               "region_env": "MANTLE_ANTHROPIC_REGION", "default_region": "us-east-1"},
     "bedrock_invoke": {"label": "Bedrock runtime · InvokeModel", "short": "InvokeModel", "group": "bedrock",
                        "region_env": "BEDROCK_FEATURES_REGION", "default_region": "ap-northeast-2"},
     "bedrock_converse": {"label": "Bedrock runtime · Converse", "short": "Converse", "group": "bedrock",
@@ -120,11 +123,12 @@ FEATURES: list[dict] = [
        "overview는 Claude API only, fallback-credit 페이지는 P-AWS 인식 시사 → 실측"),
     _f("structured_outputs", "model", "구조화 출력", "Structured outputs", "output_config.format json_schema → 스키마 유효 JSON",
        "output_config.format json_schema → schema-valid JSON", _DOC + "build-with-claude/structured-outputs",
-       {"cp": "ga", "mantle": "no", "bedrock_invoke": "ga", "bedrock_converse": "ga"}, "evidence",
-       "Anthropic Bedrock(Opus 4.7+) 페이지는 미지원, AWS InvokeModel 문서는 지원 → 실측"),
+       {"cp": "ga", "mantle": "no", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
+       "Anthropic 'Claude in Amazon Bedrock (Opus 4.7+)' 페이지: 미지원. AWS 문서의 지원 표기는 4.6 이하 세대 대상 — 실측(Claude 5 세대) 'Extra inputs are not permitted'"),
     _f("strict_tool_use", "model", "Strict 도구", "Strict tool use", "strict:true 도구 → 입력 키 집합이 스키마와 일치",
        "strict:true tool → input keys exactly match schema", _DOC + "build-with-claude/structured-outputs",
-       {"cp": "ga", "mantle": "unknown", "bedrock_invoke": "ga", "bedrock_converse": "ga"}, "evidence"),
+       {"cp": "ga", "mantle": "unknown", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
+       "Bedrock: strict 도구가 'Extra inputs are not permitted' (실측 2026-09-05) — structured outputs와 동일 제약"),
     _f("extended_thinking", "model", "확장 추론(budget)", "Extended thinking (budget_tokens)",
        "대표 4모델은 adaptive-only → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
        "All 4 models are adaptive-only → documented 400; exact rejection → not_applicable",
@@ -142,7 +146,8 @@ FEATURES: list[dict] = [
     _f("bash_tool", "client_tools", "Bash 도구", "Bash tool", "bash_20250124 → tool_use{bash}",
        "bash_20250124 → tool_use{bash}", _DOC + "agents-and-tools/tool-use/bash-tool", ALL, "evidence"),
     _f("browser_use", "client_tools", "브라우저 사용", "Browser use", "browser_toolset_20260801 → tool_use{toolset browser}",
-       "browser_toolset_20260801 → tool_use{toolset browser}", _DOC + "agents-and-tools/tool-use/browser-use-tool", NONE, "evidence"),
+       "browser_toolset_20260801 → tool_use{toolset browser}", _DOC + "agents-and-tools/tool-use/browser-use-tool", NONE, "evidence",
+       "실측 2026-09-05: CP on AWS·Bedrock InvokeModel에서 toolset 수락 + tool_use 방출 (문서상 미제공 → undocumented)"),
     _f("computer_use", "client_tools", "컴퓨터 사용", "Computer use", "toolset 20260801 시도 → 400이면 computer_20251124 + beta",
        "Try toolset 20260801 → on 400 fall back to computer_20251124 + beta", _DOC + "agents-and-tools/tool-use/computer-use-tool", ALL_BETA, "evidence",
        "P-AWS/Bedrock은 toolset 미제공, 대표 모델은 toolset 전용 모델군 → 미지원 가능(정상 발견)"),
@@ -169,8 +174,8 @@ FEATURES: list[dict] = [
     _f("compaction", "context", "컴팩션", "Compaction", "beta compact-2026-01-12 + edits[compact_20260112] 수락",
        "beta compact-2026-01-12 + edits[compact_20260112] accepted", _DOC + "build-with-claude/compaction",
        {"cp": "beta", "mantle": "beta", "bedrock_invoke": "beta", "bedrock_converse": "no"}, "acceptance", "AWS: Converse 미지원"),
-    _f("context_editing", "context", "컨텍스트 편집", "Context editing", "clear_thinking_20251015 → context_management.applied_edits",
-       "clear_thinking_20251015 → context_management.applied_edits", _DOC + "build-with-claude/context-editing",
+    _f("context_editing", "context", "컨텍스트 편집", "Context editing", "clear_tool_uses_20250919 → context_management.applied_edits",
+       "clear_tool_uses_20250919 → context_management.applied_edits", _DOC + "build-with-claude/context-editing",
        {"cp": "beta", "mantle": "beta", "bedrock_invoke": "beta", "bedrock_converse": "unknown"}, "evidence"),
     _f("automatic_prompt_caching", "context", "자동 프롬프트 캐싱", "Automatic prompt caching",
        "최상위 cache_control + 안정 프리픽스 2회 → cache_creation/cache_read", "Top-level cache_control, 2 calls → cache_creation/cache_read",
@@ -180,7 +185,9 @@ FEATURES: list[dict] = [
     _f("prompt_caching_1h", "context", "프롬프트 캐싱 1시간", "Prompt caching (1h)", "ttl 1h → ephemeral_1h_input_tokens 또는 2차 read",
        "ttl 1h → ephemeral_1h_input_tokens or read on 2nd call", _DOC + "build-with-claude/prompt-caching#1-hour-cache-duration", ALL, "evidence"),
     _f("token_counting", "context", "토큰 카운트", "Token counting", "count_tokens → input_tokens > 0",
-       "count_tokens → input_tokens > 0", _DOC + "build-with-claude/token-counting", ALL, "evidence"),
+       "count_tokens → input_tokens > 0", _DOC + "build-with-claude/token-counting",
+       {"cp": "ga", "mantle": "ga", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
+       "AWS CountTokens 문서: CRIS 전용(global.*) 모델 미지원 — Mantle /anthropic count_tokens가 유일 경로 (실측 2026-09-05 일치)"),
     # --- files & endpoints ---
     _f("files_api", "files_endpoints", "Files API", "Files API", "업로드 → 조회 → 삭제",
        "Upload → get → delete", _DOC + "build-with-claude/files", CP_BETA_ONLY, "evidence"),

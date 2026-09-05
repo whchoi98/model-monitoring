@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.22.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.23.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -28,8 +28,9 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
 - **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 43 monitored channels.
-- **Nine analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (Mantle TTFB/TTFT bench, 15-min cycles).
+- **Ten analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (Mantle TTFB/TTFT bench, 15-min cycles), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 19 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
+- **Daily Claude API Features sweep** — a scheduled Fargate task runs the 39-row catalog (33 documented `platform.claude.com` features + 4 core Messages checks + Models API) against Claude Platform on AWS, Bedrock Mantle `/anthropic`, and Bedrock runtime (InvokeModel + Converse) for 4 representative models, surfacing a documentation-drift banner when observed behavior disagrees with the documented availability.
 - **Multi-channel comparison** — Same model family invoked through Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), and OpenAI GPT via Bedrock Mantle (Path 4) in parallel for true apples-to-apples evaluation.
 - **AI chatbot with tools** — Claude Sonnet 4.6 chatbot answers natural-language questions over the time-series store using four custom Bedrock tools; dynamic follow-up suggestions generated per turn.
 - **Mobile-responsive UI** — one shared header with a hamburger menu on narrow screens; the same URLs adapt purely by viewport width (v2.16.0).
@@ -156,9 +157,10 @@ model-monitoring/
 │   ├── prober.py                 # 43-model (+5 dormant 1P) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI Mantle/Global
 │   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
 │   ├── pricing.py                # token unit price table
-│   └── routers/                  # 16 router modules (auth, admin, analysis, cost, gptbench, …)
-├── frontend/                     # Next.js 14 standalone + 10 routes (installable PWA)
-│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA icons
+│   ├── claude_features/          # catalog (39 rows × 4 surfaces), transports, probes, engine, runner (v2.23.0)
+│   └── routers/                  # 17 router modules (auth, admin, analysis, cost, gptbench, features, …)
+├── frontend/                     # Next.js 14 standalone + 11 routes (installable PWA)
+│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA icons
 │   ├── src/components/           # 30+ React components (dashboard, panels, chat)
 │   └── src/lib/                  # api client, i18n, sortModels, pricing mirror, version
 ├── cdk/                          # 8 CDK TypeScript stacks
@@ -166,7 +168,7 @@ model-monitoring/
 │   └── lib/constructs/           # reusable FargateServiceConstruct (L3)
 ├── docs/
 │   ├── architecture.md           # full system design
-│   ├── decisions/                # ADR-001 through ADR-025
+│   ├── decisions/                # ADR-001 through ADR-026
 │   └── runbooks/                 # deploy, rollback procedures
 ├── CHANGELOG.md                  # Keep a Changelog format (bilingual, repo root)
 └── Makefile                      # `make verify` runs CDK lint + tests + ruff + tsc
@@ -248,8 +250,9 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic
 
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
 - **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 43개 모니터링 채널에 호출합니다.
-- **9개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Mantle TTFB/TTFT 벤치, 15분 주기).
+- **10개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Mantle TTFB/TTFT 벤치, 15분 주기), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 19 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
+- **일일 Claude API 기능 검증 스윕** — 스케줄된 Fargate 태스크가 39행 카탈로그(문서 33피처 + 코어 Messages 4 + Models API)를 Claude Platform on AWS · Bedrock Mantle `/anthropic` · Bedrock runtime(InvokeModel + Converse)에서 대표 모델 4종으로 실행하고, 실측이 문서상 가용성과 어긋나면 문서 드리프트 배너로 표시합니다.
 - **다중 채널 비교** — 동일 모델 family를 Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), OpenAI GPT via Bedrock Mantle (Path 4) 네 채널로 병렬 호출하여 정확한 동일 조건 비교를 제공합니다.
 - **AI 챗봇 + 도구** — Claude Sonnet 4.6 챗봇이 4개의 Bedrock 커스텀 도구를 사용해 시계열 데이터에 대한 자연어 질의에 응답하며, 매 턴마다 동적 후속 질문을 생성합니다.
 - **모바일 반응형 UI** — 공용 헤더 + 좁은 화면 햄버거 메뉴, 같은 URL이 뷰포트 폭만으로 적응 (v2.16.0).
@@ -376,9 +379,10 @@ model-monitoring/
 │   ├── prober.py                 # 43개(+1P 5개 휴면) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI (Mantle + Global + 1P)
 │   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
 │   ├── pricing.py                # 토큰 단가 테이블
-│   └── routers/                  # 16개 라우터 (auth, admin, analysis, cost, gptbench, …)
-├── frontend/                     # Next.js 14 standalone + 10 라우트 (설치형 PWA)
-│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA 아이콘
+│   ├── claude_features/          # 카탈로그(39행 × 4 surface) + 전송기 + 프로브 + 엔진 + 러너 (v2.23.0)
+│   └── routers/                  # 17개 라우터 (auth, admin, analysis, cost, gptbench, features, …)
+├── frontend/                     # Next.js 14 standalone + 11 라우트 (설치형 PWA)
+│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA 아이콘
 │   ├── src/components/           # 30+ React 컴포넌트 (대시보드, 패널, 챗)
 │   └── src/lib/                  # API 클라이언트, i18n, sortModels, pricing 미러, version
 ├── cdk/                          # 8개 CDK TypeScript 스택
@@ -386,7 +390,7 @@ model-monitoring/
 │   └── lib/constructs/           # 재사용 가능한 FargateServiceConstruct (L3)
 ├── docs/
 │   ├── architecture.md           # 전체 시스템 설계
-│   ├── decisions/                # ADR-001 ~ ADR-025
+│   ├── decisions/                # ADR-001 ~ ADR-026
 │   └── runbooks/                 # 배포 / 롤백 절차
 ├── CHANGELOG.md                  # Keep a Changelog 형식 (bilingual, 저장소 루트)
 └── Makefile                      # `make verify` — CDK lint + tests + ruff + tsc 일괄 실행
