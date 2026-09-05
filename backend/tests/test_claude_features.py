@@ -386,6 +386,13 @@ def test_bedrock_messages_403_on_non_messages_route_is_route_absence(monkeypatch
     assert messages.value.status_code == 403
     assert engine.classify(str(messages.value)) == "broken"
 
+    # count_tokens의 라우트 부재는 coral UnknownOperationException이 이미 잡는다 →
+    # 여기서 나는 403은 인증 문제이므로 403(broken)으로 남겨야 한다.
+    with pytest.raises(T.TransportError) as count_tokens:
+        t.request("POST", "/v1/messages/count_tokens", json={"model": "m"})
+    assert count_tokens.value.status_code == 403
+    assert engine.classify(str(count_tokens.value)) == "broken"
+
 
 def test_tiny_pdf_is_valid_pdf_containing_text():
     pdf = P._tiny_pdf("HELLO_7391")

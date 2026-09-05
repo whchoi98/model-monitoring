@@ -15,7 +15,7 @@
 | 열 | 엔드포인트 | 인증 | 모델 id | 리전 |
 |---|---|---|---|---|
 | **Claude Platform on AWS** (`cp`) | `https://aws-external-anthropic.{region}.api.aws/v1/*` | `x-api-key` envelope key + `anthropic-workspace-id` | bare `claude-fable-5-1` … | `ANTHROPIC_AWS_REGION` (기본 us-east-2) |
-| **Bedrock Mantle `/anthropic`** (`mantle`) | `https://bedrock-mantle.{region}.api.aws/anthropic/v1/*` | SigV4 파생 단기 bearer (`aws_bedrock_token_generator.provide_token`) → `x-api-key` | FM id `anthropic.claude-fable-5` … | `MANTLE_ANTHROPIC_REGION` (**ap-northeast-1 고정**) |
+| **Bedrock Mantle `/anthropic`** (`mantle`) | `https://bedrock-mantle.{region}.api.aws/anthropic/v1/*` | SigV4 파생 단기 bearer (`aws_bedrock_token_generator.provide_token`) → `x-api-key` | FM id `anthropic.claude-fable-5` … | `MANTLE_ANTHROPIC_REGION` (**us-east-1** — 2026-09-05 사용자 결정; ap-northeast-1은 Opus 4.8만 서빙) |
 | **Bedrock runtime — Anthropic Messages API** (`bedrock_messages`, 2026-09-05 추가) | `https://bedrock-runtime.{region}.amazonaws.com/anthropic/v1/*` | SigV4 파생 단기 bearer → `x-api-key` (`anthropic-version`/`-beta` 헤더) | 프로파일 `global.anthropic.claude-fable-5-1` … | `BEDROCK_FEATURES_REGION` (기본 ap-northeast-2) |
 | **Bedrock runtime — InvokeModel** (`bedrock_invoke`) | boto3 `bedrock-runtime` `invoke_model(_with_response_stream)` | SigV4 (태스크 롤) | 프로파일 `global.anthropic.claude-fable-5-1` … | ap-northeast-2 (Seoul) |
 | **Bedrock runtime — Converse** (`bedrock_converse`, 서브열) | boto3 `converse(_stream)` / `count_tokens` | SigV4 | 동일 프로파일 | ap-northeast-2 |
@@ -52,7 +52,8 @@
 
 ## Catalog (행 정의 — `backend/claude_features/catalog.py`)
 
-행마다: `id`, `group`, `label_ko/en`, `desc_ko/en`, `doc_url`, `documented: {cp, mantle, bedrock_invoke, bedrock_converse}`
+행마다: `id`, `group`, `label_ko/en`, `desc_ko/en`, `doc_url`, `documented: {cp, mantle, bedrock_messages, bedrock_invoke, bedrock_converse}`
+(`bedrock_messages`는 별도 override가 없으면 `bedrock_invoke` 값을 상속한다 — `catalog._BEDROCK_MESSAGES_OVERRIDES`)
 (값 `ga | beta | no | unknown`), `verification`(증거 강도), 모델 제약. 문서 기대치의 1차 출처는 개요 페이지 Availability
 컬럼(Bedrock 단일 컬럼), Converse/InvokeModel 차이와 Mantle 특례는 AWS 공식 문서와 platform.claude.com의 Bedrock 두
 페이지(Opus 4.7+ = Mantle, Opus 4.6 이하 = legacy)로 보정한다. 출처가 상충하는 항목은 `notes`에 기록하고 실측으로 판정한다.
@@ -183,7 +184,7 @@ class FeatureResult(Base):         # feature_results  (Index run_id; Index (run_
 
 - `cdk/lib/stacks/scheduler-stack.ts`: `buildTaskDef("FeaturesVerifyTaskDef", autoProberTaskRole, ["python","-m","features_runner","--once"], "/ecs/features")`,
   `rate(24 hours)`, `RunTaskFamilyWildcard` resources에 family 추가. IAM 추가 불필요(bedrock:* · bedrock-mantle:* 체인 기존, CP는 API 키).
-- env(두 스택 공통): `MANTLE_ANTHROPIC_REGION=ap-northeast-1`(명시), `FEATURES_MCP_SERVER_URL`(선택). 신규 secret 없음.
+- env(두 스택 공통): `MANTLE_ANTHROPIC_REGION=us-east-1`(명시), `FEATURES_MCP_SERVER_URL`(선택). 신규 secret 없음.
 - `cdk/test/scheduler-stack.test.ts`: 현재 stale(3 기대 vs 실제 4)로 실패 중 → Schedule/TaskDef 5로 갱신 + `rate(24 hours)` 테스트 추가.
 - 알람/DLQ는 기존 잡과 동일하게 미도입. 실패 감지는 `/ecs/features` 로그 + `feature_runs.status`.
 
