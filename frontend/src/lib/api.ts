@@ -10,6 +10,9 @@ import {
   ChatStreamEvents,
   Insight,
 } from "./types";
+import type {
+  FeatureCell, FeatureChange, FeatureDef, FeatureGroupDef, FeatureRunInfo, ModelDef, SurfaceDef,
+} from "./claudeFeatures";
 
 const BASE = "";
 
@@ -850,4 +853,42 @@ export async function fetchGptBenchTrend(hours: number = 24): Promise<GptBenchTr
   const res = await fetch(`${BASE}/api/gptbench/trend?hours=${hours}`);
   if (!res.ok) throw new Error(`fetchGptBenchTrend failed: ${res.statusText}`);
   return res.json();
+}
+
+// ── Claude API Features 검증 (v2.23.0) ──────────────────────────────────
+
+export interface FeaturesCatalog { groups: FeatureGroupDef[]; surfaces: SurfaceDef[]; models: ModelDef[]; features: FeatureDef[] }
+export interface FeaturesLatest {
+  run: FeatureRunInfo | null; previous_run_id: number | null; changes: FeatureChange[];
+  drift: FeatureCell[]; results: FeatureCell[]; running?: boolean;
+}
+export interface FeaturesEvidence extends FeatureCell {
+  evidence: Record<string, unknown> | null; error_message: string | null;
+  doc_url: string | null; verification: string | null; notes: string | null;
+}
+
+export async function fetchFeaturesCatalog(): Promise<FeaturesCatalog> {
+  const res = await fetch(`${BASE}/api/features/catalog`);
+  if (!res.ok) throw new Error(`fetchFeaturesCatalog failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchFeaturesLatest(): Promise<FeaturesLatest> {
+  const res = await fetch(`${BASE}/api/features/latest`);
+  if (!res.ok) throw new Error(`fetchFeaturesLatest failed: ${res.statusText}`);
+  return res.json();
+}
+
+export async function fetchFeaturesEvidence(q: { run_id: number; feature: string; surface: string; model_key: string }): Promise<FeaturesEvidence> {
+  const sp = new URLSearchParams({ run_id: String(q.run_id), feature: q.feature, surface: q.surface, model_key: q.model_key });
+  const res = await fetch(`${BASE}/api/features/evidence?${sp}`);
+  if (!res.ok) throw new Error(`fetchFeaturesEvidence failed: ${res.status}`);
+  return res.json();
+}
+
+export async function triggerFeaturesRun(): Promise<{ triggered: boolean; message: string }> {
+  const res = await fetch(`${BASE}/api/features/trigger`, { method: "POST", headers: authHeaders() });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) return { triggered: false, message: body.detail ?? `HTTP ${res.status}` };
+  return body;
 }
