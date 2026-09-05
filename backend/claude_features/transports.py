@@ -96,6 +96,8 @@ def assemble_stream(events: list[dict]) -> dict:
                 b["_json"] = b.get("_json", "") + d.get("partial_json", "")
             elif d.get("type") == "thinking_delta":
                 b["thinking"] = b.get("thinking", "") + d.get("thinking", "")
+            elif d.get("type") == "signature_delta":
+                b["signature"] = d.get("signature")
             elif d.get("type") == "citations_delta":
                 b.setdefault("citations", []).append(d.get("citation"))
         elif t == "message_delta":
@@ -308,15 +310,52 @@ class BedrockConverseTransport(Transport):
             if hasattr(exc, "response"):
                 raise _client_error(exc) from exc
             raise
-        text, stop, usage = "", None, {}
+        blocks: dict[int, dict] = {}
+        stop, usage = None, {}
         for ev in events:
-            if "contentBlockDelta" in ev:
-                text += (ev["contentBlockDelta"].get("delta") or {}).get("text", "")
+            if "contentBlockStart" in ev:
+                s = ev["contentBlockStart"]
+                start = s.get("start") or {}
+                idx = s.get("contentBlockIndex", len(blocks))
+                if "toolUse" in start:
+                    blocks[idx] = {"toolUse": {"toolUseId": start["toolUse"].get("toolUseId"),
+                                               "name": start["toolUse"].get("name"), "_input": ""}}
+            elif "contentBlockDelta" in ev:
+                cbd = ev["contentBlockDelta"]
+                idx = cbd.get("contentBlockIndex", 0)
+                d = cbd.get("delta") or {}
+                b = blocks.setdefault(idx, {})
+                if "text" in d:
+                    b["text"] = b.get("text", "") + d["text"]
+                elif "toolUse" in d:
+                    b.setdefault("toolUse", {"_input": ""})["_input"] += d["toolUse"].get("input", "")
+                elif "reasoningContent" in d:
+                    rc = d["reasoningContent"]
+                    r = b.setdefault("reasoningContent", {"reasoningText": {"text": ""}})
+                    if "text" in rc:
+                        r["reasoningText"]["text"] += rc["text"]
+                    if "signature" in rc:
+                        r["reasoningText"]["signature"] = rc["signature"]
             elif "messageStop" in ev:
                 stop = ev["messageStop"].get("stopReason")
             elif "metadata" in ev:
                 usage = ev["metadata"].get("usage") or {}
-        n = normalize_converse({"output": {"message": {"content": [{"text": text}]}}, "usage": usage, "stopReason": stop})
+        content: list[dict] = []
+        for i in sorted(blocks):
+            b = blocks[i]
+            if "toolUse" in b:
+                tu = b["toolUse"]
+                raw = tu.pop("_input", "")
+                try:
+                    tu["input"] = json.loads(raw or "{}")
+                except ValueError:
+                    tu["input"] = raw
+                content.append({"toolUse": tu})
+            elif "reasoningContent" in b:
+                content.append({"reasoningContent": b["reasoningContent"]})
+            else:
+                content.append({"text": b.get("text", "")})
+        n = normalize_converse({"output": {"message": {"content": content}}, "usage": usage, "stopReason": stop})
         n.events = events
         return n
 
