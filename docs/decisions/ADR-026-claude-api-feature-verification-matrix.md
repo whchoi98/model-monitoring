@@ -84,6 +84,23 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
 **카탈로그 기대치를 바꾼 4건**(token_counting/structured_outputs/strict_tool_use/browser_use notes, context_editing
 파라미터명 정정)과 **인프라 결정 1건**(Mantle 리전 전환)만 반영한다.
 
+- **전체 스윕(4모델 × 5 surface, 780셀 = 39피처 × 5 surface × 4모델, task-12-report.md 참조)** — 프로브 결함
+  2건을 수정한 뒤 **broken 0 / inconclusive 0**으로 수렴한다(수정 전 최초 전체 실행은 broken 39). 드리프트 25건은
+  Mantle(`us-east-1`) Fable 5가 모든 피처를 `data retention mode 'default' is not available for this model`로
+  거부하는 ×23(Covered Model 데이터 보존 opt-in을 계정/프로젝트에 적용하면 해소되는 계정 단위 단일 원인 — 카탈로그
+  기대치는 낮추지 않고 그대로 둔 **결정 항목**) + Mantle `fallback_credit` ×2(해당 `anthropic-beta` 헤더를 Mantle이
+  수락하지 않는 **실제 surface 갭**)로 구성된다. `undocumented` 14건은 전부 `browser_use`
+  (`browser_toolset_20260801`)가 cp(4모델)·mantle(opus-5/sonnet-5)·bedrock_messages(4모델)·bedrock_invoke(4모델)에서
+  문서 없이 `tool_use`를 방출(Converse는 표현 필드가 없어 `not_applicable`). 프로브 결함 수정: (1) 구 `CACHE_PAD`가
+  자신을 "probe"/"model"로 서술해 안전 거부를 유발했다(CP Fable 5 `refusal`/`cyber`, CP Opus 5
+  `refusal`/`reasoning_extraction`, Converse Fable 5 `content_filtered`) → 무해한 백과사전식 패딩으로 교체 +
+  `engine.blocked_stop_reason()`이 차단된 완료를 `broken` 대신 `inconclusive`로 분류; (2) 캐시 3프로브
+  (`automatic_prompt_caching`/`prompt_caching_5m`/`prompt_caching_1h`) 판정식을 **2차 호출
+  `cache_read_input_tokens > 0` 필수**로 통일(생성/`ephemeral_1h` 필드는 보조 증거로만 남김 — 종전 창작-only OR
+  분기는 안전 거부 4건 + `bedrock_messages`/Fable 5 정상 캐시 미스 1건, 총 5행을 증거 없이 통과시켰다); (3) 분류
+  마커에 `"is not available for this model"`을 추가해 계정 단위 모델 미제공을 `unsupported`로 정확히 판정
+  (그 전엔 Mantle Fable 5 35행이 전부 `broken` 오탐).
+
 ## Consequences
 
 - (+) 문서 드리프트가 배너로 드러남; 셀 클릭으로 요청 스냅샷·응답 신호·문서 링크까지 추적.
@@ -94,3 +111,4 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
   포함 ≈800 API 호출. MCP 프로브는 공개 MCP 서버 의존(장애는 inconclusive로 격리).
 - (−) 신규 피처 추가 시 3단: 카탈로그 행(+documented) → 프로브 함수(5 surface 분기) → 테스트. Converse 표현 불가 목록(`_CONVERSE_NOT_EXPRESSIBLE`) 갱신.
 - (−) `strict_tool_use`/`structured_outputs`/`token_counting` Bedrock 열 drift는 의도적으로 남김(문서 기대치는 그대로 `ga`가 아닌 실측 반영값으로 낮췄으므로 이제 `match` — Bedrock 자체의 플랫폼 갭은 여전히 존재하고 향후 AWS가 지원을 추가하면 실측이 다시 흔들릴 수 있음).
+- (−) 드리프트 배너의 25건은 첫 배포 화면에 그대로 뜬다 — 해소 조건은 Mantle 계정 opt-in.

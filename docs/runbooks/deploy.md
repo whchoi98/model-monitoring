@@ -72,8 +72,9 @@ BE_ARN=$(aws ecs register-task-definition --region $REGION \
 aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
-# Autoprober / Insights / ParityRun schedule도 동일하게 (각각 별도 Fargate Task — backend image 공용)
+# Autoprober / Insights / ParityRun / FeaturesVerify schedule도 동일하게 (각각 별도 Fargate Task — backend image 공용)
 # ParityRun (v2.11.0): family BedrockMonitorSchedulerParityRunTaskDef*, schedule rate(12 hours)
+# FeaturesVerify (v2.23.0): family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule rate(24 hours), CLI features_runner --once
 aws ecs describe-task-definition --task-definition BedrockMonitorSchedulerAutoProberTaskDef* \
   --region $REGION > /tmp/td-ap.json
 # ... (위와 동일하게 image 교체 + register) ...
@@ -203,6 +204,9 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
 # 기댓값: 16개 행 (Mantle 13 + Global 3), status "success", input_tokens > 0, output_tokens > 0.
 ```
 
+- v2.23.0: `aws ecs run-task`로 FeaturesVerify 1회 실행 후 `/ecs/features` 로그에 `bedrock_messages` AccessDenied 0건 +
+  `GET /api/features/latest` run.status completed, 드리프트 25건(Mantle fable-5 23 + fallback_credit 2) 대조.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`)에는 이 이미지-only
@@ -210,7 +214,7 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포
 (`BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`, digest 고정 `-c backendImage/-c frontendImage`)로
-backend 서비스와 스케줄 태스크(autoprober/insights/parityrun/gptbench) **양쪽** task def를 갱신할 것.
+backend 서비스와 스케줄 태스크(autoprober/insights/parityrun/gptbench/featuresverify) **양쪽** task def를 갱신할 것.
 
 ```bash
 make build              # backend + frontend 이미지 재빌드

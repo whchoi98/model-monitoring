@@ -99,9 +99,9 @@
 | 26 | `tool_search` | infra | `tool_search_tool_regex_20251119` + defer 도구 3개 (Bedrock invoke는 `anthropic_beta: tool-search-tool-2025-10-19`) | `tool_search_tool_result.tool_references` | ga / ga / ga / **no**(AWS: InvokeModel only) |
 | 27 | `compaction` | context | beta `compact-2026-01-12`, `context_management.edits[compact_20260112, trigger 50000]` 소량 요청 | acceptance (+CP capability `compact_20260112.supported`) | beta / beta / beta / **no**(AWS: Converse 미지원) |
 | 28 | `context_editing` | context | beta `context-management-2025-06-27`, `edits[clear_thinking_20251015]` | 응답 `context_management.applied_edits` 존재 | beta / beta / beta / unknown |
-| 29 | `automatic_prompt_caching` | context | 최상위 `cache_control` + 안정 프리픽스(≥1,500 토큰), 2회 순차 | 1차 `cache_creation_input_tokens>0` 또는 2차 `cache_read_input_tokens>0` | ga / ga / ga / n.a.(Converse 표현 불가) |
+| 29 | `automatic_prompt_caching` | context | 최상위 `cache_control` + 안정 프리픽스(≥1,500 토큰), 2회 순차 | 1차 `cache_creation_input_tokens>0` 또는 2차 `cache_read_input_tokens>0` (구현 확정, 2026-09-05: 판정은 2차 호출 `cache_read > 0` 필수; 생성 필드는 보조 증거) | ga / ga / ga / n.a.(Converse 표현 불가) |
 | 30 | `prompt_caching_5m` | context | 블록 `cache_control ephemeral`, 2회 | 2차 `cache_read_input_tokens>0` | ga / ga / ga / ga (`cachePoint`) |
-| 31 | `prompt_caching_1h` | context | `cache_control {ttl: 1h}`, 2회 | `cache_creation.ephemeral_1h_input_tokens>0` 또는 2차 read>0 | ga / ga / ga / ga (`cachePoint.ttl: 1h`) |
+| 31 | `prompt_caching_1h` | context | `cache_control {ttl: 1h}`, 2회 | `cache_creation.ephemeral_1h_input_tokens>0` 또는 2차 read>0 (구현 확정, 2026-09-05: 판정은 2차 호출 `cache_read > 0` 필수; 1h 필드는 보조 증거) | ga / ga / ga / ga (`cachePoint.ttl: 1h`) |
 | 32 | `token_counting` | context | count_tokens (cp `/v1/messages/count_tokens`, mantle `/anthropic/v1/messages/count_tokens`, bedrock `CountTokens` invokeModel/converse) | `input_tokens > 0` | ga / ga / ga / ga |
 | 33 | `files_api` | files | `POST /v1/files`(텍스트 1KB) → GET → DELETE | `type: file` + 삭제 200 | beta / no / no / no |
 | E1 | `models_api` | endpoints | `GET /v1/models/{id}` | id 일치 + `capabilities` 존재 | ga / no / no / no |

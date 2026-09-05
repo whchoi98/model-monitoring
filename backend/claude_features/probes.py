@@ -615,6 +615,7 @@ def probe_fine_grained_tool_streaming(t, model_id, model_key):
 
 
 def probe_mcp_connector(t, model_id, model_key):
+    # 이 URL은 증거 스냅샷(공개 조회 가능)에 그대로 기록된다 — 자격증명을 URL에 넣지 말 것.
     url = os.environ.get("FEATURES_MCP_SERVER_URL", "https://mcp.deepwiki.com/mcp")
     kw = _msg("List the tools offered by the probe-mcp server and call one of them with a trivial input, then summarize in one line.",
               max_tokens=_TOOL_MAX, mcp_servers=[{"type": "url", "url": url, "name": "probe-mcp"}],

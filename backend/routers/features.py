@@ -112,4 +112,4 @@ def trigger(user=Depends(get_current_user)):
             _running["active"] = False
 
     threading.Thread(target=_worker, daemon=True, name="features-run").start()
-    return {"triggered": True, "message": "Claude API Features 검증 런을 시작했습니다 (약 10-15분 소요)"}
+    return {"triggered": True, "message": "Claude API Features 검증 런을 시작했습니다 (약 7분 소요)"}
