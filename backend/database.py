@@ -84,7 +84,7 @@ Base = declarative_base()
 
 def create_tables():
     """Create all tables defined by ORM models."""
-    from models import ProbeRun, ProbeResult, PromptSet, User, Insight  # noqa: F401
+    from models import ProbeRun, ProbeResult, PromptSet, User, Insight, FeatureRun, FeatureResult  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
 

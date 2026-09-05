@@ -22,7 +22,7 @@ Dashboard UI for monitoring Bedrock LLM model performance.
 - UI text must go through `src/lib/i18n.ts` (Korean primary, English secondary)
 - Components use Tailwind dark theme (bg-gray-900/950 palette); v2.8.0부터 화이트 테마 토글 (`html.light` class + `light:` variant, `lib/theme.ts`)
 - Model cards are sorted by: channel (Anthropic → Global[Bedrock·OpenAI `(Global)` 공통] → Bedrock US → OpenAI 리전) → family (newest first), via `lib/sortModels.ts` `channelRank`/`familyRank`
-- Pages: `/` 대시보드, `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/prompts`, `/cost`, `/reliability`, `/efficiency`, `/analysis`
+- Pages: `/` 대시보드, `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/gpt-on-aws` GPT on AWS 벤치 (v2.18.0), `/claude-features` Claude API Features 매트릭스 (v2.23.0), `/prompts`, `/cost`, `/reliability`, `/efficiency`, `/analysis`
 
 ## Commands
 ```bash

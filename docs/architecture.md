@@ -28,7 +28,9 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
 EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 43 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
-   └─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
+   ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
+   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9채널 TTFB/TTFT 벤치 → RDS
+   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×5 surface×4모델 실행-증거 스윕 → RDS
 ```
 
 ### 컴포넌트 (Layer별)
@@ -72,9 +74,13 @@ EventBridge Scheduler
 | EventBridge Scheduler `AutoProberSchedule` | rate(5 min) → AutoProber TaskDef |
 | EventBridge Scheduler `InsightsSchedule` | rate(5 min) → Insights TaskDef |
 | EventBridge Scheduler `ParityRunSchedule` | rate(12 hours) → ParityRun TaskDef (v2.12.0에서 일 1회→12h) |
+| EventBridge Scheduler `GptBenchSchedule` | rate(15 min) → GptBench TaskDef (v2.18.0) |
+| EventBridge Scheduler `FeaturesVerifySchedule` | rate(24 hours) → FeaturesVerify TaskDef (v2.23.0) |
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
+| GptBench TaskDef | `python -m gptbench_runner --once` — Mantle GPT 9채널 TTFB/TTFT 벤치 |
+| FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×4모델 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
 
 #### 네트워크 / Network
 | 리소스 | 역할 |
@@ -87,7 +93,7 @@ EventBridge Scheduler
 #### 관측 / Observability
 | 리소스 | 역할 |
 |--------|------|
-| CloudWatch Log Groups | `/ecs/{backend,frontend,autoprober,insights,parityrun}` (14d) |
+| CloudWatch Log Groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features}` (14d) |
 | CloudWatch Alarms × 7 | ALB 5xx ratio, ALB latency, ECS task 수 ×2, RDS CPU/Storage/Connections |
 | CloudWatch Dashboard `BedrockMonitor-v2` | 5 widgets + alarm status grid |
 | SNS Topic `bedrock-monitor-alarms` | 알람 fan-out |
@@ -103,12 +109,12 @@ EventBridge Scheduler
 | AgentCore | - | AgentCore Memory + IAM |
 | AppServices | Network·Data·Cluster·AgentCore | Fargate ×2, ALB, ALB logs |
 | Edge | AppServices | CloudFront, WAF, CF logs |
-| Scheduler | Network·Data·Cluster·AgentCore | EventBridge ×3, TaskDef ×3 |
+| Scheduler | Network·Data·Cluster·AgentCore | EventBridge ×5, TaskDef ×5 |
 | Observability | AppServices·Cluster·Data | Alarms, Dashboard, SNS |
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-025 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-026 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -132,6 +138,8 @@ EventBridge Scheduler
 | 022 | Mantle /anthropic surface — SigV4 파생 bearer + IAM 액션 체인 |
 | 023 | 패리티 피처 19종 확장 — 적용 맵(skipped≠unsupported)·정직한 제외·요청 스냅샷 |
 | 024 | RUM 통합 — aws-rum-pipeline + 자체 호스팅 SDK, NEXT_PUBLIC_* 빌드 타임 주입 |
+| 025 | OpenAI GPT-5.6 Global CRIS 채널 3개 추가 + 채널별 가격 분리 |
+| 026 | Claude API Features 검증 매트릭스 — 문서 기대치 vs 실측 드리프트, Mantle `/anthropic` 리전 `us-east-1` 전환 |
 
 ### 운영 / Operations
 
@@ -161,7 +169,9 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
 EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 43 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
-   └─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
+   ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
+   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9-channel TTFB/TTFT bench → RDS
+   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 5 surfaces × 4 models evidence sweep → RDS
 ```
 
 ### Components by Layer
@@ -176,7 +186,7 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-025 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-026 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 

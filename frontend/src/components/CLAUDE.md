@@ -1,7 +1,7 @@
 # Frontend Components
 
 ## Role
-React UI components for the monitoring dashboard (25 top-level + a `chat/` subfolder). All are client components (`"use client"`).
+React UI components for the monitoring dashboard (27 top-level + a `chat/` subfolder). All are client components (`"use client"`).
 
 ## Key Components
 - `RumProvider.tsx` — RUM(Real User Monitoring, v2.16.5): 자체 호스팅 `public/rum-sdk.min.js`를 next/script로 로드, appName=llm-monitor. `NEXT_PUBLIC_RUM_ENDPOINT/_API_KEY`는 **빌드 타임** 인라인 — 미설정 빌드는 수집 비활성
@@ -18,6 +18,7 @@ React UI components for the monitoring dashboard (25 top-level + a `chat/` subfo
 - `PromptsPanel.tsx` — prompt CRUD + Bedrock OptimizePrompt target selector
 - `ModelExplorer.tsx` — 모델 카드 그리드 + 상세 모달 (API 탭: Converse/InvokeModel/Messages/Responses, `lib/modelExplorer.ts` 유도, v2.9.x)
 - `ParityPanel.tsx` — 패리티: provider 요약 카드(도넛)+Key Findings 드로어, 직전 런 대비 변경 배너, 모델 콤보박스, 피처별 접이식 그룹(분포 바, Broken 자동 펼침), `EvidenceModal`(Request/Response JSON 접이식) + 수동 트리거 (v2.15.x)
+- `ClaudeFeaturesPanel.tsx` — Claude API Features: 5열(CP/Mantle/Bedrock runtime Messages API·InvokeModel·Converse) 매트릭스, 문서 드리프트 배너, 셀 클릭 시 증거 모달(요청 스냅샷·응답 신호·문서 링크·검증 강도), 수동 트리거 (`lib/claudeFeatures.ts` 순수 로직, v2.23.0)
 - `LoginForm.tsx` — login + registration (EmailStr) with approval-pending state
 - `ResultsTable.tsx`, `HistoryPanel.tsx` — results table + history cards
 - `chat/` — `FloatingChat`, `ChatModal`, `ChatPanel`, `ChatInput`, `MessageList`, `MessageMarkdown`

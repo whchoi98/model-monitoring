@@ -93,10 +93,12 @@ export class AppServicesStack extends cdk.Stack {
         resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
       }),
       new iam.PolicyStatement({
-        // bearer 인증 흐름의 두 번째 필수 액션 — 403 실측상 resource scope가 * 뿐.
-        sid: "BedrockMantleBearer",
+        // bearer 인증(SigV4 파생 단기 토큰)의 두 번째 필수 액션 — Mantle /anthropic(bedrock-mantle:) +
+        // bedrock-runtime /anthropic Messages 라우트(bedrock:, v2.23.0 bedrock_messages surface).
+        // 403 실측상 resource scope는 * 뿐.
+        sid: "BedrockBearerTokens",
         effect: iam.Effect.ALLOW,
-        actions: ["bedrock-mantle:CallWithBearerToken"],
+        actions: ["bedrock-mantle:CallWithBearerToken", "bedrock:CallWithBearerToken"],
         resources: ["*"],
       }),
       new iam.PolicyStatement({
@@ -176,6 +178,10 @@ export class AppServicesStack extends cdk.Stack {
       // global CRIS(global.openai.*)는 bedrock-mantle 호스트 미지원 — bedrock-runtime
       // OpenAI-compat 엔드포인트(Seoul)로만 호출 가능. GPT-5.6 Global 채널 3개용 (v2.20.0).
       OPENAI_GLOBAL_BASE_URL: "https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1",
+      // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 4모델이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
+      // MCP 커넥터 프로브용 공개 read-only MCP 서버 (서버 장애는 inconclusive로 격리).
+      MANTLE_ANTHROPIC_REGION: "us-east-1",
+      FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
       BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
       BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
       BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
