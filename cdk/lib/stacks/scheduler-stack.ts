@@ -105,10 +105,12 @@ export class SchedulerStack extends cdk.Stack {
           resources: [`arn:aws:bedrock-mantle:*:${this.account}:project/*`],
         }),
         new iam.PolicyStatement({
-          // bearer 인증 흐름의 두 번째 필수 액션 — 403 실측상 resource scope가 * 뿐.
-          sid: "BedrockMantleBearer",
+          // bearer 인증(SigV4 파생 단기 토큰)의 두 번째 필수 액션 — Mantle /anthropic(bedrock-mantle:) +
+          // bedrock-runtime /anthropic Messages 라우트(bedrock:, v2.23.0 bedrock_messages surface).
+          // 403 실측상 resource scope는 * 뿐.
+          sid: "BedrockBearerTokens",
           effect: iam.Effect.ALLOW,
-          actions: ["bedrock-mantle:CallWithBearerToken"],
+          actions: ["bedrock-mantle:CallWithBearerToken", "bedrock:CallWithBearerToken"],
           resources: ["*"],
         }),
       ],

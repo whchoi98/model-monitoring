@@ -53,15 +53,16 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("Task role은 bedrock-mantle:CreateInference를 허용한다 (v2.13.0 messages_mantle — SigV4 파생 bearer)", () => {
+  it("Task role은 bedrock-mantle:CreateInference + 두 bearer 액션(Mantle/bedrock_messages)을 허용한다 (v2.13.0 messages_mantle, v2.23.0 bedrock_messages — SigV4 파생 bearer)", () => {
     template.hasResourceProperties("AWS::IAM::Role", Match.objectLike({
       Policies: Match.arrayWith([
         Match.objectLike({
           PolicyDocument: Match.objectLike({
             Statement: Match.arrayWith([
               Match.objectLike({ Action: Match.arrayWith(["bedrock-mantle:CreateInference", "bedrock-mantle:CountTokens"]) }),
-              // bearer 인증 흐름의 두 번째 필수 액션 (403 실측: resource *)
-              Match.objectLike({ Action: "bedrock-mantle:CallWithBearerToken" }),
+              // bearer 인증 흐름의 두 번째 필수 액션 (403 실측: resource *) — Mantle + bedrock-runtime
+              // Anthropic Messages 라우트(bedrock_messages surface, v2.23.0) 둘 다 필요.
+              Match.objectLike({ Action: Match.arrayWith(["bedrock-mantle:CallWithBearerToken", "bedrock:CallWithBearerToken"]) }),
             ]),
           }),
         }),

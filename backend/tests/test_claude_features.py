@@ -619,9 +619,15 @@ def test_mark_failed_swallows_secondary_errors():
     R._mark_failed(_DB(), object, 1, RuntimeError("original"))  # must not raise
 
 
-def test_build_latest_payload_computes_changes_and_drift():
+def test_build_latest_payload_computes_changes_and_drift(monkeypatch):
+    import importlib
     from types import SimpleNamespace as NS
-    from routers.features import build_latest_payload
+
+    # routers.features → auth는 import 시점에 JWT_SECRET_KEY(32자 이상)를 요구한다.
+    # 깨끗한 셀(예: `make verify`)에서 env가 비어 있으면 RuntimeError로 죽으므로,
+    # 모듈 import 전에 monkeypatch로 값을 주입하고 importlib로 지연 import한다.
+    monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    build_latest_payload = importlib.import_module("routers.features").build_latest_payload
     run = NS(id=2, started_at=None, finished_at=None, totals={"supported": 1}, catalog_version="2026-09-05")
     rows = [NS(feature="a", surface="cp", model_key="opus-5", model_label="Opus 5", model_id="claude-opus-5",
                status="broken", documented="ga", verdict="drift", latency_ms=10.0)]
