@@ -675,44 +675,64 @@ def test_cache_pad_is_benign_filler():
     assert P.CACHE_PAD.isascii()
 
 
-def test_cache_probes_report_blocked_completion_as_inconclusive(monkeypatch):
-    """차단된 완료에서 캐시 프로브는 broken이 아니라 inconclusive를 반환한다 (전체 스윕 발견)."""
-    blocked = T.NormalizedResponse(content=[], top={}, usage={"cache_creation_input_tokens": 2203,
-                                                              "cache_read_input_tokens": 0},
-                                   stop_reason="refusal")
+CACHE_PROBES = (P.probe_automatic_prompt_caching, P.probe_prompt_caching_5m, P.probe_prompt_caching_1h)
 
+
+def _cache_transport(usage, stop_reason="end_turn", stop_details=None):
+    """캐시 프로브용 가짜 전송기 — 두 호출이 같은 usage/stop_reason을 낸다."""
     class _T:
         surface = "cp"
         routes = frozenset({"messages"})
 
         def messages(self, model_id, body, **kw):
-            return blocked
-
-    for probe in (P.probe_prompt_caching_5m, P.probe_prompt_caching_1h, P.probe_automatic_prompt_caching):
-        status, ev = probe(_T(), "claude-opus-5", "opus-5")
-        assert status == "inconclusive", probe.__name__
-        assert "refusal" in ev["reason"]
-        # 증거는 그대로 보존돼야 한다 (usage를 숨기지 않는다)
-        assert ev["first_usage"]["cache_creation_input_tokens"] == 2203
+            return T.NormalizedResponse(content=[{"type": "text", "text": "pong"}],
+                                        top={"stop_details": stop_details}, usage=usage,
+                                        stop_reason=stop_reason)
+    return _T()
 
 
-def test_cache_probes_still_require_cache_read_evidence():
-    """차단 가드가 증거 검사를 약화시키지 않는다 — 정상 완료인데 cache_read가 0이면 broken."""
-    def _resp(usage):
-        return T.NormalizedResponse(content=[{"type": "text", "text": "pong"}], top={}, usage=usage,
-                                    stop_reason="end_turn")
+@pytest.mark.parametrize("probe", CACHE_PROBES, ids=lambda f: f.__name__)
+def test_cache_probes_still_require_cache_read_evidence(probe):
+    """캐시 3프로브 전부 2차 호출의 cache_read > 0을 요구한다 (컨트롤러 판정 R-b).
 
-    class _T:
-        surface = "cp"
-        routes = frozenset({"messages"})
+    캐시 *생성*만 있는 응답(cache_creation > 0 / ephemeral_1h > 0, read == 0)은 프롬프트가
+    최소 길이를 넘겼다는 뜻일 뿐 재사용 증거가 아니다 — 종전에는 automatic/1h가 이걸로 통과해
+    거부된 완료까지 초록으로 보였다.
+    """
+    creation_only = {"input_tokens": 14, "output_tokens": 4,
+                     "cache_creation_input_tokens": 2203, "cache_read_input_tokens": 0,
+                     "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 2203}}
+    status, ev = probe(_cache_transport(creation_only), "claude-opus-5", "opus-5")
+    assert status is False, f"{probe.__name__}: creation-only must not be supported"
+    # 생성 수치는 보조 증거로 남아야 한다 (숨기지 않는다)
+    assert ev["second_usage"]["cache_read_input_tokens"] == 0
+    assert ev["stop_reason"] == ["end_turn", "end_turn"]
 
-        def __init__(self, usage):
-            self._u = usage
 
-        def messages(self, model_id, body, **kw):
-            return _resp(self._u)
+@pytest.mark.parametrize("probe", CACHE_PROBES, ids=lambda f: f.__name__)
+def test_cache_probes_pass_on_real_second_call_read(probe):
+    """2차 호출이 실제로 캐시를 읽으면 supported (양성 케이스)."""
+    read = {"input_tokens": 14, "output_tokens": 4,
+            "cache_creation_input_tokens": 0, "cache_read_input_tokens": 2203,
+            "cache_creation": {"ephemeral_5m_input_tokens": 0, "ephemeral_1h_input_tokens": 0}}
+    status, ev = probe(_cache_transport(read), "claude-opus-5", "opus-5")
+    assert status is True, probe.__name__
+    assert ev["second_usage"]["cache_read_input_tokens"] == 2203
 
-    no_read = {"cache_creation_input_tokens": 2203, "cache_read_input_tokens": 0}
-    assert P.probe_prompt_caching_5m(_T(no_read), "claude-opus-5", "opus-5")[0] is False
-    read = {"cache_creation_input_tokens": 0, "cache_read_input_tokens": 2203}
-    assert P.probe_prompt_caching_5m(_T(read), "claude-opus-5", "opus-5")[0] is True
+
+@pytest.mark.parametrize("probe", CACHE_PROBES, ids=lambda f: f.__name__)
+def test_cache_probes_persist_blocked_category_evidence(probe):
+    """차단 시 inconclusive + stop_reason/stop_details를 증거로 남긴다 (컨트롤러 판정 R-a).
+
+    트리아지를 가능하게 한 건 카테고리(refusal/cyber, refusal/reasoning_extraction)였다 —
+    이유 문자열만으로는 복원되지 않으므로 두 호출의 stop_details를 보존해야 한다.
+    """
+    details = {"type": "refusal", "category": "reasoning_extraction", "explanation": "blocked"}
+    creation_only = {"cache_creation_input_tokens": 2203, "cache_read_input_tokens": 0}
+    status, ev = probe(_cache_transport(creation_only, "refusal", details), "claude-opus-5", "opus-5")
+    assert status == "inconclusive", probe.__name__
+    assert "refusal" in ev["reason"]
+    assert ev["stop_reason"] == ["refusal", "refusal"]
+    assert ev["stop_details"][0]["category"] == "reasoning_extraction"
+    # 증거는 그대로 보존돼야 한다 (usage를 숨기지 않는다)
+    assert ev["first_usage"]["cache_creation_input_tokens"] == 2203

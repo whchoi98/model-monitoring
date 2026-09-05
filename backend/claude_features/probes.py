@@ -694,19 +694,35 @@ def _cache_pair(t, model_id, kw_builder) -> tuple[dict, NormalizedResponse, Norm
 
 
 def _cache_evidence(model_id: str, kw: dict, n1: NormalizedResponse, n2: NormalizedResponse) -> tuple[dict, str | None]:
-    """캐시 프로브 공통 증거 + 차단 사유. 차단된 완료는 캐시를 읽지 않으므로 측정 자체가 불가하다."""
-    ev = {"request": _req(model_id, kw), "first_usage": n1.usage, "second_usage": n2.usage}
+    """캐시 프로브 공통 증거 + 차단 사유. 차단된 완료는 캐시를 읽지 않으므로 측정 자체가 불가하다.
+
+    `stop_reason`·`stop_details`를 두 호출 모두 남긴다 — 차단 카테고리(예: refusal/cyber,
+    refusal/reasoning_extraction)가 트리아지의 결정적 단서였는데 이유 문자열만으로는 복원되지 않는다.
+    Converse에는 stop_details가 없어 None이 들어간다.
+    """
+    ev = {"request": _req(model_id, kw), "first_usage": n1.usage, "second_usage": n2.usage,
+          "stop_reason": [n1.stop_reason, n2.stop_reason],
+          "stop_details": [_trim(n1.top.get("stop_details")), _trim(n2.top.get("stop_details"))]}
     return ev, engine.blocked_stop_reason(n1.stop_reason, n2.stop_reason)
+
+
+def _cache_read_verdict(ev: dict, blocked: str | None, n2: NormalizedResponse, label: str):
+    """캐시 3프로브 공통 판정 — 2차 호출의 `cache_read_input_tokens > 0`만 supported로 인정한다.
+
+    캐시 *생성*(cache_creation / ephemeral_1h)은 프롬프트가 최소 길이를 넘겼다는 뜻일 뿐
+    캐시가 실제로 재사용됐다는 증거가 아니다. 생성만으로 통과시키면 거부된 완료도 초록으로
+    보인다(2026-09-05 전체 스윕에서 실제로 그랬다) → 보조 필드로만 남긴다.
+    """
+    if blocked:
+        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — {label} not measurable"}
+    return engine.usage_int(n2.usage, "cache_read_input_tokens") > 0, ev
 
 
 def probe_automatic_prompt_caching(t, model_id, model_key):
     kw, n1, n2 = _cache_pair(t, model_id, lambda: _msg(_BASIC_PROMPT, system=CACHE_PAD, cache_control={"type": "ephemeral"}))
     ev, blocked = _cache_evidence(model_id, kw, n1, n2)
-    if blocked:
-        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — cache usage not measurable"}
-    created = engine.usage_int(n1.usage, "cache_creation_input_tokens")
-    read = engine.usage_int(n2.usage, "cache_read_input_tokens")
-    return (created > 0 or read > 0), ev
+    ev["first_call_cache_creation"] = engine.usage_int(n1.usage, "cache_creation_input_tokens")
+    return _cache_read_verdict(ev, blocked, n2, "cache usage")
 
 
 def probe_prompt_caching_5m(t, model_id, model_key):
@@ -717,9 +733,7 @@ def probe_prompt_caching_5m(t, model_id, model_key):
         builder = lambda: _msg(_BASIC_PROMPT, system=[{"type": "text", "text": CACHE_PAD, "cache_control": {"type": "ephemeral"}}])  # noqa: E731
     kw, n1, n2 = _cache_pair(t, model_id, builder)
     ev, blocked = _cache_evidence(model_id, kw, n1, n2)
-    if blocked:
-        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — cache read not measurable"}
-    return engine.usage_int(n2.usage, "cache_read_input_tokens") > 0, ev
+    return _cache_read_verdict(ev, blocked, n2, "cache read")
 
 
 def probe_prompt_caching_1h(t, model_id, model_key):
@@ -731,12 +745,9 @@ def probe_prompt_caching_1h(t, model_id, model_key):
     kw, n1, n2 = _cache_pair(t, model_id, builder)
     u1 = n1.usage
     ev, blocked = _cache_evidence(model_id, kw, n1, n2)
-    one_h = engine.usage_int((u1.get("cache_creation") or {}) if isinstance(u1.get("cache_creation"), dict) else {}, "ephemeral_1h_input_tokens")
-    ev["ephemeral_1h_input_tokens"] = one_h
-    if blocked:
-        return "inconclusive", {**ev, "reason": f"completion blocked ({blocked}) — 1h cache not measurable"}
-    read = engine.usage_int(n2.usage, "cache_read_input_tokens")
-    return (one_h > 0 or read > 0), ev
+    ev["ephemeral_1h_input_tokens"] = engine.usage_int(
+        (u1.get("cache_creation") or {}) if isinstance(u1.get("cache_creation"), dict) else {}, "ephemeral_1h_input_tokens")
+    return _cache_read_verdict(ev, blocked, n2, "1h cache read")
 
 
 def probe_token_counting(t, model_id, model_key):

@@ -3423,6 +3423,8 @@ python3.12 -m features_runner --smoke --json > <scratchpad>/smoke-all.json
 
 #### 수정 후 surface × 모델 (broken 0 · inconclusive 0)
 
+(merged view — 99 rows re-run after fixes overlaid on the pre-fix full run)
+
 | surface | model | supported | unsupported | broken | inconclusive | skipped | not_applicable |
 |---|---|---|---|---|---|---|---|
 | cp | fable-5-1 | 38 | 0 | 0 | 0 | 0 | 1 |
@@ -3462,25 +3464,50 @@ python3.12 -m features_runner --smoke --json > <scratchpad>/smoke-all.json
 
 | 증상 | 행 수 | 근본 원인 | 분류 | 수정 |
 |---|---|---|---|---|
-| 캐시 3프로브 `broken`/약한 통과 — `cache_read_input_tokens`가 2번째 호출에도 0, `output_tokens: 0`, u1 == u2 | 4 broken (+8 약한 통과) | **프로브 결함.** 구 `CACHE_PAD`가 자신을 "probe"로 설명하며 "model"의 최소 캐시 길이를 언급해 **안전 거부**를 유발했다. 직접 재현(3/3 결정적): CP Fable 5 → `stop_reason: refusal`, `stop_details.category: "cyber"`; CP Opus 5 → `refusal` / `reasoning_extraction`("reverse engineering or duplicating model outputs"); Converse Fable 5 → `stopReason: content_filtered`. 거부된 완료는 캐시를 읽지 않으므로 증거 검사가 실패 | (a) 프로브 결함 | `CACHE_PAD`를 무해한 백과사전식 문장으로 교체(~2,100토큰, 최소 1,024 초과 유지) + `engine.blocked_stop_reason()`으로 `refusal`/`content_filtered`/`guardrail_intervened`를 식별해 캐시 3프로브가 **broken 대신 inconclusive** 반환(측정 불가 ≠ 피처 결함) |
+| 캐시 3프로브 `broken`/약한 통과 — `cache_read_input_tokens`가 2번째 호출에도 0, `output_tokens: 0`, u1 == u2 | 4 broken (+5 약한 통과) | **프로브 결함.** 구 `CACHE_PAD`가 자신을 "probe"로 설명하며 "model"의 최소 캐시 길이를 언급해 **안전 거부**를 유발했다. 직접 재현(3/3 결정적): CP Fable 5 → `stop_reason: refusal`, `stop_details.category: "cyber"`; CP Opus 5 → `refusal` / `reasoning_extraction`("reverse engineering or duplicating model outputs"); Converse Fable 5 → `stopReason: content_filtered`. 거부된 완료는 캐시를 읽지 않으므로 증거 검사가 실패 | (a) 프로브 결함 | `CACHE_PAD`를 무해한 백과사전식 문장으로 교체(~2,100토큰, 최소 1,024 초과 유지) + `engine.blocked_stop_reason()`으로 `refusal`/`content_filtered`/`guardrail_intervened`를 식별해 캐시 3프로브가 **broken 대신 inconclusive** 반환(측정 불가 ≠ 피처 결함). 이후 판정 R-b로 3프로브의 판정식을 **2차 `cache_read > 0`**으로 통일하고 R-a로 `stop_reason`·`stop_details`를 증거에 보존 |
 | Mantle Fable 5 전 피처 `broken` — `HTTP 400 "data retention mode 'default' is not available for this model"` | 35 | **깨끗한 거부 문구 누락.** Fable 5는 Covered Model이라 데이터 보존 옵트인이 없는 계정에는 모델 자체가 제공되지 않는다. 계정 단위 조건이며 프로브·전송 결함이 아니다 | (b) 새 거부 문구 | `engine._EXTRA_UNSUPPORTED`에 `"is not available for this model"` 추가 → `unsupported`. `AccessDeniedException`·`ConnectError`는 여전히 `broken`(회귀 테스트가 양방향 고정) |
 
-**증거 검사는 약화하지 않았다 — 오히려 강해졌다.** 캐시 프로브의 판정식(`cache_read > 0`)은 그대로다.
-종전에 `cache_creation > 0`(automatic) / `ephemeral_1h > 0`(1h)라는 **약한 OR 가지**로 통과했던 8행(CP·Converse의 Fable 5·Opus 5)은
-실제로는 거부된 완료였다. 패딩 교체 후 이 행들은 실제 `cache_read` 3,103~3,116토큰을 증거로 남긴다.
+**증거 검사는 약화하지 않았다 — 오히려 강해졌다.** 다만 최초 기재("판정식 `cache_read > 0`은 그대로")는
+`prompt_caching_5m`에만 맞는 말이었다. `automatic_prompt_caching`(`created > 0 or read > 0`)과
+`prompt_caching_1h`(`one_h > 0 or read > 0`)는 여전히 **생성만으로** 통과할 수 있었다 → 컨트롤러 판정 R-b로
+**3프로브 전부 2차 호출의 `cache_read > 0`을 요구**하도록 통일했다(`_cache_read_verdict`).
+`cache_creation`·`ephemeral_1h`는 `first_call_cache_creation`·`ephemeral_1h_input_tokens` 보조 필드로만 남고
+셀을 초록으로 만들지 않는다.
+
+수정 전 JSON에서 재구성한 **약한 OR 가지 통과는 8행이 아니라 5행**이다
+(조건: `status == supported` ∧ 피처가 automatic/1h ∧ 2차 호출 `cache_read == 0`):
+
+| feature | surface | model | 1차 creation | 1차 ephemeral_1h | 2차 read | 1·2차 output_tokens | 성격 |
+|---|---|---|---|---|---|---|---|
+| automatic_prompt_caching | cp | fable-5 | 2,216 | 0 | 0 | 0 / 0 | 안전 거부 |
+| automatic_prompt_caching | cp | opus-5 | 2,215 | 0 | 0 | 0 / 0 | 안전 거부 |
+| automatic_prompt_caching | bedrock_messages | fable-5 | 2,216 | 0 | 0 | 5 / 1 | **거부 아님** — 정상 완료인데 2차가 캐시를 못 읽은 일시적 미스 |
+| prompt_caching_1h | cp | fable-5 | 2,204 | 2,204 | 0 | 0 / 0 | 안전 거부 |
+| prompt_caching_1h | cp | opus-5 | 2,203 | 2,203 | 0 | 0 / 0 | 안전 거부 |
+
+4행은 거부 서명(`output_tokens: 0` + `inference_geo: "not_available"`)을 갖지만,
+`bedrock_messages/fable-5` 1행은 **정상 완료**였다 — 즉 종전 OR 가지는 거부뿐 아니라 평범한 캐시 재사용 실패까지
+초록으로 덮고 있었다. (수정 전에는 캐시 프로브가 `stop_reason`을 증거로 남기지 않아 이 구분이 JSON에서
+복원되지 않았다 → 판정 R-a로 `stop_reason`·`stop_details`를 두 호출 모두 기록하게 했다.)
+수정 후 이 5행은 전부 실제 2차 `cache_read` 3,103~3,116토큰으로 통과한다.
 
 재검증(수정 후, 영향 범위만 재실행):
 ```bash
 python3.12 -m features_runner --smoke --features automatic_prompt_caching,prompt_caching_5m,prompt_caching_1h --json   # 60행: supported 50 · unsupported 3 · not_applicable 7 · broken 0
 python3.12 -m features_runner --smoke --surfaces mantle --models fable-5 --json                                        # 39행: unsupported 38 · skipped 1 · broken 0
+# R-b 적용 후 확인 (sonnet-5 × 5 surface): supported 14 · not_applicable 1 (Converse automatic) · broken 0
+python3.12 -m features_runner --smoke --features automatic_prompt_caching,prompt_caching_5m,prompt_caching_1h --models sonnet-5 --json
 ```
 
-테스트 +5 (`test_claude_features.py` 56 → 61, backend 전체 175 → 180):
+테스트 (`test_claude_features.py` 56 → 68, backend 전체 175 → 187):
 `test_classify_treats_model_level_unavailability_as_unsupported`,
 `test_blocked_stop_reason_flags_refusal_and_content_filter`,
 `test_cache_pad_is_benign_filler`,
-`test_cache_probes_report_blocked_completion_as_inconclusive`,
-`test_cache_probes_still_require_cache_read_evidence`(가드가 증거를 약화하지 않음을 고정).
+그리고 캐시 3프로브에 각각 parametrize된 3종(= 9케이스):
+`test_cache_probes_still_require_cache_read_evidence`(생성만 있는 응답은 3프로브 모두 `False` → broken),
+`test_cache_probes_pass_on_real_second_call_read`(2차 read > 0이면 supported),
+`test_cache_probes_persist_blocked_category_evidence`(차단 시 inconclusive + `stop_reason`/`stop_details` 보존).
+앞의 두 종은 수정 전 코드(`96798a7`)에 대해 3프로브 전부 실패함을 확인했다(automatic/1h가 생성만으로 통과했다는 증거).
 
 #### 드리프트 25건 — 클러스터 2개, 개별 피처 갭은 0
 
