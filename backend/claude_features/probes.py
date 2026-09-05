@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import base64
 import json
+import os
 import time
 from dataclasses import dataclass, field
 from typing import Any, Callable
@@ -66,6 +67,8 @@ def _echo_tool(strict: bool = False, eager: bool = False) -> dict:
 
 
 def _trim(v: Any) -> Any:
+    if isinstance(v, (bytes, bytearray)):
+        return f"<{len(v)} bytes>"
     if isinstance(v, str) and len(v) > 200:
         return f"{v[:200]}… ({len(v)} chars)"
     if isinstance(v, dict):
@@ -135,6 +138,8 @@ def run_probe(fn: Callable, t: Transport, model_id: str, model_key: str) -> Prob
         if result is False:
             evidence.setdefault("reason", "evidence check failed")
             return ProbeOutcome("broken", latency, evidence)
+        if str(result) not in engine.STATUSES:
+            return ProbeOutcome("broken", latency, {**evidence, "reason": f"probe returned unknown status {result!r}"})
         return ProbeOutcome(str(result), latency, evidence)
     except TransportError as exc:
         latency = (time.time() - start) * 1000
@@ -409,3 +414,345 @@ PROBES: dict[str, Callable] = {
     "structured_outputs": probe_structured_outputs, "strict_tool_use": probe_strict_tool_use,
     "extended_thinking": probe_extended_thinking,
 }
+
+
+# ---------------------------------------------------------------- shared: beta/tool fallbacks
+
+def _with_fallback(t: Transport, model_id: str, attempts: list[tuple[str, dict, list[str]]]) -> tuple[NormalizedResponse, dict]:
+    """attempts = [(label, body, betas), ...] — 앞 시도가 '명시적 미지원' 400이면 다음 시도. 마지막 실패는 raise."""
+    log: list[dict] = []
+    for i, (label, body, betas) in enumerate(attempts):
+        try:
+            n = t.messages(model_id, body, betas=betas)
+            log.append({"attempt": label, "result": "ok"})
+            return n, {"attempts": log, "request": _req(model_id, body, betas=betas)}
+        except TransportError as exc:
+            log.append({"attempt": label, "result": str(exc)[:200]})
+            if i == len(attempts) - 1 or engine.classify(str(exc)) != "unsupported":
+                raise TransportError(exc.status_code, f"{exc.message} | attempts={json.dumps(log, ensure_ascii=False)[:600]}") from exc
+    raise RuntimeError("unreachable")
+
+
+def _tool_use_named(n: NormalizedResponse, *names: str, toolset: str | None = None) -> dict | None:
+    for b in n.content:
+        if b.get("type") != "tool_use":
+            continue
+        if b.get("name") in names or (toolset and b.get("toolset_name") == toolset):
+            return b
+    return None
+
+
+def _server_tool_evidence(n: NormalizedResponse, tool_name: str, result_type: str) -> tuple[bool | str, dict]:
+    used = any(b.get("type") == "server_tool_use" and b.get("name") == tool_name for b in n.content)
+    result = engine.find_block(n.content, result_type)
+    content = (result or {}).get("content")
+    ev = {"server_tool_used": used, "result_type": (result or {}).get("type"), "stop_reason": n.stop_reason,
+          "response_snippet": _snippet(n), "content_types": [b.get("type") for b in n.content]}
+    if not used:
+        return "inconclusive", {**ev, "reason": "model did not invoke the server tool"}
+    if isinstance(content, dict) and content.get("type", "").endswith("_error"):
+        return "inconclusive", {**ev, "reason": f"server tool error: {content.get('error_code')}"}
+    return result is not None, ev
+
+
+# ---------------------------------------------------------------- server-side tools
+
+_ADVISOR_FOR = {"fable-5-1": "claude-fable-5-1", "fable-5": "claude-fable-5", "opus-5": "claude-opus-5", "sonnet-5": "claude-opus-5"}
+
+
+def _advisor_model(model_key: str) -> str:
+    return _ADVISOR_FOR[model_key]
+
+
+def probe_advisor_tool(t, model_id, model_key):
+    tool = {"type": "advisor_20260301", "name": "advisor", "model": _advisor_model(model_key), "max_uses": 1}
+    prompt = "Before answering, consult the advisor tool once. Question: which number is larger, 7391 or 3917? Answer briefly."
+    kw = _msg(prompt, max_tokens=_TOOL_MAX, tools=[tool], tool_choice=_tool_choice(model_id, "advisor"))
+    n = t.messages(model_id, kw, betas=["advisor-tool-2026-03-01"])
+    used = any(b.get("type") == "server_tool_use" and b.get("name") == "advisor" for b in n.content)
+    res = engine.find_block(n.content, "advisor_tool_result")
+    ev = {"request": _req(model_id, kw, betas=["advisor-tool-2026-03-01"]), "server_tool_used": used,
+          "advisor_result_type": ((res or {}).get("content") or {}).get("type"), "stop_reason": n.stop_reason}
+    if not used:
+        return "inconclusive", {**ev, "reason": "model did not call advisor"}
+    return res is not None, ev
+
+
+def probe_code_execution(t, model_id, model_key):
+    prompt = "Use the code execution tool to run this Python: print(7391*3). Then reply with only the printed number."
+    kw = _msg(prompt, max_tokens=_TOOL_MAX, tools=[{"type": "code_execution_20260521", "name": "code_execution"}])
+    n = t.messages(model_id, kw)
+    res = engine.find_block(n.content, "bash_code_execution_tool_result")
+    stdout = str(((res or {}).get("content") or {}).get("stdout", ""))
+    status, ev = _server_tool_evidence(n, "bash_code_execution", "bash_code_execution_tool_result")
+    ev.update({"request": _req(model_id, kw), "stdout": stdout[:200], "container": n.top.get("container")})
+    if status is True:
+        return "22173" in stdout or "22173" in engine.text_of(n.content), ev
+    return status, ev
+
+
+def probe_web_fetch(t, model_id, model_key):
+    url = "https://www.iana.org/help/example-domains"
+    prompt = f"Fetch {url} with the web_fetch tool and tell me its first heading in one line."
+    kw = _msg(prompt, max_tokens=_TOOL_MAX, tools=[{"type": "web_fetch_20260209", "name": "web_fetch", "max_uses": 1}])
+    n = t.messages(model_id, kw)
+    status, ev = _server_tool_evidence(n, "web_fetch", "web_fetch_tool_result")
+    return status, {"request": _req(model_id, kw), **ev}
+
+
+def probe_web_search(t, model_id, model_key):
+    prompt = "Use the web_search tool once to find the current list of Anthropic Claude models, then name one model in one line."
+    kw = _msg(prompt, max_tokens=_TOOL_MAX, tools=[{"type": "web_search_20260209", "name": "web_search", "max_uses": 1}])
+    n = t.messages(model_id, kw)
+    status, ev = _server_tool_evidence(n, "web_search", "web_search_tool_result")
+    res = engine.find_block(n.content, "web_search_tool_result")
+    ev["results"] = len((res or {}).get("content") or []) if isinstance((res or {}).get("content"), list) else 0
+    return status, {"request": _req(model_id, kw), **ev}
+
+
+# ---------------------------------------------------------------- client-side tools (definition acceptance + tool_use emission)
+
+def _client_tool_probe(t, model_id, tool: dict, prompt: str, tool_name: str, betas: list[str] | None = None,
+                       fallback_betas: list[str] | None = None):
+    kw = _msg(prompt, max_tokens=_TOOL_MAX, tools=[tool], tool_choice=_tool_choice(model_id, tool_name))
+    attempts = [("no-beta" if not betas else ",".join(betas), kw, betas or [])]
+    if fallback_betas:
+        attempts.append((",".join(fallback_betas), kw, fallback_betas))
+    n, ev = _with_fallback(t, model_id, attempts)
+    tu = _tool_use_named(n, tool_name)
+    ev.update({"tool_call": _trim({"name": (tu or {}).get("name"), "input": (tu or {}).get("input")}), "stop_reason": n.stop_reason})
+    if tu is None:
+        return "inconclusive", {**ev, "reason": "tool definition accepted but the model did not call it"}
+    return True, ev
+
+
+def probe_bash_tool(t, model_id, model_key):
+    return _client_tool_probe(t, model_id, {"type": "bash_20250124", "name": "bash"},
+                              f"Use the bash tool to run: echo {CANARY}", "bash", fallback_betas=["computer-use-2025-01-24"])
+
+
+def probe_text_editor(t, model_id, model_key):
+    return _client_tool_probe(t, model_id, {"type": "text_editor_20250728", "name": "str_replace_based_edit_tool"},
+                              "Use the text editor tool to view the file /tmp/probe.txt", "str_replace_based_edit_tool",
+                              fallback_betas=["computer-use-2025-01-24"])
+
+
+def probe_memory_tool(t, model_id, model_key):
+    return _client_tool_probe(t, model_id, {"type": "memory_20250818", "name": "memory"},
+                              "Check your memory directory first, then say hello.", "memory",
+                              fallback_betas=["context-management-2025-06-27"])
+
+
+def probe_browser_use(t, model_id, model_key):
+    kw = _msg("Take a screenshot of the current browser page using the browser tools.", max_tokens=_TOOL_MAX,
+              tools=[{"type": "browser_toolset_20260801"}])
+    n = t.messages(model_id, kw)
+    tu = _tool_use_named(n, toolset="browser")
+    ev = {"request": _req(model_id, kw), "tool_call": _trim(tu), "stop_reason": n.stop_reason}
+    return (True, ev) if tu else ("inconclusive", {**ev, "reason": "toolset accepted but no browser tool_use"})
+
+
+def probe_computer_use(t, model_id, model_key):
+    prompt = "Take a screenshot of the screen using the computer tool."
+    toolset = _msg(prompt, max_tokens=_TOOL_MAX, tools=[{"type": "computer_toolset_20260801"}])
+    legacy = _msg(prompt, max_tokens=_TOOL_MAX,
+                  tools=[{"type": "computer_20251124", "name": "computer", "display_width_px": 1024, "display_height_px": 768}],
+                  tool_choice=_tool_choice(model_id, "computer"))
+    n, ev = _with_fallback(t, model_id, [("computer_toolset_20260801", toolset, []),
+                                         ("computer_20251124+beta", legacy, ["computer-use-2025-11-24"])])
+    tu = _tool_use_named(n, "computer", toolset="computer")
+    ev.update({"tool_call": _trim(tu), "stop_reason": n.stop_reason})
+    return (True, ev) if tu else ("inconclusive", {**ev, "reason": "tool accepted but no computer tool_use"})
+
+
+# ---------------------------------------------------------------- tool infrastructure
+
+def probe_agent_skills(t, model_id, model_key):
+    kw = _msg("In one line, list the names of the skills available to you.", max_tokens=_TOOL_MAX,
+              tools=[{"type": "code_execution_20260521", "name": "code_execution"}],
+              container={"skills": [{"type": "anthropic", "skill_id": "pdf", "version": "latest"}]})
+    n = t.messages(model_id, kw)
+    ev = {"request": _req(model_id, kw), "container": n.top.get("container"), "response_snippet": _snippet(n)}
+    if "skills" in t.routes:
+        try:
+            _, skills = t.request("GET", "/v1/skills")
+            ev["skills_listed"] = len(skills.get("data", [])) if isinstance(skills, dict) else None
+        except TransportError as exc:
+            ev["skills_listed"] = f"error: {str(exc)[:120]}"
+    return bool((n.top.get("container") or {}).get("id")), ev
+
+
+def probe_fine_grained_tool_streaming(t, model_id, model_key):
+    long_text = ("lorem ipsum dolor sit amet " * 12).strip()
+    kw = _msg(f"Call the echo tool once with text set to exactly: {long_text}", max_tokens=_TOOL_MAX,
+              tools=[_echo_tool(eager=True)], tool_choice=_tool_choice(model_id, "echo"))
+    n = t.messages(model_id, kw, stream=True)
+    deltas = _content_deltas(n.events, "input_json_delta")
+    return deltas >= 2, {"request": _req(model_id, kw, stream=True), "input_json_deltas": deltas,
+                         "tool_call": _trim(_tool_use_named(n, "echo"))}
+
+
+def probe_mcp_connector(t, model_id, model_key):
+    url = os.environ.get("FEATURES_MCP_SERVER_URL", "https://mcp.deepwiki.com/mcp")
+    kw = _msg("List the tools offered by the probe-mcp server and call one of them with a trivial input, then summarize in one line.",
+              max_tokens=_TOOL_MAX, mcp_servers=[{"type": "url", "url": url, "name": "probe-mcp"}],
+              tools=[{"type": "mcp_toolset", "mcp_server_name": "probe-mcp"}])
+    try:
+        n = t.messages(model_id, kw, betas=["mcp-client-2025-11-20"])
+    except TransportError as exc:
+        low = str(exc).lower()
+        if any(k in low for k in ("connect", "unreachable", "timed out", "mcp server", "failed to")) and engine.classify(str(exc)) != "unsupported":
+            return "inconclusive", {"request": _req(model_id, kw), "reason": f"MCP server unreachable: {str(exc)[:200]}"}
+        raise
+    used = engine.has_block(n.content, "mcp_tool_use")
+    ev = {"request": _req(model_id, kw, betas=["mcp-client-2025-11-20"]), "mcp_tool_use": used,
+          "mcp_tool_result": engine.has_block(n.content, "mcp_tool_result"), "response_snippet": _snippet(n)}
+    return (True, ev) if used else ("inconclusive", {**ev, "reason": "MCP toolset accepted but no mcp_tool_use"})
+
+
+def probe_programmatic_tool_calling(t, model_id, model_key):
+    tool = {"name": "get_number", "description": "Returns a secret integer for the given index.",
+            "input_schema": {"type": "object", "properties": {"index": {"type": "integer"}}, "required": ["index"]},
+            "allowed_callers": ["code_execution_20260120"]}
+    kw = _msg("Write and run code that calls get_number for index 1, 2 and 3 and prints the sum.", max_tokens=2048,
+              tools=[{"type": "code_execution_20260120", "name": "code_execution"}, tool])
+    n = t.messages(model_id, kw)
+    tu = next((b for b in n.content if b.get("type") == "tool_use" and (b.get("caller") or {}).get("type") == "code_execution_20260120"), None)
+    ev = {"request": _req(model_id, kw), "container": n.top.get("container"), "caller": (tu or {}).get("caller"),
+          "stop_reason": n.stop_reason, "content_types": [b.get("type") for b in n.content]}
+    return (True, ev) if tu else ("inconclusive", {**ev, "reason": "no tool_use with code_execution caller"})
+
+
+def probe_tool_search(t, model_id, model_key):
+    deferred = [{"name": f"get_{k}", "description": d, "input_schema": {"type": "object", "properties": {"q": {"type": "string"}}},
+                 "defer_loading": True}
+                for k, d in (("weather", "Current weather for a city"), ("time", "Current time in a timezone"), ("stock", "Stock quote"))]
+    kw = _msg("Find the tool that gives weather for Seoul and call it.", max_tokens=_TOOL_MAX,
+              tools=[{"type": "tool_search_tool_regex_20251119", "name": "tool_search_tool_regex"}, *deferred])
+    betas = ["tool-search-tool-2025-10-19"] if t.surface == "bedrock_invoke" else []
+    n = t.messages(model_id, kw, betas=betas)
+    searched = any(b.get("type") == "server_tool_use" and b.get("name") == "tool_search_tool_regex" for b in n.content)
+    ev = {"request": _req(model_id, kw, betas=betas), "tool_search_used": searched,
+          "tool_search_result": engine.has_block(n.content, "tool_search_tool_result"),
+          "called": (_tool_use_named(n, "get_weather") or {}).get("name"), "stop_reason": n.stop_reason}
+    return (True, ev) if searched else ("inconclusive", {**ev, "reason": "tool search tool accepted but not used"})
+
+
+# ---------------------------------------------------------------- context management
+
+def probe_compaction(t, model_id, model_key):
+    cm = {"edits": [{"type": "compact_20260112", "trigger": {"type": "input_tokens", "value": 50000}}]}
+    kw = _msg(_BASIC_PROMPT, context_management=cm)
+    n = t.messages(model_id, kw, betas=["compact-2026-01-12"])
+    ev = {"request": _req(model_id, kw, betas=["compact-2026-01-12"]), "verification": "acceptance", "stop_reason": n.stop_reason}
+    if "models" in t.routes:
+        try:
+            _, m = t.request("GET", f"/v1/models/{model_id}")
+            ev["capability_compact_20260112"] = (((m.get("capabilities") or {}).get("context_management") or {}).get("compact_20260112") or {}).get("supported")
+        except TransportError as exc:
+            ev["capability_compact_20260112"] = f"error: {str(exc)[:120]}"
+    return True, ev
+
+
+def probe_context_editing(t, model_id, model_key):
+    cm = {"edits": [{"type": "clear_tool_uses_20250919", "trigger": {"type": "input_tokens", "value": 100000}}]}
+    kw = _msg(_BASIC_PROMPT, context_management=cm)
+    n = t.messages(model_id, kw, betas=["context-management-2025-06-27"])
+    applied = (n.top.get("context_management") or {}).get("applied_edits")
+    return applied is not None, {"request": _req(model_id, kw, betas=["context-management-2025-06-27"]),
+                                 "applied_edits": applied, "stop_reason": n.stop_reason}
+
+
+def _cache_pair(t, model_id, kw_builder) -> tuple[dict, dict, dict]:
+    if t.surface == "bedrock_converse":
+        kw = kw_builder()
+        n1 = t.converse(model_id, **kw)
+        n2 = t.converse(model_id, **kw)
+    else:
+        kw = kw_builder()
+        n1 = t.messages(model_id, kw)
+        n2 = t.messages(model_id, kw)
+    return kw, n1.usage, n2.usage
+
+
+def probe_automatic_prompt_caching(t, model_id, model_key):
+    kw, u1, u2 = _cache_pair(t, model_id, lambda: _msg(_BASIC_PROMPT, system=CACHE_PAD, cache_control={"type": "ephemeral"}))
+    created = engine.usage_int(u1, "cache_creation_input_tokens")
+    read = engine.usage_int(u2, "cache_read_input_tokens")
+    return (created > 0 or read > 0), {"request": _req(model_id, kw), "first_usage": u1, "second_usage": u2}
+
+
+def probe_prompt_caching_5m(t, model_id, model_key):
+    if t.surface == "bedrock_converse":
+        builder = lambda: {"system": [{"text": CACHE_PAD}, {"cachePoint": {"type": "default"}}],  # noqa: E731
+                           "messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX}}
+    else:
+        builder = lambda: _msg(_BASIC_PROMPT, system=[{"type": "text", "text": CACHE_PAD, "cache_control": {"type": "ephemeral"}}])  # noqa: E731
+    kw, u1, u2 = _cache_pair(t, model_id, builder)
+    return engine.usage_int(u2, "cache_read_input_tokens") > 0, {"request": _req(model_id, kw), "first_usage": u1, "second_usage": u2}
+
+
+def probe_prompt_caching_1h(t, model_id, model_key):
+    if t.surface == "bedrock_converse":
+        builder = lambda: {"system": [{"text": CACHE_PAD}, {"cachePoint": {"type": "default", "ttl": "1h"}}],  # noqa: E731
+                           "messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX}}
+    else:
+        builder = lambda: _msg(_BASIC_PROMPT, system=[{"type": "text", "text": CACHE_PAD, "cache_control": {"type": "ephemeral", "ttl": "1h"}}])  # noqa: E731
+    kw, u1, u2 = _cache_pair(t, model_id, builder)
+    one_h = engine.usage_int((u1.get("cache_creation") or {}) if isinstance(u1.get("cache_creation"), dict) else {}, "ephemeral_1h_input_tokens")
+    read = engine.usage_int(u2, "cache_read_input_tokens")
+    return (one_h > 0 or read > 0), {"request": _req(model_id, kw), "first_usage": u1, "second_usage": u2, "ephemeral_1h_input_tokens": one_h}
+
+
+def probe_token_counting(t, model_id, model_key):
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}]}
+        r = t.count_tokens_converse(model_id, **kw)
+    else:
+        kw = _msg(_BASIC_PROMPT)
+        r = t.count_tokens(model_id, kw)
+    n = r.get("input_tokens")
+    return isinstance(n, int) and n > 0, {"request": _req(model_id, kw, endpoint="count_tokens"), "input_tokens": n}
+
+
+# ---------------------------------------------------------------- files & endpoints
+
+def probe_files_api(t, model_id, model_key):
+    gate = _route_or_unsupported(t, "files")
+    if gate:
+        return gate
+    _, up = t.request("POST", "/v1/files", files={"file": ("features-probe.txt", b"Claude API Features probe file.\n", "text/plain")})
+    fid = up.get("id")
+    ev = {"request": _req(model_id, endpoint="/v1/files"), "file_id": fid, "type": up.get("type")}
+    try:
+        _, got = t.request("GET", f"/v1/files/{fid}")
+        ev["get_ok"] = got.get("id") == fid
+    finally:
+        try:
+            t.request("DELETE", f"/v1/files/{fid}")
+            ev["deleted"] = True
+        except TransportError as exc:
+            ev["deleted"] = f"error: {str(exc)[:120]}"
+    return up.get("type") == "file" and bool(fid), ev
+
+
+def probe_models_api(t, model_id, model_key):
+    gate = _route_or_unsupported(t, "models")
+    if gate:
+        return gate
+    _, m = t.request("GET", f"/v1/models/{model_id}")
+    return m.get("id") == model_id and "capabilities" in m, {"request": _req(model_id, endpoint=f"/v1/models/{model_id}"),
+                                                              "retrieved_id": m.get("id"), "capabilities": _trim(m.get("capabilities"))}
+
+
+PROBES.update({
+    "advisor_tool": probe_advisor_tool, "code_execution": probe_code_execution, "web_fetch": probe_web_fetch, "web_search": probe_web_search,
+    "bash_tool": probe_bash_tool, "browser_use": probe_browser_use, "computer_use": probe_computer_use,
+    "memory_tool": probe_memory_tool, "text_editor": probe_text_editor,
+    "agent_skills": probe_agent_skills, "fine_grained_tool_streaming": probe_fine_grained_tool_streaming,
+    "mcp_connector": probe_mcp_connector, "programmatic_tool_calling": probe_programmatic_tool_calling, "tool_search": probe_tool_search,
+    "compaction": probe_compaction, "context_editing": probe_context_editing,
+    "automatic_prompt_caching": probe_automatic_prompt_caching, "prompt_caching_5m": probe_prompt_caching_5m,
+    "prompt_caching_1h": probe_prompt_caching_1h, "token_counting": probe_token_counting,
+    "files_api": probe_files_api, "models_api": probe_models_api,
+})

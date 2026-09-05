@@ -177,6 +177,8 @@ class _HttpTransport(Transport):
 
     def request(self, method: str, path: str, json: Any = None, betas=(), files=None, data=None) -> tuple[int, Any]:
         headers = self._headers(betas)
+        if files is not None or data is not None:
+            headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
         with httpx.Client(timeout=_TIMEOUT) as c:
             r = c.request(method, self.base_url + path, json=json, headers=headers, files=files, data=data)
         parsed: Any

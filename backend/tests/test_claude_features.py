@@ -364,3 +364,50 @@ def test_route_less_endpoint_feature_is_unsupported_without_call():
     out = P.run_probe(P.PROBES["batch_processing"], t, "global.anthropic.claude-opus-5", "opus-5")
     assert out.status == "unsupported"
     assert t.calls == [] and "no route" in out.evidence["reason"]
+
+
+def test_probes_cover_every_catalog_feature():
+    assert set(P.PROBES) == set(catalog.FEATURE_IDS)
+
+
+def test_advisor_pairing():
+    assert P._advisor_model("fable-5-1") == "claude-fable-5-1"
+    assert P._advisor_model("sonnet-5") == "claude-opus-5"
+    assert P._advisor_model("opus-5") == "claude-opus-5"
+
+
+def test_http_request_drops_json_content_type_for_multipart(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    t = T.CpTransport()
+    seen = {}
+
+    class _R:
+        status_code = 200
+        content = b"{}"
+        def json(self):
+            return {"id": "file_1", "type": "file"}
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            seen.update(kw)
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    t.request("POST", "/v1/files", files={"file": ("a.txt", b"x", "text/plain")})
+    assert "content-type" not in {k.lower() for k in seen["headers"]}
+
+
+def test_trim_replaces_bytes_and_truncates_long_strings():
+    snap = P._req("m", {"blob": b"\x00" * 5000, "text": "x" * 500})
+    assert snap["blob"] == "<5000 bytes>"
+    assert snap["text"].startswith("x" * 200) and "(500 chars)" in snap["text"]
+
+
+def test_run_probe_rejects_unknown_status_string():
+    t = _FakeT()
+    out = P.run_probe(lambda t_, m, k: ("not_aplicable", {}), t, "claude-opus-5", "opus-5")
+    assert out.status == "broken" and "unknown status" in out.evidence["reason"]
