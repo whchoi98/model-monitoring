@@ -86,6 +86,26 @@ def diff_runs(prev: dict[tuple, str], cur: dict[tuple, str]) -> list[dict[str, A
     return out
 
 
+#: effort 전용 허용값 — 이 중 `xhigh`는 다른 파라미터에 등장하지 않아 열거 자체가 지목 증거가 된다.
+EFFORT_LEVELS = ("low", "medium", "high", "xhigh", "max")
+
+
+def effort_rejection_names_param(error_message: str | None, bad_value: str) -> bool:
+    """effort 부정 제어의 400이 effort 파라미터를 지목했는가 (파싱·검증됐다는 증거).
+
+    CP/Mantle은 필드 경로를 돌려준다: `output_config.effort: Input should be 'low', …`.
+    Bedrock(InvokeModel·Converse)은 경로를 지우고 허용 variant만 남긴다:
+    ``unknown variant `ultra`, expected one of `low`, `medium`, `high`, `xhigh`, `max` …``
+    → 잘못된 값 + effort 전용 값 열거도 동등한 지목 증거로 인정한다. 아무 400이나 통과시키지는 않는다.
+    """
+    msg = (error_message or "").lower()
+    if not msg:
+        return False
+    if "effort" in msg:
+        return True
+    return bad_value.lower() in msg and "xhigh" in msg
+
+
 def find_block(blocks: list[dict] | None, type_: str) -> dict | None:
     for b in blocks or []:
         if isinstance(b, dict) and b.get("type") == type_:

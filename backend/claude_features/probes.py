@@ -330,6 +330,9 @@ def probe_data_residency(t, model_id, model_key):
     return n.usage.get("inference_geo") == "us", ev
 
 
+_BAD_EFFORT = "ultra"
+
+
 def probe_effort(t, model_id, model_key):
     def call(effort: str):
         if t.surface == "bedrock_converse":
@@ -342,12 +345,12 @@ def probe_effort(t, model_id, model_key):
     n, kw = call("low")
     ev = {"request": _req(model_id, kw), "output_tokens_low": n.usage.get("output_tokens"), "response_snippet": _snippet(n)}
     try:
-        call("ultra")
+        call(_BAD_EFFORT)
         ev["negative_control"] = "accepted (effort not validated)"
         return "inconclusive", ev
     except TransportError as exc:
         ev["negative_control"] = f"rejected: {str(exc)[:200]}"
-        return "effort" in str(exc).lower(), ev
+        return engine.effort_rejection_names_param(str(exc), _BAD_EFFORT), ev
 
 
 def probe_fallback_credit(t, model_id, model_key):

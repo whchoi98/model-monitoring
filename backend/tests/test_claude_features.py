@@ -401,6 +401,19 @@ def test_http_request_drops_json_content_type_for_multipart(monkeypatch):
     assert "content-type" not in {k.lower() for k in seen["headers"]}
 
 
+def test_effort_rejection_accepts_bedrock_variant_enumeration():
+    """Bedrock은 필드 경로를 지우고 variant만 남긴다 — 'effort' 문자열만 찾으면 false-broken (스모크 발견)."""
+    cp = "HTTP 400: output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'"
+    bedrock = ("HTTP 400: ValidationException: unknown variant `ultra`, expected one of "
+               "`low`, `medium`, `high`, `xhigh`, `max`, `Unhandled` at line 1 column 125")
+    assert engine.effort_rejection_names_param(cp, "ultra")
+    assert engine.effort_rejection_names_param(bedrock, "ultra")
+    # 파라미터를 지목하지 않는 400·빈 오류는 통과시키지 않는다
+    assert not engine.effort_rejection_names_param("HTTP 400: ValidationException: request is not valid", "ultra")
+    assert not engine.effort_rejection_names_param("HTTP 429: Too many requests", "ultra")
+    assert not engine.effort_rejection_names_param(None, "ultra")
+
+
 def test_http_request_serializes_dict_error_body(monkeypatch):
     """`json=` 파라미터가 json 모듈을 가려 4xx JSON 본문 직렬화가 터졌던 회귀 (스모크 발견)."""
     monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
