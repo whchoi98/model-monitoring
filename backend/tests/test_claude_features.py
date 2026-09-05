@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from claude_features import catalog, engine, probes as P, transports as T
+from claude_features import catalog, engine, probes as P, transports as T, runner as R
 
 
 def test_surfaces_and_models():
@@ -413,9 +413,6 @@ def test_run_probe_rejects_unknown_status_string():
     assert out.status == "broken" and "unknown status" in out.evidence["reason"]
 
 
-from claude_features import runner as R
-
-
 def test_build_jobs_partitions_applicable_and_predecided():
     jobs, decided = R.build_jobs(["mantle", "bedrock_converse"], ["messages_basic", "bash_tool", "context_window_1m"], ["fable-5-1", "opus-5"])
     keys = {(j["feature"], j["surface"], j["model_key"]) for j in jobs}
@@ -433,4 +430,6 @@ def test_default_job_count_matches_spec_estimate():
     jobs, decided = R.build_jobs(None, None, None)
     total = len(jobs) + len(decided)
     assert total == 39 * 4 * 4  # feature × surface × model
-    assert 380 <= len(jobs) <= 470
+    # pre-decided 118 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
+    #                 + context_window_1m skipped on mantle/invoke/converse (3 × 4 − 1 overlap = 11)
+    assert (len(jobs), len(decided)) == (506, 118)
