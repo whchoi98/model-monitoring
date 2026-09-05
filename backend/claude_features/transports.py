@@ -264,6 +264,8 @@ class BedrockMessagesTransport(_HttpTransport):
     surface = "bedrock_messages"
     #: 라우트 부재를 가정하지 않고 전부 실측한다 (이 엔드포인트는 미지원 라우트를 명시적으로 알려준다).
     routes = frozenset({"messages", "count_tokens", "batches", "files", "models", "skills"})
+    #: x-api-key 인증이 걸리는 Anthropic 호환 라우트 — 여기서 나는 403은 진짜 인증 사고(broken)다.
+    _ANTHROPIC_SERVED_PATH = "/v1/messages"
 
     def __init__(self, region: str | None = None):
         from aws_bedrock_token_generator import provide_token
@@ -275,6 +277,21 @@ class BedrockMessagesTransport(_HttpTransport):
     def _headers(self, betas=()) -> dict[str, str]:
         return {"x-api-key": self._token, "anthropic-version": ANTHROPIC_VERSION,
                 "content-type": "application/json", **beta_header(betas)}
+
+    def request(self, method: str, path: str, json: Any = None, betas=(), files=None, data=None) -> tuple[int, Any]:
+        try:
+            return super().request(method, path, json=json, betas=betas, files=files, data=data)
+        except TransportError as exc:
+            # `/v1/messages` 외의 경로에서 나는 403 "Authorization header is missing"는 인증 사고가 아니라
+            # 그 라우트가 Anthropic 호환 핸들러에 없다는 뜻 — 요청이 SigV4 프론트도어로 떨어진 것이다.
+            # 실측 2026-09-05 (`/v1/messages/batches`): x-api-key만 → 403 위 문구, `Authorization: Bearer`를
+            # 대신 보내면 400 "The provided model identifier is invalid"(Anthropic 배치 응답이 아니다),
+            # 두 헤더를 함께 보내면 `/v1/messages`가 400 "Cannot provide both …" → 두 스킴은 배타적이라
+            # 헤더를 추가해 재측정할 수 없다. 라우트 부재로 정규화해 false-broken을 없앤다.
+            if (exc.status_code == 403 and path != self._ANTHROPIC_SERVED_PATH
+                    and "authorization header is missing" in (exc.message or "").lower()):
+                raise TransportError(404, f"route not served by the Anthropic-compatible handler (403 {exc.message})") from exc
+            raise
 
 
 def _boto_client(region: str):

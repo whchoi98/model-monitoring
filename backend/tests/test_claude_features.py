@@ -353,6 +353,40 @@ def test_http_request_maps_coral_unknown_operation_to_404(monkeypatch):
     assert engine.classify(str(exc.value)) == "unsupported"
 
 
+def test_bedrock_messages_403_on_non_messages_route_is_route_absence(monkeypatch):
+    """`/v1/messages/batches`의 403 "Authorization header is missing"는 라우트 부재 (스모크 발견).
+
+    x-api-key 인증이 없는 경로로 떨어졌다는 뜻 — 인증 사고가 아니다. 반대로 `/v1/messages`에서 같은 403이
+    나면 그건 진짜 사고이므로 broken으로 남겨야 한다.
+    """
+    monkeypatch.setattr("aws_bedrock_token_generator.provide_token", lambda region=None: "tok")
+    t = T.BedrockMessagesTransport(region="ap-northeast-2")
+
+    class _R:
+        status_code = 403
+        content = b"{}"
+        def json(self):
+            return {"Message": "Authorization header is missing"}
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError) as batches:
+        t.request("POST", "/v1/messages/batches", json={"requests": []})
+    assert batches.value.status_code == 404
+    assert engine.classify(str(batches.value)) == "unsupported"
+
+    with pytest.raises(T.TransportError) as messages:
+        t.request("POST", "/v1/messages", json={"model": "m"})
+    assert messages.value.status_code == 403
+    assert engine.classify(str(messages.value)) == "broken"
+
+
 def test_tiny_pdf_is_valid_pdf_containing_text():
     pdf = P._tiny_pdf("HELLO_7391")
     assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF")
