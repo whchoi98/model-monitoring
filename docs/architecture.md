@@ -30,7 +30,7 @@ EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
    ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9채널 TTFB/TTFT 벤치 → RDS
-   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×4 surface×4모델 실행-증거 스윕 → RDS
+   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×5 surface×4모델 실행-증거 스윕 → RDS
 ```
 
 ### 컴포넌트 (Layer별)
@@ -80,7 +80,7 @@ EventBridge Scheduler
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
 | GptBench TaskDef | `python -m gptbench_runner --once` — Mantle GPT 9채널 TTFB/TTFT 벤치 |
-| FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×4 surface×4모델 실행-증거 스윕. Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
+| FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×4모델 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
 
 #### 네트워크 / Network
 | 리소스 | 역할 |
@@ -171,7 +171,7 @@ EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
    ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9-channel TTFB/TTFT bench → RDS
-   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 4 surfaces × 4 models evidence sweep → RDS
+   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 5 surfaces × 4 models evidence sweep → RDS
 ```
 
 ### Components by Layer

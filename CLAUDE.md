@@ -36,14 +36,14 @@ Internal ALB
                 ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
                 ├── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
                 ├── /gpt-on-aws   — GPT on AWS (Mantle 9채널 TTFB/TTFT 벤치 — Terra Global 포함 v2.20.1, 15분 주기)
-                └── /claude-features — Claude API Features (33 문서 피처 × CP/Mantle/InvokeModel/Converse × 4모델 실행-증거 + 문서 드리프트, v2.23.0)
+                └── /claude-features — Claude API Features (33 문서 피처 × CP/Mantle/Bedrock(Messages API·InvokeModel·Converse) × 4모델 실행-증거 + 문서 드리프트, v2.23.0)
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 43 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
   ├── GptBench Fargate Task    → 15분 주기 Mantle GPT 9채널 × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1)
-  └── FeaturesVerify Fargate Task → 일 1회 Claude API Features 39행(문서 33+코어 4+Models API·분할 2) × 4 surface × 대표 4모델 실행-증거 스윕 (v2.23.0)
+  └── FeaturesVerify Fargate Task → 일 1회 Claude API Features 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 대표 4모델 실행-증거 스윕 (v2.23.0)
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
@@ -75,7 +75,7 @@ model-monitoring/
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py
 │   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×19 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
-│   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×4 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
+│   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×5 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
 │   ├── features_runner.py   # CLI entry: `python -m features_runner --once` (FeaturesVerify Fargate task)
 │   └── routers/
 │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
@@ -122,7 +122,7 @@ model-monitoring/
 │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt
 │   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x)
 │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
-│   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 4열 매트릭스 + 드리프트 배너 + 증거 모달 + 수동 트리거 (v2.23.0)
+│   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 드리프트 배너 + 증거 모달 + 수동 트리거 (v2.23.0)
 │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
 │   │   ├── hooks/                       # useAutoRefresh, useProbeStream, useChatStream
 │   │   └── lib/
@@ -217,7 +217,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 
-**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 43개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(문서 33피처+코어 4+Models API·분할 2) × 4 surface(CP on AWS/Mantle `/anthropic`/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다. Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026.
+**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 43개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface(CP on AWS/Mantle `/anthropic`/Bedrock runtime Messages API/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다(1런 = 프로브 658 + 사전판정 122 = 780셀). Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026.
 
 **라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"`(Mantle) / `"OpenAI <family> (Global)"`(Global CRIS, v2.20.0) / `"OpenAI <family> (1P)"`(1P direct) prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Global(Bedrock·OpenAI 공통, `(Global)` 서픽스) → Bedrock US → OpenAI 리전** (`channelRank` 함수).
 

@@ -280,7 +280,8 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/gptbench",
     );
 
-    // Claude API Features 검증 (v2.23.0) — 39행(문서 피처 33 + 코어 4 + Models API·분할 2) × 4 surface × 대표 4모델 실행-증거, 일 1회.
+    // Claude API Features 검증 (v2.23.0) — 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)
+    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 4모델 실행-증거, 일 1회.
     // bedrock:* + bedrock-mantle:* IAM 체인이 필요하므로 autoprober role 재사용. CP는 API 키(secret).
     const featuresTaskDef = buildTaskDef(
       "FeaturesVerifyTaskDef",
@@ -382,9 +383,11 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "FeaturesVerifySchedule", {
-      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 506 프로브 + 118 사전판정 = 624셀, 캐싱·부정 제어 포함 ≈ 650 API 호출, 토큰 비용 대략 $4~6 (Fable 지배)
+      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 658 프로브 + 122 사전판정 = 780셀
+      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 4 모델,
+      //   캐싱·부정 제어 포함 ≈ 800 API 호출, 토큰 비용 대략 $5~7 (Fable 지배)
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(24)),
-      description: "Claude API Features verification: 39 rows x CP/Mantle/InvokeModel/Converse x 4 models, daily",
+      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 4 models, daily",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: featuresTaskDef,
         vpcSubnets: props.appSubnets,

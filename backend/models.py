@@ -197,7 +197,7 @@ class FeatureResult(Base):
     id = Column(Integer, primary_key=True, autoincrement=True)
     run_id = Column(Integer, ForeignKey("feature_runs.id"), nullable=False)
     feature = Column(Text, nullable=False)      # claude_features.catalog.FEATURE_IDS
-    surface = Column(Text, nullable=False)      # cp | mantle | bedrock_invoke | bedrock_converse
+    surface = Column(Text, nullable=False)      # cp | mantle | bedrock_messages | bedrock_invoke | bedrock_converse
     model_key = Column(Text, nullable=False)    # fable-5-1 | fable-5 | opus-5 | sonnet-5
     model_label = Column(Text, nullable=False)
     model_id = Column(Text, nullable=True)      # surface별 실제 id (not_applicable이면 None)

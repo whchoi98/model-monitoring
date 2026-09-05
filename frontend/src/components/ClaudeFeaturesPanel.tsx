@@ -1,7 +1,7 @@
 "use client";
 
 // Claude API Features (v2.23.0) — platform.claude.com "Build with Claude" 33피처(+코어 4, Models API)를
-// Claude Platform on AWS / Bedrock Mantle /anthropic / Bedrock InvokeModel / Bedrock Converse 4열에서 실행-증거로 검증.
+// Claude Platform on AWS / Bedrock Mantle /anthropic / Bedrock runtime(Messages API · InvokeModel · Converse) 5열에서 실행-증거로 검증.
 // 셀 = 피처 × 엔드포인트(대표 모델 4종 집계) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
 
 import { Fragment, useEffect, useMemo, useState } from "react";
@@ -176,7 +176,7 @@ export default function ClaudeFeaturesPanel() {
     return <div className="flex items-center justify-center py-24"><div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;
   }
 
-  // 헤더 열 그룹: cp / mantle / bedrock(InvokeModel·Converse 2열)
+  // 헤더 열 그룹: cp / mantle / bedrock(Messages API·InvokeModel·Converse 3열)
   const colGroups = catalog ? catalog.surfaces.reduce<{ group: string; ids: string[] }[]>((acc, s) => {
     const last = acc[acc.length - 1];
     if (last && last.group === s.group) last.ids.push(s.id); else acc.push({ group: s.group, ids: [s.id] });
@@ -189,8 +189,8 @@ export default function ClaudeFeaturesPanel() {
         <div>
           <h2 className="text-xl font-bold text-gray-100">{L("Claude API Features", "Claude API 기능 검증")}</h2>
           <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
-            {L("Every documented \"Build with Claude\" feature, executed for real on Claude Platform on AWS, Bedrock Mantle /anthropic and Bedrock runtime (InvokeModel · Converse) with Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5. Cells compare what the docs promise with what actually happened.",
-               "공식 \"Build with Claude\" 문서의 모든 피처를 Claude Platform on AWS · Bedrock Mantle /anthropic · Bedrock runtime(InvokeModel · Converse)에서 Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다.")}
+            {L("Every documented \"Build with Claude\" feature, executed for real on Claude Platform on AWS, Bedrock Mantle /anthropic and Bedrock runtime (Messages API · InvokeModel · Converse) with Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5. Cells compare what the docs promise with what actually happened.",
+               "공식 \"Build with Claude\" 문서의 모든 피처를 Claude Platform on AWS · Bedrock Mantle /anthropic · Bedrock runtime(Messages API · InvokeModel · Converse)에서 Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다.")}
           </p>
           {run && (
             <p className="text-xs text-gray-500 mt-1">
@@ -239,7 +239,7 @@ export default function ClaudeFeaturesPanel() {
 
       {/* 엔드포인트 헬스 카드 */}
       {run && catalog && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {catalog.surfaces.map((s) => {
             const h = surfaceHealth(cells, s.id);
             return (

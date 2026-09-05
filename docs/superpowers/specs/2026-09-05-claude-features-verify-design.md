@@ -9,13 +9,14 @@
 ## Goal
 
 [Claude Developer Platform "Build with Claude" 개요](https://platform.claude.com/docs/en/build-with-claude/overview)가
-나열하는 **33개 피처 전부**(+ 코어 Messages 4종 + Models API)가 다음 세 Claude-on-AWS 엔드포인트에서 **실제로
+나열하는 **33개 피처 전부**(+ 코어 Messages 4종 + Models API)가 다음 세 Claude-on-AWS 엔드포인트(5 surface 열)에서 **실제로
 동작하는지**를 주기적으로 실행해 증거와 함께 보여 주는 **별도 메뉴 `/claude-features`**를 추가한다.
 
 | 열 | 엔드포인트 | 인증 | 모델 id | 리전 |
 |---|---|---|---|---|
 | **Claude Platform on AWS** (`cp`) | `https://aws-external-anthropic.{region}.api.aws/v1/*` | `x-api-key` envelope key + `anthropic-workspace-id` | bare `claude-fable-5-1` … | `ANTHROPIC_AWS_REGION` (기본 us-east-2) |
 | **Bedrock Mantle `/anthropic`** (`mantle`) | `https://bedrock-mantle.{region}.api.aws/anthropic/v1/*` | SigV4 파생 단기 bearer (`aws_bedrock_token_generator.provide_token`) → `x-api-key` | FM id `anthropic.claude-fable-5` … | `MANTLE_ANTHROPIC_REGION` (**ap-northeast-1 고정**) |
+| **Bedrock runtime — Anthropic Messages API** (`bedrock_messages`, 2026-09-05 추가) | `https://bedrock-runtime.{region}.amazonaws.com/anthropic/v1/*` | SigV4 파생 단기 bearer → `x-api-key` (`anthropic-version`/`-beta` 헤더) | 프로파일 `global.anthropic.claude-fable-5-1` … | `BEDROCK_FEATURES_REGION` (기본 ap-northeast-2) |
 | **Bedrock runtime — InvokeModel** (`bedrock_invoke`) | boto3 `bedrock-runtime` `invoke_model(_with_response_stream)` | SigV4 (태스크 롤) | 프로파일 `global.anthropic.claude-fable-5-1` … | ap-northeast-2 (Seoul) |
 | **Bedrock runtime — Converse** (`bedrock_converse`, 서브열) | boto3 `converse(_stream)` / `count_tokens` | SigV4 | 동일 프로파일 | ap-northeast-2 |
 
@@ -37,7 +38,13 @@
    설치된다. 새 엔진은 Anthropic Messages JSON 본문 하나를 세 전송기로 그대로 흘리므로 SDK 파라미터 표면 변화에 영향받지
    않는다. (패리티는 SDK 사용 — 그대로 둠.)
 4. **스케줄**: EventBridge `rate(24 hours)` Fargate one-shot(`python -m features_runner --once`) + `POST /api/features/trigger`(JWT)
-   수동 실행. 1런 ≈ 550 API 호출, 토큰 비용 대략 $3~5(Fable 2종 지배). 월 ≈ $100~150.
+   수동 실행. 설계 시 추정은 1런 ≈ 550 API 호출·$3~5였고, **구현 확정값은 1런 = 프로브 658 + 사전판정 122 = 780셀
+   (39행 × 5 surface × 4모델) · ≈800 API 호출 · $5~7**(5번째 surface `bedrock_messages` 추가 반영, ADR-026 §9).
+   Bedrock runtime의 Anthropic Messages API는 AWS Build 가이드·Endpoints 페이지가 신규 앱과 "Migrating from Anthropic
+   APIs"에 권장하는 경로여서 InvokeModel/Converse와 별개 열로 실측한다:
+   <https://docs.aws.amazon.com/bedrock/latest/userguide/build.html> ·
+   <https://docs.aws.amazon.com/bedrock/latest/userguide/endpoints.html> ·
+   <https://docs.aws.amazon.com/bedrock/latest/userguide/inference-messages-api.html>
 5. **고비용·부작용 프로브도 실행한다** (실행-증거 원칙 유지): web search(1회, ≈$0.01), web fetch, code execution(컨테이너
    최소 5분 과금·무료 티어 내), advisor(추가 추론), batches(1건 배치 생성 → 조회 → 즉시 취소), files(업로드 → 조회 → 삭제),
    agent skills(컨테이너). **1M 컨텍스트만 capability 검사로 대체**(실전송 $2+/회): CP는 Models API `max_input_tokens`,
@@ -168,7 +175,7 @@ class FeatureResult(Base):         # feature_results  (Index run_id; Index (run_
 
 - `src/app/claude-features/page.tsx` — gpt-on-aws 셸 복사(`useNavItems("features")`).
 - `AppHeader.tsx` nav: `{ key: "features", label: L("Claude API Features", "Claude API 기능"), href: "/claude-features" }` — `gptbench` 뒤·`manual` 앞. 주석 "표준 10개"→11개. 데스크톱 폭 확인.
-- `src/components/ClaudeFeaturesPanel.tsx` — ParityPanel 골격 copy-adapt: 상단 엔드포인트 헬스 카드 4개(supported/(supported+broken)), 드리프트 배너(`verdict == drift`), 7그룹 헤더(core → model → server → client → infra → context → files/endpoints), 피처 행 × 4열(Bedrock runtime은 InvokeModel·Converse 2열을 한 그룹 헤더 아래), 셀 클릭 → 증거 모달(요청 스냅샷·응답 요약·attempts·에러·문서 링크·문서 기대치·검증 강도 배지), 상태 필터 칩, 수동 트리거(JWT), 직전 런 diff. KO/EN은 인라인 `L(en, ko)`.
+- `src/components/ClaudeFeaturesPanel.tsx` — ParityPanel 골격 copy-adapt: 상단 엔드포인트 헬스 카드 5개(supported/(supported+broken)), 드리프트 배너(`verdict == drift`), 7그룹 헤더(core → model → server → client → infra → context → files/endpoints), 피처 행 × 5열(Bedrock runtime은 Messages API·InvokeModel·Converse 3열을 한 그룹 헤더 아래), 셀 클릭 → 증거 모달(요청 스냅샷·응답 요약·attempts·에러·문서 링크·문서 기대치·검증 강도 배지), 상태 필터 칩, 수동 트리거(JWT), 직전 런 diff. KO/EN은 인라인 `L(en, ko)`.
 - 순수 로직은 `src/lib/claudeFeatures.ts`(타입·상태 스타일·`aggregateCell`·`verdictOf`·그룹 계산) + `src/lib/claudeFeatures.test.ts`(vitest).
 - `src/lib/api.ts` 하단에 `// ── Claude API Features (v2.23.0)` 섹션: 타입 + `fetchFeaturesCatalog/Latest/Evidence`, `triggerFeaturesRun`.
 
@@ -182,8 +189,8 @@ class FeatureResult(Base):         # feature_results  (Index run_id; Index (run_
 
 ## Testing & rollout
 
-1. **단위 테스트** `backend/tests/test_claude_features.py`: 카탈로그 정합(39행·4 surface·documented 값 도메인·doc_url 존재), `is_applicable` 규칙(Mantle Fable 5.1 n.a., Converse 표현 불가, 라우트 부재), `verdict`/`aggregate_cell`/`diff_runs`, 전송기의 betas 매핑(헤더 vs body)과 InvokeModel 본문 변환, 증거 검사 함수. 프론트 `claudeFeatures.test.ts`.
-2. **로컬 라이브 스모크**(python3.12, 현 IAM 롤, SSM 키): `python -m features_runner --smoke --models sonnet-5` → 4 surface × 39피처 표 출력, DB 미기록. 프로브 결함(패리티 run #1 `max_tokens=64` false-Broken 재현)을 배포 전에 걸러낸다. 이어 4모델 전체 1런.
+1. **단위 테스트** `backend/tests/test_claude_features.py`: 카탈로그 정합(39행·5 surface·documented 값 도메인·doc_url 존재), `is_applicable` 규칙(Mantle Fable 5.1 n.a., Converse 표현 불가, 라우트 부재), `verdict`/`aggregate_cell`/`diff_runs`, 전송기의 betas 매핑(헤더 vs body)과 InvokeModel 본문 변환, 증거 검사 함수. 프론트 `claudeFeatures.test.ts`.
+2. **로컬 라이브 스모크**(python3.12, 현 IAM 롤, SSM 키): `python -m features_runner --smoke --models sonnet-5` → 5 surface × 39피처 표 출력, DB 미기록. 프로브 결함(패리티 run #1 `max_tokens=64` false-Broken 재현)을 배포 전에 걸러낸다. 이어 4모델 전체 1런.
 3. **배포**: 이미지 빌드(immutable tag) → `cdk deploy BedrockMonitor-AppServices BedrockMonitor-Scheduler`(digest 고정) → CloudFront invalidation → 첫 스케줄/수동 런 로그 확인.
 4. **문서**: ADR-026, CHANGELOG v2.23.0(KO/EN), 버전 6곳, README 페이지 수 9→10 + 주기 잡 bullet, CLAUDE.md 트리·환경변수, `docs/architecture.md` 잡 표·로그 그룹, `backend/CLAUDE.md`·`routers/CLAUDE.md`·`frontend/CLAUDE.md`·`components/CLAUDE.md`.
 

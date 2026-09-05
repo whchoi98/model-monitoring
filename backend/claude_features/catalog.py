@@ -1,9 +1,9 @@
 """Claude API Features 카탈로그 (v2.23.0) — 무엇을 어느 엔드포인트에서 어떤 모델로 검증하는가.
 
-행(FEATURES) = 39개: platform.claude.com/docs/en/build-with-claude/overview 의 33개 문서 피처 매핑 34행
-(strict_tool_use는 structured_outputs, extended_thinking은 adaptive_thinking과 문서상 같은 항목이지만
-검증 강도가 달라 카탈로그에서는 별도 행으로 분리) + 코어 Messages 4(messages_basic/streaming/system_prompt/tool_use)
-+ Models API 1.
+행(FEATURES) = 39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1
+(1차 출처는 platform.claude.com/docs/en/build-with-claude/overview 의 33개 문서 피처. strict_tool_use는
+structured_outputs, extended_thinking은 adaptive_thinking과 문서상 같은 항목이지만 검증 강도가 달라 별도 행으로
+분리했고, 코어 4는 messages_basic/streaming/system_prompt/tool_use).
 열(SURFACES) = cp(Claude Platform on AWS) / mantle(Bedrock Mantle /anthropic) /
 bedrock_messages(bedrock-runtime `/anthropic/v1/messages`) / bedrock_invoke / bedrock_converse.
 documented = 문서상 기대치 {ga|beta|no|unknown}. 1차 출처는 overview Availability 컬럼(Bedrock 단일 컬럼),
@@ -155,7 +155,7 @@ FEATURES: list[dict] = [
        "bash_20250124 → tool_use{bash}", _DOC + "agents-and-tools/tool-use/bash-tool", ALL, "evidence"),
     _f("browser_use", "client_tools", "브라우저 사용", "Browser use", "browser_toolset_20260801 → tool_use{toolset browser}",
        "browser_toolset_20260801 → tool_use{toolset browser}", _DOC + "agents-and-tools/tool-use/browser-use-tool", NONE, "evidence",
-       "실측 2026-09-05: CP on AWS·Bedrock InvokeModel에서 toolset 수락 + tool_use 방출 (문서상 미제공 → undocumented)"),
+       "실측 2026-09-05: CP on AWS·Bedrock InvokeModel·bedrock-runtime Messages API에서 toolset 수락 + tool_use 방출 (문서상 미제공 → undocumented)"),
     _f("computer_use", "client_tools", "컴퓨터 사용", "Computer use", "toolset 20260801 시도 → 400이면 computer_20251124 + beta",
        "Try toolset 20260801 → on 400 fall back to computer_20251124 + beta", _DOC + "agents-and-tools/tool-use/computer-use-tool", ALL_BETA, "evidence",
        "P-AWS/Bedrock은 toolset 미제공, 대표 모델은 toolset 전용 모델군 → 미지원 가능(정상 발견)"),
@@ -177,7 +177,8 @@ FEATURES: list[dict] = [
        _DOC + "agents-and-tools/tool-use/programmatic-tool-calling", CP_ONLY, "evidence"),
     _f("tool_search", "tool_infra", "도구 검색", "Tool search", "tool_search_tool_regex + defer_loading → tool_search_tool_result",
        "tool_search_tool_regex + defer_loading → tool_search_tool_result", _DOC + "agents-and-tools/tool-use/tool-search-tool",
-       {"cp": "ga", "mantle": "ga", "bedrock_invoke": "ga", "bedrock_converse": "no"}, "evidence", "AWS: InvokeModel only"),
+       {"cp": "ga", "mantle": "ga", "bedrock_invoke": "ga", "bedrock_converse": "no"}, "evidence",
+       "AWS: InvokeModel only — bedrock_messages는 문서에 없지만 실측 동작(기대치 unknown 유지, 2026-09-05)"),
     # --- context management ---
     _f("compaction", "context", "컴팩션", "Compaction", "beta compact-2026-01-12 + edits[compact_20260112] 수락",
        "beta compact-2026-01-12 + edits[compact_20260112] accepted", _DOC + "build-with-claude/compaction",
@@ -195,7 +196,7 @@ FEATURES: list[dict] = [
     _f("token_counting", "context", "토큰 카운트", "Token counting", "count_tokens → input_tokens > 0",
        "count_tokens → input_tokens > 0", _DOC + "build-with-claude/token-counting",
        {"cp": "ga", "mantle": "ga", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
-       "AWS CountTokens 문서: CRIS 전용(global.*) 모델 미지원 — Mantle /anthropic count_tokens가 유일 경로 (실측 2026-09-05 일치)"),
+       "AWS CountTokens 문서: CRIS 전용(global.*) 모델 미지원 — Mantle /anthropic count_tokens가 유일 경로 (실측 2026-09-05 일치). bedrock-runtime Messages API는 count_tokens 라우트 자체가 없음(coral UnknownOperationException)"),
     # --- files & endpoints ---
     _f("files_api", "files_endpoints", "Files API", "Files API", "업로드 → 조회 → 삭제",
        "Upload → get → delete", _DOC + "build-with-claude/files", CP_BETA_ONLY, "evidence"),

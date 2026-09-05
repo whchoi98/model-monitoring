@@ -3364,6 +3364,48 @@ python3.12 -m features_runner --smoke --models fable-5-1 --features tool_use,str
   리전을 옮기면 Mantle 열이 대부분 되살아날 것으로 보이지만 이는 사용자 결정 영역.
 - `browser_use`의 undocumented 지원 2건은 카탈로그 `documented`를 고칠 근거가 될 수 있으나(문서 기대치 변경) 컨트롤러 결정 사항.
 
+### bedrock_messages (sonnet-5)
+
+2026-09-05, Task 13. 5번째 surface(bedrock-runtime `/anthropic/v1/messages`, 서울) 단독 스윕.
+자격은 로컬 IAM 롤의 `aws-bedrock-token-generator` 단기 토큰(값 미출력), 리전 `ap-northeast-2`.
+
+```bash
+python3.12 -m features_runner --smoke --surfaces bedrock_messages --models sonnet-5 --json > <scratchpad>/smoke-bedrock-messages-sonnet5.json
+```
+
+**39행 결과 (라우트 403 정규화 후)** — `broken` 0 · `inconclusive` 0 · 드리프트 0.
+
+| 상태 | 수 | 피처 |
+|---|---|---|
+| supported | 22 | messages_basic, streaming, system_prompt, tool_use, adaptive_thinking, citations, pdf_support, search_results, effort, fallback_credit, compaction, context_editing, automatic_prompt_caching, prompt_caching_5m, prompt_caching_1h, fine_grained_tool_streaming, tool_search, bash_tool, browser_use, computer_use, memory_tool, text_editor |
+| unsupported | 15 | structured_outputs, strict_tool_use, data_residency, server_side_fallback, token_counting, models_api, files_api, batch_processing, advisor_tool, code_execution, web_fetch, web_search, mcp_connector, programmatic_tool_calling, agent_skills |
+| skipped | 1 | context_window_1m (capability 엔드포인트 없음 — `/v1/models/{id}`가 404 `UnknownOperationException`) |
+| not_applicable | 1 | extended_thinking (adaptive 전용 모델의 정확한 거부 문구) |
+
+판정 합계: `match` 35 · `undocumented` 1 (`browser_use`) · `none` 3 (context_window_1m, extended_thinking, tool_search).
+
+**거부 문구 분류**
+- `Extra inputs are not permitted` 400 — `output_config.format`(structured_outputs), `tools.0.custom.strict`(strict_tool_use),
+  `inference_geo`(data_residency), `fallbacks`(server_side_fallback). InvokeModel/Converse와 같은 Claude 5 세대 제약.
+- `tool type '…' is not supported` 400 — advisor / code_execution(+agent_skills, programmatic_tool_calling) / web_fetch /
+  web_search / mcp_toolset. 서버측 도구·MCP는 이 엔드포인트에 없다.
+- coral `UnknownOperationException` — `/v1/messages/count_tokens`(HTTP **200** 본문!), `/v1/files`, `/v1/models/{id}`(404 XML).
+  전송기가 전부 `TransportError(404)`로 정규화 → `unsupported`.
+
+**트리아지: `broken` 1건 → 수정 1건**
+
+| 증상 | 근본 원인 | 수정 | 커밋 |
+|---|---|---|---|
+| `batch_processing` `broken` — `HTTP 403 {"Message":"Authorization header is missing"}` | `/v1/messages/batches`는 Anthropic 호환 핸들러(x-api-key 인증)에 없어 요청이 SigV4 프론트도어로 떨어진다. 확인: `Authorization: Bearer`를 대신 보내면 400 `The provided model identifier is invalid`(Anthropic 배치 응답이 아님), 두 헤더를 함께 보내면 `/v1/messages`가 400 `Cannot provide both x-api-key and Authorization headers` → 두 스킴은 배타적이라 헤더를 추가해 재측정할 수 없다. 알 수 없는 경로(`/v1/zzz_nope`)는 coral 200으로 답하므로 라우트별 응답이 갈린다 | `BedrockMessagesTransport.request()`가 **`/v1/messages` 이외 경로의** 403 "Authorization header is missing"만 `TransportError(404, "route not served by the Anthropic-compatible handler …")`로 정규화. `/v1/messages`의 403은 진짜 인증 사고이므로 `broken`으로 남긴다(회귀 테스트가 양방향 고정) | `08ef92b` |
+
+증거 검사는 하나도 완화하지 않았다(정규화는 라우트 부재 판정에만 관여).
+
+**부수 발견**
+- `tool_search`가 이 경로에서 동작한다 — AWS 문서는 InvokeModel만 명시. 기대치는 `unknown`으로 두고 실측 판정에 맡긴다.
+- `browser_use`(`browser_toolset_20260801`)가 CP·InvokeModel에 이어 이 경로에서도 `tool_use`를 방출 → `undocumented` 3번째 사례.
+- `adaptive_thinking`은 `max_tokens`가 작으면 thinking 토큰이 예산을 다 쓴다(초기 수동 확인에서 16토큰 요청이 thinking 15토큰으로 소진).
+  프로브 예산은 그보다 커서 영향 없음.
+
 ---
 
 ### Task 13: Add the 5th surface — Bedrock runtime · Anthropic Messages API (`bedrock_messages`)

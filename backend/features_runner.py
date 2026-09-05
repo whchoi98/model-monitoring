@@ -21,7 +21,7 @@ def main() -> int:
     parser = argparse.ArgumentParser(description="Run one Claude API Features verification sweep and exit")
     parser.add_argument("--once", action="store_true", help="DB에 기록하는 실행 1회")
     parser.add_argument("--smoke", action="store_true", help="DB 없이 실행 후 표 출력 (로컬 검증)")
-    parser.add_argument("--surfaces", help="cp,mantle,bedrock_invoke,bedrock_converse")
+    parser.add_argument("--surfaces", help="cp,mantle,bedrock_messages,bedrock_invoke,bedrock_converse")
     parser.add_argument("--features", help="feature id 목록(콤마)")
     parser.add_argument("--models", help="fable-5-1,fable-5,opus-5,sonnet-5")
     parser.add_argument("--json", action="store_true", help="--smoke 결과를 JSON으로 출력")
