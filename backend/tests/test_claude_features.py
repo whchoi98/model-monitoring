@@ -411,3 +411,26 @@ def test_run_probe_rejects_unknown_status_string():
     t = _FakeT()
     out = P.run_probe(lambda t_, m, k: ("not_aplicable", {}), t, "claude-opus-5", "opus-5")
     assert out.status == "broken" and "unknown status" in out.evidence["reason"]
+
+
+from claude_features import runner as R
+
+
+def test_build_jobs_partitions_applicable_and_predecided():
+    jobs, decided = R.build_jobs(["mantle", "bedrock_converse"], ["messages_basic", "bash_tool", "context_window_1m"], ["fable-5-1", "opus-5"])
+    keys = {(j["feature"], j["surface"], j["model_key"]) for j in jobs}
+    assert ("messages_basic", "mantle", "opus-5") in keys
+    assert ("messages_basic", "mantle", "fable-5-1") not in keys  # GovCloud-only → decided
+    na = {(d["feature"], d["surface"], d["model_key"]): d["status"] for d in decided}
+    assert na[("messages_basic", "mantle", "fable-5-1")] == "not_applicable"
+    assert na[("bash_tool", "bedrock_converse", "opus-5")] == "not_applicable"
+    assert na[("context_window_1m", "mantle", "opus-5")] == "skipped"
+    for j in jobs:
+        assert j["documented"] in {"ga", "beta", "no", "unknown"} and j["model_id"]
+
+
+def test_default_job_count_matches_spec_estimate():
+    jobs, decided = R.build_jobs(None, None, None)
+    total = len(jobs) + len(decided)
+    assert total == 39 * 4 * 4  # feature × surface × model
+    assert 380 <= len(jobs) <= 470

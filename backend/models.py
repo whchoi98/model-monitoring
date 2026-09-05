@@ -171,6 +171,44 @@ class ParityResult(Base):
     error_message = Column(Text, nullable=True)
 
 
+class FeatureRun(Base):
+    """Claude API Features 검증 런 1회 (v2.23.0) — feature × surface × model 실행-증거 스윕."""
+
+    __tablename__ = "feature_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(Text, default="running")  # running | completed | failed
+    totals = Column(JSON, nullable=True)  # {supported, unsupported, broken, inconclusive, skipped, not_applicable, drift}
+    catalog_version = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
+class FeatureResult(Base):
+    """Claude API Features 프로브 1건 — 판정 + 문서 기대치 + 증거 (v2.23.0)."""
+
+    __tablename__ = "feature_results"
+    __table_args__ = (
+        Index("ix_feature_results_run_id", "run_id"),
+        Index("ix_feature_results_run_feature", "run_id", "feature"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("feature_runs.id"), nullable=False)
+    feature = Column(Text, nullable=False)      # claude_features.catalog.FEATURE_IDS
+    surface = Column(Text, nullable=False)      # cp | mantle | bedrock_invoke | bedrock_converse
+    model_key = Column(Text, nullable=False)    # fable-5-1 | fable-5 | opus-5 | sonnet-5
+    model_label = Column(Text, nullable=False)
+    model_id = Column(Text, nullable=True)      # surface별 실제 id (not_applicable이면 None)
+    status = Column(Text, nullable=False)       # supported | unsupported | broken | inconclusive | skipped | not_applicable
+    documented = Column(Text, nullable=False)   # ga | beta | no | unknown
+    verdict = Column(Text, nullable=False)      # match | drift | undocumented | none
+    latency_ms = Column(Float, nullable=True)
+    evidence = Column(JSON, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
 class GptBenchResult(Base):
     """GPT on AWS 벤치 호출 1건 (v2.18.0) — gptbench.run_cycle()이 15분마다 채널당 10건 기록.
 
