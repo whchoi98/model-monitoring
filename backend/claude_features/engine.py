@@ -22,6 +22,9 @@ _EXTRA_UNSUPPORTED = (
     "is not available on this platform",
     "not available on",
     "no route",
+    "http 404",
+    "http 405",
+    "not found",
 )
 
 

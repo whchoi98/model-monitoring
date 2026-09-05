@@ -1,0 +1,411 @@
+"""피처별 프로브 (v2.23.0) — 전송기 무관. 본문은 Anthropic Messages 스키마로만 작성한다.
+
+각 프로브: (transport, model_id, model_key) -> (passed|status, evidence)
+  True → supported / False → broken(증거 실패) / "inconclusive" | "not_applicable" | "unsupported" | "supported"
+run_probe()가 시간 측정·오류 분류·요청 스냅샷을 공통 처리한다.
+"""
+
+from __future__ import annotations
+
+import base64
+import json
+import time
+from dataclasses import dataclass, field
+from typing import Any, Callable
+
+from claude_features import engine
+from claude_features.transports import NormalizedResponse, Transport, TransportError
+from parity.catalog import supports_forced_tool_choice
+from parity.engine import check_canary, check_json_object, check_tool_roundtrip
+
+CANARY = "FEATURES_OK_7391"
+_MAX = 256
+_JSON_MAX = 512
+_THINK_MAX = 3000
+_TOOL_MAX = 1024
+# 캐시 최소 토큰(Fable/Opus 5 = 512, Sonnet 5 = 1,024)을 넉넉히 넘기는 영문 패딩 (~1,800 토큰)
+CACHE_PAD = ("This paragraph is stable context padding for the Claude API Features prompt-caching probe. "
+             "It exists only to exceed the minimum cacheable prefix length of every monitored model. ") * 40
+_JSON_SCHEMA = {"type": "object", "properties": {"city": {"type": "string"}, "country": {"type": "string"}},
+                "required": ["city", "country"], "additionalProperties": False}
+_ECHO_SCHEMA = {"type": "object", "properties": {"text": {"type": "string", "description": "text to echo"}},
+                "required": ["text"], "additionalProperties": False}
+_TOOL_PROMPT = f"Call the `echo` tool exactly once with text set to '{CANARY}'. Do not answer in prose."
+_SYSTEM_PROMPT = f"Begin every reply with the exact token {CANARY} followed by a space."
+_BASIC_PROMPT = "Reply with the single word: pong"
+
+
+@dataclass
+class ProbeOutcome:
+    status: str
+    latency_ms: float | None = None
+    evidence: dict = field(default_factory=dict)
+    error: str | None = None
+
+
+# ---------------------------------------------------------------- helpers
+
+def _msg(prompt: Any, **kw: Any) -> dict:
+    content = prompt if isinstance(prompt, list) else prompt
+    body = {"max_tokens": _MAX, "messages": [{"role": "user", "content": content}]}
+    body.update(kw)
+    return body
+
+
+def _tool_choice(model_id: str, name: str) -> dict:
+    return {"type": "tool", "name": name} if supports_forced_tool_choice(model_id) else {"type": "auto"}
+
+
+def _echo_tool(strict: bool = False, eager: bool = False) -> dict:
+    tool: dict = {"name": "echo", "description": "Returns the given text unchanged.", "input_schema": _ECHO_SCHEMA}
+    if strict:
+        tool["strict"] = True
+    if eager:
+        tool["eager_input_streaming"] = True
+    return tool
+
+
+def _trim(v: Any) -> Any:
+    if isinstance(v, str) and len(v) > 200:
+        return f"{v[:200]}… ({len(v)} chars)"
+    if isinstance(v, dict):
+        return {k: _trim(x) for k, x in v.items()}
+    if isinstance(v, (list, tuple)):
+        return [_trim(x) for x in v]
+    return v
+
+
+def _req(model_id: str, body: dict | None = None, betas=(), **extra: Any) -> dict:
+    snap: dict = {"model": model_id}
+    if body:
+        snap.update(_trim(body))
+    if betas:
+        snap["anthropic_beta"] = list(betas)
+    snap.update(_trim(extra))
+    return snap
+
+
+def _snippet(n: NormalizedResponse, limit: int = 300) -> str:
+    return engine.text_of(n.content)[:limit]
+
+
+def _content_deltas(events: list[dict], delta_type: str) -> int:
+    return sum(1 for e in events if e.get("type") == "content_block_delta"
+               and (e.get("delta") or {}).get("type") == delta_type)
+
+
+def _route_or_unsupported(t: Transport, route: str) -> tuple[str, dict] | None:
+    """라우트가 없는 전송기(Bedrock 두 열)는 호출 없이 unsupported로 판정."""
+    if route not in t.routes:
+        return "unsupported", {"reason": f"no route: {t.surface} endpoint has no {route} API"}
+    return None
+
+
+def _tiny_pdf(text: str) -> bytes:
+    """텍스트 한 줄이 든 최소 1페이지 PDF (Helvetica, ASCII만)."""
+    stream = f"BT /F1 24 Tf 72 700 Td ({text}) Tj ET".encode()
+    objs = [
+        b"<< /Type /Catalog /Pages 2 0 R >>",
+        b"<< /Type /Pages /Kids [3 0 R] /Count 1 >>",
+        b"<< /Type /Page /Parent 2 0 R /MediaBox [0 0 612 792] /Resources << /Font << /F1 5 0 R >> >> /Contents 4 0 R >>",
+        b"<< /Length " + str(len(stream)).encode() + b" >>\nstream\n" + stream + b"\nendstream",
+        b"<< /Type /Font /Subtype /Type1 /BaseFont /Helvetica >>",
+    ]
+    out = bytearray(b"%PDF-1.4\n")
+    offsets = []
+    for i, o in enumerate(objs, start=1):
+        offsets.append(len(out))
+        out += f"{i} 0 obj\n".encode() + o + b"\nendobj\n"
+    xref = len(out)
+    out += f"xref\n0 {len(objs) + 1}\n0000000000 65535 f \n".encode()
+    for off in offsets:
+        out += f"{off:010d} 00000 n \n".encode()
+    out += f"trailer\n<< /Size {len(objs) + 1} /Root 1 0 R >>\nstartxref\n{xref}\n%%EOF\n".encode()
+    return bytes(out)
+
+
+def run_probe(fn: Callable, t: Transport, model_id: str, model_key: str) -> ProbeOutcome:
+    start = time.time()
+    try:
+        result, evidence = fn(t, model_id, model_key)
+        latency = (time.time() - start) * 1000
+        evidence.setdefault("request", _req(model_id))
+        if result is True:
+            return ProbeOutcome("supported", latency, evidence)
+        if result is False:
+            evidence.setdefault("reason", "evidence check failed")
+            return ProbeOutcome("broken", latency, evidence)
+        return ProbeOutcome(str(result), latency, evidence)
+    except TransportError as exc:
+        latency = (time.time() - start) * 1000
+        msg = str(exc)
+        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id)}, error=msg[:1500])
+    except Exception as exc:  # noqa: BLE001 — 네트워크/파싱 오류 전체
+        latency = (time.time() - start) * 1000
+        msg = f"{type(exc).__name__}: {exc}"
+        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id)}, error=msg[:1500])
+
+
+# ---------------------------------------------------------------- core
+
+def probe_messages_basic(t, model_id, model_key):
+    body = _msg(_BASIC_PROMPT)
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX}}
+        n = t.converse(model_id, **kw)
+        return bool(engine.text_of(n.content).strip()), {"request": _req(model_id, kw), "response_snippet": _snippet(n), "stop_reason": n.stop_reason}
+    n = t.messages(model_id, body)
+    return bool(engine.text_of(n.content).strip()), {"request": _req(model_id, body), "response_snippet": _snippet(n), "stop_reason": n.stop_reason}
+
+
+def probe_streaming(t, model_id, model_key):
+    prompt = "Count from 1 to 30 separated by commas."
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": _MAX}}
+        n = t.converse(model_id, stream=True, **kw)
+        deltas = sum(1 for e in n.events if "contentBlockDelta" in e)
+        return deltas >= 2, {"request": _req(model_id, kw, stream=True), "content_events": deltas}
+    body = _msg(prompt)
+    n = t.messages(model_id, body, stream=True)
+    deltas = _content_deltas(n.events, "text_delta")
+    return deltas >= 2, {"request": _req(model_id, body, stream=True), "content_events": deltas, "response_snippet": _snippet(n)}
+
+
+def probe_system_prompt(t, model_id, model_key):
+    prompt = "Say hello in one short sentence."
+    if t.surface == "bedrock_converse":
+        kw = {"system": [{"text": _SYSTEM_PROMPT}], "messages": [{"role": "user", "content": [{"text": prompt}]}],
+              "inferenceConfig": {"maxTokens": _MAX}}
+        n = t.converse(model_id, **kw)
+    else:
+        kw = _msg(prompt, system=_SYSTEM_PROMPT)
+        n = t.messages(model_id, kw)
+    text = engine.text_of(n.content)
+    return check_canary(text, CANARY), {"request": _req(model_id, kw), "response_snippet": text[:300]}
+
+
+def _tool_call_evidence(n: NormalizedResponse, name: str) -> tuple[bool, dict]:
+    tu = next((b for b in n.content if b.get("type") == "tool_use" and b.get("name") == name), None)
+    call = {"name": name, "arguments": tu.get("input")} if tu else None
+    return check_tool_roundtrip(call, CANARY), {"tool_call": _trim(call), "stop_reason": n.stop_reason}
+
+
+def probe_tool_use(t, model_id, model_key):
+    if t.surface == "bedrock_converse":
+        choice = {"tool": {"name": "echo"}} if supports_forced_tool_choice(model_id) else {"auto": {}}
+        kw = {"messages": [{"role": "user", "content": [{"text": _TOOL_PROMPT}]}], "inferenceConfig": {"maxTokens": _TOOL_MAX},
+              "toolConfig": {"tools": [{"toolSpec": {"name": "echo", "description": "Returns the given text unchanged.",
+                                                     "inputSchema": {"json": _ECHO_SCHEMA}}}], "toolChoice": choice}}
+        n = t.converse(model_id, **kw)
+    else:
+        kw = _msg(_TOOL_PROMPT, max_tokens=_TOOL_MAX, tools=[_echo_tool()], tool_choice=_tool_choice(model_id, "echo"))
+        n = t.messages(model_id, kw)
+    ok, ev = _tool_call_evidence(n, "echo")
+    return ok, {"request": _req(model_id, kw), **ev}
+
+
+# ---------------------------------------------------------------- model capabilities
+
+def probe_context_window_1m(t, model_id, model_key):
+    gate = _route_or_unsupported(t, "models")
+    if gate:
+        return gate
+    _, obj = t.request("GET", f"/v1/models/{model_id}")
+    caps = {k: obj.get(k) for k in ("max_input_tokens", "max_tokens")}
+    return obj.get("max_input_tokens") == 1_000_000, {"request": _req(model_id, path=f"/v1/models/{model_id}"), **caps}
+
+
+def probe_adaptive_thinking(t, model_id, model_key):
+    prompt = "What is the third prime number greater than 100? Think it through, then answer with just the number."
+    thinking = {"type": "adaptive", "display": "summarized"}
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": _THINK_MAX},
+              "additionalModelRequestFields": {"thinking": thinking, "output_config": {"effort": "medium"}}}
+        n = t.converse(model_id, **kw)
+    else:
+        kw = _msg(prompt, max_tokens=_THINK_MAX, thinking=thinking, output_config={"effort": "medium"})
+        n = t.messages(model_id, kw)
+    th = engine.find_block(n.content, "thinking")
+    return th is not None, {"request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content],
+                            "thinking_chars": len((th or {}).get("thinking") or ""), "response_snippet": _snippet(n)}
+
+
+def probe_extended_thinking(t, model_id, model_key):
+    prompt = "What is 17 * 23? Answer with just the number."
+    thinking = {"type": "enabled", "budget_tokens": 1024}
+    try:
+        if t.surface == "bedrock_converse":
+            kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": 2048},
+                  "additionalModelRequestFields": {"thinking": thinking}}
+            n = t.converse(model_id, **kw)
+        else:
+            kw = _msg(prompt, max_tokens=2048, thinking=thinking)
+            n = t.messages(model_id, kw)
+    except TransportError as exc:
+        low = str(exc).lower()
+        if "thinking" in low and ("not supported" in low or "adaptive" in low or "validation" in low):
+            return "not_applicable", {"request": _req(model_id, thinking=thinking),
+                                      "reason": "adaptive-only model rejects budget_tokens as documented", "error": str(exc)[:500]}
+        raise
+    return engine.has_block(n.content, "thinking"), {"request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content]}
+
+
+def probe_batch_processing(t, model_id, model_key):
+    gate = _route_or_unsupported(t, "batches")
+    if gate:
+        return gate
+    req = {"requests": [{"custom_id": "features-probe-1",
+                         "params": {"model": model_id, "max_tokens": 16, "messages": [{"role": "user", "content": "ping"}]}}]}
+    _, created = t.request("POST", "/v1/messages/batches", json=req)
+    bid = created.get("id")
+    _, got = t.request("GET", f"/v1/messages/batches/{bid}")
+    try:
+        t.request("POST", f"/v1/messages/batches/{bid}/cancel")
+    except TransportError:
+        pass
+    ok = bool(bid) and got.get("processing_status") in ("in_progress", "canceling", "ended")
+    return ok, {"request": _req(model_id, req), "batch_id": bid, "processing_status": got.get("processing_status")}
+
+
+def _doc_question(t, model_id, doc_block: dict, converse_block: dict, question: str) -> tuple[NormalizedResponse, dict]:
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [converse_block, {"text": question}]}], "inferenceConfig": {"maxTokens": _JSON_MAX}}
+        return t.converse(model_id, **kw), kw
+    kw = _msg([doc_block, {"type": "text", "text": question}], max_tokens=_JSON_MAX)
+    return t.messages(model_id, kw), kw
+
+
+def probe_citations(t, model_id, model_key):
+    text = f"The code word is {CANARY}. The sky is blue. Water boils at 100 degrees Celsius."
+    doc = {"type": "document", "source": {"type": "text", "media_type": "text/plain", "data": text},
+           "title": "Probe document", "citations": {"enabled": True}}
+    cdoc = {"document": {"format": "txt", "name": "probe", "source": {"text": text}, "citations": {"enabled": True}}}
+    n, kw = _doc_question(t, model_id, doc, cdoc, "What is the code word? Cite the document.")
+    cited = [b for b in n.content if b.get("type") == "text" and b.get("citations")]
+    return bool(cited), {"request": _req(model_id, kw), "citation_blocks": len(cited),
+                         "first_citation": _trim((cited[0]["citations"][0] if cited else None)), "response_snippet": _snippet(n)}
+
+
+def probe_search_results(t, model_id, model_key):
+    text = f"The code word is {CANARY}."
+    sr = {"type": "search_result", "source": "https://example.com/probe", "title": "Probe result",
+          "content": [{"type": "text", "text": text}], "citations": {"enabled": True}}
+    csr = {"searchResult": {"source": "https://example.com/probe", "title": "Probe result",
+                            "content": [{"text": text}], "citations": {"enabled": True}}}
+    n, kw = _doc_question(t, model_id, sr, csr, "What is the code word? Cite your source.")
+    cites = [c for b in n.content if b.get("type") == "text" for c in (b.get("citations") or [])]
+    ok = any((c or {}).get("type") == "search_result_location" for c in cites) or (t.surface == "bedrock_converse" and bool(cites))
+    return ok, {"request": _req(model_id, kw), "citations": _trim(cites[:2]), "response_snippet": _snippet(n)}
+
+
+def probe_pdf_support(t, model_id, model_key):
+    pdf = _tiny_pdf(CANARY)
+    b64 = base64.b64encode(pdf).decode()
+    doc = {"type": "document", "source": {"type": "base64", "media_type": "application/pdf", "data": b64}}
+    cdoc = {"document": {"format": "pdf", "name": "probe", "source": {"bytes": pdf}}}
+    n, kw = _doc_question(t, model_id, doc, cdoc, "What code word is written in the document? Reply with only the word.")
+    text = engine.text_of(n.content)
+    return check_canary(text, CANARY), {"request": _req(model_id, {"document": f"pdf {len(pdf)} bytes"}), "response_snippet": text[:300]}
+
+
+def probe_data_residency(t, model_id, model_key):
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX},
+              "additionalModelRequestFields": {"inference_geo": "us"}}
+        n = t.converse(model_id, **kw)
+        return n.usage.get("inference_geo") == "us", {"request": _req(model_id, kw), "usage": n.usage}
+    kw = _msg(_BASIC_PROMPT, inference_geo="us")
+    n = t.messages(model_id, kw)
+    ev = {"request": _req(model_id, kw), "usage_inference_geo": n.usage.get("inference_geo")}
+    try:
+        t.messages(model_id, _msg(_BASIC_PROMPT, inference_geo="mars"))
+        ev["negative_control"] = "accepted (not validated)"
+    except TransportError as exc:
+        ev["negative_control"] = f"rejected: {str(exc)[:160]}"
+    return n.usage.get("inference_geo") == "us", ev
+
+
+def probe_effort(t, model_id, model_key):
+    def call(effort: str):
+        if t.surface == "bedrock_converse":
+            kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX},
+                  "additionalModelRequestFields": {"output_config": {"effort": effort}}}
+            return t.converse(model_id, **kw), kw
+        kw = _msg(_BASIC_PROMPT, output_config={"effort": effort})
+        return t.messages(model_id, kw), kw
+
+    n, kw = call("low")
+    ev = {"request": _req(model_id, kw), "output_tokens_low": n.usage.get("output_tokens"), "response_snippet": _snippet(n)}
+    try:
+        call("ultra")
+        ev["negative_control"] = "accepted (effort not validated)"
+        return "inconclusive", ev
+    except TransportError as exc:
+        ev["negative_control"] = f"rejected: {str(exc)[:200]}"
+        return "effort" in str(exc).lower(), ev
+
+
+def probe_fallback_credit(t, model_id, model_key):
+    beta = "fallback-credit-2026-06-01" if t.surface.startswith("bedrock") else "fallback-credit-2026-07-01"
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX},
+              "additionalModelRequestFields": {"anthropic_beta": [beta]}}
+        n = t.converse(model_id, **kw)
+        return True, {"request": _req(model_id, kw), "stop_reason": n.stop_reason, "verification": "acceptance"}
+    kw = _msg(_BASIC_PROMPT)
+    n = t.messages(model_id, kw, betas=[beta])
+    return True, {"request": _req(model_id, kw, betas=[beta]), "stop_reason": n.stop_reason,
+                  "stop_details": n.top.get("stop_details"), "verification": "acceptance"}
+
+
+def probe_server_side_fallback(t, model_id, model_key):
+    beta = "server-side-fallback-2026-07-01"
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX},
+              "additionalModelRequestFields": {"fallbacks": "default", "anthropic_beta": [beta]}}
+        n = t.converse(model_id, **kw)
+        return True, {"request": _req(model_id, kw), "model": n.top.get("model"), "verification": "acceptance"}
+    kw = _msg(_BASIC_PROMPT, fallbacks="default")
+    n = t.messages(model_id, kw, betas=[beta])
+    return True, {"request": _req(model_id, kw, betas=[beta]), "served_model": n.top.get("model"),
+                  "content_types": [b.get("type") for b in n.content], "verification": "acceptance"}
+
+
+def probe_structured_outputs(t, model_id, model_key):
+    prompt = "Give the capital city of South Korea and its country as JSON."
+    if t.surface == "bedrock_converse":
+        kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": _JSON_MAX},
+              "outputConfig": {"textFormat": {"type": "json_schema", "structure": {"jsonSchema": {"schema": json.dumps(_JSON_SCHEMA)}}}}}
+        n = t.converse(model_id, **kw)
+    else:
+        kw = _msg(prompt, max_tokens=_JSON_MAX, output_config={"format": {"type": "json_schema", "schema": _JSON_SCHEMA}})
+        n = t.messages(model_id, kw)
+    text = engine.text_of(n.content)
+    return check_json_object(text, "city"), {"request": _req(model_id, kw), "response_snippet": text[:300]}
+
+
+def probe_strict_tool_use(t, model_id, model_key):
+    if t.surface == "bedrock_converse":
+        choice = {"tool": {"name": "echo"}} if supports_forced_tool_choice(model_id) else {"auto": {}}
+        kw = {"messages": [{"role": "user", "content": [{"text": _TOOL_PROMPT}]}], "inferenceConfig": {"maxTokens": _TOOL_MAX},
+              "toolConfig": {"tools": [{"toolSpec": {"name": "echo", "description": "Returns the given text unchanged.",
+                                                     "inputSchema": {"json": _ECHO_SCHEMA}, "strict": True}}], "toolChoice": choice}}
+        n = t.converse(model_id, **kw)
+    else:
+        kw = _msg(_TOOL_PROMPT, max_tokens=_TOOL_MAX, tools=[_echo_tool(strict=True)], tool_choice=_tool_choice(model_id, "echo"))
+        n = t.messages(model_id, kw)
+    tu = next((b for b in n.content if b.get("type") == "tool_use" and b.get("name") == "echo"), None)
+    inp = (tu or {}).get("input")
+    ok = isinstance(inp, dict) and set(inp) == {"text"} and CANARY in str(inp.get("text"))
+    return ok, {"request": _req(model_id, kw), "tool_input": _trim(inp), "stop_reason": n.stop_reason}
+
+
+PROBES: dict[str, Callable] = {
+    "messages_basic": probe_messages_basic, "streaming": probe_streaming, "system_prompt": probe_system_prompt,
+    "tool_use": probe_tool_use, "context_window_1m": probe_context_window_1m, "adaptive_thinking": probe_adaptive_thinking,
+    "batch_processing": probe_batch_processing, "citations": probe_citations, "data_residency": probe_data_residency,
+    "effort": probe_effort, "fallback_credit": probe_fallback_credit, "pdf_support": probe_pdf_support,
+    "search_results": probe_search_results, "server_side_fallback": probe_server_side_fallback,
+    "structured_outputs": probe_structured_outputs, "strict_tool_use": probe_strict_tool_use,
+    "extended_thinking": probe_extended_thinking,
+}

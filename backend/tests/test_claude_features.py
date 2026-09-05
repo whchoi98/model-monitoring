@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from claude_features import catalog, engine, transports as T
+from claude_features import catalog, engine, probes as P, transports as T
 
 
 def test_surfaces_and_models():
@@ -301,3 +301,66 @@ def test_build_transport_dispatch(monkeypatch):
     monkeypatch.setattr(T, "_boto_client", lambda region: object())
     assert isinstance(T.build_transport("bedrock_invoke"), T.BedrockInvokeTransport)
     assert isinstance(T.build_transport("bedrock_converse"), T.BedrockConverseTransport)
+
+
+def test_tiny_pdf_is_valid_pdf_containing_text():
+    pdf = P._tiny_pdf("HELLO_7391")
+    assert pdf.startswith(b"%PDF-1.4") and pdf.rstrip().endswith(b"%%EOF")
+    assert b"HELLO_7391" in pdf
+
+
+def test_cache_pad_is_long_enough():
+    # 최소 캐시 토큰(Sonnet 5 = 1,024)을 넉넉히 넘겨야 함 — 영문 4자≈1토큰 기준 1,500토큰 ≈ 6,000자
+    assert len(P.CACHE_PAD) >= 6000
+
+
+def test_tool_choice_respects_fable_51():
+    assert P._tool_choice("claude-fable-5-1", "echo") == {"type": "auto"}
+    assert P._tool_choice("anthropic.claude-opus-5", "echo") == {"type": "tool", "name": "echo"}
+
+
+class _FakeT:
+    surface = "cp"
+    routes = frozenset({"messages", "count_tokens"})
+
+    def __init__(self, resp=None, exc=None):
+        self.resp, self.exc, self.calls = resp, exc, []
+
+    def messages(self, model_id, body, betas=(), stream=False):
+        self.calls.append(("messages", body, tuple(betas), stream))
+        if self.exc:
+            raise self.exc
+        return self.resp
+
+    def count_tokens(self, model_id, body, betas=()):
+        return {"input_tokens": 42}
+
+
+def test_run_probe_classifies_transport_error():
+    from claude_features.transports import TransportError
+    t = _FakeT(exc=TransportError(400, 'thinking.type.enabled is not supported for this model'))
+    out = P.run_probe(P.PROBES["messages_basic"], t, "claude-opus-5", "opus-5")
+    assert out.status == "unsupported" and out.error.startswith("HTTP 400")
+    assert out.evidence["request"]["model"] == "claude-opus-5"
+
+
+def test_run_probe_supported_and_evidence():
+    from claude_features.transports import NormalizedResponse
+    t = _FakeT(resp=NormalizedResponse(content=[{"type": "text", "text": "pong"}], usage={"input_tokens": 3}, stop_reason="end_turn"))
+    out = P.run_probe(P.PROBES["messages_basic"], t, "claude-opus-5", "opus-5")
+    assert out.status == "supported" and out.evidence["response_snippet"] == "pong"
+
+
+def test_extended_thinking_rejection_is_not_applicable():
+    from claude_features.transports import TransportError
+    t = _FakeT(exc=TransportError(400, '"thinking.type.enabled" is not supported for this model. Use adaptive.'))
+    out = P.run_probe(P.PROBES["extended_thinking"], t, "claude-fable-5", "fable-5")
+    assert out.status == "not_applicable"
+
+
+def test_route_less_endpoint_feature_is_unsupported_without_call():
+    t = _FakeT()
+    t.surface, t.routes = "bedrock_invoke", frozenset({"messages", "count_tokens"})
+    out = P.run_probe(P.PROBES["batch_processing"], t, "global.anthropic.claude-opus-5", "opus-5")
+    assert out.status == "unsupported"
+    assert t.calls == [] and "no route" in out.evidence["reason"]
