@@ -2,7 +2,7 @@
 
 import pytest
 
-from claude_features import catalog, engine
+from claude_features import catalog, engine, transports as T
 
 
 def test_surfaces_and_models():
@@ -101,3 +101,59 @@ def test_block_helpers():
     assert engine.usage_int({"cache_read_input_tokens": 12}, "cache_read_input_tokens", "cacheReadInputTokens") == 12
     assert engine.usage_int({"cacheReadInputTokens": 5}, "cache_read_input_tokens", "cacheReadInputTokens") == 5
     assert engine.usage_int(None, "x") == 0
+
+
+def test_invoke_body_strips_model_and_injects_version_and_betas():
+    body = {"model": "x", "stream": True, "max_tokens": 16, "messages": []}
+    out = T.invoke_body(body, ["beta-a", "beta-b"])
+    assert "model" not in out and "stream" not in out
+    assert out["anthropic_version"] == "bedrock-2023-05-31"
+    assert out["anthropic_beta"] == ["beta-a", "beta-b"]
+    assert T.invoke_body({"messages": []}, []).get("anthropic_beta") is None
+
+
+def test_beta_header_joins_with_comma():
+    assert T.beta_header([]) == {}
+    assert T.beta_header(["a", "b"]) == {"anthropic-beta": "a,b"}
+
+
+def test_parse_sse_extracts_json_events():
+    text = 'event: message_start\ndata: {"type":"message_start"}\n\nevent: ping\ndata: {"type":"ping"}\n\ndata: [DONE]\n\n'
+    evs = T.parse_sse(text)
+    assert [e["type"] for e in evs] == ["message_start", "ping"]
+
+
+def test_normalize_converse_maps_blocks_and_usage():
+    resp = {
+        "output": {"message": {"content": [
+            {"text": "hello"},
+            {"toolUse": {"toolUseId": "t1", "name": "echo", "input": {"text": "X"}}},
+            {"reasoningContent": {"reasoningText": {"text": "hmm"}}},
+            {"citationsContent": {"content": [{"text": "cited"}], "citations": [{"title": "d"}]}},
+        ]}},
+        "usage": {"inputTokens": 10, "outputTokens": 5, "cacheReadInputTokens": 3, "cacheWriteInputTokens": 7},
+        "stopReason": "end_turn",
+    }
+    n = T.normalize_converse(resp)
+    types = [b["type"] for b in n.content]
+    assert types == ["text", "tool_use", "thinking", "text"]
+    assert n.content[1]["input"] == {"text": "X"} and n.content[1]["name"] == "echo"
+    assert n.content[3]["citations"] == [{"title": "d"}]
+    assert n.usage == {"input_tokens": 10, "output_tokens": 5, "cache_read_input_tokens": 3, "cache_creation_input_tokens": 7}
+    assert n.stop_reason == "end_turn"
+
+
+def test_normalize_anthropic_separates_top_level():
+    obj = {"id": "m", "content": [{"type": "text", "text": "a"}], "usage": {"input_tokens": 1},
+           "stop_reason": "end_turn", "container": {"id": "c1"}}
+    n = T.normalize_anthropic(obj)
+    assert n.top["container"] == {"id": "c1"} and "content" not in n.top
+    assert n.stop_reason == "end_turn" and n.events == []
+
+
+def test_routes_per_surface(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    assert "batches" in T.CpTransport().routes
+    assert T.BedrockInvokeTransport.routes == frozenset({"messages", "count_tokens"})
+    assert T.BedrockConverseTransport.routes == frozenset({"converse", "count_tokens"})
