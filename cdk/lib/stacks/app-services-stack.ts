@@ -225,6 +225,10 @@ export class AppServicesStack extends cdk.Stack {
       imageOverride: backendImage,
       containerPort: 8000,
       healthCheckPath: "/api/health",
+      // 2026-09-06 v2.23.1 배포 실사고: lifespan 마이그레이션 블록이 ~130s 걸려(probe_results 전수 스캔
+      // UPDATE/DELETE 29문장) 기본 유예 60s 안에 /api/health가 열리지 않음 → 3회 실패 → 서킷 브레이커 롤백.
+      // v2.23.0은 한 문장이 30s statement_timeout으로 조기 중단돼 36s에 기동한 우연. 유예 300s로 여유 확보.
+      healthCheckGracePeriod: cdk.Duration.seconds(300),
       environment: backendEnv,
       secrets: backendSecrets,
       taskRolePolicies: [props.agentCoreMemoryAccessPolicy],

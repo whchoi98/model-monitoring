@@ -39,6 +39,9 @@ export interface FargateServiceProps {
   readonly memoryMiB?: number; // default 1024
   readonly desiredCount?: number; // default 1
   readonly maxCapacity?: number; // default 3
+  /** ALB 헬스체크 유예. 미지정 시 ECS/CDK 기본 60s. backend는 기동 시 DB 마이그레이션 블록이
+   *  ~130s(2026-09-06 실측: probe_results 전수 스캔 UPDATE/DELETE 29문장)라 60s면 서킷 브레이커 롤백. */
+  readonly healthCheckGracePeriod?: cdk.Duration;
 }
 
 export class FargateServiceConstruct extends Construct {
@@ -150,6 +153,7 @@ export class FargateServiceConstruct extends Construct {
       minHealthyPercent: 50,
       maxHealthyPercent: 200,
       circuitBreaker: { rollback: true },
+      healthCheckGracePeriod: props.healthCheckGracePeriod,
     });
 
     // ---------------------------------------------------------------------
