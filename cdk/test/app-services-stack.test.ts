@@ -42,6 +42,13 @@ describe("AppServicesStack", () => {
     template.resourceCountIs("AWS::ECS::Service", 2);
   });
 
+  it("backend Service는 헬스체크 유예 300s (기동 마이그레이션 ~130s 실측, 2026-09-06 롤백 재발 방지)", () => {
+    template.hasResourceProperties("AWS::ECS::Service", Match.objectLike({
+      ServiceName: "backend",
+      HealthCheckGracePeriodSeconds: 300,
+    }));
+  });
+
   it("Task Definition이 2개 생성되고 awsvpc 모드를 사용한다", () => {
     template.resourceCountIs("AWS::ECS::TaskDefinition", 2);
     template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
