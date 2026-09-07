@@ -752,3 +752,85 @@ def test_cache_probes_persist_blocked_category_evidence(probe):
     assert ev["stop_details"][0]["category"] == "reasoning_extraction"
     # 증거는 그대로 보존돼야 한다 (usage를 숨기지 않는다)
     assert ev["first_usage"]["cache_creation_input_tokens"] == 2203
+
+
+# ==================================================================== v2.24.0 — Task 1: engine.classify 회귀 핀 (D8(b) 전제)
+# 라이브 run #3(2026-09-06) 증거·parity-ref 샘플에서 뽑은 대표 오류 문자열. classify는 소문자 부분 문자열 매칭이므로
+# D8(b)가 오류 문자열에 AWS operation 이름·빈 본문 표기를 덧붙일 때 새 문구에 마커("not found", "no route" 등)가
+# 끼어들면 broken→unsupported로 뒤집힌다 — 이 핀이 그 회귀를 막는다.
+_CLASSIFY_PINS = [
+    # (id, 오류 문자열 그대로, 기대 판정)
+    ("bedrock-count-tokens", "HTTP 400: ValidationException: The provided model doesn't support counting tokens.", "unsupported"),
+    ("invoke-structured-extra-inputs", "HTTP 400: ValidationException: output_config.format: Extra inputs are not permitted", "unsupported"),
+    ("mantle-data-retention", 'HTTP 400: {"type": "error", "request_id": "req_37kb", "error": {"type": "invalid_request_error", '
+                              '"message": "data retention mode \'default\' is not available for this model"}}', "unsupported"),
+    ("mantle-beta-header", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+                           '"message": "Unexpected value(s) `fallback-credit-2026-07-01` for the `anthropic-beta` header"}}', "unsupported"),
+    ("invoke-tool-type", "HTTP 400: ValidationException: tool type 'advisor_20260301' is not supported for this model", "unsupported"),
+    ("cp-strict-extra-inputs", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+                               '"message": "tools.0.custom.strict: Extra inputs are not permitted"}}', "unsupported"),
+    ("cp-fallbacks-param", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+                           '"message": "\'claude-sonnet-5\' does not support the `fallbacks` parameter."}, "request_id": "req_011Ce"}', "unsupported"),
+    ("mantle-empty-404", "HTTP 404: ", "unsupported"),
+    ("coral-unknown-operation", "HTTP 404: UnknownOperationException: route not available on this endpoint", "unsupported"),
+    ("bedrock-messages-403-as-404", 'HTTP 404: route not served by the Anthropic-compatible handler (403 {"Message": "Authorization header is missing"})',
+     "unsupported"),
+    ("no-route-gate", "no route: bedrock_invoke has no HTTP endpoint for /v1/messages/batches", "unsupported"),
+    ("thinking-enabled-rejected", 'HTTP 400: ValidationException: "thinking.type.enabled" is not supported for this model. '
+                                  'Use "thinking.type.adaptive" and "output_config.effort" to control thinking behavior.', "unsupported"),
+    ("mantle-model-does-not-exist", 'HTTP 404: {"type": "error", "error": {"type": "not_found_error", '
+                                    '"message": "The model \'anthropic.claude-fable-5-1\' does not exist or you do not have access to it."}}', "unsupported"),
+    ("with-fallback-tail", "HTTP 400: ValidationException: tools.0: Input tag 'computer_toolset_20260801' found using 'type' does not match "
+                           "any of the expected tags: 'bash_20250124' | attempts=[{\"attempt\": \"computer_toolset_20260801\", \"result\": \"HTTP 400\"}]",
+     "unsupported"),
+    ("bedrock-request-not-valid", "HTTP 400: ValidationException: request is not valid", "unsupported"),
+    ("bedrock-messages-403-auth", 'HTTP 403: {"Message": "Authorization header is missing"}', "broken"),
+    ("empty-400", "HTTP 400: ", "broken"),
+    ("rate-limit-429", 'HTTP 429: {"type": "error", "error": {"type": "rate_limit_error", "message": "Too many requests"}}', "broken"),
+    ("api-error-500", 'HTTP 500: {"type":"error","error":{"type":"api_error","message":"Internal server error"}}', "broken"),
+    ("access-denied", "HTTP 403: AccessDeniedException: User: arn:aws:sts::1:assumed-role/x is not authorized to perform: bedrock:InvokeModel",
+     "broken"),
+    ("effort-unknown-variant", "HTTP 400: ValidationException: unknown variant `ultra`, expected one of `low`, `medium`, `high`, `xhigh`, "
+                               "`max`, `Unhandled` at line 1 column 125", "broken"),
+    ("read-timeout", "ReadTimeout: HTTPSConnectionPool(host='aws-external-anthropic.us-east-2.api.aws', port=443): Read timed out.", "broken"),
+    ("connect-error", "ConnectError: [Errno 111] Connection refused", "broken"),
+    ("transport-init", "transport init: KeyError: 'ANTHROPIC_API_KEY'", "broken"),
+]
+
+
+@pytest.mark.parametrize("msg,expected", [(m, e) for _, m, e in _CLASSIFY_PINS], ids=[i for i, _, _ in _CLASSIFY_PINS])
+def test_classify_pins_live_error_strings(msg, expected):
+    assert engine.classify(msg) == expected
+
+
+# D8(b) 이후 형식 ↔ 현재 형식 — 같은 판정이어야 한다 (operation 괄호 표기, "(empty body) METHOD path")
+_CLASSIFY_FORMAT_PAIRS = [
+    # (현재 형식, D8(b) 형식, 기대 판정)
+    ("HTTP 400: ValidationException: The provided model doesn't support counting tokens.",
+     "HTTP 400: ValidationException (CountTokens): The provided model doesn't support counting tokens.", "unsupported"),
+    ("HTTP 400: ValidationException: output_config.format: Extra inputs are not permitted",
+     "HTTP 400: ValidationException (InvokeModel): output_config.format: Extra inputs are not permitted", "unsupported"),
+    ('HTTP 400: ValidationException: "thinking.type.enabled" is not supported for this model.',
+     'HTTP 400: ValidationException (Converse): "thinking.type.enabled" is not supported for this model.', "unsupported"),
+    ("HTTP 400: ValidationException: request is not valid",
+     "HTTP 400: ValidationException (InvokeModelWithResponseStream): request is not valid", "unsupported"),
+    ("HTTP 403: AccessDeniedException: User: arn:aws:sts::1:assumed-role/x is not authorized to perform: bedrock:InvokeModel",
+     "HTTP 403: AccessDeniedException (InvokeModel): User: arn:aws:sts::1:assumed-role/x is not authorized to perform: bedrock:InvokeModel",
+     "broken"),
+    ("HTTP 429: ThrottlingException: Too many requests, please wait before trying again.",
+     "HTTP 429: ThrottlingException (Converse): Too many requests, please wait before trying again.", "broken"),
+    ("HTTP 404: ", "HTTP 404: (empty body) GET /v1/files", "unsupported"),
+    ("HTTP 404: ", "HTTP 404: (empty body) POST /v1/messages/batches", "unsupported"),
+    ("HTTP 404: ", "HTTP 404: (empty body) GET /v1/models/anthropic.claude-fable-5", "unsupported"),
+    ("HTTP 405: ", "HTTP 405: (empty body) DELETE /v1/files/file_01", "unsupported"),
+    ("HTTP 400: ", "HTTP 400: (empty body) POST /v1/messages", "broken"),
+    ("HTTP 400: ", "HTTP 400: (empty body) POST /v1/messages (stream)", "broken"),
+    ("HTTP 403: ", "HTTP 403: (empty body) GET /v1/models/anthropic.claude-fable-5", "broken"),
+    ("HTTP 500: ", "HTTP 500: (empty body) POST /v1/messages", "broken"),
+]
+
+
+@pytest.mark.parametrize("before,after,expected", _CLASSIFY_FORMAT_PAIRS)
+def test_classify_unchanged_by_d8b_error_context(before, after, expected):
+    assert engine.classify(before) == expected
+    assert engine.classify(after) == expected
