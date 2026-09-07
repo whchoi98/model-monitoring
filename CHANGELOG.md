@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Fixed
+- **Backend startup no longer full-scans `probe_results` 29 times** — the lifespan migration block runs label rename/delete statements keyed by `model_name` on every boot; with no index on that column each statement was a sequential scan (~130s total on the current data volume — the root cause of the 2026-09-06 v2.23.1 rollout rollback). Added `ix_probe_results_model_name` (created `CONCURRENTLY` via `ensure_performance_indexes`), moved the index build to a daemon thread so `/api/health` opens before multi-minute index builds finish, and set `lock_timeout = 5s` on the migration session so a queued `ALTER TABLE` can no longer stall readers (the `/api/insights/latest` 30s-timeout storms seen during each deploy). The first boot after this change still runs unindexed; every later boot should start in well under a minute.
+- **backend 기동이 `probe_results`를 29번 전수 스캔하지 않도록** — lifespan 마이그레이션 블록이 매 기동마다 `model_name` 조건의 라벨 rename/삭제 문장을 실행하는데 이 컬럼에 인덱스가 없어 문장마다 순차 스캔(현 데이터 기준 합계 ~130초, 2026-09-06 v2.23.1 롤아웃 롤백의 근본 원인). `ix_probe_results_model_name` 추가(`ensure_performance_indexes`가 `CONCURRENTLY`로 생성), 인덱스 빌드를 데몬 스레드로 옮겨 수 분짜리 빌드가 끝나기 전에 `/api/health`가 열리도록 했고, 마이그레이션 세션에 `lock_timeout = 5s`를 걸어 대기열의 `ALTER TABLE`이 읽기를 막는 현상(배포마다 반복된 `/api/insights/latest` 30초 타임아웃 연쇄)을 차단. 이 변경 후 첫 기동은 인덱스 없이 돌고, 그 다음 기동부터 1분 미만이 기대값.
+
 ## v2.23.1 — 2026-09-05
 
 ### Changed

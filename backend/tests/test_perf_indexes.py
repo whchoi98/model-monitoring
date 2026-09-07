@@ -86,7 +86,9 @@ def test_ensure_performance_indexes_pg_uses_concurrently_and_long_timeout():
 
     joined = "\n".join(executed)
     assert "statement_timeout = '600000'" in joined
-    assert joined.count("CREATE INDEX CONCURRENTLY IF NOT EXISTS") == 3
+    assert joined.count("CREATE INDEX CONCURRENTLY IF NOT EXISTS") == 4
     assert "ix_probe_runs_auto_status_created ON probe_runs (is_auto, status, created_at)" in joined
     assert "ix_probe_results_run_id ON probe_results (run_id)" in joined
     assert "ix_probe_results_timestamp ON probe_results (timestamp)" in joined
+    # 2026-09-06: 기동 마이그레이션의 model_name 등호 조건(rename/삭제, label_repair)이 전수 스캔을 타지 않도록.
+    assert "ix_probe_results_model_name ON probe_results (model_name)" in joined
