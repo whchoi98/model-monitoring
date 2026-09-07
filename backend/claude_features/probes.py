@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from claude_features import engine
-from claude_features.transports import NormalizedResponse, Transport, TransportError
+from claude_features.transports import NormalizedResponse, Transport, TransportError, clear_last_request, last_request
 from parity.catalog import supports_forced_tool_choice
 from parity.engine import check_canary, check_json_object, check_tool_roundtrip
 
@@ -135,10 +135,12 @@ def _tiny_pdf(text: str) -> bytes:
 
 def run_probe(fn: Callable, t: Transport, model_id: str, model_key: str) -> ProbeOutcome:
     start = time.time()
+    clear_last_request()  # 같은 워커 스레드에서 직전 프로브가 남긴 스냅샷이 새지 않도록
     try:
         result, evidence = fn(t, model_id, model_key)
         latency = (time.time() - start) * 1000
-        evidence.setdefault("request", _req(model_id))
+        # 프로브가 request를 빠뜨리면 전송기가 마지막으로 보낸 본문으로 채운다 (parity `_run` setdefault 동형)
+        evidence.setdefault("request", _req(model_id, last_request()))
         if result is True:
             return ProbeOutcome("supported", latency, evidence)
         if result is False:
@@ -150,11 +152,12 @@ def run_probe(fn: Callable, t: Transport, model_id: str, model_key: str) -> Prob
     except TransportError as exc:
         latency = (time.time() - start) * 1000
         msg = str(exc)
-        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id)}, error=msg[:1500])
+        # 실패 셀에도 전송기가 마지막으로 보낸 본문을 남긴다 (없으면 {"model"}만) — 드리프트 셀 트리아지의 전제
+        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id, last_request())}, error=msg[:1500])
     except Exception as exc:  # noqa: BLE001 — 네트워크/파싱 오류 전체
         latency = (time.time() - start) * 1000
         msg = f"{type(exc).__name__}: {exc}"
-        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id)}, error=msg[:1500])
+        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id, last_request())}, error=msg[:1500])
 
 
 # ---------------------------------------------------------------- core
@@ -175,11 +178,11 @@ def probe_streaming(t, model_id, model_key):
         kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": _MAX}}
         n = t.converse(model_id, stream=True, **kw)
         deltas = sum(1 for e in n.events if "contentBlockDelta" in e)
-        return deltas >= 2, {"request": _req(model_id, kw, stream=True), "content_events": deltas}
+        return deltas >= 2, {"request": _req(model_id, kw, api="converse (stream)"), "content_events": deltas}
     body = _msg(prompt)
     n = t.messages(model_id, body, stream=True)
     deltas = _content_deltas(n.events, "text_delta")
-    return deltas >= 2, {"request": _req(model_id, body, stream=True), "content_events": deltas, "response_snippet": _snippet(n)}
+    return deltas >= 2, {"request": _req(model_id, body, api="messages (stream)"), "content_events": deltas, "response_snippet": _snippet(n)}
 
 
 def probe_system_prompt(t, model_id, model_key):
@@ -223,7 +226,7 @@ def probe_context_window_1m(t, model_id, model_key):
         return gate
     _, obj = t.request("GET", f"/v1/models/{model_id}")
     caps = {k: obj.get(k) for k in ("max_input_tokens", "max_tokens")}
-    return obj.get("max_input_tokens") == 1_000_000, {"request": _req(model_id, path=f"/v1/models/{model_id}"), **caps}
+    return obj.get("max_input_tokens") == 1_000_000, {"request": _req(model_id, api=f"GET /v1/models/{model_id}"), **caps}
 
 
 def probe_adaptive_thinking(t, model_id, model_key):
@@ -240,10 +243,13 @@ def probe_adaptive_thinking(t, model_id, model_key):
         kw = _msg(prompt, max_tokens=_THINK_MAX, thinking=thinking, output_config=output_config)
         n = t.messages(model_id, kw)
     th = engine.find_block(n.content, "thinking")
+    # usage 전체를 남긴다 — Bedrock Fable 5.1은 요약 텍스트를 비워 보내므로(thinking_chars=0, signature만)
+    # usage.output_tokens_details.thinking_tokens가 "추론을 실제로 했다"를 보여주는 유일한 수치 증거다.
+    # (Converse는 normalize_converse가 usage를 4키로 재구성해 details가 없다 — 그 열은 수치 없이 남는다.)
     return engine.has_thinking_evidence(n.content), {
         "request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content],
         "thinking_chars": len((th or {}).get("thinking") or ""),
-        "thinking_signed": bool((th or {}).get("signature")), "response_snippet": _snippet(n)}
+        "thinking_signed": bool((th or {}).get("signature")), "usage": n.usage, "response_snippet": _snippet(n)}
 
 
 def probe_extended_thinking(t, model_id, model_key):
@@ -263,7 +269,8 @@ def probe_extended_thinking(t, model_id, model_key):
             return "not_applicable", {"request": _req(model_id, thinking=thinking),
                                       "reason": "adaptive-only model rejects budget_tokens as documented", "error": str(exc)[:500]}
         raise
-    return engine.has_block(n.content, "thinking"), {"request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content]}
+    return engine.has_block(n.content, "thinking"), {"request": _req(model_id, kw), "content_types": [b.get("type") for b in n.content],
+                                                     "usage": n.usage}
 
 
 def probe_batch_processing(t, model_id, model_key):
@@ -280,7 +287,8 @@ def probe_batch_processing(t, model_id, model_key):
     except TransportError:
         pass
     ok = bool(bid) and got.get("processing_status") in ("in_progress", "canceling", "ended")
-    return ok, {"request": _req(model_id, req), "batch_id": bid, "processing_status": got.get("processing_status")}
+    return ok, {"request": _req(model_id, req, api="POST /v1/messages/batches → GET → POST cancel"),
+                "batch_id": bid, "processing_status": got.get("processing_status")}
 
 
 def _doc_question(t, model_id, doc_block: dict, converse_block: dict, question: str) -> tuple[NormalizedResponse, dict]:
@@ -332,7 +340,8 @@ def probe_data_residency(t, model_id, model_key):
         return n.usage.get("inference_geo") == "us", {"request": _req(model_id, kw), "usage": n.usage}
     kw = _msg(_BASIC_PROMPT, inference_geo="us")
     n = t.messages(model_id, kw)
-    ev = {"request": _req(model_id, kw), "usage_inference_geo": n.usage.get("inference_geo")}
+    ev = {"request": _req(model_id, kw, note="2 calls: inference_geo=us, then inference_geo=mars as negative control"),
+          "usage_inference_geo": n.usage.get("inference_geo")}
     try:
         t.messages(model_id, _msg(_BASIC_PROMPT, inference_geo="mars"))
         ev["negative_control"] = "accepted (not validated)"
@@ -354,7 +363,8 @@ def probe_effort(t, model_id, model_key):
         return t.messages(model_id, kw), kw
 
     n, kw = call("low")
-    ev = {"request": _req(model_id, kw), "output_tokens_low": n.usage.get("output_tokens"), "response_snippet": _snippet(n)}
+    ev = {"request": _req(model_id, kw, note=f"2 calls: effort=low, then effort={_BAD_EFFORT} as negative control"),
+          "output_tokens_low": n.usage.get("output_tokens"), "response_snippet": _snippet(n)}
     try:
         call(_BAD_EFFORT)
         ev["negative_control"] = "accepted (effort not validated)"
@@ -439,7 +449,7 @@ def _with_fallback(t: Transport, model_id: str, attempts: list[tuple[str, dict, 
         try:
             n = t.messages(model_id, body, betas=betas)
             log.append({"attempt": label, "result": "ok"})
-            return n, {"attempts": log, "request": _req(model_id, body, betas=betas)}
+            return n, {"attempts": log, "request": _req(model_id, body, betas=betas, note=f"fallback attempt: {label}")}
         except TransportError as exc:
             log.append({"attempt": label, "result": str(exc)[:200]})
             if i == len(attempts) - 1 or engine.classify(str(exc)) != "unsupported":
@@ -610,7 +620,7 @@ def probe_fine_grained_tool_streaming(t, model_id, model_key):
               tools=[_echo_tool(eager=True)], tool_choice=_tool_choice(model_id, "echo"))
     n = t.messages(model_id, kw, stream=True)
     deltas = _content_deltas(n.events, "input_json_delta")
-    return deltas >= 2, {"request": _req(model_id, kw, stream=True), "input_json_deltas": deltas,
+    return deltas >= 2, {"request": _req(model_id, kw, api="messages (stream)"), "input_json_deltas": deltas,
                          "tool_call": _trim(_tool_use_named(n, "echo"))}
 
 
@@ -701,7 +711,8 @@ def _cache_evidence(model_id: str, kw: dict, n1: NormalizedResponse, n2: Normali
     refusal/reasoning_extraction)가 트리아지의 결정적 단서였는데 이유 문자열만으로는 복원되지 않는다.
     Converse에는 stop_details가 없어 None이 들어간다.
     """
-    ev = {"request": _req(model_id, kw), "first_usage": n1.usage, "second_usage": n2.usage,
+    ev = {"request": _req(model_id, kw, note="same request twice; cache judged on 2nd call usage"),
+          "first_usage": n1.usage, "second_usage": n2.usage,
           "stop_reason": [n1.stop_reason, n2.stop_reason],
           "stop_details": [_trim(n1.top.get("stop_details")), _trim(n2.top.get("stop_details"))]}
     return ev, engine.blocked_stop_reason(n1.stop_reason, n2.stop_reason)
@@ -759,7 +770,7 @@ def probe_token_counting(t, model_id, model_key):
         kw = _msg(_BASIC_PROMPT)
         r = t.count_tokens(model_id, kw)
     n = r.get("input_tokens")
-    return isinstance(n, int) and n > 0, {"request": _req(model_id, kw, endpoint="count_tokens"), "input_tokens": n}
+    return isinstance(n, int) and n > 0, {"request": _req(model_id, kw, api="count_tokens"), "input_tokens": n}
 
 
 # ---------------------------------------------------------------- files & endpoints
@@ -770,7 +781,7 @@ def probe_files_api(t, model_id, model_key):
         return gate
     _, up = t.request("POST", "/v1/files", files={"file": ("features-probe.txt", b"Claude API Features probe file.\n", "text/plain")})
     fid = up.get("id")
-    ev = {"request": _req(model_id, endpoint="/v1/files"), "file_id": fid, "type": up.get("type")}
+    ev = {"request": _req(model_id, api="POST /v1/files → GET → DELETE"), "file_id": fid, "type": up.get("type")}
     try:
         _, got = t.request("GET", f"/v1/files/{fid}")
         ev["get_ok"] = got.get("id") == fid
@@ -788,7 +799,7 @@ def probe_models_api(t, model_id, model_key):
     if gate:
         return gate
     _, m = t.request("GET", f"/v1/models/{model_id}")
-    return m.get("id") == model_id and "capabilities" in m, {"request": _req(model_id, endpoint=f"/v1/models/{model_id}"),
+    return m.get("id") == model_id and "capabilities" in m, {"request": _req(model_id, api=f"GET /v1/models/{model_id}"),
                                                               "retrieved_id": m.get("id"), "capabilities": _trim(m.get("capabilities"))}
 
 
