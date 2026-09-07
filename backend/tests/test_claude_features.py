@@ -834,3 +834,73 @@ _CLASSIFY_FORMAT_PAIRS = [
 def test_classify_unchanged_by_d8b_error_context(before, after, expected):
     assert engine.classify(before) == expected
     assert engine.classify(after) == expected
+
+
+# ==================================================================== v2.24.0 — Task 2: D8(b) 오류 문맥
+
+def test_client_error_keeps_boto_operation_name():
+    """boto ClientError는 operation 이름을 str(exc)와 .operation_name에만 담는다 — Error.Message만 쓰면 탈락 (R6).
+
+    라이브 run #3: `bedrock_invoke/token_counting`과 `bedrock_converse/token_counting`이 같은 문구라 CountTokens에서
+    난 것인지 문자열만으로 구분 불가였다 (parity 샘플은 "CountTokens operation" 명시).
+    """
+    class E(Exception):
+        response = {"Error": {"Code": "ValidationException", "Message": "The provided model doesn't support counting tokens."},
+                    "ResponseMetadata": {"HTTPStatusCode": 400}}
+        operation_name = "CountTokens"
+    err = T._client_error(E("x"))
+    assert str(err) == "HTTP 400: ValidationException (CountTokens): The provided model doesn't support counting tokens."
+    assert err.status_code == 400
+    assert engine.classify(str(err)) == "unsupported"
+
+    class NoOp(Exception):
+        response = {"Error": {"Code": "ThrottlingException", "Message": "slow down"}, "ResponseMetadata": {"HTTPStatusCode": 429}}
+        operation_name = None
+    assert str(T._client_error(NoOp("x"))) == "HTTP 429: ThrottlingException: slow down"
+
+
+def test_http_empty_error_body_names_method_and_path(monkeypatch):
+    """본문 없는 4xx는 'HTTP 404: '로 끝나 어느 라우트였는지 알 수 없었다 (라이브 run #3 Mantle files/batches/models) (R6)."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    t = T.CpTransport()
+
+    class _R:
+        status_code = 404
+        content = b""
+        def json(self):
+            raise ValueError("no body")
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError) as exc:
+        t.request("GET", "/v1/files")
+    assert str(exc.value) == "HTTP 404: (empty body) GET /v1/files"
+    assert engine.classify(str(exc.value)) == "unsupported"  # 'http 404' 마커 유지
+
+    _R.status_code = 500
+    with pytest.raises(T.TransportError) as exc5:
+        t.request("POST", "/v1/messages", json={"model": "m"})
+    assert str(exc5.value) == "HTTP 500: (empty body) POST /v1/messages"
+    assert engine.classify(str(exc5.value)) == "broken"
+
+
+def test_http_stream_empty_error_body_is_labelled(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    t = T.CpTransport()
+    monkeypatch.setattr(T.httpx, "Client", _fake_httpx_client(_FakeHttpStream(404, b"")))
+    with pytest.raises(T.TransportError) as ei:
+        t.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
+    assert str(ei.value) == "HTTP 404: (empty body) POST /v1/messages (stream)"
+    # 본문이 있으면 그대로 (회귀 방지)
+    monkeypatch.setattr(T.httpx, "Client", _fake_httpx_client(_FakeHttpStream(400, b'{"type":"error","error":{"message":"nope"}}')))
+    with pytest.raises(T.TransportError) as ei2:
+        t.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
+    assert str(ei2.value) == 'HTTP 400: {"type":"error","error":{"message":"nope"}}'

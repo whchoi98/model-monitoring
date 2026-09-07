@@ -197,6 +197,10 @@ class _HttpTransport(Transport):
             raise TransportError(404, "UnknownOperationException: route not available on this endpoint")
         if r.status_code >= 400:
             msg = parsed if isinstance(parsed, str) else _json.dumps(parsed, ensure_ascii=False)[:1500]
+            if not msg.strip():
+                # 본문 없는 4xx/5xx — 어느 라우트였는지 오류 문자열에 남긴다 (라이브 run #3: Mantle files/batches/models가
+                # 전부 "HTTP 404: "). 문구는 판정 마커("not found", "no route" 등)를 포함하지 않는 중립 표현이어야 한다.
+                msg = f"(empty body) {method} {path}"
             raise TransportError(r.status_code, msg)
         return r.status_code, parsed
 
@@ -211,7 +215,10 @@ class _HttpTransport(Transport):
                                                             json=payload, headers=headers) as r:
             text = r.read().decode("utf-8", "replace")
             if r.status_code >= 400:
-                raise TransportError(r.status_code, text[:1500])
+                msg = text[:1500]
+                if not msg.strip():
+                    msg = "(empty body) POST /v1/messages (stream)"
+                raise TransportError(r.status_code, msg)
         events = parse_sse(text)
         return normalize_anthropic(assemble_stream(events), events)
 
@@ -310,7 +317,11 @@ def _client_error(exc: Exception) -> TransportError:
     err = resp.get("Error") or {}
     status = (resp.get("ResponseMetadata") or {}).get("HTTPStatusCode")
     code, msg = err.get("Code", type(exc).__name__), err.get("Message", str(exc))
-    return TransportError(status, f"{code}: {msg}")
+    # botocore.ClientError는 operation 이름을 str(exc)와 .operation_name에만 담고 Error.Message에는 없다.
+    # 같은 문구("doesn't support counting tokens")가 CountTokens인지 InvokeModel인지 증거만으로 구분하려면 남겨야 한다.
+    # 괄호 표기는 engine.classify 마커에 걸리지 않는다 (tests: test_classify_unchanged_by_d8b_error_context).
+    op = getattr(exc, "operation_name", None)
+    return TransportError(status, f"{code} ({op}): {msg}" if op else f"{code}: {msg}")
 
 
 class BedrockInvokeTransport(Transport):
