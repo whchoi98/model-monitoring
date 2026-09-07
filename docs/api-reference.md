@@ -196,8 +196,50 @@ Full evidence for one matrix cell: evidence JSON (response snippet, tool call, u
 latency, error_message. 404 if the cell does not exist.
 
 ### POST /api/parity/trigger (Auth Required)
-Start a manual parity run in a backend background thread (~3 min). Rejects if already running.
+Start a manual parity run in a backend background thread (약 5-10분 — the duration the router itself reports in
+`routers/parity.py`; the old "~3 min" was stale). Rejects if already running.
 The 12-hour scheduled run uses a separate Fargate task instead (`python -m parity_runner --once`).
+
+---
+
+## Claude API Features (Public read, trigger = Auth Required) — v2.23.0, `changes[].kind` + failed-cell evidence v2.24.0
+
+### GET /api/features/catalog
+Feature catalog: `groups` (7 feature groups with `label_ko`/`label_en`), `surfaces` (5 — `cp`, `mantle`, `bedrock_messages`,
+`bedrock_invoke`, `bedrock_converse`; each `{id, label, short, group, region}`, the Mantle region is `MANTLE_ANTHROPIC_REGION`),
+`models` (4 representative models `fable-5-1`, `fable-5`, `opus-5`, `sonnet-5` with per-surface native ids; `mantle: null` plus
+`mantle_reason` when Mantle does not serve the model) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
+Messages checks + Models API + the strict_tool_use split; each with `label_ko/label_en`, `desc_ko/desc_en`, `doc_url`, per-surface
+`documented` ∈ ga|beta|no|unknown, `verification` ∈ evidence|acceptance|negative|capability, `notes`). Since v2.24.0 the UI takes every
+feature label and surface short name from this payload (`labelMaps`) — it is the single source for banners, modal titles and the drawer.
+
+### GET /api/features/latest
+Latest completed run: `run` (id, started_at, finished_at, `totals` — the 6 status counts plus `drift`, catalog_version, running flag),
+`previous_run_id`, `changes`, `drift`, `results`. `results[]` = one row per (feature, surface, model_key): `model_label`, `model_id`,
+`status` ∈ supported|unsupported|broken|inconclusive|skipped|not_applicable, `documented`, `verdict` ∈ match|drift|undocumented|none,
+`latency_ms` (null for runner pre-decided rows and for probes that failed before a measurement). `drift[]` = the results whose verdict is
+`drift`. `changes[]` = cells whose status differs from the previous completed run:
+`{feature, surface, model_key, model_label, before, after, kind}` — `before: null` for cells absent in the previous run;
+**`kind` (v2.24.0)** is `"catalog"` when the cell did not exist before or when either side is a runner pre-decided row
+(`latency_ms IS NULL AND error_message IS NULL` — a catalog rule such as `_NOT_APPLICABLE_BY_DOC`), else `"measured"`. A row with a NULL
+`latency_ms` but an `error_message` is a failed probe (transport-init or executor failure), not a pre-decided row, so it counts as
+`"measured"`. `Cache-Control: s-maxage=60`.
+With no completed run: `{"run": null, "previous_run_id": null, "changes": [], "drift": [], "results": [], "running": false}`.
+
+### GET /api/features/evidence?run_id=&feature=&surface=&model_key=
+Full evidence for one cell: the result row fields plus `evidence` JSON, `error_message`, and the catalog `doc_url`, `verification`,
+`notes`. `evidence.request` is the request snapshot: `model`, the Anthropic/Converse body (strings over 200 chars trimmed, bytes as
+`<N bytes>`), `anthropic_beta`, and the v2.24.0 meta keys `api` (e.g. `count_tokens`, `messages (stream)`, `GET /v1/models/{id}`,
+`POST /v1/files → GET → DELETE`, or the boto operation `InvokeModel`/`Converse`/`CountTokens` on failed cells) and `note` for multi-call
+probes (`same request twice; cache judged on 2nd call usage`, `2 calls: effort=low, then effort=ultra as negative control`, …).
+Since v2.24.0 failed cells also carry the last body the transport actually sent (thread-local recorder; previously only `{"model"}`),
+`error_message` keeps the boto operation name (`ValidationException (CountTokens): …`) and names the route for empty error bodies
+(`HTTP 404: (empty body) GET /v1/files`), and the thinking probes store `usage`. 404 if the cell does not exist.
+
+### POST /api/features/trigger (Auth Required)
+Start a manual Claude API Features run in a backend background thread (약 7분 — the duration the router reports in
+`routers/features.py`). Rejects if already running. The daily scheduled run uses a separate Fargate task instead
+(`python -m features_runner --once`).
 
 ---
 
