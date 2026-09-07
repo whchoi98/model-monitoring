@@ -15,7 +15,7 @@ from dataclasses import dataclass, field
 from typing import Any, Callable
 
 from claude_features import engine
-from claude_features.transports import NormalizedResponse, Transport, TransportError
+from claude_features.transports import NormalizedResponse, Transport, TransportError, clear_last_request, last_request
 from parity.catalog import supports_forced_tool_choice
 from parity.engine import check_canary, check_json_object, check_tool_roundtrip
 
@@ -135,10 +135,12 @@ def _tiny_pdf(text: str) -> bytes:
 
 def run_probe(fn: Callable, t: Transport, model_id: str, model_key: str) -> ProbeOutcome:
     start = time.time()
+    clear_last_request()  # 같은 워커 스레드에서 직전 프로브가 남긴 스냅샷이 새지 않도록
     try:
         result, evidence = fn(t, model_id, model_key)
         latency = (time.time() - start) * 1000
-        evidence.setdefault("request", _req(model_id))
+        # 프로브가 request를 빠뜨리면 전송기가 마지막으로 보낸 본문으로 채운다 (parity `_run` setdefault 동형)
+        evidence.setdefault("request", _req(model_id, last_request()))
         if result is True:
             return ProbeOutcome("supported", latency, evidence)
         if result is False:
@@ -150,11 +152,12 @@ def run_probe(fn: Callable, t: Transport, model_id: str, model_key: str) -> Prob
     except TransportError as exc:
         latency = (time.time() - start) * 1000
         msg = str(exc)
-        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id)}, error=msg[:1500])
+        # 실패 셀에도 전송기가 마지막으로 보낸 본문을 남긴다 (없으면 {"model"}만) — 드리프트 셀 트리아지의 전제
+        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id, last_request())}, error=msg[:1500])
     except Exception as exc:  # noqa: BLE001 — 네트워크/파싱 오류 전체
         latency = (time.time() - start) * 1000
         msg = f"{type(exc).__name__}: {exc}"
-        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id)}, error=msg[:1500])
+        return ProbeOutcome(engine.classify(msg), latency, {"request": _req(model_id, last_request())}, error=msg[:1500])
 
 
 # ---------------------------------------------------------------- core

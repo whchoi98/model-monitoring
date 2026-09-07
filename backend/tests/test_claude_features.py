@@ -904,3 +904,153 @@ def test_http_stream_empty_error_body_is_labelled(monkeypatch):
     with pytest.raises(T.TransportError) as ei2:
         t.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
     assert str(ei2.value) == 'HTTP 400: {"type":"error","error":{"message":"nope"}}'
+
+
+# ==================================================================== v2.24.0 — Task 3: D8(a) 실패 경로 요청 스냅샷
+
+class _RecordingT(_FakeT):
+    """실제 전송기처럼 호출 직전에 record_request를 부른다 — 실패 경로 스냅샷 회수 검증용."""
+
+    def messages(self, model_id, body, betas=(), stream=False):
+        payload = {**body, "model": model_id}
+        if stream:
+            payload["stream"] = True
+        T.record_request(T._http_snapshot("POST", "/v1/messages", payload, betas, None, None))
+        return super().messages(model_id, body, betas, stream)
+
+
+def test_run_probe_transport_error_keeps_full_request_snapshot():
+    """실패 셀도 요청 본문을 남긴다 — 라이브 run #3 unsupported 206셀 중 182셀(드리프트 25건 전부)이 {"model"}만 남겼다 (R1)."""
+    t = _RecordingT(exc=T.TransportError(400, "data retention mode 'default' is not available for this model"))
+    out = P.run_probe(P.PROBES["tool_use"], t, "claude-opus-5", "opus-5")
+    assert out.status == "unsupported" and out.error.startswith("HTTP 400")
+    req = out.evidence["request"]
+    assert req["model"] == "claude-opus-5" and req["api"] == "POST /v1/messages"
+    assert req["max_tokens"] == P._TOOL_MAX and req["messages"][0]["role"] == "user"
+    assert req["tools"][0]["name"] == "echo" and req["tool_choice"] == {"type": "tool", "name": "echo"}
+
+
+def test_run_probe_generic_exception_keeps_request_snapshot():
+    t = _RecordingT(exc=RuntimeError("socket closed"))
+    out = P.run_probe(P.PROBES["messages_basic"], t, "claude-opus-5", "opus-5")
+    assert out.status == "broken" and out.error.startswith("RuntimeError: socket closed")
+    assert out.evidence["request"]["api"] == "POST /v1/messages" and out.evidence["request"]["max_tokens"] == P._MAX
+
+
+def test_run_probe_with_fallback_failure_records_last_attempt():
+    """_with_fallback 최종 실패는 마지막 시도 본문이 남는다 (라이브 computer_use/mantle/fable-5는 attempts 문자열만 있었다)."""
+    t = _RecordingT(exc=T.TransportError(400, "tools.0: Input tag 'x' found using 'type' does not match any of the expected tags"))
+    out = P.run_probe(P.PROBES["computer_use"], t, "claude-opus-5", "opus-5")
+    assert out.status == "unsupported" and "attempts=" in out.error
+    assert out.evidence["request"]["tools"][0]["type"] == "computer_20251124"
+    assert out.evidence["request"]["anthropic_beta"] == ["computer-use-2025-11-24"]
+    assert len(t.calls) == 2
+
+
+def test_run_probe_without_recorder_falls_back_to_model_only():
+    """회귀 가드 — 구현 전에도 통과해야 한다. record_request를 부르지 않는 전송기(구형/가짜)는 종전처럼 {"model"}만 남긴다 — 하위 호환."""
+    t = _FakeT(exc=T.TransportError(400, "thinking.type.enabled is not supported for this model"))
+    out = P.run_probe(P.PROBES["messages_basic"], t, "claude-opus-5", "opus-5")
+    assert out.evidence["request"] == {"model": "claude-opus-5"}
+
+
+def test_run_probe_clears_stale_snapshot_from_previous_probe():
+    """같은 워커 스레드의 직전 프로브 스냅샷이 호출 없는 프로브(route gate)에 새지 않아야 한다."""
+    T.record_request({"api": "POST /v1/messages", "model": "stale", "messages": ["stale"]})
+    t = _FakeT()
+    t.surface, t.routes = "bedrock_invoke", frozenset({"messages", "count_tokens"})
+    out = P.run_probe(P.PROBES["batch_processing"], t, "global.anthropic.claude-opus-5", "opus-5")
+    assert out.status == "unsupported"
+    assert out.evidence["request"] == {"model": "global.anthropic.claude-opus-5"}
+
+
+def test_run_probe_success_setdefault_uses_transport_snapshot():
+    """프로브가 request를 빠뜨려도 전송기 스냅샷으로 채운다 (critic 4-B, parity `_run` :81-82 동형)."""
+    t = _RecordingT(resp=T.NormalizedResponse(content=[{"type": "text", "text": "pong"}]))
+
+    def forgetful(t_, m, k):
+        return bool(t_.messages(m, {"max_tokens": 4, "messages": []}).content), {}
+
+    out = P.run_probe(forgetful, t, "claude-opus-5", "opus-5")
+    assert out.status == "supported"
+    assert out.evidence["request"] == {"model": "claude-opus-5", "api": "POST /v1/messages", "max_tokens": 4, "messages": []}
+
+
+def test_last_request_is_thread_local():
+    from concurrent.futures import ThreadPoolExecutor
+    import time as _time
+
+    def work(i):
+        T.record_request({"model": f"m{i}"})
+        _time.sleep(0.01)
+        return T.last_request()["model"]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert sorted(pool.map(work, range(8))) == [f"m{i}" for i in range(8)]
+    T.clear_last_request()
+    assert T.last_request() is None
+
+
+def test_transports_record_request_before_calling(monkeypatch):
+    """모든 전송 경로가 호출 직전 record_request를 부른다 — InvokeModel/CountTokens/Converse/HTTP/no-route."""
+    class _Down:
+        def invoke_model(self, modelId, body):
+            raise RuntimeError("down")
+        def count_tokens(self, modelId, input):
+            raise RuntimeError("down")
+        def converse(self, modelId, **kw):
+            raise RuntimeError("down")
+
+    monkeypatch.setattr(T, "_boto_client", lambda region: _Down())
+    inv = T.BedrockInvokeTransport(region="ap-northeast-2")
+    with pytest.raises(RuntimeError):
+        inv.messages("global.anthropic.claude-opus-5", {"max_tokens": 8, "messages": []}, betas=["b1"])
+    rec = T.last_request()
+    assert rec["api"] == "InvokeModel" and rec["model"] == "global.anthropic.claude-opus-5"
+    assert rec["anthropic_version"] == "bedrock-2023-05-31" and rec["anthropic_beta"] == ["b1"] and rec["max_tokens"] == 8
+    with pytest.raises(RuntimeError):
+        inv.count_tokens("global.anthropic.claude-opus-5", {"max_tokens": 8, "messages": []})
+    assert T.last_request()["api"] == "CountTokens" and "max_tokens" not in T.last_request()
+
+    conv = T.BedrockConverseTransport(region="ap-northeast-2")
+    with pytest.raises(RuntimeError):
+        conv.converse("global.anthropic.claude-opus-5", messages=[{"role": "user", "content": [{"text": "hi"}]}])
+    assert T.last_request() == {"api": "Converse", "model": "global.anthropic.claude-opus-5",
+                                "messages": [{"role": "user", "content": [{"text": "hi"}]}]}
+    with pytest.raises(RuntimeError):
+        conv.count_tokens_converse("global.anthropic.claude-opus-5", messages=[])
+    assert T.last_request() == {"api": "CountTokens", "model": "global.anthropic.claude-opus-5", "messages": []}
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    cp = T.CpTransport()
+
+    class _R:
+        status_code = 404
+        content = b"{}"
+        def json(self):
+            return {"type": "error"}
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError):
+        cp.request("POST", "/v1/files", files={"file": ("a.txt", b"x", "text/plain")})
+    assert T.last_request()["api"] == "POST /v1/files" and T.last_request()["files"]["file"][0] == "a.txt"
+    with pytest.raises(T.TransportError):
+        cp.count_tokens("claude-opus-5", {"max_tokens": 8, "messages": []}, betas=["b2"])
+    assert T.last_request() == {"api": "POST /v1/messages/count_tokens", "messages": [], "model": "claude-opus-5", "anthropic_beta": ["b2"]}
+    monkeypatch.setattr(T.httpx, "Client", _fake_httpx_client(_FakeHttpStream(400, b'{"type":"error"}')))
+    with pytest.raises(T.TransportError):
+        cp.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
+    assert T.last_request()["stream"] is True and T.last_request()["api"] == "POST /v1/messages"
+
+    # 라우트 없는 전송기의 base request()도 기록한다
+    with pytest.raises(T.TransportError):
+        T.Transport().request("GET", "/v1/models/x")
+    assert T.last_request() == {"api": "GET /v1/models/x"}

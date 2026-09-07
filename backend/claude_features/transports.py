@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import json
 import os
+import threading
 from dataclasses import dataclass, field
 from typing import Any
 
@@ -155,6 +156,44 @@ def _snippet_bytes(b: bytes | str, n: int = 800) -> str:
     return s[:n]
 
 
+# ---------------------------------------------------------------- last-request recorder (v2.24.0)
+# 전송기는 surface당 1개를 4개 워커 스레드가 공유하므로 인스턴스 속성은 쓸 수 없고, 프로브 1건은 한 스레드에서
+# 끝나므로 threading.local이 맞다. 모든 호출 경로가 호출 *직전에* record_request()를 부르고, run_probe가
+# 실패 경로에서 last_request()로 회수한다 (parity `_run(fn, request)`가 호출 전에 스냅샷을 받는 것과 동형).
+
+_tls = threading.local()
+
+
+def record_request(snapshot: dict) -> None:
+    """이 스레드가 마지막으로 보낸 요청 스냅샷을 기록한다. 절단(_trim)은 회수 측(probes._req)이 한다."""
+    _tls.last_request = snapshot
+
+
+def last_request() -> dict | None:
+    return getattr(_tls, "last_request", None)
+
+
+def clear_last_request() -> None:
+    _tls.last_request = None
+
+
+def _http_snapshot(method: str, path: str, json: Any, betas, files, data) -> dict:
+    """HTTP 호출 1건의 스냅샷 — `api`(METHOD path) + JSON 본문 평탄화 + anthropic_beta/files/data."""
+    snap: dict = {"api": f"{method} {path}"}
+    if isinstance(json, dict):
+        snap.update(json)
+    elif json is not None:
+        snap["json"] = json
+    betas = [b for b in (betas or []) if b]
+    if betas:
+        snap["anthropic_beta"] = betas
+    if files is not None:
+        snap["files"] = files
+    if data is not None:
+        snap["data"] = data
+    return snap
+
+
 # ---------------------------------------------------------------- base
 
 class Transport:
@@ -169,6 +208,7 @@ class Transport:
         raise NotImplementedError
 
     def request(self, method: str, path: str, json: Any = None, betas=(), files=None, data=None) -> tuple[int, Any]:
+        record_request(_http_snapshot(method, path, json, betas, files, data))
         raise TransportError(None, f"no route: {self.surface} has no HTTP endpoint for {path}")
 
 
@@ -180,6 +220,7 @@ class _HttpTransport(Transport):
         raise NotImplementedError
 
     def request(self, method: str, path: str, json: Any = None, betas=(), files=None, data=None) -> tuple[int, Any]:
+        record_request(_http_snapshot(method, path, json, betas, files, data))
         headers = self._headers(betas)
         if files is not None or data is not None:
             headers = {k: v for k, v in headers.items() if k.lower() != "content-type"}
@@ -211,6 +252,7 @@ class _HttpTransport(Transport):
             _, obj = self.request("POST", "/v1/messages", json=payload, betas=betas)
             return normalize_anthropic(obj)
         payload["stream"] = True
+        record_request(_http_snapshot("POST", "/v1/messages", payload, betas, None, None))
         with httpx.Client(timeout=_TIMEOUT) as c, c.stream("POST", self.base_url + "/v1/messages",
                                                             json=payload, headers=headers) as r:
             text = r.read().decode("utf-8", "replace")
@@ -335,6 +377,9 @@ class BedrockInvokeTransport(Transport):
 
     def messages(self, model_id: str, body: dict, betas=(), stream: bool = False) -> NormalizedResponse:
         native = invoke_body(body, betas)
+        # 실패 스냅샷은 *native* InvokeModel 본문(anthropic_version + anthropic_beta 리스트, model 추가)을 남긴다 —
+        # 성공 경로의 _req(model_id, kw)(Anthropic 스키마)와 형태가 조금 다르지만 "실제로 보낸 것"이 진실이다 (RUL-13).
+        record_request({"api": "InvokeModelWithResponseStream" if stream else "InvokeModel", "model": model_id, **native})
         try:
             if not stream:
                 r = self.client.invoke_model(modelId=model_id, body=json.dumps(native))
@@ -349,6 +394,7 @@ class BedrockInvokeTransport(Transport):
 
     def count_tokens(self, model_id: str, body: dict, betas=()) -> dict:
         native = invoke_body({k: v for k, v in body.items() if k != "max_tokens"}, betas)
+        record_request({"api": "CountTokens", "model": model_id, **native})
         try:
             r = self.client.count_tokens(modelId=model_id, input={"invokeModel": {"body": json.dumps(native)}})
         except Exception as exc:  # noqa: BLE001
@@ -368,6 +414,7 @@ class BedrockConverseTransport(Transport):
         self.client = _boto_client(self.region)
 
     def converse(self, model_id: str, stream: bool = False, **kw) -> NormalizedResponse:
+        record_request({"api": "ConverseStream" if stream else "Converse", "model": model_id, **kw})
         try:
             if not stream:
                 return normalize_converse(self.client.converse(modelId=model_id, **kw))
@@ -427,6 +474,7 @@ class BedrockConverseTransport(Transport):
         return n
 
     def count_tokens_converse(self, model_id: str, **kw) -> dict:
+        record_request({"api": "CountTokens", "model": model_id, **kw})
         try:
             r = self.client.count_tokens(modelId=model_id, input={"converse": kw})
         except Exception as exc:  # noqa: BLE001
