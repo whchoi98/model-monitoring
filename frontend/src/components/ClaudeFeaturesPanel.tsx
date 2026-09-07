@@ -12,9 +12,9 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, formatDuration, runSummary, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, cellBadge, featureLabelOf, formatDuration, labelMaps, runSummary, surfaceShortOf, surfaceSummary, visibleSegments,
   DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
-  type CellAggregate, type CellStatus, type FeatureCell, type RowView, type SurfaceSummary,
+  type CellAggregate, type CellStatus, type FeatureCell, type LabelMaps, type RowView, type SurfaceSummary,
 } from "@/lib/claudeFeatures";
 
 const SURFACE_GROUP_LABEL: Record<string, { en: string; ko: string }> = {
@@ -23,7 +23,7 @@ const SURFACE_GROUP_LABEL: Record<string, { en: string; ko: string }> = {
   bedrock: { en: "Bedrock runtime", ko: "Bedrock runtime" },
 };
 
-function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: FeatureCell; onClose: () => void }) {
+function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: FeatureCell; labels: LabelMaps; onClose: () => void }) {
   const { lang } = useLang();
   const [data, setData] = useState<FeaturesEvidence | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -73,14 +73,14 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: FeatureC
         <button type="button" onClick={onClose} className="absolute top-4 right-4 text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
         <div>
           <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Evidence</div>
-          <h2 className="text-base font-bold text-gray-100 font-mono mt-0.5">{cell.feature} · {cell.surface} · {cell.model_label}</h2>
-          <div className="text-xs text-gray-500 mt-0.5 font-mono">{cell.model_id ?? "—"}</div>
+          <h2 className="text-base font-bold text-gray-100 mt-0.5">{featureLabelOf(labels, cell.feature)} · {surfaceShortOf(labels, cell.surface)} · {cell.model_label}</h2>
+          <div className="text-xs text-gray-500 mt-0.5 font-mono">{cell.feature} · {cell.surface} · {cell.model_id ?? "—"}</div>
         </div>
         <div className="bg-gray-950/60 light:bg-gray-50 border border-gray-800 rounded-xl p-4 space-y-2">
           <div className="flex items-center gap-2 flex-wrap">
             <span className={`px-2.5 py-0.5 text-[11px] font-medium rounded-full border ${STATUS_STYLE[cell.status]}`}>{STATUS_LABEL[cell.status]}</span>
             <span className="text-xs text-gray-500">{lang === "en" ? "documented" : "문서"}: <b className="text-gray-300">{DOC_LABEL[cell.documented]}</b></span>
-            <span className={`text-xs ${VERDICT_STYLE[cell.verdict]}`}>verdict: {cell.verdict}</span>
+            <span className={`text-xs ${VERDICT_STYLE[cell.verdict]}`}>{lang === "en" ? "verdict" : "판정"}: {cell.verdict}</span>
             {data?.verification && <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400">{data.verification}</span>}
             <span className="text-xs text-gray-500 ml-auto tabular-nums">{cell.latency_ms != null ? `${Math.round(cell.latency_ms)} ms` : "-"}</span>
           </div>
@@ -185,6 +185,7 @@ export default function ClaudeFeaturesPanel() {
   };
 
   const surfaces = useMemo(() => catalog?.surfaces.map((s) => s.id) ?? [], [catalog]);
+  const labels = useMemo(() => labelMaps(catalog, lang), [catalog, lang]);
   const cells = latest?.results ?? [];
   const groups = useMemo(
     () => (catalog ? buildGroups(catalog.features, catalog.groups, surfaces, cells, lang, filter) : []),
@@ -249,9 +250,10 @@ export default function ClaudeFeaturesPanel() {
           <ul className="space-y-1 text-xs text-gray-300">
             {drift.slice(0, 10).map((c) => (
               <li key={`${c.feature}|${c.surface}|${c.model_key}`} className="flex items-center gap-2 flex-wrap">
-                <button type="button" onClick={() => setSelected(c)} className="font-mono text-rose-200 hover:underline">{c.feature}</button>
-                <span className="text-gray-500">{c.surface} · {c.model_label}</span>
-                <span className="text-gray-600">documented {DOC_LABEL[c.documented]} → observed</span>
+                <button type="button" onClick={() => setSelected(c)} className="text-rose-200 hover:underline">{featureLabelOf(labels, c.feature)}</button>
+                <span className="font-mono text-[10px] text-gray-600">{c.feature}</span>
+                <span className="text-gray-500">{surfaceShortOf(labels, c.surface)}, {c.model_label}</span>
+                <span className="text-gray-600">{L(`documented ${DOC_LABEL[c.documented]} → observed`, `문서 ${DOC_LABEL[c.documented]} → 실측`)}</span>
                 <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${STATUS_STYLE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
               </li>
             ))}
@@ -414,7 +416,7 @@ export default function ClaudeFeaturesPanel() {
         <p>4. {L("Runs daily via EventBridge → Fargate (manual trigger runs inside the backend). Evidence is stored in RDS; the previous run is diffed at the top.", "EventBridge → Fargate로 매일 실행(수동 트리거는 backend 내부). 증거는 RDS에 저장되고 직전 런 대비 변경이 상단에 표시됩니다.")}</p>
       </div>
 
-      {selected && run && <EvidenceModal runId={run.id} cell={selected} onClose={() => setSelected(null)} />}
+      {selected && run && <EvidenceModal runId={run.id} cell={selected} labels={labels} onClose={() => setSelected(null)} />}
     </div>
   );
 }

@@ -227,3 +227,16 @@ export function formatDuration(startedAt: string | null, finishedAt: string | nu
   if (lang === "en") return m > 0 ? `${m}m ${s}s` : `${s}s`;
   return m > 0 ? `${m}분 ${s}초` : `${s}초`;
 }
+
+// ── v2.24.0 — 배너·모달·드로어 공용 라벨 맵 (D2, RUL-6): 카탈로그 label_ko/en + surface short 단일 출처, 미로드 시 id 폴백 ──
+export interface LabelMaps { featureLabel: Map<string, string>; surfaceShort: Map<string, string> }
+
+export function labelMaps(catalog: { features: FeatureDef[]; surfaces: SurfaceDef[] } | null | undefined, lang: string): LabelMaps {
+  const featureLabel = new Map<string, string>();
+  const surfaceShort = new Map<string, string>();
+  for (const f of catalog?.features ?? []) featureLabel.set(f.id, (lang === "en" ? f.label_en : f.label_ko) || f.id);
+  for (const s of catalog?.surfaces ?? []) surfaceShort.set(s.id, s.short || s.id);
+  return { featureLabel, surfaceShort };
+}
+export function featureLabelOf(maps: LabelMaps, id: string): string { return maps.featureLabel.get(id) ?? id; }
+export function surfaceShortOf(maps: LabelMaps, id: string): string { return maps.surfaceShort.get(id) ?? id; }

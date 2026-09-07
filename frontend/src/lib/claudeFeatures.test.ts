@@ -1,7 +1,8 @@
 /** Claude API Features 매트릭스 순수 로직 (v2.23.0) — 셀 집계·그룹 구성·헬스 계산 회귀 */
 import { describe, expect, test } from "vitest";
 import {
-  aggregateCell, buildGroups, formatDuration, isDocumented, isProbed, runSummary, surfaceHealth, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, featureLabelOf, formatDuration, isDocumented, isProbed, labelMaps, runSummary, surfaceHealth,
+  surfaceShortOf, surfaceSummary, visibleSegments,
   type FeatureCell, type FeatureDef,
 } from "./claudeFeatures";
 
@@ -165,5 +166,28 @@ describe("cellBadge", () => {
     // 측정된 상태는 영향 없음
     expect(cellBadge("supported", "ga", "ko").label).toBe(STATUS_LABEL.supported);
     expect(cellBadge("not_applicable", "ga", "ko").label).toBe(STATUS_LABEL.not_applicable);
+  });
+});
+
+describe("labelMaps (v2.24.0 — 카탈로그 단일 출처 라벨)", () => {
+  const catalog = {
+    features: [
+      { id: "a", group: "core", label_ko: "가", label_en: "A", desc_ko: "", desc_en: "", doc_url: "u", documented: {}, verification: "evidence", notes: "" },
+      { id: "b", group: "core", label_ko: "", label_en: "", desc_ko: "", desc_en: "", doc_url: "u", documented: {}, verification: "evidence", notes: "" },
+    ] as FeatureDef[],
+    surfaces: [{ id: "bedrock_messages", label: "Bedrock runtime · Messages API", short: "Messages API", group: "bedrock", region: "us-east-1" }],
+  };
+  test("ko/en feature labels and surface short names from the catalog; empty label falls back to id", () => {
+    const ko = labelMaps(catalog, "ko");
+    expect(featureLabelOf(ko, "a")).toBe("가");
+    expect(featureLabelOf(labelMaps(catalog, "en"), "a")).toBe("A");
+    expect(featureLabelOf(ko, "b")).toBe("b");
+    expect(surfaceShortOf(ko, "bedrock_messages")).toBe("Messages API");
+  });
+  test("unknown id and null catalog fall back to the raw id (catalog not loaded yet)", () => {
+    expect(featureLabelOf(labelMaps(catalog, "ko"), "zzz")).toBe("zzz");
+    const empty = labelMaps(null, "ko");
+    expect(featureLabelOf(empty, "a")).toBe("a");
+    expect(surfaceShortOf(empty, "mantle")).toBe("mantle");
   });
 });
