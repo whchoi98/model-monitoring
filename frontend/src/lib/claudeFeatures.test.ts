@@ -1,7 +1,7 @@
 /** Claude API Features 매트릭스 순수 로직 (v2.23.0) — 셀 집계·그룹 구성·헬스 계산 회귀 */
 import { describe, expect, test } from "vitest";
 import {
-  aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isGroupOpen, isProbed, labelMaps, runSummary,
+  aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isGroupOpen, isProbed, labelMaps, pickModel, runSummary,
   summarizeChanges, surfaceFindings, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
   type FeatureCell, type FeatureChange, type FeatureDef, type ModelDef,
 } from "./claudeFeatures";
@@ -61,6 +61,25 @@ describe("buildGroups", () => {
     const g = buildGroups(features, groups, ["cp", "mantle"], cells, "ko", "drift");
     expect(g.map((x) => x.id)).toEqual(["core"]);
     expect(g[0].rows[0].drift).toBe(1);
+  });
+  test("modelKey narrows every cell to that model before aggregation (single-cell badge); pickModel shares the rule", () => {
+    const two = [cell({ feature: "a" }), cell({ feature: "a", model_key: "sonnet-5", model_label: "Sonnet 5", status: "unsupported", verdict: "drift" })];
+    expect(buildGroups(features, groups, ["cp"], two, "ko", "all")[0].rows[0].cells.cp.status).toBe("partial");
+    const only = buildGroups(features, groups, ["cp"], two, "ko", "all", "sonnet-5")[0].rows[0];
+    expect(only.cells.cp).toMatchObject({ status: "unsupported", probed: 1 });
+    expect(only.cells.cp.cells.map((c) => c.model_key)).toEqual(["sonnet-5"]);
+    expect(only.drift).toBe(1);
+    // 선택 모델에 셀이 없으면 empty (N/A 규칙은 aggregateCell이 그대로 적용)
+    expect(buildGroups(features, groups, ["cp"], two, "ko", "all", "fable-5-1")[0].rows[0].cells.cp.status).toBe("empty");
+    expect(pickModel(two, null)).toBe(two);
+    expect(pickModel(two, "sonnet-5").map((c) => c.model_key)).toEqual(["sonnet-5"]);
+    expect(pickModel(two, "fable-5-1")).toEqual([]);
+  });
+  test("modelKey combines with status/drift filters", () => {
+    const two = [cell({ feature: "a" }), cell({ feature: "a", model_key: "sonnet-5", status: "unsupported", verdict: "drift" })];
+    expect(buildGroups(features, groups, ["cp"], two, "ko", "drift", "opus-5")).toEqual([]);          // opus-5는 드리프트 없음
+    expect(buildGroups(features, groups, ["cp"], two, "ko", "drift", "sonnet-5").map((g) => g.id)).toEqual(["core"]);
+    expect(buildGroups(features, groups, ["cp"], two, "ko", "unsupported", "opus-5")).toEqual([]);
   });
 });
 

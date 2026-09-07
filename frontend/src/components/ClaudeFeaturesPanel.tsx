@@ -12,7 +12,7 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, isGroupOpen, labelMaps, runSummary, summarizeChanges,
+  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, isGroupOpen, labelMaps, pickModel, runSummary, summarizeChanges,
   surfaceFindings, surfaceShortOf, surfaceSummary, visibleSegments,
   CHANGE_KIND_LABEL, DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
   type CellAggregate, type CellStatus, type FeatureCell, type FindingChip, type FindingFeatureGroup, type LabelMaps, type RowView,
@@ -302,6 +302,7 @@ export default function ClaudeFeaturesPanel() {
   const [latest, setLatest] = useState<FeaturesLatest | null>(null);
   const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState<CellStatus | "all" | "drift">("all");
+  const [modelFilter, setModelFilter] = useState<string | null>(null);   // D5 모델 칩 (catalog.models[].key), null = 전체 집계
   const [selected, setSelected] = useState<FeatureCell | null>(null);
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
@@ -325,14 +326,17 @@ export default function ClaudeFeaturesPanel() {
 
   const surfaces = useMemo(() => catalog?.surfaces.map((s) => s.id) ?? [], [catalog]);
   const labels = useMemo(() => labelMaps(catalog, lang), [catalog, lang]);
-  const changeSummary = useMemo(() => summarizeChanges(latest?.changes ?? []), [latest]);
   const cells = latest?.results ?? [];
+  // D5 모델 칩: 셀·드리프트·변경을 같은 규칙으로 좁힌다 (null = 전체 집계). 헬스 카드, 배너, 드로어, 매트릭스가 같은 수를 가리켜야 한다.
+  const visibleCells = useMemo(() => pickModel(cells, modelFilter), [cells, modelFilter]);
+  const drift = useMemo(() => pickModel(latest?.drift ?? [], modelFilter), [latest, modelFilter]);
+  const visibleChanges = useMemo(() => pickModel(latest?.changes ?? [], modelFilter), [latest, modelFilter]);
+  const changeSummary = useMemo(() => summarizeChanges(visibleChanges), [visibleChanges]);
   const groups = useMemo(
-    () => (catalog ? buildGroups(catalog.features, catalog.groups, surfaces, cells, lang, filter) : []),
-    [catalog, surfaces, cells, lang, filter],
+    () => (catalog ? buildGroups(catalog.features, catalog.groups, surfaces, cells, lang, filter, modelFilter) : []),
+    [catalog, surfaces, cells, lang, filter, modelFilter],
   );
   const run = latest?.run ?? null;
-  const drift = latest?.drift ?? [];
   const runTotals = runSummary(run?.totals);
   const duration = formatDuration(run?.started_at ?? null, run?.finished_at ?? null, lang);
 
@@ -411,16 +415,16 @@ export default function ClaudeFeaturesPanel() {
       {/* 이전 런 대비 변경 (v2.24.0, D3) — previous_run_id가 있으면 항상 렌더: 목록(10건 초과 '외 N건') 또는 '변경 없음' 카드.
           항목 클릭 → latest.results에서 셀을 찾아 증거 모달. after는 6상태 STATUS_STYLE pill (critic 4-A: N/A가 amber로 찍히던 문제).
           kind 태그(카탈로그 규칙/실측)와 요약 줄은 백엔드가 kind를 내려줄 때만 표시 (RUL-4). */}
-      {run && latest && latest.changes.length > 0 && (
+      {run && latest && visibleChanges.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-gray-300">
-          <div className="text-sm font-semibold text-amber-300 mb-1">{L(`Changes since run #${latest.previous_run_id}: ${latest.changes.length}`, `이전 런(#${latest.previous_run_id}) 대비 변경 ${latest.changes.length}건`)}</div>
+          <div className="text-sm font-semibold text-amber-300 mb-1">{L(`Changes since run #${latest.previous_run_id}: ${visibleChanges.length}`, `이전 런(#${latest.previous_run_id}) 대비 변경 ${visibleChanges.length}건`)}</div>
           {changeSummary.catalog + changeSummary.measured > 0 && (
             <div className="text-[11px] text-gray-400 mb-2">
               {L(`Catalog rule changes ${changeSummary.catalog}, measured changes ${changeSummary.measured}`, `카탈로그 규칙 변경 ${changeSummary.catalog}건, 실측 변경 ${changeSummary.measured}건`)}
             </div>
           )}
           <ul className="space-y-1">
-            {latest.changes.slice(0, 10).map((c) => {
+            {visibleChanges.slice(0, 10).map((c) => {
               const target = findCell(cells, c);
               return (
                 <li key={`${c.feature}|${c.surface}|${c.model_key}`} className="flex items-center gap-2 flex-wrap">
@@ -439,11 +443,11 @@ export default function ClaudeFeaturesPanel() {
                 </li>
               );
             })}
-            {latest.changes.length > 10 && <li className="text-gray-500">{L(`+${latest.changes.length - 10} more`, `외 ${latest.changes.length - 10}건`)}</li>}
+            {visibleChanges.length > 10 && <li className="text-gray-500">{L(`+${visibleChanges.length - 10} more`, `외 ${visibleChanges.length - 10}건`)}</li>}
           </ul>
         </div>
       )}
-      {run && latest && latest.previous_run_id != null && latest.changes.length === 0 && (
+      {run && latest && latest.previous_run_id != null && visibleChanges.length === 0 && (
         <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
           {L(`No changes since run #${latest.previous_run_id}.`, `이전 런(#${latest.previous_run_id}) 대비 변경 없음.`)}
         </div>
@@ -456,7 +460,7 @@ export default function ClaudeFeaturesPanel() {
       {run && catalog && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {catalog.surfaces.map((s) => {
-            const sm = surfaceSummary(cells, s.id);
+            const sm = surfaceSummary(visibleCells, s.id);
             return (
               <button key={s.id} type="button" onClick={() => setSurfaceDetail(s.id)}
                       className="text-left w-full bg-gray-900/50 light:bg-white border border-gray-800 hover:border-blue-500/60 rounded-xl p-4 transition-colors">
@@ -492,6 +496,25 @@ export default function ClaudeFeaturesPanel() {
       {!run && (
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 text-center text-sm text-gray-400">
           {L("No verification run yet — click \"Run verification\" (login required) or wait for the daily schedule.", "아직 실행된 검증 런이 없습니다 — \"검증 런 실행\"(로그인 필요)을 누르거나 일일 스케줄을 기다려 주세요.")}
+        </div>
+      )}
+
+      {/* 모델 칩 (v2.24.0, D5) — 전체 집계 또는 모델 하나의 열만. 행을 숨기지 않으므로 filterActive에는 포함하지 않는다 (RUL-8). */}
+      {run && catalog && (
+        <div className="flex items-center gap-2 flex-wrap">
+          <span className="text-[11px] text-gray-500 mr-1">{L("Model", "모델")}</span>
+          {[{ key: null as string | null, label: L("All (aggregate)", "전체") },
+            ...catalog.models.map((m) => ({ key: m.key as string | null, label: m.label.replace(/^Claude /, "") }))].map((m) => (
+            <button key={m.key ?? "all"} type="button" onClick={() => setModelFilter(m.key)}
+              className={`px-2.5 py-1 text-xs rounded-md transition-colors ${modelFilter === m.key ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"}`}>
+              {m.label}
+            </button>
+          ))}
+          {modelFilter && (
+            <span className="text-[11px] text-gray-500 ml-1">
+              {L("Cells, health cards and banners show this model only.", "셀, 헬스 카드, 배너가 이 모델의 결과만 표시합니다.")}
+            </span>
+          )}
         </div>
       )}
 
@@ -610,7 +633,7 @@ export default function ClaudeFeaturesPanel() {
         const sdef = catalog.surfaces.find((s) => s.id === surfaceDetail);
         if (!sdef) return null;
         return (
-          <SurfaceDrawer surface={sdef} findings={surfaceFindings(cells, sdef.id, catalog.models, lang)} labels={labels}
+          <SurfaceDrawer surface={sdef} findings={surfaceFindings(visibleCells, sdef.id, catalog.models, lang)} labels={labels}
             onPick={setSelected} onClose={() => setSurfaceDetail(null)} />
         );
       })()}

@@ -84,7 +84,7 @@ export interface GroupView { id: string; label: string; rows: RowView[] }
 
 export function buildGroups(
   features: FeatureDef[], groups: FeatureGroupDef[], surfaces: string[], cells: FeatureCell[],
-  lang: string, filter: CellStatus | "all" | "drift",
+  lang: string, filter: CellStatus | "all" | "drift", modelKey: string | null = null,
 ): GroupView[] {
   const byKey = new Map<string, FeatureCell[]>();
   for (const c of cells) {
@@ -101,7 +101,8 @@ export function buildGroups(
       const agg: Record<string, CellAggregate> = {};
       let drift = 0;
       for (const s of surfaces) {
-        const cs = byKey.get(`${f.id}|${s}`) ?? [];
+        // D5: 모델 칩 선택 시 그 모델의 셀만 집계 → 단일 셀 배지(N/A·문서상 지원 규칙은 aggregateCell/cellBadge가 그대로 적용)
+        const cs = (byKey.get(`${f.id}|${s}`) ?? []).filter((c) => modelKey == null || c.model_key === modelKey);
         agg[s] = aggregateCell(cs);
         drift += cs.filter((c) => c.verdict === "drift").length;
       }
@@ -346,4 +347,9 @@ export function surfaceFindings(cells: FeatureCell[], surface: string, models: M
     undocumented: chips((c) => c.verdict === "undocumented"),
     perModel,
   };
+}
+
+// ── v2.24.0 — 모델 칩 (D5): 셀·드리프트·변경 배열을 같은 규칙으로 좁힌다. key null이면 입력 그대로(참조 동일 — useMemo 안정).
+export function pickModel<T extends { model_key: string }>(xs: T[], key: string | null): T[] {
+  return key ? xs.filter((x) => x.model_key === key) : xs;
 }
