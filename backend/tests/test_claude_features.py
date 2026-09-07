@@ -1054,3 +1054,113 @@ def test_transports_record_request_before_calling(monkeypatch):
     with pytest.raises(T.TransportError):
         T.Transport().request("GET", "/v1/models/x")
     assert T.last_request() == {"api": "GET /v1/models/x"}
+
+
+# ==================================================================== v2.24.0 — Task 4: D8(c) api/note 통일 + D8(d) thinking usage
+
+class _SeqT(_FakeT):
+    """호출 순서대로 응답/예외를 내는 전송기 — 2회 호출 프로브(effort, data_residency, _with_fallback) 검증용."""
+
+    def __init__(self, *steps):
+        super().__init__()
+        self.steps = list(steps)
+
+    def messages(self, model_id, body, betas=(), stream=False):
+        self.calls.append(("messages", body, tuple(betas), stream))
+        step = self.steps.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+
+def _text(text="pong", **kw):
+    return T.NormalizedResponse(content=[{"type": "text", "text": text}], stop_reason="end_turn", **kw)
+
+
+def test_request_snapshots_use_api_key_instead_of_path_endpoint_stream():
+    """요청 스냅샷 메타는 `api`/`note` 두 키로 통일 — path/endpoint/stream 혼용 제거 (R7, parity `_req_snapshot` 관례).
+
+    라이브 run #3 cp/fable-5-1: context_window_1m은 {"path": "/v1/models/…"}, models_api는 {"endpoint": "/v1/models/…"} —
+    같은 GET을 두 키로 표기했다.
+    """
+    _, ev = P.probe_token_counting(_FakeT(), "claude-opus-5", "opus-5")
+    assert ev["request"]["api"] == "count_tokens" and "endpoint" not in ev["request"]
+
+    stream = T.NormalizedResponse(content=[{"type": "text", "text": "1,2"}], events=[
+        {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "1,"}},
+        {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "2"}}])
+    ok, ev = P.probe_streaming(_FakeT(resp=stream), "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "messages (stream)" and "stream" not in ev["request"]
+
+    class _ModelsT(_FakeT):
+        routes = frozenset({"messages", "models"})
+        def request(self, method, path, json=None, betas=(), files=None, data=None):
+            return 200, {"id": "claude-opus-5", "capabilities": {}, "max_input_tokens": 1_000_000}
+
+    ok, ev = P.probe_context_window_1m(_ModelsT(), "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "GET /v1/models/claude-opus-5" and "path" not in ev["request"]
+    ok, ev = P.probe_models_api(_ModelsT(), "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "GET /v1/models/claude-opus-5" and "endpoint" not in ev["request"]
+
+    # 소스 수준 가드 — 옛 키가 되살아나지 않도록
+    import inspect
+    src = inspect.getsource(P)
+    assert "endpoint=" not in src and "path=f" not in src
+
+
+def test_multi_call_probes_explain_themselves_with_note():
+    """2회 호출 프로브는 요청 스냅샷에 note로 방법론을 적는다 (parity `note=` 관례, R7)."""
+    ev, _ = P._cache_evidence("m", {"max_tokens": 1}, _text(usage={"input_tokens": 1}), _text(usage={"cache_read_input_tokens": 9}))
+    assert ev["request"]["note"] == "same request twice; cache judged on 2nd call usage"
+
+    t = _SeqT(_text(usage={"output_tokens": 3}),
+              T.TransportError(400, "output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'"))
+    ok, ev = P.probe_effort(t, "claude-opus-5", "opus-5")
+    assert ok is True and ev["request"]["note"] == "2 calls: effort=low, then effort=ultra as negative control"
+    assert ev["negative_control"].startswith("rejected:")
+
+    t = _SeqT(_text(usage={"inference_geo": "us"}), T.TransportError(400, "inference_geo: Input should be 'us'"))
+    ok, ev = P.probe_data_residency(t, "claude-opus-5", "opus-5")
+    assert ok is True and ev["request"]["note"] == "2 calls: inference_geo=us, then inference_geo=mars as negative control"
+
+    t = _SeqT(T.TransportError(400, "tools.0: Input tag 'computer_toolset_20260801' found using 'type' does not match any of the expected tags"),
+              T.NormalizedResponse(content=[{"type": "tool_use", "name": "computer", "input": {"action": "screenshot"}}], stop_reason="tool_use"))
+    ok, ev = P.probe_computer_use(t, "claude-opus-5", "opus-5")
+    assert ok is True and ev["request"]["note"] == "fallback attempt: computer_20251124+beta"
+    assert ev["attempts"][0]["result"].startswith("HTTP 400") and ev["attempts"][1]["result"] == "ok"
+
+
+def test_batch_and_files_probes_name_their_route_sequence():
+    class _RoutesT(_FakeT):
+        routes = frozenset({"messages", "batches", "files"})
+        def request(self, method, path, json=None, betas=(), files=None, data=None):
+            self.calls.append((method, path))
+            if path.startswith("/v1/messages/batches"):
+                return 200, {"id": "msgbatch_1", "processing_status": "in_progress"}
+            if path == "/v1/files":
+                return 200, {"id": "file_1", "type": "file"}
+            return 200, {"id": "file_1"}
+
+    t = _RoutesT()
+    ok, ev = P.probe_batch_processing(t, "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "POST /v1/messages/batches → GET → POST cancel"
+    assert [m for m, _ in t.calls] == ["POST", "GET", "POST"]
+    t = _RoutesT()
+    ok, ev = P.probe_files_api(t, "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "POST /v1/files → GET → DELETE" and ev["deleted"] is True
+    assert [m for m, _ in t.calls] == ["POST", "GET", "DELETE"]
+
+
+def test_thinking_probes_store_usage():
+    """thinking 증거에 usage 전체를 남긴다 — Bedrock Fable 5.1은 요약 텍스트가 비어 thinking_tokens가 유일한 수치 증거 (R10).
+
+    필드명(`output_tokens_details.thinking_tokens`)은 공식 문서 미기재라 숫자만 뽑지 않고 usage 전체를 저장한다
+    (캐싱 프로브 `first_usage`/`second_usage`와 같은 방식).
+    """
+    usage = {"input_tokens": 20, "output_tokens": 15, "output_tokens_details": {"thinking_tokens": 11}}
+    resp = T.NormalizedResponse(content=[{"type": "thinking", "thinking": "", "signature": "sig"}, {"type": "text", "text": "107"}],
+                                usage=usage)
+    ok, ev = P.probe_adaptive_thinking(_FakeT(resp=resp), "global.anthropic.claude-fable-5-1", "fable-5-1")
+    assert ok is True and ev["usage"] == usage and ev["thinking_signed"] is True and ev["thinking_chars"] == 0
+    ok, ev = P.probe_extended_thinking(_FakeT(resp=resp), "claude-opus-5", "opus-5")
+    assert ok is True and ev["usage"] == usage
