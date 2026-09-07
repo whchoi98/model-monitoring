@@ -12,8 +12,9 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, surfaceHealth, DOC_LABEL, STATUS_LABEL, STATUS_STYLE, VERDICT_STYLE,
-  type CellAggregate, type CellStatus, type FeatureCell, type RowView,
+  aggregateCell, buildGroups, cellBadge, formatDuration, runSummary, surfaceSummary, visibleSegments,
+  DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
+  type CellAggregate, type CellStatus, type FeatureCell, type RowView, type SurfaceSummary,
 } from "@/lib/claudeFeatures";
 
 const SURFACE_GROUP_LABEL: Record<string, { en: string; ko: string }> = {
@@ -142,6 +143,22 @@ function CellBadge({ agg, documented, onPick }: { agg: CellAggregate; documented
   );
 }
 
+// 헬스 카드 분포 막대 — parity HealthBar(ParityPanel.tsx:93-110) 이식, features 6세그먼트 (v2.24.0, D1)
+function HealthBar({ summary, lang }: { summary: SurfaceSummary; lang: "en" | "ko" }) {
+  const total = Math.max(1, summary.total);
+  return (
+    <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-800" role="img"
+         aria-label={SEGMENT_ORDER.map((seg) => `${SEGMENT_LABEL[seg][lang]} ${summary.segments[seg]}`).join(", ")}>
+      {SEGMENT_ORDER.map((seg) =>
+        summary.segments[seg] > 0 ? (
+          <div key={seg} className={SEGMENT_BAR_COLOR[seg]} style={{ width: `${(100 * summary.segments[seg]) / total}%` }}
+               title={`${SEGMENT_LABEL[seg][lang]} ${summary.segments[seg]}`} />
+        ) : null,
+      )}
+    </div>
+  );
+}
+
 export default function ClaudeFeaturesPanel() {
   const { lang } = useLang();
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
@@ -175,6 +192,8 @@ export default function ClaudeFeaturesPanel() {
   );
   const run = latest?.run ?? null;
   const drift = latest?.drift ?? [];
+  const runTotals = runSummary(run?.totals);
+  const duration = formatDuration(run?.started_at ?? null, run?.finished_at ?? null, lang);
 
   if (loading) {
     return <div className="flex items-center justify-center py-24"><div className="w-8 h-8 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" /></div>;
@@ -199,8 +218,20 @@ export default function ClaudeFeaturesPanel() {
           {run && (
             <p className="text-xs text-gray-500 mt-1">
               {L("Last run", "최근 런")} #{run.id} · {run.finished_at ? new Date(run.finished_at).toLocaleString() : "-"} · catalog {run.catalog_version}
+              {duration && <> · {L("took", "소요")} {duration}</>}
               {run.running && <span className="ml-2 text-blue-400">● {L("run in progress…", "런 실행 중…")}</span>}
             </p>
+          )}
+          {/* 런 합계 스트립 (C9, v2.24.0) — 6 status 합 = 전체 셀, 드리프트는 verdict 카운트라 별도 pill (배너·카드와 같은 수를 가리켜야 함).
+              run.totals는 런 전체 값이라 모델 칩 필터(D5)에 영향받지 않는다. */}
+          {run && runTotals && (
+            <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-1.5 text-[11px] tabular-nums">
+              <span className="px-1.5 py-0.5 rounded bg-gray-800 text-gray-400">{runTotals.total} {L("cells", "셀")}</span>
+              {runTotals.statuses.map((x) => (
+                <span key={x.status} className={STATUS_TEXT[x.status]}>● {x.count} {STATUS_LABEL[x.status]}</span>
+              ))}
+              <span className="px-1.5 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300">▲ {L("drift", "드리프트")} {runTotals.drift}</span>
+            </div>
           )}
         </div>
         <button onClick={handleTrigger} className="px-3 py-1.5 text-xs font-medium rounded-lg bg-blue-600 hover:bg-blue-500 text-white transition-colors">
@@ -241,20 +272,37 @@ export default function ClaudeFeaturesPanel() {
         </div>
       )}
 
-      {/* 엔드포인트 헬스 카드 */}
+      {/* 엔드포인트 헬스 카드 (v2.24.0, D1) — 헤드라인 = 문서 기준 헬스(docHealth: 문서상 GA/Beta ∧ 실측된 셀 중 supported 비율),
+          6세그먼트 분포 막대(전체 셀), "{total} 셀" 칩(N/A 포함), 드리프트 pill(>0). docProbed=0이면 "-" (critic 4-C).
+          카운트 줄은 visibleSegments (RUL-5: supported/unsupported/broken 항상, 나머지는 >0일 때만). */}
       {run && catalog && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {catalog.surfaces.map((s) => {
-            const h = surfaceHealth(cells, s.id);
+            const sm = surfaceSummary(cells, s.id);
             return (
               <div key={s.id} className="bg-gray-900/50 light:bg-white border border-gray-800 rounded-xl p-4">
-                <div className="text-sm font-bold text-gray-100">{s.label}</div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-sm font-bold text-gray-100">{s.label}</span>
+                  <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400 tabular-nums">{sm.total} {L("cells", "셀")}</span>
+                  {sm.drift > 0 && (
+                    <span className="px-1.5 py-0.5 text-[10px] rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300 tabular-nums">▲ {L("drift", "드리프트")} {sm.drift}</span>
+                  )}
+                </div>
                 <div className="text-[11px] text-gray-500 font-mono">{s.region}</div>
                 <div className="mt-2 flex items-end gap-2">
-                  <span className="text-2xl font-bold text-gray-100 tabular-nums">{h.health}%</span>
-                  <span className="text-[11px] text-gray-500 mb-1">{L("of should-work checks pass", "동작해야 하는 검사 통과")}</span>
+                  <span className="text-2xl font-bold text-gray-100 tabular-nums leading-none">{sm.docHealth == null ? "-" : `${sm.docHealth}%`}</span>
+                  <span className="text-[11px] text-gray-500">
+                    {sm.docHealth == null
+                      ? L("no documented feature measured on this endpoint", "문서상 제공 기능 중 실측된 셀 없음")
+                      : L("of documented (GA/Beta) features work as measured", "문서상 제공(GA/Beta) 기능 중 실측 동작")}
+                  </span>
                 </div>
-                <div className="text-[11px] mt-1"><span className="text-emerald-300">● {h.supported}</span> <span className="text-rose-300 ml-2">● {h.broken} broken</span></div>
+                <div className="mt-2"><HealthBar summary={sm} lang={lang} /></div>
+                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-[11px] tabular-nums">
+                  {visibleSegments(sm).map((seg) => (
+                    <span key={seg} className={SEGMENT_TEXT[seg]}>● {sm.segments[seg]} {SEGMENT_LABEL[seg][lang]}</span>
+                  ))}
+                </div>
               </div>
             );
           })}
