@@ -82,8 +82,9 @@ export default function AppHeader({
   return (
     <header className="sticky top-0 z-40 bg-gray-950/90 backdrop-blur border-b border-gray-800">
       <div className="flex items-center justify-between px-4 sm:px-6 py-3 gap-2">
-        {/* 로고 + 제목 (모바일에선 설명·버전 숨김) */}
-        <div className="flex items-center gap-3 min-w-0">
+        {/* 로고 + 제목 (모바일에선 설명·버전 숨김). lg+에서는 브랜드를 고정하고 오른쪽 그룹(내비)이 줄어든다 —
+            EN 내비 11개가 KO보다 넓어 1440px에서 브랜드가 폭 0으로 눌리고 부제가 한 단어씩 줄바꿈되던 문제(v2.24.0). */}
+        <div className="flex items-center gap-3 min-w-0 lg:shrink-0">
           <div className="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center shrink-0">
             <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -91,12 +92,13 @@ export default function AppHeader({
           </div>
           <div className="min-w-0">
             <h1 className="text-base sm:text-lg font-bold text-gray-100 truncate">{t.appTitle}</h1>
-            <p className="text-xs text-gray-500 hidden sm:block">{t.appDesc}</p>
-            <span className="text-[10px] text-gray-600 font-mono tabular-nums hidden sm:inline">{APP_VERSION}</span>
+            <p className="text-xs text-gray-500 truncate hidden sm:block">{t.appDesc}</p>
+            <span className="text-[10px] text-gray-600 font-mono tabular-nums hidden sm:inline-block max-w-full truncate">{APP_VERSION}</span>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+        {/* lg 미만: shrink-0 유지(내비가 숨겨져 좁고, 줄어들면 햄버거가 뷰포트 밖으로 밀림) — lg+에서만 줄어들어 내비가 스크롤 */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0 lg:min-w-0 lg:shrink">
           {/* 언어/테마 */}
           <div className="flex bg-gray-800/50 rounded-lg p-0.5">
             <button
@@ -114,8 +116,8 @@ export default function AppHeader({
             <ThemeToggle />
           </div>
 
-          {/* 데스크톱 내비 (lg 이상) */}
-          <nav className="hidden lg:flex bg-gray-800/50 rounded-lg p-0.5">
+          {/* 데스크톱 내비 (lg 이상) — 폭이 부족하면 브랜드를 누르는 대신 내비 자체가 가로 스크롤 */}
+          <nav className="hidden lg:flex overflow-x-auto bg-gray-800/50 rounded-lg p-0.5">
             {items.map((item) => (
               <NavEntry key={item.key} item={item} onNavigate={close} />
             ))}
