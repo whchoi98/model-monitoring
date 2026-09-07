@@ -314,6 +314,18 @@ describe("surfaceFindings", () => {
     expect(empty).toMatchObject({ surface: "cp", total: 0, drift: [], broken: [], intendedGaps: [], undecidedGaps: [], undocumented: [] });
     expect(empty.perModel.every((m) => m.docHealth === null && m.na_reason === null)).toBe(true);
   });
+  test("modelKey (D5 chip) narrows cells and perModel to the selected model — unselected models are not listed", () => {
+    const f = surfaceFindings(cells, "mantle", models, "ko", "opus-5");
+    expect(f.perModel.map((m) => m.model_key)).toEqual(["opus-5"]);
+    expect(f.total).toBe(6);
+    // opus-5의 messages_basic은 supported → 드리프트 그룹에서 빠지고, fallback_credit은 1/1
+    expect(f.drift.map((g) => [g.feature, g.count, g.probed])).toEqual([["fallback_credit", 1, 1]]);
+    expect(f.intendedGaps[0].models).toEqual(["Claude Opus 5"]);
+    // 이미 좁혀진 셀(visibleCells)을 함께 넘겨도 동일 — 패널은 pickModel 결과 + modelKey를 같이 넘긴다
+    expect(surfaceFindings(pickModel(cells, "opus-5"), "mantle", models, "ko", "opus-5")).toEqual(f);
+    // null이면 종전 동작 그대로
+    expect(surfaceFindings(cells, "mantle", models, "ko", null)).toEqual(findings());
+  });
 });
 
 describe("latency helpers (D6)", () => {

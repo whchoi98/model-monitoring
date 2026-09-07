@@ -20,9 +20,10 @@ export interface FeatureRunInfo {
   id: number; started_at: string | null; finished_at: string | null;
   totals: Record<string, number> | null; catalog_version: string | null; running: boolean;
 }
-// kind (v2.24.0, 백엔드 D3/RUL-11): "catalog" = 직전 런에 없던 셀, 또는 before/after 중 하나가 사전판정 행(latency_ms IS NULL —
-// 러너가 not_applicable/skipped로 결정), "measured" = 둘 다 프로브 결과. 구 페이로드에는 없으므로 optional(RUL-4) —
-// 태그·요약 줄은 kind가 있을 때만 렌더.
+// kind (v2.24.0, 백엔드 D3/RUL-11): "catalog" = 직전 런에 없던 셀, 또는 before/after 중 하나가 사전판정 행(latency_ms IS NULL AND
+// error_message IS NULL — 러너가 not_applicable/skipped로 결정; latency 없이 error_message가 있는 행은 프로브 실패라 measured),
+// "measured" = 둘 다 프로브 결과. 판별식은 routers/features.py build_latest_payload · engine.change_kind와 동일.
+// 구 페이로드에는 없으므로 optional(RUL-4) — 태그·요약 줄은 kind가 있을 때만 렌더.
 export type ChangeKind = "catalog" | "measured";
 export interface FeatureChange {
   feature: string; surface: string; model_key: string; model_label: string;
@@ -176,7 +177,7 @@ export interface SurfaceSummary {
   supported: number; broken: number; health: number; // surfaceHealth() 호환 필드
 }
 
-/** 헬스 카드 헤드라인은 "문서상 제공(GA/Beta) 기능 중 실측 동작 비율"(docHealth). 음성 일치(documented=no ∧ unsupported)는
+/** 헬스 카드 헤드라인은 "문서상 제공(GA/Beta) 셀 중 실측 supported 비율"(docHealth — 단위는 피처×모델 셀). 음성 일치(documented=no ∧ unsupported)는
  *  분모·분자 어디에도 들어가지 않는다 — match/(match+drift) 공식이 76%로 부풀던 문제의 교정(verify-R2). */
 export function surfaceSummary(cells: FeatureCell[], surface: string): SurfaceSummary {
   const counts: Record<FeatureStatus, number> = { supported: 0, unsupported: 0, broken: 0, inconclusive: 0, skipped: 0, not_applicable: 0 };
@@ -295,9 +296,12 @@ export interface SurfaceFindings {
 
 const MANTLE_NA_EN = "Not measurable — Mantle serves this model only in US GovCloud regions (us-gov-west-1); shown as N/A.";
 
-export function surfaceFindings(cells: FeatureCell[], surface: string, models: ModelDef[], lang: string): SurfaceFindings {
-  const own = cells.filter((c) => c.surface === surface);
-  const order = new Map(models.map((m, i) => [m.key, i]));
+export function surfaceFindings(cells: FeatureCell[], surface: string, models: ModelDef[], lang: string, modelKey: string | null = null): SurfaceFindings {
+  // D5: 모델 칩이 켜져 있으면 셀과 perModel 행을 그 모델로 좁힌다 — 선택되지 않은 모델이 6절에 "문서상 프로브 셀 없음"으로
+  // 나열되던 필터 잔상 방지. 패널이 이미 좁힌 visibleCells를 넘겨도 결과는 같다(멱등).
+  const own = cells.filter((c) => c.surface === surface && (modelKey == null || c.model_key === modelKey));
+  const scopedModels = modelKey == null ? models : models.filter((m) => m.key === modelKey);
+  const order = new Map(scopedModels.map((m, i) => [m.key, i]));
   const byModel = (a: FeatureCell, b: FeatureCell) => (order.get(a.model_key) ?? 99) - (order.get(b.model_key) ?? 99);
 
   const probedByFeature = new Map<string, number>();
@@ -321,7 +325,7 @@ export function surfaceFindings(cells: FeatureCell[], surface: string, models: M
       return { feature, models: sorted.map((c) => c.model_label), cells: sorted };
     });
 
-  const perModel: ModelDocHealth[] = models.map((m) => {
+  const perModel: ModelDocHealth[] = scopedModels.map((m) => {
     let supported = 0, probed = 0, drift = 0;
     for (const c of own) {
       if (c.model_key !== m.key) continue;

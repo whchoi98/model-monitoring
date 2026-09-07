@@ -84,7 +84,7 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
             <span className="text-xs text-gray-500">{lang === "en" ? "documented" : "문서"}: <b className="text-gray-300">{DOC_LABEL[cell.documented]}</b></span>
             <span className={`text-xs ${VERDICT_STYLE[cell.verdict]}`}>{lang === "en" ? "verdict" : "판정"}: {cell.verdict}</span>
             {data?.verification && <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400" title={verificationDesc(data.verification, lang)}>{data.verification}</span>}
-            <span className="text-xs text-gray-500 ml-auto tabular-nums">{cell.latency_ms != null ? `${Math.round(cell.latency_ms)} ms` : "-"}</span>
+            <span className="text-xs text-gray-500 ml-auto tabular-nums">{isProbed(cell.status) ? formatMs(cell.latency_ms) : "-"}</span>
           </div>
           <p className={`text-sm leading-relaxed ${isOk ? "text-gray-300" : cell.status === "broken" ? "text-rose-300" : "text-amber-300"}`}>{verdictText[cell.status]}</p>
           {data?.notes && <p className="text-[11px] text-gray-500">{data.notes}</p>}
@@ -108,13 +108,20 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
 }
 
 // Key Findings 드로어 (v2.24.0, D4) — surface 카드 클릭 → verdict 축 6섹션. 라벨은 카탈로그 LabelMaps(D2/RUL-6), 항목·칩 클릭 → 증거 모달(RUL-9).
-function SurfaceDrawer({ surface, findings, labels, onPick, onClose }: {
-  surface: SurfaceDef; findings: SurfaceFindings; labels: LabelMaps;
+// scope: 모델 칩(D5)이 켜져 있을 때 그 모델 라벨 — 메타 줄이 "전체 N셀"이 아니라 "<모델> 모델의 N셀"이라고 말해야 한다.
+function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClose }: {
+  surface: SurfaceDef; findings: SurfaceFindings; labels: LabelMaps; scope?: string | null;
   onPick: (c: FeatureCell) => void; onClose: () => void;
 }) {
   const { lang } = useLang();
   const T = (en: string, ko: string) => (lang === "en" ? en : ko);
   const label = (id: string) => featureLabelOf(labels, id);
+  // Escape로 닫기 — 폰 폭에서는 aside가 오버레이를 거의 덮어 × 외에 닫을 수단이 없었다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   const none = (
     <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{T("None.", "없음")}</div>
   );
@@ -163,15 +170,16 @@ function SurfaceDrawer({ surface, findings, labels, onPick, onClose }: {
   return (
     <div className="fixed inset-0 z-50">
       <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
-      <aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto bg-gray-900 light:bg-white border-l border-gray-800 shadow-2xl p-6 space-y-6">
-        <div>
+      {/* 폰 폭에서도 왼쪽 2.5rem은 오버레이가 남아 탭으로 닫을 수 있다. 헤더는 sticky — 긴 드로어를 스크롤해도 ×가 항상 닿는다. */}
+      <aside className="absolute right-0 top-0 h-full w-[calc(100%-2.5rem)] max-w-md overflow-y-auto bg-gray-900 light:bg-white border-l border-gray-800 shadow-2xl p-6 pt-0 space-y-6">
+        <div className="sticky top-0 z-10 -mx-6 px-6 pt-6 pb-3 bg-gray-900 light:bg-white">
           <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-bold text-gray-100">{surface.label}</h2>
             <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
-            <span className="font-mono">{surface.id}</span> · <span className="font-mono">{surface.region}</span> · {T(`latest run, computed from all ${findings.total} cells of this endpoint`, `최근 런 기준, 이 엔드포인트의 전체 ${findings.total}셀에서 계산`)}
+            <span className="font-mono">{surface.id}</span> · <span className="font-mono">{surface.region}</span> · {T(`latest run, ${scope ? `${scope} only, ` : ""}${findings.total} cells of this endpoint`, `최근 런 기준, ${scope ? `${scope} 모델의 ` : "이 엔드포인트의 전체 "}${findings.total}셀에서 계산`)}
           </p>
         </div>
 
@@ -447,8 +455,10 @@ export default function ClaudeFeaturesPanel() {
                   {c.kind && (
                     <span className={`px-1.5 py-px text-[10px] rounded ${c.kind === "catalog" ? "bg-sky-500/10 text-sky-300" : "bg-gray-800 text-gray-400"}`}>{CHANGE_KIND_LABEL[c.kind][lang]}</span>
                   )}
+                  {/* 액센트 -100 톤은 globals.css 라이트 리매핑 대상이 아니다(200/300/400만) — amber-100은 라이트 배너 위에서 1.04:1로 사라진다.
+                      드리프트 배너의 rose-200과 같은 단계인 amber-200을 쓴다. */}
                   <button type="button" disabled={!target} onClick={() => target && setSelected(target)}
-                          className={target ? "text-amber-100 hover:underline" : "text-gray-400 cursor-default"}>
+                          className={target ? "text-amber-200 hover:underline" : "text-gray-400 cursor-default"}>
                     {featureLabelOf(labels, c.feature)}
                   </button>
                   <span className="font-mono text-[10px] text-gray-600">{c.feature}</span>
@@ -492,8 +502,8 @@ export default function ClaudeFeaturesPanel() {
                   <span className="text-2xl font-bold text-gray-100 tabular-nums leading-none">{sm.docHealth == null ? "-" : `${sm.docHealth}%`}</span>
                   <span className="text-[11px] text-gray-500">
                     {sm.docHealth == null
-                      ? L("no documented feature measured on this endpoint", "문서상 제공 기능 중 실측된 셀 없음")
-                      : L("of documented (GA/Beta) features work as measured", "문서상 제공(GA/Beta) 기능 중 실측 동작")}
+                      ? L("no documented (GA/Beta) cell measured on this endpoint", "문서상 제공(GA/Beta) 셀 중 실측된 셀 없음")
+                      : L("of documented (GA/Beta) cells measured supported", "문서상 제공(GA/Beta) 셀 중 실측 supported")}
                   </span>
                 </div>
                 <div className="mt-2"><HealthBar summary={sm} lang={lang} /></div>
@@ -561,9 +571,11 @@ export default function ClaudeFeaturesPanel() {
       {run && catalog && (
         <div className="overflow-x-auto bg-gray-900/50 border border-gray-800 rounded-xl">
           <table className="w-full text-xs border-collapse">
+            {/* 고정(sticky) 피처 열은 z-20(thead)/z-10(tbody) — CellBadge의 relative 래퍼가 DOM 뒤라 z 없이는 가로 스크롤 시 배지가
+                피처 이름 위에 그려진다. 드롭다운(z-20)은 tbody 고정 셀(z-10)보다 위에 남는다. */}
             <thead>
               <tr className="border-b border-gray-800">
-                <th rowSpan={2} className="text-left px-3 py-2 text-gray-400 font-medium sticky left-0 bg-gray-900 light:bg-white align-bottom">{L("Feature", "피처")}</th>
+                <th rowSpan={2} className="text-left px-3 py-2 text-gray-400 font-medium sticky left-0 z-20 bg-gray-900 light:bg-white align-bottom">{L("Feature", "피처")}</th>
                 {colGroups.map((g) => (
                   <th key={g.group} colSpan={g.ids.length} className="text-center px-3 pt-2 text-gray-300 font-semibold whitespace-nowrap border-l border-gray-800">
                     {SURFACE_GROUP_LABEL[g.group]?.[lang === "en" ? "en" : "ko"] ?? g.group}
@@ -583,7 +595,7 @@ export default function ClaudeFeaturesPanel() {
                   <Fragment key={g.id}>
                     <tr onClick={() => { if (filterActive) return; setCollapsed((c) => { const n = new Set(c); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; }); }}
                         className={`border-t-2 border-t-gray-700 bg-gray-900/80 light:bg-gray-50 ${filterActive ? "" : "cursor-pointer hover:bg-gray-800/60"}`}>
-                      <td className="px-3 py-2 sticky left-0 bg-gray-900 light:bg-white" colSpan={1}>
+                      <td className="px-3 py-2 sticky left-0 z-10 bg-gray-900 light:bg-white" colSpan={1}>
                         {!filterActive && <span className={`text-[10px] text-gray-500 inline-block mr-2 transition-transform ${open ? "rotate-90" : ""}`}>▶</span>}
                         <span className="font-bold text-gray-100 text-sm">{g.label}</span>
                         <span className="ml-2 text-[11px] text-gray-500">{g.rows.length}</span>
@@ -592,7 +604,7 @@ export default function ClaudeFeaturesPanel() {
                     </tr>
                     {open && g.rows.map((row: RowView) => (
                       <tr key={row.id} className="border-b border-gray-800/60" title={row.desc}>
-                        <td className="px-3 py-1.5 pl-8 sticky left-0 bg-gray-900 light:bg-white">
+                        <td className="px-3 py-1.5 pl-8 sticky left-0 z-10 bg-gray-900 light:bg-white">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-200 text-[12px]">{row.label}</span>
                             {row.verification !== "evidence" && <span className="px-1 py-px text-[9px] rounded bg-gray-800 text-gray-500" title={verificationDesc(row.verification, lang)}>{row.verification}</span>}
@@ -661,8 +673,10 @@ export default function ClaudeFeaturesPanel() {
       {surfaceDetail && run && catalog && (() => {
         const sdef = catalog.surfaces.find((s) => s.id === surfaceDetail);
         if (!sdef) return null;
+        // D5: 드로어도 모델 칩을 공유 — 셀은 visibleCells, perModel 행은 modelKey로 좁히고 메타 줄에 모델 라벨(scope)을 표기한다.
+        const scope = modelFilter ? (catalog.models.find((m) => m.key === modelFilter)?.label.replace(/^Claude /, "") ?? modelFilter) : null;
         return (
-          <SurfaceDrawer surface={sdef} findings={surfaceFindings(visibleCells, sdef.id, catalog.models, lang)} labels={labels}
+          <SurfaceDrawer surface={sdef} findings={surfaceFindings(visibleCells, sdef.id, catalog.models, lang, modelFilter)} labels={labels} scope={scope}
             onPick={setSelected} onClose={() => setSurfaceDetail(null)} />
         );
       })()}
