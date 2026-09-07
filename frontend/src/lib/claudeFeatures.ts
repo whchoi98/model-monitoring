@@ -271,3 +271,79 @@ export function findCell(cells: FeatureCell[], ref: { feature: string; surface: 
 export function isGroupOpen(filterActive: boolean, collapsed: Set<string>, groupId: string): boolean {
   return filterActive || !collapsed.has(groupId);
 }
+
+// ── Key Findings 드로어 파생 (v2.24.0, D4) ──────────────────────────────────────────
+// surface 카드 클릭 → verdict 축 6섹션. 셀(모델별 FeatureCell) 단위로 계산하므로 aggregateCell의 4모델 접기와 충돌 없음.
+// 술어 isProbed/isDocumented는 위(RUL-7)의 단일 정의를 사용한다.
+export interface FindingFeatureGroup { feature: string; count: number; probed: number; models: string[]; cells: FeatureCell[] }
+export interface FindingChip { feature: string; models: string[]; cells: FeatureCell[] }
+export interface ModelDocHealth {
+  model_key: string; model_label: string;
+  supported: number;         // 문서상 GA/Beta이면서 probed인 셀 중 supported
+  probed: number;            // 문서상 GA/Beta이면서 probed인 셀
+  docHealth: number | null;  // Math.round(100 * supported / probed), probed === 0 → null (막대 대신 "-")
+  drift: number;             // verdict === "drift" 셀 수 (이 모델, 이 surface)
+  na_reason: string | null;  // 이 surface에서 모델 미서빙(mantle=null)일 때만 — 막대 대신 사유 표기
+}
+export interface SurfaceFindings {
+  surface: string; total: number;
+  drift: FindingFeatureGroup[]; broken: FindingFeatureGroup[];
+  intendedGaps: FindingChip[]; undecidedGaps: FindingChip[]; undocumented: FindingChip[];
+  perModel: ModelDocHealth[];
+}
+
+const MANTLE_NA_EN = "Not measurable — Mantle serves this model only in US GovCloud regions (us-gov-west-1); shown as N/A.";
+
+export function surfaceFindings(cells: FeatureCell[], surface: string, models: ModelDef[], lang: string): SurfaceFindings {
+  const own = cells.filter((c) => c.surface === surface);
+  const order = new Map(models.map((m, i) => [m.key, i]));
+  const byModel = (a: FeatureCell, b: FeatureCell) => (order.get(a.model_key) ?? 99) - (order.get(b.model_key) ?? 99);
+
+  const probedByFeature = new Map<string, number>();
+  for (const c of own) if (isProbed(c.status)) probedByFeature.set(c.feature, (probedByFeature.get(c.feature) ?? 0) + 1);
+
+  const bucket = (pick: (c: FeatureCell) => boolean): Map<string, FeatureCell[]> => {
+    const m = new Map<string, FeatureCell[]>();
+    for (const c of own) if (pick(c)) m.set(c.feature, [...(m.get(c.feature) ?? []), c]);
+    return m;
+  };
+  const groups = (pick: (c: FeatureCell) => boolean): FindingFeatureGroup[] =>
+    Array.from(bucket(pick).entries())
+      .map(([feature, cs]) => {
+        const sorted = [...cs].sort(byModel);
+        return { feature, count: sorted.length, probed: probedByFeature.get(feature) ?? 0, models: sorted.map((c) => c.model_label), cells: sorted };
+      })
+      .sort((a, b) => b.count - a.count || a.feature.localeCompare(b.feature));
+  const chips = (pick: (c: FeatureCell) => boolean): FindingChip[] =>
+    Array.from(bucket(pick).entries()).map(([feature, cs]) => {
+      const sorted = [...cs].sort(byModel);
+      return { feature, models: sorted.map((c) => c.model_label), cells: sorted };
+    });
+
+  const perModel: ModelDocHealth[] = models.map((m) => {
+    let supported = 0, probed = 0, drift = 0;
+    for (const c of own) {
+      if (c.model_key !== m.key) continue;
+      if (c.verdict === "drift") drift += 1;
+      if (!isDocumented(c.documented) || !isProbed(c.status)) continue;
+      probed += 1;
+      if (c.status === "supported") supported += 1;
+    }
+    const notServed = surface === "mantle" && m.mantle === null;
+    return {
+      model_key: m.key, model_label: m.label, supported, probed,
+      docHealth: probed === 0 ? null : Math.round((100 * supported) / probed), drift,
+      na_reason: notServed ? (lang === "en" ? MANTLE_NA_EN : (m.mantle_reason ?? "측정 불가")) : null,
+    };
+  });
+
+  return {
+    surface, total: own.length,
+    drift: groups((c) => c.verdict === "drift"),
+    broken: groups((c) => c.status === "broken"),
+    intendedGaps: chips((c) => c.status === "unsupported" && c.verdict === "match"),
+    undecidedGaps: chips((c) => c.status === "unsupported" && c.verdict === "none"),
+    undocumented: chips((c) => c.verdict === "undocumented"),
+    perModel,
+  };
+}

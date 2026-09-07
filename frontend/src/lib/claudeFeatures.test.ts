@@ -2,8 +2,8 @@
 import { describe, expect, test } from "vitest";
 import {
   aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isGroupOpen, isProbed, labelMaps, runSummary,
-  summarizeChanges, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
-  type FeatureCell, type FeatureChange, type FeatureDef,
+  summarizeChanges, surfaceFindings, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
+  type FeatureCell, type FeatureChange, type FeatureDef, type ModelDef,
 } from "./claudeFeatures";
 
 const cell = (p: Partial<FeatureCell>): FeatureCell => ({
@@ -221,5 +221,77 @@ describe("isGroupOpen (v2.24.0 — 필터 활성 시 강제 펼침)", () => {
   test("active filter forces every group open, even one collapsed earlier (collapse → drift filter regression)", () => {
     expect(isGroupOpen(true, new Set(["model"]), "model")).toBe(true);
     expect(isGroupOpen(true, new Set(), "core")).toBe(true);
+  });
+});
+
+describe("surfaceFindings", () => {
+  const models: ModelDef[] = [
+    { key: "fable-5-1", label: "Claude Fable 5.1", cp: "claude-fable-5-1", mantle: null, bedrock: "global.anthropic.claude-fable-5-1",
+      mantle_reason: "측정 불가 — GovCloud 전용" },
+    { key: "fable-5", label: "Claude Fable 5", cp: "claude-fable-5", mantle: "anthropic.claude-fable-5", bedrock: "global.anthropic.claude-fable-5" },
+    { key: "opus-5", label: "Claude Opus 5", cp: "claude-opus-5", mantle: "anthropic.claude-opus-5", bedrock: "global.anthropic.claude-opus-5" },
+  ];
+  const mantle = (p: Partial<FeatureCell>) => cell({ surface: "mantle", ...p });
+  const cells: FeatureCell[] = [
+    // messages_basic: Fable 5.1 N/A, Fable 5 drift, Opus 5 ok
+    mantle({ feature: "messages_basic", model_key: "fable-5-1", model_label: "Claude Fable 5.1", model_id: null, status: "not_applicable", verdict: "none", latency_ms: null }),
+    mantle({ feature: "messages_basic", model_key: "fable-5", model_label: "Claude Fable 5", status: "unsupported", verdict: "drift" }),
+    mantle({ feature: "messages_basic", model_key: "opus-5", model_label: "Claude Opus 5" }),
+    // fallback_credit (documented beta): 두 모델 모두 drift
+    mantle({ feature: "fallback_credit", model_key: "fable-5", model_label: "Claude Fable 5", documented: "beta", status: "unsupported", verdict: "drift" }),
+    mantle({ feature: "fallback_credit", model_key: "opus-5", model_label: "Claude Opus 5", documented: "beta", status: "unsupported", verdict: "drift" }),
+    // batch_processing (documented no): 의도된 격차
+    mantle({ feature: "batch_processing", model_key: "fable-5", model_label: "Claude Fable 5", documented: "no", status: "unsupported", verdict: "match" }),
+    mantle({ feature: "batch_processing", model_key: "opus-5", model_label: "Claude Opus 5", documented: "no", status: "unsupported", verdict: "match" }),
+    // strict_tool_use (documented unknown): 문서 미확정
+    mantle({ feature: "strict_tool_use", model_key: "opus-5", model_label: "Claude Opus 5", documented: "unknown", status: "unsupported", verdict: "none" }),
+    // browser_use (documented no, supported): 문서에 없는 동작
+    mantle({ feature: "browser_use", model_key: "opus-5", model_label: "Claude Opus 5", documented: "no", status: "supported", verdict: "undocumented" }),
+    // pdf_support (documented no, broken → verdict none): 프로브 오류 섹션에는 status 기준으로 잡혀야 함
+    mantle({ feature: "pdf_support", model_key: "opus-5", model_label: "Claude Opus 5", documented: "no", status: "broken", verdict: "none" }),
+    // 다른 surface — 무시돼야 함
+    cell({ feature: "messages_basic", surface: "cp", status: "unsupported", verdict: "drift" }),
+  ];
+  // lazy: describe 스코프에서 직접 호출하면 구현 전(import가 undefined) TypeError가 수집 단계에서 나 파일 전체가 `Failed Suites 1`로
+  // 죽는다(기존 25건도 실행되지 않음). 각 test 안에서 호출해야 red 단계가 "6건 실패, 25건 통과"로 나온다.
+  const findings = () => surfaceFindings(cells, "mantle", models, "ko");
+
+  test("drift grouped by feature, count desc then id asc; probed excludes N/A", () => {
+    const f = findings();
+    expect(f.drift.map((g) => [g.feature, g.count, g.probed])).toEqual([["fallback_credit", 2, 2], ["messages_basic", 1, 2]]);
+    expect(f.drift[1].models).toEqual(["Claude Fable 5"]);
+    expect(f.drift[0].cells.map((c) => c.model_key)).toEqual(["fable-5", "opus-5"]);
+  });
+  test("broken is status-based: documented no + broken (verdict none) is still listed", () => {
+    const f = findings();
+    expect(f.broken.map((g) => [g.feature, g.count, g.probed])).toEqual([["pdf_support", 1, 1]]);
+  });
+  test("intended / undecided / undocumented buckets are disjoint and unique per feature", () => {
+    const f = findings();
+    expect(f.intendedGaps.map((c) => c.feature)).toEqual(["batch_processing"]);
+    expect(f.intendedGaps[0].models).toEqual(["Claude Fable 5", "Claude Opus 5"]);
+    expect(f.undecidedGaps.map((c) => c.feature)).toEqual(["strict_tool_use"]);
+    expect(f.undocumented.map((c) => c.feature)).toEqual(["browser_use"]);
+  });
+  test("perModel: docHealth = supported/probed among documented ga|beta, null when probed 0, mantle=null → na_reason", () => {
+    const f = findings();
+    expect(f.perModel.map((m) => m.model_key)).toEqual(["fable-5-1", "fable-5", "opus-5"]);
+    const by = Object.fromEntries(f.perModel.map((m) => [m.model_key, m]));
+    expect(by["fable-5-1"]).toMatchObject({ supported: 0, probed: 0, docHealth: null, drift: 0, na_reason: "측정 불가 — GovCloud 전용" });
+    // fable-5: messages_basic(ga) + fallback_credit(beta) 둘 다 unsupported; batch_processing(no)는 분모 제외
+    expect(by["fable-5"]).toMatchObject({ supported: 0, probed: 2, docHealth: 0, drift: 2, na_reason: null });
+    // opus-5: messages_basic(ga, supported) + fallback_credit(beta, unsupported) → 1/2; unknown/no 행은 분모 제외
+    expect(by["opus-5"]).toMatchObject({ supported: 1, probed: 2, docHealth: 50, drift: 1, na_reason: null });
+  });
+  test("other surfaces are ignored; total counts every cell of the surface incl. N/A", () => {
+    const f = findings();
+    expect(f.total).toBe(10);
+    expect(surfaceFindings(cells, "cp", models, "ko").drift.map((g) => g.feature)).toEqual(["messages_basic"]);
+  });
+  test("lang en → English na_reason; no drift → empty arrays, not undefined", () => {
+    expect(surfaceFindings(cells, "mantle", models, "en").perModel[0].na_reason).toMatch(/GovCloud/);
+    const empty = surfaceFindings([], "cp", models, "ko");
+    expect(empty).toMatchObject({ surface: "cp", total: 0, drift: [], broken: [], intendedGaps: [], undecidedGaps: [], undocumented: [] });
+    expect(empty.perModel.every((m) => m.docHealth === null && m.na_reason === null)).toBe(true);
   });
 });
