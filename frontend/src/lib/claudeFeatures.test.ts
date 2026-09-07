@@ -1,9 +1,9 @@
 /** Claude API Features 매트릭스 순수 로직 (v2.23.0) — 셀 집계·그룹 구성·헬스 계산 회귀 */
 import { describe, expect, test } from "vitest";
 import {
-  aggregateCell, buildGroups, featureLabelOf, formatDuration, isDocumented, isProbed, labelMaps, runSummary, surfaceHealth,
-  surfaceShortOf, surfaceSummary, visibleSegments,
-  type FeatureCell, type FeatureDef,
+  aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isProbed, labelMaps, runSummary, summarizeChanges,
+  surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
+  type FeatureCell, type FeatureChange, type FeatureDef,
 } from "./claudeFeatures";
 
 const cell = (p: Partial<FeatureCell>): FeatureCell => ({
@@ -189,5 +189,25 @@ describe("labelMaps (v2.24.0 — 카탈로그 단일 출처 라벨)", () => {
     const empty = labelMaps(null, "ko");
     expect(featureLabelOf(empty, "a")).toBe("a");
     expect(surfaceShortOf(empty, "mantle")).toBe("mantle");
+  });
+});
+
+describe("summarizeChanges / findCell (v2.24.0 변경 배너)", () => {
+  const ch = (p: Partial<FeatureChange>): FeatureChange => ({
+    feature: "f", surface: "cp", model_key: "opus-5", model_label: "Opus 5", before: "unsupported", after: "not_applicable", ...p,
+  });
+  test("counts catalog / measured / untagged (kind absent on pre-v2.24 payloads)", () => {
+    expect(summarizeChanges([ch({ kind: "catalog" }), ch({ kind: "catalog", model_key: "sonnet-5" }), ch({ kind: "measured", feature: "g" }), ch({ feature: "h" })]))
+      .toEqual({ total: 4, catalog: 2, measured: 1, untagged: 1 });
+    expect(summarizeChanges([])).toEqual({ total: 0, catalog: 0, measured: 0, untagged: 0 });
+  });
+  test("findCell resolves a change to its result cell by (feature, surface, model_key); null when absent", () => {
+    const cells = [
+      cell({ feature: "f", surface: "cp", model_key: "opus-5" }),
+      cell({ feature: "f", surface: "cp", model_key: "sonnet-5", status: "unsupported", verdict: "drift" }),
+    ];
+    expect(findCell(cells, ch({ model_key: "sonnet-5" }))?.status).toBe("unsupported");
+    expect(findCell(cells, ch({ model_key: "opus-5" }))?.status).toBe("supported");
+    expect(findCell(cells, ch({ surface: "mantle" }))).toBeNull();
   });
 });

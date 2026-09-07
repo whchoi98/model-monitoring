@@ -20,9 +20,13 @@ export interface FeatureRunInfo {
   id: number; started_at: string | null; finished_at: string | null;
   totals: Record<string, number> | null; catalog_version: string | null; running: boolean;
 }
+// kind (v2.24.0, 백엔드 D3/RUL-11): "catalog" = 직전 런에 없던 셀, 또는 before/after 중 하나가 사전판정 행(latency_ms IS NULL —
+// 러너가 not_applicable/skipped로 결정), "measured" = 둘 다 프로브 결과. 구 페이로드에는 없으므로 optional(RUL-4) —
+// 태그·요약 줄은 kind가 있을 때만 렌더.
+export type ChangeKind = "catalog" | "measured";
 export interface FeatureChange {
   feature: string; surface: string; model_key: string; model_label: string;
-  before: FeatureStatus | null; after: FeatureStatus;
+  before: FeatureStatus | null; after: FeatureStatus; kind?: ChangeKind;
 }
 
 export const STATUS_STYLE: Record<CellStatus, string> = {
@@ -240,3 +244,24 @@ export function labelMaps(catalog: { features: FeatureDef[]; surfaces: SurfaceDe
 }
 export function featureLabelOf(maps: LabelMaps, id: string): string { return maps.featureLabel.get(id) ?? id; }
 export function surfaceShortOf(maps: LabelMaps, id: string): string { return maps.surfaceShort.get(id) ?? id; }
+
+// ── v2.24.0 — 변경 배너 (D3): kind 요약 + 변경 항목 → 증거 모달용 셀 조회 ─────────────────────────────
+export const CHANGE_KIND_LABEL: Record<ChangeKind, { en: string; ko: string }> = {
+  catalog: { en: "catalog rule", ko: "카탈로그 규칙" }, measured: { en: "measured", ko: "실측" },
+};
+export interface ChangeSummary { total: number; catalog: number; measured: number; untagged: number }
+
+export function summarizeChanges(changes: FeatureChange[]): ChangeSummary {
+  const out: ChangeSummary = { total: changes.length, catalog: 0, measured: 0, untagged: 0 };
+  for (const c of changes) {
+    if (c.kind === "catalog") out.catalog += 1;
+    else if (c.kind === "measured") out.measured += 1;
+    else out.untagged += 1;
+  }
+  return out;
+}
+
+/** 변경 항목(FeatureChange)은 status/documented/verdict가 없어 그대로 모달을 열 수 없다 → latest.results에서 같은 (feature, surface, model_key) 셀을 찾는다. */
+export function findCell(cells: FeatureCell[], ref: { feature: string; surface: string; model_key: string }): FeatureCell | null {
+  return cells.find((c) => c.feature === ref.feature && c.surface === ref.surface && c.model_key === ref.model_key) ?? null;
+}

@@ -12,8 +12,8 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, featureLabelOf, formatDuration, labelMaps, runSummary, surfaceShortOf, surfaceSummary, visibleSegments,
-  DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
+  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, labelMaps, runSummary, summarizeChanges, surfaceShortOf, surfaceSummary, visibleSegments,
+  CHANGE_KIND_LABEL, DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
   type CellAggregate, type CellStatus, type FeatureCell, type LabelMaps, type RowView, type SurfaceSummary,
 } from "@/lib/claudeFeatures";
 
@@ -186,6 +186,7 @@ export default function ClaudeFeaturesPanel() {
 
   const surfaces = useMemo(() => catalog?.surfaces.map((s) => s.id) ?? [], [catalog]);
   const labels = useMemo(() => labelMaps(catalog, lang), [catalog, lang]);
+  const changeSummary = useMemo(() => summarizeChanges(latest?.changes ?? []), [latest]);
   const cells = latest?.results ?? [];
   const groups = useMemo(
     () => (catalog ? buildGroups(catalog.features, catalog.groups, surfaces, cells, lang, filter) : []),
@@ -261,16 +262,51 @@ export default function ClaudeFeaturesPanel() {
           </ul>
         </div>
       )}
+      {/* 드리프트 0건도 명시한다 (RUL-1) — "변경 없음" 카드와 같은 원칙: 음성 결과를 빈 화면이 아닌 문장으로 */}
+      {run && drift.length === 0 && (
+        <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
+          {L("No documentation drift.", "문서 드리프트 없음.")}
+        </div>
+      )}
+
+      {/* 이전 런 대비 변경 (v2.24.0, D3) — previous_run_id가 있으면 항상 렌더: 목록(10건 초과 '외 N건') 또는 '변경 없음' 카드.
+          항목 클릭 → latest.results에서 셀을 찾아 증거 모달. after는 6상태 STATUS_STYLE pill (critic 4-A: N/A가 amber로 찍히던 문제).
+          kind 태그(카탈로그 규칙/실측)와 요약 줄은 백엔드가 kind를 내려줄 때만 표시 (RUL-4). */}
       {run && latest && latest.changes.length > 0 && (
         <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-gray-300">
           <div className="text-sm font-semibold text-amber-300 mb-1">{L(`Changes since run #${latest.previous_run_id}: ${latest.changes.length}`, `이전 런(#${latest.previous_run_id}) 대비 변경 ${latest.changes.length}건`)}</div>
-          <ul className="space-y-0.5">
-            {latest.changes.slice(0, 10).map((c) => (
-              <li key={`${c.feature}|${c.surface}|${c.model_key}`}>
-                <span className="font-mono">{c.feature}</span> · {c.surface} · {c.model_label}: {c.before ?? L("new", "신규")} → <span className={c.after === "supported" ? "text-emerald-300" : c.after === "broken" ? "text-rose-300" : "text-amber-300"}>{c.after}</span>
-              </li>
-            ))}
+          {changeSummary.catalog + changeSummary.measured > 0 && (
+            <div className="text-[11px] text-gray-400 mb-2">
+              {L(`Catalog rule changes ${changeSummary.catalog}, measured changes ${changeSummary.measured}`, `카탈로그 규칙 변경 ${changeSummary.catalog}건, 실측 변경 ${changeSummary.measured}건`)}
+            </div>
+          )}
+          <ul className="space-y-1">
+            {latest.changes.slice(0, 10).map((c) => {
+              const target = findCell(cells, c);
+              return (
+                <li key={`${c.feature}|${c.surface}|${c.model_key}`} className="flex items-center gap-2 flex-wrap">
+                  {c.kind && (
+                    <span className={`px-1.5 py-px text-[10px] rounded ${c.kind === "catalog" ? "bg-sky-500/10 text-sky-300" : "bg-gray-800 text-gray-400"}`}>{CHANGE_KIND_LABEL[c.kind][lang]}</span>
+                  )}
+                  <button type="button" disabled={!target} onClick={() => target && setSelected(target)}
+                          className={target ? "text-amber-100 hover:underline" : "text-gray-400 cursor-default"}>
+                    {featureLabelOf(labels, c.feature)}
+                  </button>
+                  <span className="font-mono text-[10px] text-gray-600">{c.feature}</span>
+                  <span className="text-gray-500">{surfaceShortOf(labels, c.surface)}, {c.model_label}:</span>
+                  <span className={c.before ? "text-gray-300" : "text-gray-500"}>{c.before ? STATUS_LABEL[c.before] : L("new", "신규")}</span>
+                  <span className="text-gray-500">→</span>
+                  <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${STATUS_STYLE[c.after]}`}>{STATUS_LABEL[c.after]}</span>
+                </li>
+              );
+            })}
+            {latest.changes.length > 10 && <li className="text-gray-500">{L(`+${latest.changes.length - 10} more`, `외 ${latest.changes.length - 10}건`)}</li>}
           </ul>
+        </div>
+      )}
+      {run && latest && latest.previous_run_id != null && latest.changes.length === 0 && (
+        <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
+          {L(`No changes since run #${latest.previous_run_id}.`, `이전 런(#${latest.previous_run_id}) 대비 변경 없음.`)}
         </div>
       )}
 
