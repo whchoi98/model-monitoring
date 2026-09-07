@@ -2,7 +2,8 @@
 import { describe, expect, test } from "vitest";
 import {
   aggregateCell, buildGroups, cellLatencyLines, featureLabelOf, findCell, formatDuration, formatMs, isDocumented, isGroupOpen, isProbed, labelMaps,
-  pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
+  pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceHealth, surfaceShortOf, surfaceSummary, verificationDesc, visibleSegments,
+  VERIFICATION_DESC,
   type FeatureCell, type FeatureChange, type FeatureDef, type ModelDef,
 } from "./claudeFeatures";
 
@@ -334,5 +335,19 @@ describe("latency helpers (D6)", () => {
     expect(formatMs(0)).toBe("0 ms");
     expect(formatMs(1234.4)).toBe("1,234 ms");
     expect(formatMs(25656)).toBe("25,656 ms");
+  });
+});
+
+describe("VERIFICATION_DESC (C11 legend)", () => {
+  test("covers the four catalog strengths, both languages, Korean without middle dots", () => {
+    expect(Object.keys(VERIFICATION_DESC).sort()).toEqual(["acceptance", "capability", "evidence", "negative"]);
+    for (const d of Object.values(VERIFICATION_DESC)) {
+      expect(d.en.length).toBeGreaterThan(20);
+      expect(d.ko.length).toBeGreaterThan(10);
+      expect(d.ko).not.toContain("·");
+    }
+    expect(verificationDesc("acceptance", "ko")).toBe(VERIFICATION_DESC.acceptance.ko);
+    expect(verificationDesc("acceptance", "en")).toBe(VERIFICATION_DESC.acceptance.en);
+    expect(verificationDesc("weird", "ko")).toBe("weird");
   });
 });

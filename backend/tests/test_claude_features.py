@@ -1263,3 +1263,16 @@ def test_build_latest_payload_null_latency_with_error_is_measured(monkeypatch):
     p = build_latest_payload(run, rows, prev, 3, running=False)
     assert {c["feature"]: c["kind"] for c in p["changes"]} == {
         "tool_use": "measured", "mcp_connector": "measured", "data_residency": "catalog"}
+
+
+# ==================================================================== v2.24.0 — Task 15: catalog desc — acceptance 사유 (critic 4-D)
+
+def test_acceptance_only_rows_state_why_in_desc():
+    """critic 4-D (v2.24.0): server_side_fallback/compaction은 acceptance 행인데 desc에 사유가 없었다."""
+    by_id = {f["id"]: f for f in catalog.FEATURES}
+    for fid in ("server_side_fallback", "compaction"):
+        f = by_id[fid]
+        assert f["verification"] == "acceptance", fid
+        assert "수락만 검증" in f["desc_ko"], fid
+        assert "acceptance only" in f["desc_en"], fid
+        assert "·" not in f["desc_ko"], fid  # 한글 UI 문장부호 규칙: 가운데 점 대신 쉼표

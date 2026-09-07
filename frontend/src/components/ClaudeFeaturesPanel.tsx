@@ -13,7 +13,7 @@ import {
 } from "@/lib/api";
 import {
   aggregateCell, buildGroups, cellBadge, cellLatencyLines, featureLabelOf, findCell, formatDuration, formatMs, isGroupOpen, isProbed, labelMaps,
-  pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceShortOf, surfaceSummary, visibleSegments,
+  pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceShortOf, surfaceSummary, verificationDesc, visibleSegments,
   CHANGE_KIND_LABEL, DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
   type CellAggregate, type CellStatus, type FeatureCell, type FindingChip, type FindingFeatureGroup, type LabelMaps, type RowView,
   type SurfaceDef, type SurfaceFindings, type SurfaceSummary,
@@ -83,7 +83,7 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
             <span className={`px-2.5 py-0.5 text-[11px] font-medium rounded-full border ${STATUS_STYLE[cell.status]}`}>{STATUS_LABEL[cell.status]}</span>
             <span className="text-xs text-gray-500">{lang === "en" ? "documented" : "문서"}: <b className="text-gray-300">{DOC_LABEL[cell.documented]}</b></span>
             <span className={`text-xs ${VERDICT_STYLE[cell.verdict]}`}>{lang === "en" ? "verdict" : "판정"}: {cell.verdict}</span>
-            {data?.verification && <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400">{data.verification}</span>}
+            {data?.verification && <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400" title={verificationDesc(data.verification, lang)}>{data.verification}</span>}
             <span className="text-xs text-gray-500 ml-auto tabular-nums">{cell.latency_ms != null ? `${Math.round(cell.latency_ms)} ms` : "-"}</span>
           </div>
           <p className={`text-sm leading-relaxed ${isOk ? "text-gray-300" : cell.status === "broken" ? "text-rose-300" : "text-amber-300"}`}>{verdictText[cell.status]}</p>
@@ -367,10 +367,15 @@ export default function ClaudeFeaturesPanel() {
       <div className="flex items-start justify-between flex-wrap gap-4">
         <div>
           <h2 className="text-xl font-bold text-gray-100">{L("Claude API Features", "Claude API 기능 검증")}</h2>
-          <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
-            {L("Every documented \"Build with Claude\" feature, executed for real on Claude Platform on AWS, Bedrock Mantle and Bedrock runtime (Messages API · InvokeModel · Converse) with Fable 5.1 · Fable 5 · Opus 5 · Sonnet 5. Cells compare what the docs promise with what actually happened.",
-               "공식 \"Build with Claude\" 문서의 모든 피처를 Claude Platform on AWS, Bedrock Mantle, Bedrock runtime(Messages API, InvokeModel, Converse)에서 Fable 5.1, Fable 5, Opus 5, Sonnet 5로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다.")}
-          </p>
+          {(() => {
+            const modelList = (catalog?.models ?? []).map((m) => m.label.replace(/^Claude /, "")).join(", ") || L("the representative models", "대표 모델");
+            return (
+              <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
+                {L(`Every documented "Build with Claude" feature, executed for real on Claude Platform on AWS, Bedrock Mantle and Bedrock runtime (Messages API, InvokeModel, Converse) with ${modelList}. Cells compare what the docs promise with what actually happened. Evidence rows are judged on response content (canary, deltas, usage), never on HTTP 200 alone; acceptance rows only verify the request is accepted.`,
+                   `공식 "Build with Claude" 문서의 모든 피처를 Claude Platform on AWS, Bedrock Mantle, Bedrock runtime(Messages API, InvokeModel, Converse)에서 ${modelList}로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다. evidence 행은 응답 내용(카나리, 델타, usage)을 검사해 판정하며 HTTP 200만으로는 supported로 두지 않습니다. acceptance 행은 요청 수락 여부까지만 검증합니다.`)}
+              </p>
+            );
+          })()}
           {run && (
             <p className="text-xs text-gray-500 mt-1">
               {L("Last run", "최근 런")} #{run.id} · {run.finished_at ? new Date(run.finished_at).toLocaleString() : "-"} · catalog {run.catalog_version}
@@ -590,7 +595,7 @@ export default function ClaudeFeaturesPanel() {
                         <td className="px-3 py-1.5 pl-8 sticky left-0 bg-gray-900 light:bg-white">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-200 text-[12px]">{row.label}</span>
-                            {row.verification !== "evidence" && <span className="px-1 py-px text-[9px] rounded bg-gray-800 text-gray-500" title={L("Verification strength", "검증 강도")}>{row.verification}</span>}
+                            {row.verification !== "evidence" && <span className="px-1 py-px text-[9px] rounded bg-gray-800 text-gray-500" title={verificationDesc(row.verification, lang)}>{row.verification}</span>}
                             {row.drift > 0 && <span className="text-[10px] text-rose-300">▲{row.drift}</span>}
                           </div>
                           <div className="text-gray-500 font-mono text-[10px]">{row.id}</div>
@@ -635,9 +640,22 @@ export default function ClaudeFeaturesPanel() {
       <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-1.5">
         <div className="text-sm font-semibold text-gray-200 mb-1">{L("How to read", "읽는 법")}</div>
         <p>1. {L("Rows are the features listed on platform.claude.com/docs/en/build-with-claude/overview (+4 core Messages checks and the Models API). The small GA/Beta/— tag in each cell is what the documentation says for that platform.", "행은 platform.claude.com/docs/en/build-with-claude/overview의 피처 목록(+코어 Messages 4종, Models API)입니다. 셀 앞의 GA/Beta/— 태그가 해당 플랫폼의 문서상 기대치입니다.")}</p>
-        <p>2. {L("Each cell aggregates Fable 5.1, Fable 5, Opus 5 and Sonnet 5 (Fable 5.1 is not measurable on Bedrock Mantle — US GovCloud only; see the Note under the table). Click to open per-model evidence: request snapshot, response signal, error.", "각 셀은 Fable 5.1, Fable 5, Opus 5, Sonnet 5 결과를 집계합니다(Fable 5.1은 Bedrock Mantle에서 측정 불가 — US GovCloud 리전 전용, 표 하단 참조). 클릭하면 모델별 증거(요청 스냅샷, 응답 신호, 오류)를 볼 수 있습니다.")}</p>
+        <p>2. {(() => {
+          const models = (catalog?.models ?? []).map((m) => m.label.replace(/^Claude /, ""));
+          const list = models.join(", ") || L("the representative models", "대표 모델");
+          const na = (catalog?.models ?? []).filter((m) => m.mantle === null).map((m) => m.label.replace(/^Claude /, "")).join(", ");
+          return L(`Each cell aggregates ${list}${na ? ` (${na} is not measurable on Bedrock Mantle — US GovCloud only; see the Note under the table)` : ""}. Click to open per-model evidence: request snapshot, response signal, latency, error.`,
+                   `각 셀은 ${list} 결과를 집계합니다${na ? `(${na}은 Bedrock Mantle에서 측정 불가 — US GovCloud 리전 전용, 표 하단 참조)` : ""}. 클릭하면 모델별 증거(요청 스냅샷, 응답 신호, 지연시간, 오류)를 볼 수 있습니다.`);
+        })()}</p>
         <p>3. {L("Drift = documented as available but observed unsupported/broken. Inconclusive = definition accepted but the model did not use the feature. N/A = not applicable by design (e.g. Converse has no field for it; inference_geo on Bedrock). 'Documented' (sky) = the docs say GA/Beta but the endpoint offers no verification path (e.g. 1M context on Mantle/Bedrock) — not a measurement.", "드리프트 = 문서상 제공인데 실측 미지원/오류. Inconclusive = 정의는 수락됐지만 모델이 기능을 쓰지 않음. N/A = 설계상 부적용(예: Converse에 해당 필드 없음, Bedrock의 inference_geo). '문서상 지원'(하늘색) = 문서는 GA/Beta이나 실측 경로가 없는 셀(예: Mantle/Bedrock의 1M 컨텍스트) — 측정값이 아님.")}</p>
         <p>4. {L("Runs daily via EventBridge → Fargate (manual trigger runs inside the backend). Evidence is stored in RDS; the previous run is diffed at the top.", "EventBridge → Fargate로 매일 실행(수동 트리거는 backend 내부). 증거는 RDS에 저장되고 직전 런 대비 변경이 상단에 표시됩니다.")}</p>
+        <p>5. {(() => {
+          const n: Record<string, number> = {};
+          for (const f of catalog?.features ?? []) n[f.verification] = (n[f.verification] ?? 0) + 1;
+          const dist = ["evidence", "acceptance", "negative", "capability"].filter((k) => n[k]).map((k) => `${k} ${n[k]}`).join(", ");
+          return L(`Verification strength (${dist}): evidence = response signal checked, acceptance = request accepted only, negative = invalid value must be rejected with 400, capability = metadata endpoint lookup. The small gray tag next to a row marks non-evidence rows. Treat Broken and drift cells as real only after the request snapshot in the evidence modal rules out a probe defect.`,
+                   `검증 강도(${dist}): evidence = 응답 신호 확인, acceptance = 요청 수락만, negative = 잘못된 값 400 거부 확인, capability = 메타 엔드포인트 조회. 행 옆 회색 태그는 evidence가 아닌 행에만 붙습니다. Broken, 드리프트 셀은 증거 모달의 요청 스냅샷으로 프로브 결함 여부를 먼저 확인한 뒤 신뢰합니다.`);
+        })()}</p>
       </div>
 
       {surfaceDetail && run && catalog && (() => {

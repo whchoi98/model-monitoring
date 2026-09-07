@@ -372,3 +372,27 @@ export function formatMs(ms: number | null | undefined): string {
   if (ms > 0 && ms < 1) return "<1 ms";
   return `${MS_FORMAT.format(Math.round(ms))} ms`;
 }
+
+// ── 검증 강도 4종 정의 (v2.24.0, C11) — 행 태그·증거 모달 태그 title, '읽는 법' 5항에서 공유. 출처: ADR-026 결정 1·5·7, catalog.py:110/126/189.
+export const VERIFICATION_DESC: Record<"evidence" | "acceptance" | "negative" | "capability", { en: string; ko: string }> = {
+  evidence: {
+    en: "Evidence: the response content itself is checked (canary round-trip, 2+ stream deltas, cache_read tokens, schema-valid JSON). HTTP 200 alone is never enough.",
+    ko: "evidence: 응답 내용 자체를 검사합니다(카나리 왕복, 스트림 델타 2개 이상, cache_read 토큰, 스키마 유효 JSON). HTTP 200만으로는 supported로 두지 않습니다.",
+  },
+  acceptance: {
+    en: "Acceptance: only checks that the request (beta header, parameter) is accepted without error — the feature fires under conditions a short probe cannot force, so no response signal exists.",
+    ko: "acceptance: 요청(beta 헤더, 파라미터)이 오류 없이 수락되는지만 확인합니다. 짧은 프로브로는 발동 조건을 만들 수 없어 응답 신호가 없습니다.",
+  },
+  negative: {
+    en: "Negative: additionally sends an invalid value and requires a 400 that names the parameter — separates 'validated' from 'silently ignored'.",
+    ko: "negative: 잘못된 값도 함께 보내 해당 파라미터를 지목하는 400 거부를 요구합니다. '검증됨'과 '조용히 무시'를 구분합니다.",
+  },
+  capability: {
+    en: "Capability: read from Models API metadata (e.g. max_input_tokens) instead of a live request — only CP exposes this endpoint.",
+    ko: "capability: 실요청 대신 Models API 메타데이터(max_input_tokens 등)를 조회합니다. CP에만 이 엔드포인트가 있습니다.",
+  },
+};
+export function verificationDesc(kind: string, lang: string): string {
+  const d = (VERIFICATION_DESC as Record<string, { en: string; ko: string } | undefined>)[kind];
+  return d ? (lang === "en" ? d.en : d.ko) : kind;
+}
