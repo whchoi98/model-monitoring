@@ -1,8 +1,8 @@
 /** Claude API Features 매트릭스 순수 로직 (v2.23.0) — 셀 집계·그룹 구성·헬스 계산 회귀 */
 import { describe, expect, test } from "vitest";
 import {
-  aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isGroupOpen, isProbed, labelMaps, pickModel, runSummary,
-  summarizeChanges, surfaceFindings, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, cellLatencyLines, featureLabelOf, findCell, formatDuration, formatMs, isDocumented, isGroupOpen, isProbed, labelMaps,
+  pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
   type FeatureCell, type FeatureChange, type FeatureDef, type ModelDef,
 } from "./claudeFeatures";
 
@@ -312,5 +312,27 @@ describe("surfaceFindings", () => {
     const empty = surfaceFindings([], "cp", models, "ko");
     expect(empty).toMatchObject({ surface: "cp", total: 0, drift: [], broken: [], intendedGaps: [], undecidedGaps: [], undocumented: [] });
     expect(empty.perModel.every((m) => m.docHealth === null && m.na_reason === null)).toBe(true);
+  });
+});
+
+describe("latency helpers (D6)", () => {
+  test("cellLatencyLines keeps probed rows with latency only — runtime N/A with latency and null latency are dropped", () => {
+    const lines = cellLatencyLines([
+      cell({ latency_ms: 1234.4 }),
+      cell({ model_key: "sonnet-5", model_label: "Sonnet 5", status: "unsupported", verdict: "match", latency_ms: 0.0006 }),
+      cell({ model_key: "fable-5", status: "not_applicable", verdict: "none", latency_ms: 300 }),   // extended_thinking 런타임 N/A 18셀 패턴
+      cell({ model_key: "fable-5-1", status: "skipped", verdict: "none", latency_ms: null }),
+      cell({ model_key: "x", status: "broken", verdict: "drift", latency_ms: null }),
+    ]);
+    expect(lines.map((l) => [l.model_key, l.ms])).toEqual([["opus-5", 1234.4], ["sonnet-5", 0.0006]]);
+    expect(lines[0]).toMatchObject({ model_label: "Opus 5", model_id: "claude-opus-5" });
+  });
+  test("formatMs (RUL-10): null → '-', sub-ms (no network call) → '<1 ms', 0 → '0 ms', otherwise rounded with thousands separator", () => {
+    expect(formatMs(null)).toBe("-");
+    expect(formatMs(undefined)).toBe("-");
+    expect(formatMs(0.0006)).toBe("<1 ms");
+    expect(formatMs(0)).toBe("0 ms");
+    expect(formatMs(1234.4)).toBe("1,234 ms");
+    expect(formatMs(25656)).toBe("25,656 ms");
   });
 });

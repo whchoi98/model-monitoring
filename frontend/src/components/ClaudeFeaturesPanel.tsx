@@ -12,8 +12,8 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, isGroupOpen, labelMaps, pickModel, runSummary, summarizeChanges,
-  surfaceFindings, surfaceShortOf, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, cellBadge, cellLatencyLines, featureLabelOf, findCell, formatDuration, formatMs, isGroupOpen, isProbed, labelMaps,
+  pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceShortOf, surfaceSummary, visibleSegments,
   CHANGE_KIND_LABEL, DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
   type CellAggregate, type CellStatus, type FeatureCell, type FindingChip, type FindingFeatureGroup, type LabelMaps, type RowView,
   type SurfaceDef, type SurfaceFindings, type SurfaceSummary,
@@ -248,6 +248,13 @@ function CellBadge({ agg, documented, onPick }: { agg: CellAggregate; documented
   const single = agg.cells.length === 1;
   const drift = agg.cells.filter((c) => c.verdict === "drift").length;
   const badge = cellBadge(agg.status, documented, lang);
+  const lines = cellLatencyLines(agg.cells);
+  const hint = badge.documentedOnly
+    ? (lang === "en" ? "Documented as available — no verification path on this endpoint (not measured)" : "문서상 지원 — 이 엔드포인트에는 실측 경로가 없어 측정하지 않음")
+    : (lang === "en" ? "Click for per-model evidence" : "클릭해서 모델별 증거 보기");
+  // D6: 모델별 "라벨: N ms" 줄 + 지표 성격 한 줄 + 기존 안내. title은 \n으로 줄바꿈 렌더. L()은 메인 컴포넌트 클로저라 여기서는 삼항.
+  const title = lines.length === 0 ? hint
+    : [...lines.map((l) => `${l.model_label}: ${formatMs(l.ms)}`), lang === "en" ? "probe wall-clock time (multi-call probes are summed)" : "프로브 소요 시간(wall-clock, 다중 호출 프로브는 합산)", hint].join("\n");
   return (
     <div className="relative inline-block">
       <button
@@ -255,21 +262,25 @@ function CellBadge({ agg, documented, onPick }: { agg: CellAggregate; documented
         onClick={() => (single ? onPick(agg.cells[0]) : setOpen((o) => !o))}
         onBlur={() => setTimeout(() => setOpen(false), 150)}
         className={`px-2 py-0.5 text-[10px] font-medium rounded-full border transition-transform hover:scale-105 ${badge.style}`}
-        title={badge.documentedOnly
-          ? (lang === "en" ? "Documented as available — no verification path on this endpoint (not measured)" : "문서상 지원 — 이 엔드포인트에는 실측 경로가 없어 측정하지 않음")
-          : (lang === "en" ? "Click for per-model evidence" : "클릭해서 모델별 증거 보기")}
+        title={title}
       >
         {badge.label}
         {!single && agg.probed > 0 && <span className="ml-1 text-gray-400">{agg.counts.supported}/{agg.probed}</span>}
         {drift > 0 && <span className="ml-1 text-rose-300">▲{drift}</span>}
       </button>
       {open && (
-        <ul className="absolute z-20 mt-1 left-0 min-w-[14rem] bg-gray-900 light:bg-white border border-gray-700 rounded-lg shadow-xl py-1">
+        <ul className="absolute z-20 mt-1 left-0 min-w-[17rem] bg-gray-900 light:bg-white border border-gray-700 rounded-lg shadow-xl py-1">
           {agg.cells.map((c) => (
             <li key={c.model_key}>
               <button type="button" onMouseDown={() => onPick(c)} className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] hover:bg-blue-600/20">
-                <span className="text-gray-300">{c.model_label}</span>
-                <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${cellBadge(c.status, c.documented, lang).style}`}>{cellBadge(c.status, c.documented, lang).label}</span>
+                <span className="flex flex-col items-start min-w-0">
+                  <span className="text-gray-300">{c.model_label}</span>
+                  <span className="font-mono text-[9px] text-gray-500 truncate max-w-[11rem]">{c.model_id ?? "—"}</span>
+                </span>
+                <span className="flex items-center gap-2 shrink-0">
+                  <span className="tabular-nums text-gray-500">{isProbed(c.status) ? formatMs(c.latency_ms) : "-"}</span>
+                  <span className={`px-1.5 py-0.5 rounded-full border text-[10px] ${cellBadge(c.status, c.documented, lang).style}`}>{cellBadge(c.status, c.documented, lang).label}</span>
+                </span>
               </button>
             </li>
           ))}

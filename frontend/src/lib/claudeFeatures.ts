@@ -353,3 +353,22 @@ export function surfaceFindings(cells: FeatureCell[], surface: string, models: M
 export function pickModel<T extends { model_key: string }>(xs: T[], key: string | null): T[] {
   return key ? xs.filter((x) => x.model_key === key) : xs;
 }
+
+// ── 지연시간 표시 (v2.24.0, D6) — 값은 프로브 함수 전체 wall-clock(다중 호출 프로브는 합산). 백엔드 변경 없음.
+export interface LatencyLine { model_key: string; model_label: string; model_id: string | null; ms: number }
+
+// probed 상태(supported/unsupported/broken/inconclusive)이면서 latency_ms가 있는 행만 — 런타임 not_applicable(extended_thinking 등)이
+// latency를 갖는 18셀은 "측정했는데 부적용"으로 읽히므로 제외 (verify-R4 §3-1). isProbed는 위의 단일 정의 (RUL-7).
+export function cellLatencyLines(cells: FeatureCell[]): LatencyLine[] {
+  return cells
+    .filter((c) => isProbed(c.status) && c.latency_ms != null)
+    .map((c) => ({ model_key: c.model_key, model_label: c.model_label, model_id: c.model_id, ms: c.latency_ms as number }));
+}
+
+const MS_FORMAT = new Intl.NumberFormat("en-US", { maximumFractionDigits: 0 });
+// RUL-10. 서브 ms(0.0005~0.0007)는 네트워크 호출 없이 unsupported로 라우팅된 행(_route_or_unsupported) → "<1 ms" (verify-R4 §3-2).
+export function formatMs(ms: number | null | undefined): string {
+  if (ms == null) return "-";
+  if (ms > 0 && ms < 1) return "<1 ms";
+  return `${MS_FORMAT.format(Math.round(ms))} ms`;
+}
