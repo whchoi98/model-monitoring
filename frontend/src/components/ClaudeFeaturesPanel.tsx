@@ -12,7 +12,7 @@ import {
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, labelMaps, runSummary, summarizeChanges, surfaceShortOf, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, isGroupOpen, labelMaps, runSummary, summarizeChanges, surfaceShortOf, surfaceSummary, visibleSegments,
   CHANGE_KIND_LABEL, DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
   type CellAggregate, type CellStatus, type FeatureCell, type LabelMaps, type RowView, type SurfaceSummary,
 } from "@/lib/claudeFeatures";
@@ -169,6 +169,8 @@ export default function ClaudeFeaturesPanel() {
   const [selected, setSelected] = useState<FeatureCell | null>(null);
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  // 필터가 켜져 있으면 접힘을 무시하고 전부 펼침 (D7). 모델 칩(D5)은 행을 숨기지 않으므로 여기에 포함하지 않는다 (RUL-8).
+  const filterActive = filter !== "all";
 
   const load = () => {
     Promise.all([fetchFeaturesLatest(), fetchFeaturesCatalog()])
@@ -362,6 +364,18 @@ export default function ClaudeFeaturesPanel() {
             </button>
           ))}
           <span className="text-xs text-gray-500 ml-2">{groups.reduce((n, g) => n + g.rows.length, 0)} {L("features", "피처")}</span>
+          {!filterActive && (
+            <div className="flex gap-1 ml-auto">
+              <button type="button" onClick={() => setCollapsed(new Set())}
+                      className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300">
+                {L("Expand all", "모두 펼치기")}
+              </button>
+              <button type="button" onClick={() => setCollapsed(new Set(groups.map((g) => g.id)))}
+                      className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300">
+                {L("Collapse all", "모두 접기")}
+              </button>
+            </div>
+          )}
         </div>
       )}
 
@@ -385,13 +399,13 @@ export default function ClaudeFeaturesPanel() {
             </thead>
             <tbody>
               {groups.map((g) => {
-                const open = !collapsed.has(g.id);
+                const open = isGroupOpen(filterActive, collapsed, g.id);
                 return (
                   <Fragment key={g.id}>
-                    <tr onClick={() => setCollapsed((c) => { const n = new Set(c); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; })}
-                        className="border-t-2 border-t-gray-700 bg-gray-900/80 light:bg-gray-50 cursor-pointer hover:bg-gray-800/60">
+                    <tr onClick={() => { if (filterActive) return; setCollapsed((c) => { const n = new Set(c); if (n.has(g.id)) n.delete(g.id); else n.add(g.id); return n; }); }}
+                        className={`border-t-2 border-t-gray-700 bg-gray-900/80 light:bg-gray-50 ${filterActive ? "" : "cursor-pointer hover:bg-gray-800/60"}`}>
                       <td className="px-3 py-2 sticky left-0 bg-gray-900 light:bg-white" colSpan={1}>
-                        <span className={`text-[10px] text-gray-500 inline-block mr-2 transition-transform ${open ? "rotate-90" : ""}`}>▶</span>
+                        {!filterActive && <span className={`text-[10px] text-gray-500 inline-block mr-2 transition-transform ${open ? "rotate-90" : ""}`}>▶</span>}
                         <span className="font-bold text-gray-100 text-sm">{g.label}</span>
                         <span className="ml-2 text-[11px] text-gray-500">{g.rows.length}</span>
                       </td>

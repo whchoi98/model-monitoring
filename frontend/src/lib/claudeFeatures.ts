@@ -265,3 +265,9 @@ export function summarizeChanges(changes: FeatureChange[]): ChangeSummary {
 export function findCell(cells: FeatureCell[], ref: { feature: string; surface: string; model_key: string }): FeatureCell | null {
   return cells.find((c) => c.feature === ref.feature && c.surface === ref.surface && c.model_key === ref.model_key) ?? null;
 }
+
+// ── v2.24.0 — 그룹 접기 (D7): 상태/드리프트 필터가 켜져 있으면 접힘 상태를 무시하고 전부 펼친다 (parity PP:469-470 규칙).
+//   collapsed는 "접힌 그룹" Set(펼침 Set이 아님) — 모두 펼치기 = new Set(), 모두 접기 = 모든 g.id.
+export function isGroupOpen(filterActive: boolean, collapsed: Set<string>, groupId: string): boolean {
+  return filterActive || !collapsed.has(groupId);
+}

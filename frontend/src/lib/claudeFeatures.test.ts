@@ -1,8 +1,8 @@
 /** Claude API Features 매트릭스 순수 로직 (v2.23.0) — 셀 집계·그룹 구성·헬스 계산 회귀 */
 import { describe, expect, test } from "vitest";
 import {
-  aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isProbed, labelMaps, runSummary, summarizeChanges,
-  surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, featureLabelOf, findCell, formatDuration, isDocumented, isGroupOpen, isProbed, labelMaps, runSummary,
+  summarizeChanges, surfaceHealth, surfaceShortOf, surfaceSummary, visibleSegments,
   type FeatureCell, type FeatureChange, type FeatureDef,
 } from "./claudeFeatures";
 
@@ -209,5 +209,17 @@ describe("summarizeChanges / findCell (v2.24.0 변경 배너)", () => {
     expect(findCell(cells, ch({ model_key: "sonnet-5" }))?.status).toBe("unsupported");
     expect(findCell(cells, ch({ model_key: "opus-5" }))?.status).toBe("supported");
     expect(findCell(cells, ch({ surface: "mantle" }))).toBeNull();
+  });
+});
+
+describe("isGroupOpen (v2.24.0 — 필터 활성 시 강제 펼침)", () => {
+  test("no filter: open unless the user collapsed the group", () => {
+    const collapsed = new Set(["model"]);
+    expect(isGroupOpen(false, collapsed, "core")).toBe(true);
+    expect(isGroupOpen(false, collapsed, "model")).toBe(false);
+  });
+  test("active filter forces every group open, even one collapsed earlier (collapse → drift filter regression)", () => {
+    expect(isGroupOpen(true, new Set(["model"]), "model")).toBe(true);
+    expect(isGroupOpen(true, new Set(), "core")).toBe(true);
   });
 });
