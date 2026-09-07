@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import threading
 from contextlib import asynccontextmanager
 
 from fastapi import FastAPI
@@ -54,6 +55,11 @@ async def lifespan(app: FastAPI):
     try:
         with engine.begin() as conn:  # begin은 commit/rollback 자동 + 연결 항상 반환
             conn.execute(text("SET statement_timeout = '30000'"))
+            # lock_timeout: ALTER TABLE … ADD COLUMN IF NOT EXISTS는 no-op이어도 ACCESS EXCLUSIVE 락을
+            # 요청한다. 다른 세션이 락을 쥐고 있으면 이 요청이 대기열에 서고, 그 뒤의 모든 읽기까지
+            # 함께 막힌다(2026-09-06 배포 창마다 /api/insights/latest 30s 타임아웃 연쇄). 5초 안에
+            # 못 잡으면 블록을 포기하고 기동을 계속한다 — 마이그레이션은 다음 기동에 재시도.
+            conn.execute(text("SET lock_timeout = '5000'"))
             conn.execute(text("SELECT pg_advisory_lock(917350001)"))
             try:
                 conn.execute(text("ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS is_auto INTEGER DEFAULT 0"))
@@ -117,12 +123,19 @@ async def lifespan(app: FastAPI):
     # 22만+ 행 테이블의 CREATE INDEX가 30초를 초과해 실패한 실사고(2026-07-09) 재발 방지.
     # PG에서는 CONCURRENTLY + 10분 timeout (쓰기 블로킹 없음). 상세는 models.py 참고.
     # 최상단 `from routers import models`와 이름 충돌하므로 지점 import.
-    try:
-        from models import ensure_performance_indexes
+    # 2026-09-06부터 백그라운드 스레드: 큰 테이블의 CONCURRENTLY 빌드가 수 분 걸려도 /api/health가
+    # 먼저 열려야 ALB 헬스체크 유예(300s) 안에 기동한다. 이 기동의 마이그레이션은 인덱스 없이 돌고,
+    # 다음 기동부터 인덱스를 쓴다.
+    def _ensure_indexes_background() -> None:
+        try:
+            from models import ensure_performance_indexes
 
-        ensure_performance_indexes(engine)
-    except Exception:
-        logger.exception("Performance index creation failed (non-fatal, backend continues)")
+            ensure_performance_indexes(engine)
+            logger.info("Performance indexes ensured (background).")
+        except Exception:
+            logger.exception("Performance index creation failed (non-fatal, backend continues)")
+
+    threading.Thread(target=_ensure_indexes_background, name="perf-indexes", daemon=True).start()
 
     # Seed default admin user if no users exist
     _seed_default_admin()

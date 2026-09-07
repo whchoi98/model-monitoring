@@ -40,9 +40,13 @@ class ProbeRun(Base):
 class ProbeResult(Base):
     __tablename__ = "probe_results"
     # run_id: trend/latest의 JOIN·IN 조회. timestamp: cost/reliability/efficiency/analysis의 범위 필터.
+    # model_name: lifespan 마이그레이션의 라벨 rename/삭제(UPDATE/DELETE … WHERE model_name = :x)와
+    #   label_repair가 매 기동마다 실행되는데, 인덱스가 없어 문장당 전수 스캔 → 기동 ~130s
+    #   (2026-09-06 v2.23.1 롤아웃이 헬스체크 유예를 넘겨 롤백된 원인). 등호 조건 27문장을 ms 단위로.
     __table_args__ = (
         Index("ix_probe_results_run_id", "run_id"),
         Index("ix_probe_results_timestamp", "timestamp"),
+        Index("ix_probe_results_model_name", "model_name"),
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
