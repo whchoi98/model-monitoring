@@ -5,16 +5,18 @@
 // 표 하단 "참조" 블록: Mantle에서 측정 불가한 모델(Fable 5.1 = US GovCloud 전용)을 카탈로그 mantle_reason으로 표기 (v2.23.1).
 // 셀 = 피처 × 엔드포인트(대표 모델 4종 집계) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
 
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLang } from "@/lib/i18n-context";
 import {
   fetchFeaturesCatalog, fetchFeaturesEvidence, fetchFeaturesLatest, getToken, triggerFeaturesRun,
   type FeaturesCatalog, type FeaturesEvidence, type FeaturesLatest,
 } from "@/lib/api";
 import {
-  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, isGroupOpen, labelMaps, runSummary, summarizeChanges, surfaceShortOf, surfaceSummary, visibleSegments,
+  aggregateCell, buildGroups, cellBadge, featureLabelOf, findCell, formatDuration, isGroupOpen, labelMaps, runSummary, summarizeChanges,
+  surfaceFindings, surfaceShortOf, surfaceSummary, visibleSegments,
   CHANGE_KIND_LABEL, DOC_LABEL, SEGMENT_BAR_COLOR, SEGMENT_LABEL, SEGMENT_ORDER, SEGMENT_TEXT, STATUS_LABEL, STATUS_STYLE, STATUS_TEXT, VERDICT_STYLE,
-  type CellAggregate, type CellStatus, type FeatureCell, type LabelMaps, type RowView, type SurfaceSummary,
+  type CellAggregate, type CellStatus, type FeatureCell, type FindingChip, type FindingFeatureGroup, type LabelMaps, type RowView,
+  type SurfaceDef, type SurfaceFindings, type SurfaceSummary,
 } from "@/lib/claudeFeatures";
 
 const SURFACE_GROUP_LABEL: Record<string, { en: string; ko: string }> = {
@@ -105,6 +107,140 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
   );
 }
 
+// Key Findings 드로어 (v2.24.0, D4) — surface 카드 클릭 → verdict 축 6섹션. 라벨은 카탈로그 LabelMaps(D2/RUL-6), 항목·칩 클릭 → 증거 모달(RUL-9).
+function SurfaceDrawer({ surface, findings, labels, onPick, onClose }: {
+  surface: SurfaceDef; findings: SurfaceFindings; labels: LabelMaps;
+  onPick: (c: FeatureCell) => void; onClose: () => void;
+}) {
+  const { lang } = useLang();
+  const T = (en: string, ko: string) => (lang === "en" ? en : ko);
+  const label = (id: string) => featureLabelOf(labels, id);
+  const none = (
+    <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{T("None.", "없음")}</div>
+  );
+
+  const Sec = ({ title, sub, color, empty, children }: { title: string; sub: string; color: string; empty: boolean; children: ReactNode }) => (
+    <section>
+      <h3 className={`text-sm font-semibold mb-1 ${color}`}>{title}</h3>
+      <p className="text-[11px] text-gray-500 mb-2">{sub}</p>
+      {empty ? none : children}
+    </section>
+  );
+  const GroupCards = ({ groups, tone }: { groups: FindingFeatureGroup[]; tone: "rose" | "amber" }) => (
+    <div className="space-y-2">
+      {groups.map((g) => (
+        <div key={g.feature} className={`rounded-lg px-3 py-2 border ${tone === "rose" ? "bg-rose-500/10 border-rose-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-sm font-medium text-gray-100">{label(g.feature)}</span>
+            <span className={`text-xs font-semibold whitespace-nowrap ${tone === "rose" ? "text-rose-300" : "text-amber-300"}`}>{g.count}/{g.probed} {T("cells", "셀")}</span>
+          </div>
+          <div className="text-[11px] text-gray-500 font-mono mt-0.5">{g.feature}</div>
+          <div className="flex flex-wrap gap-1 mt-1">
+            {g.cells.map((c) => (
+              <button key={c.model_key} type="button" onClick={() => onPick(c)} title={T("Open evidence", "증거 보기")}
+                className="px-1.5 py-0.5 text-[10px] rounded border border-gray-700 text-gray-300 hover:border-blue-500/60 hover:text-blue-300">
+                {c.model_label}
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+  // RUL-9: 칩은 button — 첫 모델의 증거 모달을 연다. title에 모델 전체 목록.
+  const Chips = ({ chips, style }: { chips: FindingChip[]; style: string }) => (
+    <div className="flex flex-wrap gap-1.5">
+      {chips.map((u) => (
+        <button key={u.feature} type="button" onClick={() => onPick(u.cells[0])}
+          title={`${u.models.join(", ")} (${T("click: evidence of the first model", "클릭: 첫 모델 증거")})`}
+          className={`px-2 py-0.5 text-[11px] rounded-full border hover:border-blue-500/60 ${style}`}>
+          {label(u.feature)}
+        </button>
+      ))}
+    </div>
+  );
+
+  return (
+    <div className="fixed inset-0 z-50">
+      <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
+      <aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto bg-gray-900 light:bg-white border-l border-gray-800 shadow-2xl p-6 space-y-6">
+        <div>
+          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
+          <div className="flex items-center justify-between">
+            <h2 className="text-lg font-bold text-gray-100">{surface.label}</h2>
+            <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
+          </div>
+          <p className="text-xs text-gray-500 mt-0.5">
+            <span className="font-mono">{surface.id}</span> · <span className="font-mono">{surface.region}</span> · {T(`latest run, computed from all ${findings.total} cells of this endpoint`, `최근 런 기준, 이 엔드포인트의 전체 ${findings.total}셀에서 계산`)}
+          </p>
+        </div>
+
+        <Sec color="text-rose-300" empty={findings.drift.length === 0}
+          title={T(`1. Documentation drift (${findings.drift.length} features)`, `1. 문서 드리프트 (${findings.drift.length}개 피처)`)}
+          sub={T("Documented GA/Beta but measured unsupported or broken. Check the request snapshot in the evidence modal for a probe defect first.",
+                 "문서상 GA/Beta인데 실측이 unsupported 또는 broken인 셀입니다. 증거 모달의 요청 스냅샷으로 프로브 결함 여부를 먼저 확인합니다.")}>
+          <GroupCards groups={findings.drift} tone="rose" />
+        </Sec>
+
+        <Sec color="text-rose-300" empty={findings.broken.length === 0}
+          title={T(`2. Probe errors (${findings.broken.length} features)`, `2. 프로브 오류 (${findings.broken.length}개 피처)`)}
+          sub={T("Cells that returned an error instead of a response. Listed by status (broken) regardless of the documented expectation.",
+                 "응답 대신 오류를 받은 셀입니다. 문서 기대치와 무관하게 status가 broken이면 여기에 옵니다.")}>
+          <GroupCards groups={findings.broken} tone="rose" />
+        </Sec>
+
+        <Sec color="text-amber-300" empty={findings.intendedGaps.length === 0}
+          title={T(`3. Intended gaps (${findings.intendedGaps.length})`, `3. 의도된 격차 (${findings.intendedGaps.length})`)}
+          sub={T("Documented as unavailable and measured unsupported (not a bug).", "문서상 미제공, 실측도 미지원 (버그 아님)")}>
+          <Chips chips={findings.intendedGaps} style={STATUS_STYLE.unsupported} />
+        </Sec>
+
+        <Sec color="text-gray-300" empty={findings.undecidedGaps.length === 0}
+          title={T(`4. Documentation undecided (${findings.undecidedGaps.length})`, `4. 문서 미확정 (${findings.undecidedGaps.length})`)}
+          sub={T("Documented expectation is unknown and the probe measured unsupported. Once the docs settle, these move to drift or intended gaps.",
+                 "문서 기대치가 unknown인데 실측 미지원인 피처입니다. 문서가 확정되면 드리프트 또는 의도된 격차로 귀속됩니다.")}>
+          <Chips chips={findings.undecidedGaps} style="bg-gray-800 border-gray-700 text-gray-400" />
+        </Sec>
+
+        <Sec color="text-sky-300" empty={findings.undocumented.length === 0}
+          title={T(`5. Undocumented behaviour (${findings.undocumented.length})`, `5. 문서에 없는 동작 (${findings.undocumented.length})`)}
+          sub={T("Not promised by the docs, yet measured supported.", "문서가 약속하지 않았지만 실측이 supported인 피처입니다.")}>
+          <Chips chips={findings.undocumented} style="bg-sky-500/10 border-sky-500/30 text-sky-300" />
+        </Sec>
+
+        <section>
+          <h3 className="text-sm font-semibold text-gray-200 mb-1">{T("6. Documented health per model", "6. 모델별 문서 일치율")}</h3>
+          <p className="text-[11px] text-gray-500 mb-2">
+            {T("Share of documented GA/Beta cells that measured supported. Models not served here show the reason instead of a bar.",
+               "문서상 GA/Beta 셀 중 supported 비율입니다. 측정 불가 모델은 막대 대신 사유를 표기합니다.")}
+          </p>
+          <div className="space-y-1.5">
+            {findings.perModel.map((m) => (
+              <div key={m.model_key} className="flex items-center gap-2 text-[11px]">
+                <span className="w-24 shrink-0 truncate text-gray-300">{m.model_label.replace(/^Claude /, "")}</span>
+                {m.na_reason ? (
+                  <span className="flex-1 text-gray-500 leading-snug">{m.na_reason}</span>
+                ) : m.docHealth == null ? (
+                  <span className="flex-1 text-gray-500">{T("no documented probed cells", "문서상 프로브 셀 없음")}</span>
+                ) : (
+                  <>
+                    <div className="flex-1 h-1.5 rounded-full bg-gray-800 overflow-hidden">
+                      <div className={`h-full rounded-full ${m.docHealth < 60 ? "bg-rose-400" : "bg-emerald-400"}`} style={{ width: `${m.docHealth}%` }} />
+                    </div>
+                    <span className="w-28 text-right text-gray-400 tabular-nums whitespace-nowrap">
+                      {m.docHealth}% ({m.supported}/{m.probed}){m.drift > 0 && <span className="text-rose-300 ml-1">▲{m.drift}</span>}
+                    </span>
+                  </>
+                )}
+              </div>
+            ))}
+          </div>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
 function CellBadge({ agg, documented, onPick }: { agg: CellAggregate; documented?: string; onPick: (c: FeatureCell) => void }) {
   const { lang } = useLang();
   const [open, setOpen] = useState(false);
@@ -169,6 +305,7 @@ export default function ClaudeFeaturesPanel() {
   const [selected, setSelected] = useState<FeatureCell | null>(null);
   const [triggerMsg, setTriggerMsg] = useState<string | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [surfaceDetail, setSurfaceDetail] = useState<string | null>(null);   // Key Findings 드로어 대상 surface id (D4)
   // 필터가 켜져 있으면 접힘을 무시하고 전부 펼침 (D7). 모델 칩(D5)은 행을 숨기지 않으므로 여기에 포함하지 않는다 (RUL-8).
   const filterActive = filter !== "all";
 
@@ -314,13 +451,15 @@ export default function ClaudeFeaturesPanel() {
 
       {/* 엔드포인트 헬스 카드 (v2.24.0, D1) — 헤드라인 = 문서 기준 헬스(docHealth: 문서상 GA/Beta ∧ 실측된 셀 중 supported 비율),
           6세그먼트 분포 막대(전체 셀), "{total} 셀" 칩(N/A 포함), 드리프트 pill(>0). docProbed=0이면 "-" (critic 4-C).
-          카운트 줄은 visibleSegments (RUL-5: supported/unsupported/broken 항상, 나머지는 >0일 때만). */}
+          카운트 줄은 visibleSegments (RUL-5: supported/unsupported/broken 항상, 나머지는 >0일 때만).
+          카드 전체가 <button> — 클릭 시 해당 surface의 SurfaceDrawer(D4). 내부 마크업은 카드 그대로. */}
       {run && catalog && (
         <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-5 gap-3">
           {catalog.surfaces.map((s) => {
             const sm = surfaceSummary(cells, s.id);
             return (
-              <div key={s.id} className="bg-gray-900/50 light:bg-white border border-gray-800 rounded-xl p-4">
+              <button key={s.id} type="button" onClick={() => setSurfaceDetail(s.id)}
+                      className="text-left w-full bg-gray-900/50 light:bg-white border border-gray-800 hover:border-blue-500/60 rounded-xl p-4 transition-colors">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-bold text-gray-100">{s.label}</span>
                   <span className="px-1.5 py-0.5 text-[10px] rounded bg-gray-800 text-gray-400 tabular-nums">{sm.total} {L("cells", "셀")}</span>
@@ -343,7 +482,8 @@ export default function ClaudeFeaturesPanel() {
                     <span key={seg} className={SEGMENT_TEXT[seg]}>● {sm.segments[seg]} {SEGMENT_LABEL[seg][lang]}</span>
                   ))}
                 </div>
-              </div>
+                <div className="text-[11px] text-blue-400 mt-1.5">{L("Key findings →", "상세 요약 →")}</div>
+              </button>
             );
           })}
         </div>
@@ -466,6 +606,14 @@ export default function ClaudeFeaturesPanel() {
         <p>4. {L("Runs daily via EventBridge → Fargate (manual trigger runs inside the backend). Evidence is stored in RDS; the previous run is diffed at the top.", "EventBridge → Fargate로 매일 실행(수동 트리거는 backend 내부). 증거는 RDS에 저장되고 직전 런 대비 변경이 상단에 표시됩니다.")}</p>
       </div>
 
+      {surfaceDetail && run && catalog && (() => {
+        const sdef = catalog.surfaces.find((s) => s.id === surfaceDetail);
+        if (!sdef) return null;
+        return (
+          <SurfaceDrawer surface={sdef} findings={surfaceFindings(cells, sdef.id, catalog.models, lang)} labels={labels}
+            onPick={setSelected} onClose={() => setSurfaceDetail(null)} />
+        );
+      })()}
       {selected && run && <EvidenceModal runId={run.id} cell={selected} labels={labels} onClose={() => setSelected(null)} />}
     </div>
   );
