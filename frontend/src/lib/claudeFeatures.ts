@@ -126,3 +126,104 @@ export function surfaceHealth(cells: FeatureCell[], surface: string): { supporte
   }
   return { supported, broken, health: Math.round((100 * supported) / Math.max(1, supported + broken)) };
 }
+
+// ── v2.24.0 UI detail parity — 공용 술어 (RUL-7: 여기 한 번만 정의, 드로어·지연시간 헬퍼가 import) ──────────
+export const PROBED_STATUSES: ReadonlySet<FeatureStatus> = new Set<FeatureStatus>(["supported", "unsupported", "broken", "inconclusive"]);
+export function isProbed(status: FeatureStatus): boolean { return PROBED_STATUSES.has(status); }
+export function isDocumented(documented: Documented): boolean { return documented === "ga" || documented === "beta"; }
+
+// ── v2.24.0 UI detail parity — 헬스 카드 요약 (C2/R2, D1), 런 합계 스트립 (C9) ────────────────────
+
+/** 헬스 카드 막대 세그먼트 — 6상태를 표시 단위로 접음: skipped는 문서 GA/Beta면 '문서상 지원'(sky, cellBadge 규칙과 동일),
+ *  나머지 skipped와 N/A는 other(gray). */
+export type SummarySegment = "supported" | "unsupported" | "broken" | "inconclusive" | "documented_only" | "other";
+export const SEGMENT_ORDER: SummarySegment[] = ["supported", "unsupported", "broken", "inconclusive", "documented_only", "other"];
+// 누적 막대용 솔리드 색 — STATUS_STYLE(반투명 배지 배경)은 막대에서 보이지 않으므로 parity BAR_COLORS(ParityPanel.tsx:86-91) 패턴을 따름.
+export const SEGMENT_BAR_COLOR: Record<SummarySegment, string> = {
+  supported: "bg-emerald-400", unsupported: "bg-amber-400", broken: "bg-rose-400",
+  inconclusive: "bg-violet-400", documented_only: "bg-sky-400", other: "bg-gray-600",
+};
+export const SEGMENT_TEXT: Record<SummarySegment, string> = {
+  supported: "text-emerald-300", unsupported: "text-amber-300", broken: "text-rose-300",
+  inconclusive: "text-violet-300", documented_only: "text-sky-300", other: "text-gray-500",
+};
+export const SEGMENT_LABEL: Record<SummarySegment, { en: string; ko: string }> = {
+  supported: { en: "Supported", ko: "Supported" }, unsupported: { en: "Unsupported", ko: "Unsupported" },
+  broken: { en: "Broken", ko: "Broken" }, inconclusive: { en: "Inconclusive", ko: "Inconclusive" },
+  documented_only: { en: "Documented", ko: "문서상 지원" }, other: { en: "N/A", ko: "N/A" },
+};
+export const STATUS_TEXT: Record<FeatureStatus, string> = {
+  supported: "text-emerald-300", unsupported: "text-amber-300", broken: "text-rose-300",
+  inconclusive: "text-violet-300", skipped: "text-gray-500", not_applicable: "text-gray-500",
+};
+
+export interface SurfaceSummary {
+  surface: string;
+  total: number;                          // surface의 전체 셀 수 (N/A 포함) — 카드 "{total} 셀" 칩
+  counts: Record<FeatureStatus, number>;  // 6상태 원시 카운트
+  segments: Record<SummarySegment, number>;
+  probed: number;                         // supported+unsupported+broken+inconclusive
+  drift: number;                          // verdict === "drift"
+  undocumented: number;                   // verdict === "undocumented"
+  docSupported: number;                   // documented ∈ {ga,beta} ∧ supported
+  docProbed: number;                      // documented ∈ {ga,beta} ∧ status ∈ probed 4상태 (inconclusive 포함 — RUL-2)
+  docHealth: number | null;               // round(100·docSupported/docProbed); docProbed=0 → null (카드 "-")
+  supported: number; broken: number; health: number; // surfaceHealth() 호환 필드
+}
+
+/** 헬스 카드 헤드라인은 "문서상 제공(GA/Beta) 기능 중 실측 동작 비율"(docHealth). 음성 일치(documented=no ∧ unsupported)는
+ *  분모·분자 어디에도 들어가지 않는다 — match/(match+drift) 공식이 76%로 부풀던 문제의 교정(verify-R2). */
+export function surfaceSummary(cells: FeatureCell[], surface: string): SurfaceSummary {
+  const counts: Record<FeatureStatus, number> = { supported: 0, unsupported: 0, broken: 0, inconclusive: 0, skipped: 0, not_applicable: 0 };
+  let total = 0, drift = 0, undocumented = 0, docSupported = 0, docProbed = 0, documentedOnly = 0;
+  for (const c of cells) {
+    if (c.surface !== surface) continue;
+    total += 1;
+    counts[c.status] += 1;
+    if (c.verdict === "drift") drift += 1;
+    else if (c.verdict === "undocumented") undocumented += 1;
+    if (c.status === "skipped" && isDocumented(c.documented)) documentedOnly += 1;
+    if (isDocumented(c.documented) && isProbed(c.status)) {
+      docProbed += 1;
+      if (c.status === "supported") docSupported += 1;
+    }
+  }
+  const probed = counts.supported + counts.unsupported + counts.broken + counts.inconclusive;
+  const segments: Record<SummarySegment, number> = {
+    supported: counts.supported, unsupported: counts.unsupported, broken: counts.broken, inconclusive: counts.inconclusive,
+    documented_only: documentedOnly, other: counts.skipped - documentedOnly + counts.not_applicable,
+  };
+  return {
+    surface, total, counts, segments, probed, drift, undocumented, docSupported, docProbed,
+    docHealth: docProbed === 0 ? null : Math.round((100 * docSupported) / docProbed),
+    supported: counts.supported, broken: counts.broken,
+    health: Math.round((100 * counts.supported) / Math.max(1, counts.supported + counts.broken)),
+  };
+}
+
+const ALWAYS_SEGMENTS: ReadonlySet<SummarySegment> = new Set<SummarySegment>(["supported", "unsupported", "broken"]);
+/** 헬스 카드 카운트 줄 (RUL-5): supported/unsupported/broken은 항상, inconclusive/문서상 지원/N/A는 0이 아닐 때만. */
+export function visibleSegments(summary: SurfaceSummary): SummarySegment[] {
+  return SEGMENT_ORDER.filter((seg) => ALWAYS_SEGMENTS.has(seg) || summary.segments[seg] > 0);
+}
+
+/** 런 합계 스트립 (C9): totals의 6 status 키는 합 = 전체 셀(780), drift는 verdict 카운트라 status와 겹침 → 별도 필드로 분리. */
+export const RUN_STATUS_ORDER: FeatureStatus[] = ["supported", "unsupported", "broken", "inconclusive", "skipped", "not_applicable"];
+export interface RunSummary { total: number; statuses: { status: FeatureStatus; count: number }[]; drift: number }
+
+export function runSummary(totals: Record<string, number> | null | undefined): RunSummary | null {
+  if (!totals) return null;
+  const statuses = RUN_STATUS_ORDER.map((status) => ({ status, count: totals[status] ?? 0 }));
+  return { total: statuses.reduce((n, x) => n + x.count, 0), statuses, drift: totals.drift ?? 0 };
+}
+
+/** finished_at − started_at → "6분 15초" / "6m 15s". 입력 누락, 역순, 파싱 실패는 null. */
+export function formatDuration(startedAt: string | null, finishedAt: string | null, lang: string): string | null {
+  if (!startedAt || !finishedAt) return null;
+  const ms = new Date(finishedAt).getTime() - new Date(startedAt).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const totalSec = Math.floor(ms / 1000);
+  const m = Math.floor(totalSec / 60), s = totalSec % 60;
+  if (lang === "en") return m > 0 ? `${m}m ${s}s` : `${s}s`;
+  return m > 0 ? `${m}분 ${s}초` : `${s}초`;
+}

@@ -1,6 +1,9 @@
 /** Claude API Features 매트릭스 순수 로직 (v2.23.0) — 셀 집계·그룹 구성·헬스 계산 회귀 */
 import { describe, expect, test } from "vitest";
-import { aggregateCell, buildGroups, surfaceHealth, type FeatureCell, type FeatureDef } from "./claudeFeatures";
+import {
+  aggregateCell, buildGroups, formatDuration, isDocumented, isProbed, runSummary, surfaceHealth, surfaceSummary, visibleSegments,
+  type FeatureCell, type FeatureDef,
+} from "./claudeFeatures";
 
 const cell = (p: Partial<FeatureCell>): FeatureCell => ({
   feature: "f", surface: "cp", model_key: "opus-5", model_label: "Opus 5", model_id: "claude-opus-5",
@@ -64,6 +67,91 @@ describe("surfaceHealth", () => {
   test("health = supported / (supported + broken)", () => {
     const h = surfaceHealth([cell({}), cell({ status: "broken" }), cell({ status: "unsupported" })], "cp");
     expect(h).toEqual({ supported: 1, broken: 1, health: 50 });
+  });
+});
+
+describe("surfaceSummary (v2.24.0 헬스 카드)", () => {
+  // Mantle run #3 축소판 — surface "mantle"만 집계, "cp" 셀은 무시돼야 함
+  const mantle = (p: Partial<FeatureCell>) => cell({ surface: "mantle", ...p });
+  const cells: FeatureCell[] = [
+    mantle({ feature: "a" }),                                                            // ga supported
+    mantle({ feature: "b", documented: "beta" }),                                        // beta supported
+    mantle({ feature: "c", status: "unsupported", verdict: "drift" }),                   // ga unsupported → drift
+    mantle({ feature: "d", status: "unsupported", documented: "no", verdict: "match" }), // 음성 일치(문서 미제공, 실측 미지원)
+    mantle({ feature: "e", status: "unsupported", documented: "no", verdict: "match" }),
+    mantle({ feature: "f", status: "skipped", verdict: "none" }),                        // ga skipped → 문서상 지원(sky)
+    mantle({ feature: "g", status: "not_applicable", documented: "no", verdict: "none" }),
+    mantle({ feature: "h", status: "not_applicable", documented: "no", verdict: "none" }),
+    mantle({ feature: "i", status: "inconclusive", documented: "unknown", verdict: "none" }),
+    mantle({ feature: "j", documented: "no", verdict: "undocumented" }),                 // 문서 미제공인데 동작
+    cell({ feature: "z", status: "broken", verdict: "drift" }),                          // surface cp → 제외
+  ];
+  test("total/counts/segments cover ALL cells of the surface (N/A included)", () => {
+    const s = surfaceSummary(cells, "mantle");
+    expect(s.total).toBe(10);
+    expect(s.counts).toEqual({ supported: 3, unsupported: 3, broken: 0, inconclusive: 1, skipped: 1, not_applicable: 2 });
+    expect(s.segments).toEqual({ supported: 3, unsupported: 3, broken: 0, inconclusive: 1, documented_only: 1, other: 2 });
+    expect(s.probed).toBe(7);
+    expect(s.drift).toBe(1);
+    expect(s.undocumented).toBe(1);
+  });
+  test("docHealth = documented(ga/beta) ∧ supported / documented ∧ probed — negative matches do not inflate it", () => {
+    const s = surfaceSummary(cells, "mantle");
+    expect(s.docSupported).toBe(2); // a, b
+    expect(s.docProbed).toBe(3);    // a, b, c — i(unknown), d/e(documented=no) 제외
+    expect(s.docHealth).toBe(67);
+    const withoutNegatives = surfaceSummary(cells.filter((c) => c.feature !== "d" && c.feature !== "e"), "mantle");
+    expect(withoutNegatives.docHealth).toBe(67);
+  });
+  test("legacy fields stay identical to surfaceHealth()", () => {
+    const s = surfaceSummary(cells, "mantle");
+    const h = surfaceHealth(cells, "mantle");
+    expect({ supported: s.supported, broken: s.broken, health: s.health }).toEqual(h);
+    expect(h).toEqual({ supported: 3, broken: 0, health: 100 });
+  });
+  test("no documented+probed cell → docHealth null (card shows '-'); empty surface → total 0", () => {
+    const onlyNa = [mantle({ status: "not_applicable", verdict: "none" }), mantle({ status: "skipped", verdict: "none", model_key: "sonnet-5" })];
+    const s = surfaceSummary(onlyNa, "mantle");
+    expect(s.docHealth).toBeNull();
+    expect(s.total).toBe(2);
+    expect(s.segments.documented_only).toBe(1);
+    expect(s.segments.other).toBe(1);
+    expect(surfaceSummary([], "mantle")).toMatchObject({ total: 0, docHealth: null, drift: 0, health: 0 });
+  });
+  test("visibleSegments: supported/unsupported/broken always, the other three only when > 0 (RUL-5); shared predicates", () => {
+    expect(visibleSegments(surfaceSummary(cells, "mantle"))).toEqual(["supported", "unsupported", "broken", "inconclusive", "documented_only", "other"]);
+    expect(visibleSegments(surfaceSummary([mantle({ feature: "a" })], "mantle"))).toEqual(["supported", "unsupported", "broken"]);
+    expect(visibleSegments(surfaceSummary([mantle({ status: "not_applicable", verdict: "none" })], "mantle"))).toEqual(["supported", "unsupported", "broken", "other"]);
+    expect(isProbed("inconclusive")).toBe(true);
+    expect(isProbed("skipped")).toBe(false);
+    expect(isProbed("not_applicable")).toBe(false);
+    expect(isDocumented("beta")).toBe(true);
+    expect(isDocumented("unknown")).toBe(false);
+    expect(isDocumented("no")).toBe(false);
+  });
+});
+
+describe("runSummary / formatDuration (v2.24.0 런 합계 스트립)", () => {
+  test("totals → 6 status counts in fixed order, total = their sum, drift kept separate", () => {
+    const s = runSummary({ supported: 419, unsupported: 206, broken: 0, inconclusive: 0, skipped: 15, not_applicable: 140, drift: 25 });
+    expect(s).not.toBeNull();
+    expect(s!.total).toBe(780);
+    expect(s!.statuses.map((x) => x.status)).toEqual(["supported", "unsupported", "broken", "inconclusive", "skipped", "not_applicable"]);
+    expect(s!.statuses[0].count).toBe(419);
+    expect(s!.drift).toBe(25);
+  });
+  test("missing keys count as 0; null/undefined totals → null", () => {
+    expect(runSummary({ supported: 1 })!.total).toBe(1);
+    expect(runSummary({ supported: 1 })!.drift).toBe(0);
+    expect(runSummary(null)).toBeNull();
+    expect(runSummary(undefined)).toBeNull();
+  });
+  test("formatDuration: run #3 → '6분 15초' / '6m 15s'; seconds only under a minute; null when missing or reversed", () => {
+    expect(formatDuration("2026-09-06T00:26:35.455128+00:00", "2026-09-06T00:32:50.794359+00:00", "ko")).toBe("6분 15초");
+    expect(formatDuration("2026-09-06T00:26:35.455128+00:00", "2026-09-06T00:32:50.794359+00:00", "en")).toBe("6m 15s");
+    expect(formatDuration("2026-09-06T00:00:00Z", "2026-09-06T00:00:42Z", "ko")).toBe("42초");
+    expect(formatDuration(null, "2026-09-06T00:32:50Z", "ko")).toBeNull();
+    expect(formatDuration("2026-09-06T00:32:50Z", "2026-09-06T00:26:35Z", "ko")).toBeNull();
   });
 });
 
