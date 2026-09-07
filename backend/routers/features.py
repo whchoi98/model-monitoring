@@ -1,7 +1,7 @@
 """Claude API Features 검증 API (v2.23.0).
 
 - GET  /api/features/catalog   — 그룹·surface·모델·피처(문서 기대치 포함)
-- GET  /api/features/latest    — 최신 완료 런 매트릭스 + 직전 런 diff + 드리프트 목록 (s-maxage=60)
+- GET  /api/features/latest    — 최신 완료 런 매트릭스 + 직전 런 diff(kind: catalog|measured) + 드리프트 목록 (s-maxage=60)
 - GET  /api/features/evidence  — 셀(feature, surface, model_key) 전체 증거
 - POST /api/features/trigger   — 수동 런 (JWT, backend 내 백그라운드 스레드)
 """
@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from claude_features import catalog
-from claude_features.engine import diff_runs
+from claude_features.engine import annotate_change_kinds, diff_runs
 from database import get_db
 from models import FeatureResult, FeatureRun
 
@@ -48,8 +48,12 @@ def build_latest_payload(run, rows, prev_rows, prev_run_id, running: bool) -> di
     if prev_rows is not None:
         prev_map = {(p.feature, p.surface, p.model_key): p.status for p in prev_rows}
         cur_map = {(r.feature, r.surface, r.model_key): r.status for r in rows}
+        # latency_ms IS NULL ⇔ 러너 사전판정 행(카탈로그 규칙) — engine.change_kind 참조
+        prev_pre = {(p.feature, p.surface, p.model_key) for p in prev_rows if p.latency_ms is None}
+        cur_pre = {(r.feature, r.surface, r.model_key) for r in rows if r.latency_ms is None}
         labels = {r.model_key: r.model_label for r in rows}
-        changes = [{**c, "model_label": labels.get(c["model_key"], c["model_key"])} for c in diff_runs(prev_map, cur_map)]
+        changes = [{**c, "model_label": labels.get(c["model_key"], c["model_key"])}
+                   for c in annotate_change_kinds(diff_runs(prev_map, cur_map), prev_pre, cur_pre)]
     drift = [r for r in results if r["verdict"] == "drift"]
     return {
         "run": {"id": run.id, "started_at": run.started_at.isoformat() if run.started_at else None,
@@ -75,7 +79,8 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
                 .order_by(desc(FeatureRun.id)).first())
     prev_rows = None
     if prev_run:
-        prev_rows = (db.query(FeatureResult.feature, FeatureResult.surface, FeatureResult.model_key, FeatureResult.status)
+        prev_rows = (db.query(FeatureResult.feature, FeatureResult.surface, FeatureResult.model_key, FeatureResult.status,
+                              FeatureResult.latency_ms)
                      .filter(FeatureResult.run_id == prev_run.id).all())
     return build_latest_payload(run, rows, prev_rows, prev_run.id if prev_run else None, _running["active"])
 

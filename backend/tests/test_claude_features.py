@@ -641,10 +641,11 @@ def test_build_latest_payload_computes_changes_and_drift(monkeypatch):
     run = NS(id=2, started_at=None, finished_at=None, totals={"supported": 1}, catalog_version="2026-09-05")
     rows = [NS(feature="a", surface="cp", model_key="opus-5", model_label="Opus 5", model_id="claude-opus-5",
                status="broken", documented="ga", verdict="drift", latency_ms=10.0)]
-    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported")]
+    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported", latency_ms=9.0)]
     p = build_latest_payload(run, rows, prev, 1, running=False)
     assert p["run"]["id"] == 2 and p["previous_run_id"] == 1
-    assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken", "model_label": "Opus 5"}]
+    assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken",
+                             "kind": "measured", "model_label": "Opus 5"}]
     assert p["drift"][0]["feature"] == "a" and p["results"][0]["verdict"] == "drift"
 
 
@@ -1164,3 +1165,57 @@ def test_thinking_probes_store_usage():
     assert ok is True and ev["usage"] == usage and ev["thinking_signed"] is True and ev["thinking_chars"] == 0
     ok, ev = P.probe_extended_thinking(_FakeT(resp=resp), "claude-opus-5", "opus-5")
     assert ok is True and ev["usage"] == usage
+
+
+# ==================================================================== v2.24.0 — Task 5: D3 backend changes[].kind
+
+def test_change_kind_covers_all_four_predecided_combinations():
+    assert engine.change_kind(False, False) == "measured"
+    assert engine.change_kind(True, False) == "catalog"
+    assert engine.change_kind(False, True) == "catalog"
+    assert engine.change_kind(True, True) == "catalog"
+
+
+def test_change_kind_new_cell_is_catalog_and_annotate_passes_before_missing():
+    """직전 런에 없던 셀(before None)은 카탈로그 변경으로만 생길 수 있다 (RUL-11)."""
+    assert engine.change_kind(False, False, before_missing=True) == "catalog"
+    assert engine.change_kind(False, True, before_missing=True) == "catalog"
+    assert engine.change_kind(True, False, before_missing=True) == "catalog"
+    assert engine.change_kind(False, False, before_missing=False) == "measured"
+    changes = engine.diff_runs(
+        {("dr", "bedrock_converse", "opus-5"): "unsupported", ("x", "cp", "opus-5"): "supported"},
+        {("dr", "bedrock_converse", "opus-5"): "not_applicable", ("new", "cp", "opus-5"): "supported", ("x", "cp", "opus-5"): "broken"})
+    tagged = engine.annotate_change_kinds(changes, prev_predecided=set(), cur_predecided={("dr", "bedrock_converse", "opus-5")})
+    # sorted(cur) 순서: dr → new → x
+    assert [(c["feature"], c["kind"]) for c in tagged] == [("dr", "catalog"), ("new", "catalog"), ("x", "measured")]
+    assert tagged[0]["before"] == "unsupported" and tagged[0]["after"] == "not_applicable"
+    assert tagged[1]["before"] is None
+    assert "kind" not in changes[0]  # diff_runs 자체는 그대로
+
+
+def test_build_latest_payload_tags_catalog_rule_changes(monkeypatch):
+    """run #2→#3 data_residency 15건: documented도 catalog_version도 그대로였고 latency만 1180ms→null (R5 교정안)."""
+    import importlib
+    from types import SimpleNamespace as NS
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    build_latest_payload = importlib.import_module("routers.features").build_latest_payload
+    run = NS(id=3, started_at=None, finished_at=None, totals={}, catalog_version="2026-09-05")
+    rows = [
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="global.anthropic.claude-opus-5", status="not_applicable", documented="no", verdict="none", latency_ms=None),
+        NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="global.anthropic.claude-opus-5", status="unsupported", documented="no", verdict="match", latency_ms=310.0),
+        NS(feature="models_api", surface="cp", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="claude-opus-5", status="supported", documented="ga", verdict="match", latency_ms=120.0),
+    ]
+    prev = [
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", status="unsupported", latency_ms=1179.99),
+        NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", status="supported", latency_ms=290.0),
+    ]
+    p = build_latest_payload(run, rows, prev, 2, running=False)
+    kinds = {(c["feature"], c["surface"]): c["kind"] for c in p["changes"]}
+    assert kinds == {("data_residency", "bedrock_converse"): "catalog",
+                     ("token_counting", "bedrock_invoke"): "measured",
+                     ("models_api", "cp"): "catalog"}  # 신규 셀(before None)은 카탈로그 변경 (RUL-11)
+    assert all(c["model_label"] == "Claude Opus 5" for c in p["changes"])

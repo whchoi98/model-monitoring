@@ -106,6 +106,30 @@ def diff_runs(prev: dict[tuple, str], cur: dict[tuple, str]) -> list[dict[str, A
     return out
 
 
+def change_kind(before_predecided: bool, after_predecided: bool, before_missing: bool = False) -> str:
+    """런 간 변경 1건의 원인 태그 — "catalog"(카탈로그 규칙 변경) | "measured"(실측 변경).
+
+    러너는 카탈로그 사전판정 행(`is_applicable` → not_applicable/skipped)을 latency_ms 없이 저장하고,
+    프로브 행은 route-gate unsupported까지 항상 latency를 채운다 → `latency_ms IS NULL` ⇔ 사전판정.
+    before/after 어느 한쪽이 사전판정이면 카탈로그 변경, 둘 다 프로브 결과면 실측 변경.
+    직전 런에 없던 셀(before_missing)은 카탈로그에 행/모델/surface가 추가됐다는 뜻이므로 항상 카탈로그 변경이다.
+    (run #2→#3의 data_residency 15건은 documented도 catalog_version도 그대로였고 latency만 1180ms→null이었다 —
+    documented 비교나 catalog_version 비교로는 잡히지 않는다.)
+    """
+    if before_missing:
+        return "catalog"
+    return "catalog" if (before_predecided or after_predecided) else "measured"
+
+
+def annotate_change_kinds(changes: list[dict[str, Any]], prev_predecided: set[tuple], cur_predecided: set[tuple]) -> list[dict[str, Any]]:
+    """diff_runs 결과에 kind를 덧붙인다 — 키는 (feature, surface, model_key). diff_runs 자체는 그대로 둔다."""
+    out: list[dict[str, Any]] = []
+    for c in changes:
+        key = (c["feature"], c["surface"], c["model_key"])
+        out.append({**c, "kind": change_kind(key in prev_predecided, key in cur_predecided, before_missing=c["before"] is None)})
+    return out
+
+
 def has_thinking_evidence(blocks: list[dict] | None) -> bool:
     """adaptive thinking 증거: thinking 블록이 있고 요약 텍스트나 서명 중 하나가 실제로 채워졌는가.
 
