@@ -48,9 +48,10 @@ def build_latest_payload(run, rows, prev_rows, prev_run_id, running: bool) -> di
     if prev_rows is not None:
         prev_map = {(p.feature, p.surface, p.model_key): p.status for p in prev_rows}
         cur_map = {(r.feature, r.surface, r.model_key): r.status for r in rows}
-        # latency_ms IS NULL ⇔ 러너 사전판정 행(카탈로그 규칙) — engine.change_kind 참조
-        prev_pre = {(p.feature, p.surface, p.model_key) for p in prev_rows if p.latency_ms is None}
-        cur_pre = {(r.feature, r.surface, r.model_key) for r in rows if r.latency_ms is None}
+        # latency_ms IS NULL AND error_message IS NULL ⇔ 러너 사전판정 행(카탈로그 규칙) — engine.change_kind 참조.
+        # latency 없는 행에는 transport init 실패 같은 프로브 실패도 섞이므로 error_message로 함께 걸러야 한다.
+        prev_pre = {(p.feature, p.surface, p.model_key) for p in prev_rows if p.latency_ms is None and not p.error_message}
+        cur_pre = {(r.feature, r.surface, r.model_key) for r in rows if r.latency_ms is None and not r.error_message}
         labels = {r.model_key: r.model_label for r in rows}
         changes = [{**c, "model_label": labels.get(c["model_key"], c["model_key"])}
                    for c in annotate_change_kinds(diff_runs(prev_map, cur_map), prev_pre, cur_pre)]
@@ -73,14 +74,15 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
     if not run:
         return {"run": None, "previous_run_id": None, "changes": [], "drift": [], "results": [], "running": _running["active"]}
     cols = (FeatureResult.feature, FeatureResult.surface, FeatureResult.model_key, FeatureResult.model_label,
-            FeatureResult.model_id, FeatureResult.status, FeatureResult.documented, FeatureResult.verdict, FeatureResult.latency_ms)
+            FeatureResult.model_id, FeatureResult.status, FeatureResult.documented, FeatureResult.verdict,
+            FeatureResult.latency_ms, FeatureResult.error_message)
     rows = db.query(*cols).filter(FeatureResult.run_id == run.id).all()
     prev_run = (db.query(FeatureRun).filter(FeatureRun.status == "completed", FeatureRun.id < run.id)
                 .order_by(desc(FeatureRun.id)).first())
     prev_rows = None
     if prev_run:
         prev_rows = (db.query(FeatureResult.feature, FeatureResult.surface, FeatureResult.model_key, FeatureResult.status,
-                              FeatureResult.latency_ms)
+                              FeatureResult.latency_ms, FeatureResult.error_message)
                      .filter(FeatureResult.run_id == prev_run.id).all())
     return build_latest_payload(run, rows, prev_rows, prev_run.id if prev_run else None, _running["active"])
 

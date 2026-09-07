@@ -640,8 +640,8 @@ def test_build_latest_payload_computes_changes_and_drift(monkeypatch):
     build_latest_payload = importlib.import_module("routers.features").build_latest_payload
     run = NS(id=2, started_at=None, finished_at=None, totals={"supported": 1}, catalog_version="2026-09-05")
     rows = [NS(feature="a", surface="cp", model_key="opus-5", model_label="Opus 5", model_id="claude-opus-5",
-               status="broken", documented="ga", verdict="drift", latency_ms=10.0)]
-    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported", latency_ms=9.0)]
+               status="broken", documented="ga", verdict="drift", latency_ms=10.0, error_message=None)]
+    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported", latency_ms=9.0, error_message=None)]
     p = build_latest_payload(run, rows, prev, 1, running=False)
     assert p["run"]["id"] == 2 and p["previous_run_id"] == 1
     assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken",
@@ -1203,15 +1203,20 @@ def test_build_latest_payload_tags_catalog_rule_changes(monkeypatch):
     run = NS(id=3, started_at=None, finished_at=None, totals={}, catalog_version="2026-09-05")
     rows = [
         NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", model_label="Claude Opus 5",
-           model_id="global.anthropic.claude-opus-5", status="not_applicable", documented="no", verdict="none", latency_ms=None),
+           model_id="global.anthropic.claude-opus-5", status="not_applicable", documented="no", verdict="none",
+           latency_ms=None, error_message=None),
         NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", model_label="Claude Opus 5",
-           model_id="global.anthropic.claude-opus-5", status="unsupported", documented="no", verdict="match", latency_ms=310.0),
+           model_id="global.anthropic.claude-opus-5", status="unsupported", documented="no", verdict="match",
+           latency_ms=310.0, error_message=None),
         NS(feature="models_api", surface="cp", model_key="opus-5", model_label="Claude Opus 5",
-           model_id="claude-opus-5", status="supported", documented="ga", verdict="match", latency_ms=120.0),
+           model_id="claude-opus-5", status="supported", documented="ga", verdict="match", latency_ms=120.0,
+           error_message=None),
     ]
     prev = [
-        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", status="unsupported", latency_ms=1179.99),
-        NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", status="supported", latency_ms=290.0),
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", status="unsupported",
+           latency_ms=1179.99, error_message=None),
+        NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", status="supported", latency_ms=290.0,
+           error_message=None),
     ]
     p = build_latest_payload(run, rows, prev, 2, running=False)
     kinds = {(c["feature"], c["surface"]): c["kind"] for c in p["changes"]}
@@ -1219,3 +1224,42 @@ def test_build_latest_payload_tags_catalog_rule_changes(monkeypatch):
                      ("token_counting", "bedrock_invoke"): "measured",
                      ("models_api", "cp"): "catalog"}  # 신규 셀(before None)은 카탈로그 변경 (RUL-11)
     assert all(c["model_label"] == "Claude Opus 5" for c in p["changes"])
+
+
+def test_build_latest_payload_null_latency_with_error_is_measured(monkeypatch):
+    """latency 없는 행이라도 error_message가 있으면 프로브 실패(실측)다 — 사전판정 행은 error_message가 비어 있다.
+
+    러너는 surface 전체의 transport 초기화가 실패하면 그 surface의 모든 job을
+    ProbeOutcome("broken", error="transport init: …")로 기록한다(runner.py `_execute`).
+    이 행은 latency_ms가 NULL이라 latency만으로는 사전판정과 구분되지 않고,
+    자격 만료 같은 실측 장애가 "카탈로그 규칙 변경"으로 오태깅된다(복구 런도 반대 방향으로 같은 오태깅).
+    """
+    import importlib
+    from types import SimpleNamespace as NS
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    build_latest_payload = importlib.import_module("routers.features").build_latest_payload
+    run = NS(id=4, started_at=None, finished_at=None, totals={}, catalog_version="2026-09-05")
+    rows = [
+        # 자격 누락으로 surface 전체가 broken — latency 없음 + error 있음 → 실측 변경
+        NS(feature="tool_use", surface="cp", model_key="opus-5", model_label="Claude Opus 5", model_id="claude-opus-5",
+           status="broken", documented="ga", verdict="drift", latency_ms=None,
+           error_message="transport init: boom"),
+        # 복구 런 방향: 직전 런이 broken(latency 없음 + error 있음)이었고 이번 런은 정상 프로브 → 실측 변경
+        NS(feature="mcp_connector", surface="cp", model_key="opus-5", model_label="Claude Opus 5", model_id="claude-opus-5",
+           status="supported", documented="ga", verdict="match", latency_ms=210.0, error_message=None),
+        # 러너 사전판정 행: latency 없음 + error 없음 → 카탈로그 규칙 변경
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="global.anthropic.claude-opus-5", status="not_applicable", documented="no", verdict="none",
+           latency_ms=None, error_message=None),
+    ]
+    prev = [
+        NS(feature="tool_use", surface="cp", model_key="opus-5", status="supported", latency_ms=140.0, error_message=None),
+        NS(feature="mcp_connector", surface="cp", model_key="opus-5", status="broken", latency_ms=None,
+           error_message="executor: boom"),
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", status="unsupported",
+           latency_ms=1179.99, error_message=None),
+    ]
+    p = build_latest_payload(run, rows, prev, 3, running=False)
+    assert {c["feature"]: c["kind"] for c in p["changes"]} == {
+        "tool_use": "measured", "mcp_connector": "measured", "data_residency": "catalog"}

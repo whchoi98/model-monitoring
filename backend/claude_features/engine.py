@@ -109,12 +109,16 @@ def diff_runs(prev: dict[tuple, str], cur: dict[tuple, str]) -> list[dict[str, A
 def change_kind(before_predecided: bool, after_predecided: bool, before_missing: bool = False) -> str:
     """런 간 변경 1건의 원인 태그 — "catalog"(카탈로그 규칙 변경) | "measured"(실측 변경).
 
-    러너는 카탈로그 사전판정 행(`is_applicable` → not_applicable/skipped)을 latency_ms 없이 저장하고,
-    프로브 행은 route-gate unsupported까지 항상 latency를 채운다 → `latency_ms IS NULL` ⇔ 사전판정.
+    러너는 카탈로그 사전판정 행(`is_applicable` → not_applicable/skipped)을 latency_ms도 error_message도
+    없이 저장하고(`runner.py` `run_features`의 `decided` 행), 프로브 행은 route-gate unsupported까지
+    `run_probe`가 항상 latency를 채운다. latency가 없는 프로브 행은 transport 초기화 실패
+    (`ProbeOutcome("broken", error="transport init: …")`)나 executor 예외뿐이고 이들은 항상 error를 남기므로,
+    사전판정 판별식은 `latency_ms IS NULL AND error_message IS NULL`이다(호출자가 이 판정을 넘겨준다).
     before/after 어느 한쪽이 사전판정이면 카탈로그 변경, 둘 다 프로브 결과면 실측 변경.
     직전 런에 없던 셀(before_missing)은 카탈로그에 행/모델/surface가 추가됐다는 뜻이므로 항상 카탈로그 변경이다.
     (run #2→#3의 data_residency 15건은 documented도 catalog_version도 그대로였고 latency만 1180ms→null이었다 —
-    documented 비교나 catalog_version 비교로는 잡히지 않는다.)
+    documented 비교나 catalog_version 비교로는 잡히지 않는다. 반대로 자격 만료로 surface 전체가 broken이 된 런은
+    latency가 비어도 error가 남으므로 실측 변경으로 태깅된다.)
     """
     if before_missing:
         return "catalog"
@@ -122,7 +126,11 @@ def change_kind(before_predecided: bool, after_predecided: bool, before_missing:
 
 
 def annotate_change_kinds(changes: list[dict[str, Any]], prev_predecided: set[tuple], cur_predecided: set[tuple]) -> list[dict[str, Any]]:
-    """diff_runs 결과에 kind를 덧붙인다 — 키는 (feature, surface, model_key). diff_runs 자체는 그대로 둔다."""
+    """diff_runs 결과에 kind를 덧붙인다 — 키는 (feature, surface, model_key). diff_runs 자체는 그대로 둔다.
+
+    `prev_predecided`/`cur_predecided`는 각 런의 사전판정 셀 키 집합
+    (= `latency_ms IS NULL AND error_message IS NULL`인 행 — `change_kind` 참조).
+    """
     out: list[dict[str, Any]] = []
     for c in changes:
         key = (c["feature"], c["surface"], c["model_key"])
