@@ -640,11 +640,12 @@ def test_build_latest_payload_computes_changes_and_drift(monkeypatch):
     build_latest_payload = importlib.import_module("routers.features").build_latest_payload
     run = NS(id=2, started_at=None, finished_at=None, totals={"supported": 1}, catalog_version="2026-09-05")
     rows = [NS(feature="a", surface="cp", model_key="opus-5", model_label="Opus 5", model_id="claude-opus-5",
-               status="broken", documented="ga", verdict="drift", latency_ms=10.0)]
-    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported")]
+               status="broken", documented="ga", verdict="drift", latency_ms=10.0, error_message=None)]
+    prev = [NS(feature="a", surface="cp", model_key="opus-5", status="supported", latency_ms=9.0, error_message=None)]
     p = build_latest_payload(run, rows, prev, 1, running=False)
     assert p["run"]["id"] == 2 and p["previous_run_id"] == 1
-    assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken", "model_label": "Opus 5"}]
+    assert p["changes"] == [{"feature": "a", "surface": "cp", "model_key": "opus-5", "before": "supported", "after": "broken",
+                             "kind": "measured", "model_label": "Opus 5"}]
     assert p["drift"][0]["feature"] == "a" and p["results"][0]["verdict"] == "drift"
 
 
@@ -752,3 +753,526 @@ def test_cache_probes_persist_blocked_category_evidence(probe):
     assert ev["stop_details"][0]["category"] == "reasoning_extraction"
     # 증거는 그대로 보존돼야 한다 (usage를 숨기지 않는다)
     assert ev["first_usage"]["cache_creation_input_tokens"] == 2203
+
+
+# ==================================================================== v2.24.0 — Task 1: engine.classify 회귀 핀 (D8(b) 전제)
+# 라이브 run #3(2026-09-06) 증거·parity-ref 샘플에서 뽑은 대표 오류 문자열. classify는 소문자 부분 문자열 매칭이므로
+# D8(b)가 오류 문자열에 AWS operation 이름·빈 본문 표기를 덧붙일 때 새 문구에 마커("not found", "no route" 등)가
+# 끼어들면 broken→unsupported로 뒤집힌다 — 이 핀이 그 회귀를 막는다.
+_CLASSIFY_PINS = [
+    # (id, 오류 문자열 그대로, 기대 판정)
+    ("bedrock-count-tokens", "HTTP 400: ValidationException: The provided model doesn't support counting tokens.", "unsupported"),
+    ("invoke-structured-extra-inputs", "HTTP 400: ValidationException: output_config.format: Extra inputs are not permitted", "unsupported"),
+    ("mantle-data-retention", 'HTTP 400: {"type": "error", "request_id": "req_37kb", "error": {"type": "invalid_request_error", '
+                              '"message": "data retention mode \'default\' is not available for this model"}}', "unsupported"),
+    ("mantle-beta-header", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+                           '"message": "Unexpected value(s) `fallback-credit-2026-07-01` for the `anthropic-beta` header"}}', "unsupported"),
+    ("invoke-tool-type", "HTTP 400: ValidationException: tool type 'advisor_20260301' is not supported for this model", "unsupported"),
+    ("cp-strict-extra-inputs", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+                               '"message": "tools.0.custom.strict: Extra inputs are not permitted"}}', "unsupported"),
+    ("cp-fallbacks-param", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
+                           '"message": "\'claude-sonnet-5\' does not support the `fallbacks` parameter."}, "request_id": "req_011Ce"}', "unsupported"),
+    ("mantle-empty-404", "HTTP 404: ", "unsupported"),
+    ("coral-unknown-operation", "HTTP 404: UnknownOperationException: route not available on this endpoint", "unsupported"),
+    ("bedrock-messages-403-as-404", 'HTTP 404: route not served by the Anthropic-compatible handler (403 {"Message": "Authorization header is missing"})',
+     "unsupported"),
+    ("no-route-gate", "no route: bedrock_invoke has no HTTP endpoint for /v1/messages/batches", "unsupported"),
+    ("thinking-enabled-rejected", 'HTTP 400: ValidationException: "thinking.type.enabled" is not supported for this model. '
+                                  'Use "thinking.type.adaptive" and "output_config.effort" to control thinking behavior.', "unsupported"),
+    ("mantle-model-does-not-exist", 'HTTP 404: {"type": "error", "error": {"type": "not_found_error", '
+                                    '"message": "The model \'anthropic.claude-fable-5-1\' does not exist or you do not have access to it."}}', "unsupported"),
+    ("with-fallback-tail", "HTTP 400: ValidationException: tools.0: Input tag 'computer_toolset_20260801' found using 'type' does not match "
+                           "any of the expected tags: 'bash_20250124' | attempts=[{\"attempt\": \"computer_toolset_20260801\", \"result\": \"HTTP 400\"}]",
+     "unsupported"),
+    ("bedrock-request-not-valid", "HTTP 400: ValidationException: request is not valid", "unsupported"),
+    ("bedrock-messages-403-auth", 'HTTP 403: {"Message": "Authorization header is missing"}', "broken"),
+    ("empty-400", "HTTP 400: ", "broken"),
+    ("rate-limit-429", 'HTTP 429: {"type": "error", "error": {"type": "rate_limit_error", "message": "Too many requests"}}', "broken"),
+    ("api-error-500", 'HTTP 500: {"type":"error","error":{"type":"api_error","message":"Internal server error"}}', "broken"),
+    ("access-denied", "HTTP 403: AccessDeniedException: User: arn:aws:sts::1:assumed-role/x is not authorized to perform: bedrock:InvokeModel",
+     "broken"),
+    ("effort-unknown-variant", "HTTP 400: ValidationException: unknown variant `ultra`, expected one of `low`, `medium`, `high`, `xhigh`, "
+                               "`max`, `Unhandled` at line 1 column 125", "broken"),
+    ("read-timeout", "ReadTimeout: HTTPSConnectionPool(host='aws-external-anthropic.us-east-2.api.aws', port=443): Read timed out.", "broken"),
+    ("connect-error", "ConnectError: [Errno 111] Connection refused", "broken"),
+    ("transport-init", "transport init: KeyError: 'ANTHROPIC_API_KEY'", "broken"),
+]
+
+
+@pytest.mark.parametrize("msg,expected", [(m, e) for _, m, e in _CLASSIFY_PINS], ids=[i for i, _, _ in _CLASSIFY_PINS])
+def test_classify_pins_live_error_strings(msg, expected):
+    assert engine.classify(msg) == expected
+
+
+# D8(b) 이후 형식 ↔ 현재 형식 — 같은 판정이어야 한다 (operation 괄호 표기, "(empty body) METHOD path")
+_CLASSIFY_FORMAT_PAIRS = [
+    # (현재 형식, D8(b) 형식, 기대 판정)
+    ("HTTP 400: ValidationException: The provided model doesn't support counting tokens.",
+     "HTTP 400: ValidationException (CountTokens): The provided model doesn't support counting tokens.", "unsupported"),
+    ("HTTP 400: ValidationException: output_config.format: Extra inputs are not permitted",
+     "HTTP 400: ValidationException (InvokeModel): output_config.format: Extra inputs are not permitted", "unsupported"),
+    ('HTTP 400: ValidationException: "thinking.type.enabled" is not supported for this model.',
+     'HTTP 400: ValidationException (Converse): "thinking.type.enabled" is not supported for this model.', "unsupported"),
+    ("HTTP 400: ValidationException: request is not valid",
+     "HTTP 400: ValidationException (InvokeModelWithResponseStream): request is not valid", "unsupported"),
+    ("HTTP 403: AccessDeniedException: User: arn:aws:sts::1:assumed-role/x is not authorized to perform: bedrock:InvokeModel",
+     "HTTP 403: AccessDeniedException (InvokeModel): User: arn:aws:sts::1:assumed-role/x is not authorized to perform: bedrock:InvokeModel",
+     "broken"),
+    ("HTTP 429: ThrottlingException: Too many requests, please wait before trying again.",
+     "HTTP 429: ThrottlingException (Converse): Too many requests, please wait before trying again.", "broken"),
+    ("HTTP 404: ", "HTTP 404: (empty body) GET /v1/files", "unsupported"),
+    ("HTTP 404: ", "HTTP 404: (empty body) POST /v1/messages/batches", "unsupported"),
+    ("HTTP 404: ", "HTTP 404: (empty body) GET /v1/models/anthropic.claude-fable-5", "unsupported"),
+    ("HTTP 405: ", "HTTP 405: (empty body) DELETE /v1/files/file_01", "unsupported"),
+    ("HTTP 400: ", "HTTP 400: (empty body) POST /v1/messages", "broken"),
+    ("HTTP 400: ", "HTTP 400: (empty body) POST /v1/messages (stream)", "broken"),
+    ("HTTP 403: ", "HTTP 403: (empty body) GET /v1/models/anthropic.claude-fable-5", "broken"),
+    ("HTTP 500: ", "HTTP 500: (empty body) POST /v1/messages", "broken"),
+]
+
+
+@pytest.mark.parametrize("before,after,expected", _CLASSIFY_FORMAT_PAIRS)
+def test_classify_unchanged_by_d8b_error_context(before, after, expected):
+    assert engine.classify(before) == expected
+    assert engine.classify(after) == expected
+
+
+# ==================================================================== v2.24.0 — Task 2: D8(b) 오류 문맥
+
+def test_client_error_keeps_boto_operation_name():
+    """boto ClientError는 operation 이름을 str(exc)와 .operation_name에만 담는다 — Error.Message만 쓰면 탈락 (R6).
+
+    라이브 run #3: `bedrock_invoke/token_counting`과 `bedrock_converse/token_counting`이 같은 문구라 CountTokens에서
+    난 것인지 문자열만으로 구분 불가였다 (parity 샘플은 "CountTokens operation" 명시).
+    """
+    class E(Exception):
+        response = {"Error": {"Code": "ValidationException", "Message": "The provided model doesn't support counting tokens."},
+                    "ResponseMetadata": {"HTTPStatusCode": 400}}
+        operation_name = "CountTokens"
+    err = T._client_error(E("x"))
+    assert str(err) == "HTTP 400: ValidationException (CountTokens): The provided model doesn't support counting tokens."
+    assert err.status_code == 400
+    assert engine.classify(str(err)) == "unsupported"
+
+    class NoOp(Exception):
+        response = {"Error": {"Code": "ThrottlingException", "Message": "slow down"}, "ResponseMetadata": {"HTTPStatusCode": 429}}
+        operation_name = None
+    assert str(T._client_error(NoOp("x"))) == "HTTP 429: ThrottlingException: slow down"
+
+
+def test_http_empty_error_body_names_method_and_path(monkeypatch):
+    """본문 없는 4xx는 'HTTP 404: '로 끝나 어느 라우트였는지 알 수 없었다 (라이브 run #3 Mantle files/batches/models) (R6)."""
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    t = T.CpTransport()
+
+    class _R:
+        status_code = 404
+        content = b""
+        def json(self):
+            raise ValueError("no body")
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError) as exc:
+        t.request("GET", "/v1/files")
+    assert str(exc.value) == "HTTP 404: (empty body) GET /v1/files"
+    assert engine.classify(str(exc.value)) == "unsupported"  # 'http 404' 마커 유지
+
+    _R.status_code = 500
+    with pytest.raises(T.TransportError) as exc5:
+        t.request("POST", "/v1/messages", json={"model": "m"})
+    assert str(exc5.value) == "HTTP 500: (empty body) POST /v1/messages"
+    assert engine.classify(str(exc5.value)) == "broken"
+
+
+def test_http_stream_empty_error_body_is_labelled(monkeypatch):
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    t = T.CpTransport()
+    monkeypatch.setattr(T.httpx, "Client", _fake_httpx_client(_FakeHttpStream(404, b"")))
+    with pytest.raises(T.TransportError) as ei:
+        t.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
+    assert str(ei.value) == "HTTP 404: (empty body) POST /v1/messages (stream)"
+    # 본문이 있으면 그대로 (회귀 방지)
+    monkeypatch.setattr(T.httpx, "Client", _fake_httpx_client(_FakeHttpStream(400, b'{"type":"error","error":{"message":"nope"}}')))
+    with pytest.raises(T.TransportError) as ei2:
+        t.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
+    assert str(ei2.value) == 'HTTP 400: {"type":"error","error":{"message":"nope"}}'
+
+
+# ==================================================================== v2.24.0 — Task 3: D8(a) 실패 경로 요청 스냅샷
+
+class _RecordingT(_FakeT):
+    """실제 전송기처럼 호출 직전에 record_request를 부른다 — 실패 경로 스냅샷 회수 검증용."""
+
+    def messages(self, model_id, body, betas=(), stream=False):
+        payload = {**body, "model": model_id}
+        if stream:
+            payload["stream"] = True
+        T.record_request(T._http_snapshot("POST", "/v1/messages", payload, betas, None, None))
+        return super().messages(model_id, body, betas, stream)
+
+
+def test_run_probe_transport_error_keeps_full_request_snapshot():
+    """실패 셀도 요청 본문을 남긴다 — 라이브 run #3 unsupported 206셀 중 182셀(드리프트 25건 전부)이 {"model"}만 남겼다 (R1)."""
+    t = _RecordingT(exc=T.TransportError(400, "data retention mode 'default' is not available for this model"))
+    out = P.run_probe(P.PROBES["tool_use"], t, "claude-opus-5", "opus-5")
+    assert out.status == "unsupported" and out.error.startswith("HTTP 400")
+    req = out.evidence["request"]
+    assert req["model"] == "claude-opus-5" and req["api"] == "POST /v1/messages"
+    assert req["max_tokens"] == P._TOOL_MAX and req["messages"][0]["role"] == "user"
+    assert req["tools"][0]["name"] == "echo" and req["tool_choice"] == {"type": "tool", "name": "echo"}
+
+
+def test_run_probe_generic_exception_keeps_request_snapshot():
+    t = _RecordingT(exc=RuntimeError("socket closed"))
+    out = P.run_probe(P.PROBES["messages_basic"], t, "claude-opus-5", "opus-5")
+    assert out.status == "broken" and out.error.startswith("RuntimeError: socket closed")
+    assert out.evidence["request"]["api"] == "POST /v1/messages" and out.evidence["request"]["max_tokens"] == P._MAX
+
+
+def test_run_probe_with_fallback_failure_records_last_attempt():
+    """_with_fallback 최종 실패는 마지막 시도 본문이 남는다 (라이브 computer_use/mantle/fable-5는 attempts 문자열만 있었다)."""
+    t = _RecordingT(exc=T.TransportError(400, "tools.0: Input tag 'x' found using 'type' does not match any of the expected tags"))
+    out = P.run_probe(P.PROBES["computer_use"], t, "claude-opus-5", "opus-5")
+    assert out.status == "unsupported" and "attempts=" in out.error
+    assert out.evidence["request"]["tools"][0]["type"] == "computer_20251124"
+    assert out.evidence["request"]["anthropic_beta"] == ["computer-use-2025-11-24"]
+    assert len(t.calls) == 2
+
+
+def test_run_probe_without_recorder_falls_back_to_model_only():
+    """회귀 가드 — 구현 전에도 통과해야 한다. record_request를 부르지 않는 전송기(구형/가짜)는 종전처럼 {"model"}만 남긴다 — 하위 호환."""
+    t = _FakeT(exc=T.TransportError(400, "thinking.type.enabled is not supported for this model"))
+    out = P.run_probe(P.PROBES["messages_basic"], t, "claude-opus-5", "opus-5")
+    assert out.evidence["request"] == {"model": "claude-opus-5"}
+
+
+def test_run_probe_clears_stale_snapshot_from_previous_probe():
+    """같은 워커 스레드의 직전 프로브 스냅샷이 호출 없는 프로브(route gate)에 새지 않아야 한다."""
+    T.record_request({"api": "POST /v1/messages", "model": "stale", "messages": ["stale"]})
+    t = _FakeT()
+    t.surface, t.routes = "bedrock_invoke", frozenset({"messages", "count_tokens"})
+    out = P.run_probe(P.PROBES["batch_processing"], t, "global.anthropic.claude-opus-5", "opus-5")
+    assert out.status == "unsupported"
+    assert out.evidence["request"] == {"model": "global.anthropic.claude-opus-5"}
+
+
+def test_run_probe_success_setdefault_uses_transport_snapshot():
+    """프로브가 request를 빠뜨려도 전송기 스냅샷으로 채운다 (critic 4-B, parity `_run` :81-82 동형)."""
+    t = _RecordingT(resp=T.NormalizedResponse(content=[{"type": "text", "text": "pong"}]))
+
+    def forgetful(t_, m, k):
+        return bool(t_.messages(m, {"max_tokens": 4, "messages": []}).content), {}
+
+    out = P.run_probe(forgetful, t, "claude-opus-5", "opus-5")
+    assert out.status == "supported"
+    assert out.evidence["request"] == {"model": "claude-opus-5", "api": "POST /v1/messages", "max_tokens": 4, "messages": []}
+
+
+def test_last_request_is_thread_local():
+    from concurrent.futures import ThreadPoolExecutor
+    import time as _time
+
+    def work(i):
+        T.record_request({"model": f"m{i}"})
+        _time.sleep(0.01)
+        return T.last_request()["model"]
+
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        assert sorted(pool.map(work, range(8))) == [f"m{i}" for i in range(8)]
+    T.clear_last_request()
+    assert T.last_request() is None
+
+
+def test_transports_record_request_before_calling(monkeypatch):
+    """모든 전송 경로가 호출 직전 record_request를 부른다 — InvokeModel/CountTokens/Converse/HTTP/no-route."""
+    class _Down:
+        def invoke_model(self, modelId, body):
+            raise RuntimeError("down")
+        def count_tokens(self, modelId, input):
+            raise RuntimeError("down")
+        def converse(self, modelId, **kw):
+            raise RuntimeError("down")
+
+    monkeypatch.setattr(T, "_boto_client", lambda region: _Down())
+    inv = T.BedrockInvokeTransport(region="ap-northeast-2")
+    with pytest.raises(RuntimeError):
+        inv.messages("global.anthropic.claude-opus-5", {"max_tokens": 8, "messages": []}, betas=["b1"])
+    rec = T.last_request()
+    assert rec["api"] == "InvokeModel" and rec["model"] == "global.anthropic.claude-opus-5"
+    assert rec["anthropic_version"] == "bedrock-2023-05-31" and rec["anthropic_beta"] == ["b1"] and rec["max_tokens"] == 8
+    with pytest.raises(RuntimeError):
+        inv.count_tokens("global.anthropic.claude-opus-5", {"max_tokens": 8, "messages": []})
+    assert T.last_request()["api"] == "CountTokens" and "max_tokens" not in T.last_request()
+
+    conv = T.BedrockConverseTransport(region="ap-northeast-2")
+    with pytest.raises(RuntimeError):
+        conv.converse("global.anthropic.claude-opus-5", messages=[{"role": "user", "content": [{"text": "hi"}]}])
+    assert T.last_request() == {"api": "Converse", "model": "global.anthropic.claude-opus-5",
+                                "messages": [{"role": "user", "content": [{"text": "hi"}]}]}
+    with pytest.raises(RuntimeError):
+        conv.count_tokens_converse("global.anthropic.claude-opus-5", messages=[])
+    assert T.last_request() == {"api": "CountTokens", "model": "global.anthropic.claude-opus-5", "messages": []}
+
+    monkeypatch.setenv("ANTHROPIC_API_KEY", "k")
+    monkeypatch.setenv("ANTHROPIC_WORKSPACE_ID", "w")
+    cp = T.CpTransport()
+
+    class _R:
+        status_code = 404
+        content = b"{}"
+        def json(self):
+            return {"type": "error"}
+
+    class _C:
+        def __init__(self, timeout=None): pass
+        def __enter__(self): return self
+        def __exit__(self, *a): return False
+        def request(self, method, url, **kw):
+            return _R()
+
+    monkeypatch.setattr(T.httpx, "Client", _C)
+    with pytest.raises(T.TransportError):
+        cp.request("POST", "/v1/files", files={"file": ("a.txt", b"x", "text/plain")})
+    assert T.last_request()["api"] == "POST /v1/files" and T.last_request()["files"]["file"][0] == "a.txt"
+    with pytest.raises(T.TransportError):
+        cp.count_tokens("claude-opus-5", {"max_tokens": 8, "messages": []}, betas=["b2"])
+    assert T.last_request() == {"api": "POST /v1/messages/count_tokens", "messages": [], "model": "claude-opus-5", "anthropic_beta": ["b2"]}
+    monkeypatch.setattr(T.httpx, "Client", _fake_httpx_client(_FakeHttpStream(400, b'{"type":"error"}')))
+    with pytest.raises(T.TransportError):
+        cp.messages("claude-opus-5", {"max_tokens": 8, "messages": []}, stream=True)
+    assert T.last_request()["stream"] is True and T.last_request()["api"] == "POST /v1/messages"
+
+    # 라우트 없는 전송기의 base request()도 기록한다
+    with pytest.raises(T.TransportError):
+        T.Transport().request("GET", "/v1/models/x")
+    assert T.last_request() == {"api": "GET /v1/models/x"}
+
+
+# ==================================================================== v2.24.0 — Task 4: D8(c) api/note 통일 + D8(d) thinking usage
+
+class _SeqT(_FakeT):
+    """호출 순서대로 응답/예외를 내는 전송기 — 2회 호출 프로브(effort, data_residency, _with_fallback) 검증용."""
+
+    def __init__(self, *steps):
+        super().__init__()
+        self.steps = list(steps)
+
+    def messages(self, model_id, body, betas=(), stream=False):
+        self.calls.append(("messages", body, tuple(betas), stream))
+        step = self.steps.pop(0)
+        if isinstance(step, Exception):
+            raise step
+        return step
+
+
+def _text(text="pong", **kw):
+    return T.NormalizedResponse(content=[{"type": "text", "text": text}], stop_reason="end_turn", **kw)
+
+
+def test_request_snapshots_use_api_key_instead_of_path_endpoint_stream():
+    """요청 스냅샷 메타는 `api`/`note` 두 키로 통일 — path/endpoint/stream 혼용 제거 (R7, parity `_req_snapshot` 관례).
+
+    라이브 run #3 cp/fable-5-1: context_window_1m은 {"path": "/v1/models/…"}, models_api는 {"endpoint": "/v1/models/…"} —
+    같은 GET을 두 키로 표기했다.
+    """
+    _, ev = P.probe_token_counting(_FakeT(), "claude-opus-5", "opus-5")
+    assert ev["request"]["api"] == "count_tokens" and "endpoint" not in ev["request"]
+
+    stream = T.NormalizedResponse(content=[{"type": "text", "text": "1,2"}], events=[
+        {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "1,"}},
+        {"type": "content_block_delta", "delta": {"type": "text_delta", "text": "2"}}])
+    ok, ev = P.probe_streaming(_FakeT(resp=stream), "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "messages (stream)" and "stream" not in ev["request"]
+
+    class _ModelsT(_FakeT):
+        routes = frozenset({"messages", "models"})
+        def request(self, method, path, json=None, betas=(), files=None, data=None):
+            return 200, {"id": "claude-opus-5", "capabilities": {}, "max_input_tokens": 1_000_000}
+
+    ok, ev = P.probe_context_window_1m(_ModelsT(), "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "GET /v1/models/claude-opus-5" and "path" not in ev["request"]
+    ok, ev = P.probe_models_api(_ModelsT(), "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "GET /v1/models/claude-opus-5" and "endpoint" not in ev["request"]
+
+    # 소스 수준 가드 — 옛 키가 되살아나지 않도록
+    import inspect
+    src = inspect.getsource(P)
+    assert "endpoint=" not in src and "path=f" not in src
+
+
+def test_multi_call_probes_explain_themselves_with_note():
+    """2회 호출 프로브는 요청 스냅샷에 note로 방법론을 적는다 (parity `note=` 관례, R7)."""
+    ev, _ = P._cache_evidence("m", {"max_tokens": 1}, _text(usage={"input_tokens": 1}), _text(usage={"cache_read_input_tokens": 9}))
+    assert ev["request"]["note"] == "same request twice; cache judged on 2nd call usage"
+
+    t = _SeqT(_text(usage={"output_tokens": 3}),
+              T.TransportError(400, "output_config.effort: Input should be 'low', 'medium', 'high', 'xhigh' or 'max'"))
+    ok, ev = P.probe_effort(t, "claude-opus-5", "opus-5")
+    assert ok is True and ev["request"]["note"] == "2 calls: effort=low, then effort=ultra as negative control"
+    assert ev["negative_control"].startswith("rejected:")
+
+    t = _SeqT(_text(usage={"inference_geo": "us"}), T.TransportError(400, "inference_geo: Input should be 'us'"))
+    ok, ev = P.probe_data_residency(t, "claude-opus-5", "opus-5")
+    assert ok is True and ev["request"]["note"] == "2 calls: inference_geo=us, then inference_geo=mars as negative control"
+
+    t = _SeqT(T.TransportError(400, "tools.0: Input tag 'computer_toolset_20260801' found using 'type' does not match any of the expected tags"),
+              T.NormalizedResponse(content=[{"type": "tool_use", "name": "computer", "input": {"action": "screenshot"}}], stop_reason="tool_use"))
+    ok, ev = P.probe_computer_use(t, "claude-opus-5", "opus-5")
+    assert ok is True and ev["request"]["note"] == "fallback attempt: computer_20251124+beta"
+    assert ev["attempts"][0]["result"].startswith("HTTP 400") and ev["attempts"][1]["result"] == "ok"
+
+
+def test_batch_and_files_probes_name_their_route_sequence():
+    class _RoutesT(_FakeT):
+        routes = frozenset({"messages", "batches", "files"})
+        def request(self, method, path, json=None, betas=(), files=None, data=None):
+            self.calls.append((method, path))
+            if path.startswith("/v1/messages/batches"):
+                return 200, {"id": "msgbatch_1", "processing_status": "in_progress"}
+            if path == "/v1/files":
+                return 200, {"id": "file_1", "type": "file"}
+            return 200, {"id": "file_1"}
+
+    t = _RoutesT()
+    ok, ev = P.probe_batch_processing(t, "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "POST /v1/messages/batches → GET → POST cancel"
+    assert [m for m, _ in t.calls] == ["POST", "GET", "POST"]
+    t = _RoutesT()
+    ok, ev = P.probe_files_api(t, "claude-opus-5", "opus-5")
+    assert ok and ev["request"]["api"] == "POST /v1/files → GET → DELETE" and ev["deleted"] is True
+    assert [m for m, _ in t.calls] == ["POST", "GET", "DELETE"]
+
+
+def test_thinking_probes_store_usage():
+    """thinking 증거에 usage 전체를 남긴다 — Bedrock Fable 5.1은 요약 텍스트가 비어 thinking_tokens가 유일한 수치 증거 (R10).
+
+    필드명(`output_tokens_details.thinking_tokens`)은 공식 문서 미기재라 숫자만 뽑지 않고 usage 전체를 저장한다
+    (캐싱 프로브 `first_usage`/`second_usage`와 같은 방식).
+    """
+    usage = {"input_tokens": 20, "output_tokens": 15, "output_tokens_details": {"thinking_tokens": 11}}
+    resp = T.NormalizedResponse(content=[{"type": "thinking", "thinking": "", "signature": "sig"}, {"type": "text", "text": "107"}],
+                                usage=usage)
+    ok, ev = P.probe_adaptive_thinking(_FakeT(resp=resp), "global.anthropic.claude-fable-5-1", "fable-5-1")
+    assert ok is True and ev["usage"] == usage and ev["thinking_signed"] is True and ev["thinking_chars"] == 0
+    ok, ev = P.probe_extended_thinking(_FakeT(resp=resp), "claude-opus-5", "opus-5")
+    assert ok is True and ev["usage"] == usage
+
+
+# ==================================================================== v2.24.0 — Task 5: D3 backend changes[].kind
+
+def test_change_kind_covers_all_four_predecided_combinations():
+    assert engine.change_kind(False, False) == "measured"
+    assert engine.change_kind(True, False) == "catalog"
+    assert engine.change_kind(False, True) == "catalog"
+    assert engine.change_kind(True, True) == "catalog"
+
+
+def test_change_kind_new_cell_is_catalog_and_annotate_passes_before_missing():
+    """직전 런에 없던 셀(before None)은 카탈로그 변경으로만 생길 수 있다 (RUL-11)."""
+    assert engine.change_kind(False, False, before_missing=True) == "catalog"
+    assert engine.change_kind(False, True, before_missing=True) == "catalog"
+    assert engine.change_kind(True, False, before_missing=True) == "catalog"
+    assert engine.change_kind(False, False, before_missing=False) == "measured"
+    changes = engine.diff_runs(
+        {("dr", "bedrock_converse", "opus-5"): "unsupported", ("x", "cp", "opus-5"): "supported"},
+        {("dr", "bedrock_converse", "opus-5"): "not_applicable", ("new", "cp", "opus-5"): "supported", ("x", "cp", "opus-5"): "broken"})
+    tagged = engine.annotate_change_kinds(changes, prev_predecided=set(), cur_predecided={("dr", "bedrock_converse", "opus-5")})
+    # sorted(cur) 순서: dr → new → x
+    assert [(c["feature"], c["kind"]) for c in tagged] == [("dr", "catalog"), ("new", "catalog"), ("x", "measured")]
+    assert tagged[0]["before"] == "unsupported" and tagged[0]["after"] == "not_applicable"
+    assert tagged[1]["before"] is None
+    assert "kind" not in changes[0]  # diff_runs 자체는 그대로
+
+
+def test_build_latest_payload_tags_catalog_rule_changes(monkeypatch):
+    """run #2→#3 data_residency 15건: documented도 catalog_version도 그대로였고 latency만 1180ms→null (R5 교정안)."""
+    import importlib
+    from types import SimpleNamespace as NS
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    build_latest_payload = importlib.import_module("routers.features").build_latest_payload
+    run = NS(id=3, started_at=None, finished_at=None, totals={}, catalog_version="2026-09-05")
+    rows = [
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="global.anthropic.claude-opus-5", status="not_applicable", documented="no", verdict="none",
+           latency_ms=None, error_message=None),
+        NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="global.anthropic.claude-opus-5", status="unsupported", documented="no", verdict="match",
+           latency_ms=310.0, error_message=None),
+        NS(feature="models_api", surface="cp", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="claude-opus-5", status="supported", documented="ga", verdict="match", latency_ms=120.0,
+           error_message=None),
+    ]
+    prev = [
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", status="unsupported",
+           latency_ms=1179.99, error_message=None),
+        NS(feature="token_counting", surface="bedrock_invoke", model_key="opus-5", status="supported", latency_ms=290.0,
+           error_message=None),
+    ]
+    p = build_latest_payload(run, rows, prev, 2, running=False)
+    kinds = {(c["feature"], c["surface"]): c["kind"] for c in p["changes"]}
+    assert kinds == {("data_residency", "bedrock_converse"): "catalog",
+                     ("token_counting", "bedrock_invoke"): "measured",
+                     ("models_api", "cp"): "catalog"}  # 신규 셀(before None)은 카탈로그 변경 (RUL-11)
+    assert all(c["model_label"] == "Claude Opus 5" for c in p["changes"])
+
+
+def test_build_latest_payload_null_latency_with_error_is_measured(monkeypatch):
+    """latency 없는 행이라도 error_message가 있으면 프로브 실패(실측)다 — 사전판정 행은 error_message가 비어 있다.
+
+    러너는 surface 전체의 transport 초기화가 실패하면 그 surface의 모든 job을
+    ProbeOutcome("broken", error="transport init: …")로 기록한다(runner.py `_execute`).
+    이 행은 latency_ms가 NULL이라 latency만으로는 사전판정과 구분되지 않고,
+    자격 만료 같은 실측 장애가 "카탈로그 규칙 변경"으로 오태깅된다(복구 런도 반대 방향으로 같은 오태깅).
+    """
+    import importlib
+    from types import SimpleNamespace as NS
+
+    monkeypatch.setenv("JWT_SECRET_KEY", "x" * 40)
+    build_latest_payload = importlib.import_module("routers.features").build_latest_payload
+    run = NS(id=4, started_at=None, finished_at=None, totals={}, catalog_version="2026-09-05")
+    rows = [
+        # 자격 누락으로 surface 전체가 broken — latency 없음 + error 있음 → 실측 변경
+        NS(feature="tool_use", surface="cp", model_key="opus-5", model_label="Claude Opus 5", model_id="claude-opus-5",
+           status="broken", documented="ga", verdict="drift", latency_ms=None,
+           error_message="transport init: boom"),
+        # 복구 런 방향: 직전 런이 broken(latency 없음 + error 있음)이었고 이번 런은 정상 프로브 → 실측 변경
+        NS(feature="mcp_connector", surface="cp", model_key="opus-5", model_label="Claude Opus 5", model_id="claude-opus-5",
+           status="supported", documented="ga", verdict="match", latency_ms=210.0, error_message=None),
+        # 러너 사전판정 행: latency 없음 + error 없음 → 카탈로그 규칙 변경
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", model_label="Claude Opus 5",
+           model_id="global.anthropic.claude-opus-5", status="not_applicable", documented="no", verdict="none",
+           latency_ms=None, error_message=None),
+    ]
+    prev = [
+        NS(feature="tool_use", surface="cp", model_key="opus-5", status="supported", latency_ms=140.0, error_message=None),
+        NS(feature="mcp_connector", surface="cp", model_key="opus-5", status="broken", latency_ms=None,
+           error_message="executor: boom"),
+        NS(feature="data_residency", surface="bedrock_converse", model_key="opus-5", status="unsupported",
+           latency_ms=1179.99, error_message=None),
+    ]
+    p = build_latest_payload(run, rows, prev, 3, running=False)
+    assert {c["feature"]: c["kind"] for c in p["changes"]} == {
+        "tool_use": "measured", "mcp_connector": "measured", "data_residency": "catalog"}
+
+
+# ==================================================================== v2.24.0 — Task 15: catalog desc — acceptance 사유 (critic 4-D)
+
+def test_acceptance_only_rows_state_why_in_desc():
+    """critic 4-D (v2.24.0): server_side_fallback/compaction은 acceptance 행인데 desc에 사유가 없었다."""
+    by_id = {f["id"]: f for f in catalog.FEATURES}
+    for fid in ("server_side_fallback", "compaction"):
+        f = by_id[fid]
+        assert f["verification"] == "acceptance", fid
+        assert "수락만 검증" in f["desc_ko"], fid
+        assert "acceptance only" in f["desc_en"], fid
+        assert "·" not in f["desc_ko"], fid  # 한글 UI 문장부호 규칙: 가운데 점 대신 쉼표

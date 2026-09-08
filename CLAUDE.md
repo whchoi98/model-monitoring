@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.23.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.24.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -122,7 +122,7 @@ model-monitoring/
 │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt
 │   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x)
 │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
-│   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 드리프트 배너 + 증거 모달 + 수동 트리거 (v2.23.0)
+│   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 헬스 카드(docHealth, 클릭 → Key Findings 드로어) + 모델 칩 + 드리프트/변경(kind) 배너 + 증거 모달 + 수동 트리거 (v2.24.0)
 │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
 │   │   ├── hooks/                       # useAutoRefresh, useProbeStream, useChatStream
 │   │   └── lib/
@@ -132,7 +132,7 @@ model-monitoring/
 │   │       ├── pricing.ts               # backend/pricing.py mirror
 │   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
 │   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (lang 파라미터로 KO/EN, v2.16.2)
-│   │       ├── claudeFeatures.ts        # Claude API Features 매트릭스 순수 로직 — 셀 집계·그룹 구성·헬스 계산 (v2.23.0)
+│   │       ├── claudeFeatures.ts        # Claude API Features 매트릭스 순수 로직 — 셀 집계·그룹 구성(modelKey)·surfaceSummary/surfaceFindings·labelMaps·지연시간 헬퍼 (v2.24.0)
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / middleware.ts
 ├── cdk/                                  # 8 stacks (TypeScript)
@@ -217,7 +217,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 
-**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 43개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface(CP on AWS/Mantle `/anthropic`/Bedrock runtime Messages API/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다(1런 = 프로브 658 + 사전판정 122 = 780셀). Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026.
+**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 43개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface(CP on AWS/Mantle `/anthropic`/Bedrock runtime Messages API/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다(1런 = 프로브 643 + 사전판정 137 = 780셀 — v2.23.1에서 data_residency Bedrock 15셀이 사전판정으로 이동). Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026. **v2.24.0 UI 상세도 보강(패리티 수준)**: 헬스 카드 헤드라인은 문서 기준 헬스(docHealth = 문서상 GA/Beta ∧ 실측 셀 중 supported 비율) + 6상태 분포 막대, 카드 클릭 → Key Findings 드로어(6섹션), 모델 칩(전체/모델별), 변경 배너 `kind`(카탈로그 규칙/실측) 태그, 셀 툴팁 모델별 지연시간; 백엔드는 실패 셀에도 요청 스냅샷 보존(스레드 로컬 recorder), 오류 문자열에 boto operation/빈 본문 라우트 표기(`engine.classify` 판정 불변, 회귀 핀 38건). ADR-026 부록 참조.
 
 **라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"`(Mantle) / `"OpenAI <family> (Global)"`(Global CRIS, v2.20.0) / `"OpenAI <family> (1P)"`(1P direct) prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Global(Bedrock·OpenAI 공통, `(Global)` 서픽스) → Bedrock US → OpenAI 리전** (`channelRank` 함수).
 
@@ -282,6 +282,8 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | `CHANGELOG.md` 최신 엔트리 + git tag `vX.Y.Z` | 릴리스 기록 |
 
 (`cdk/package.json`은 인프라 패키지 버전이라 앱 버전과 무관 — 범프 대상 아님.)
+
+**Claude API Features 카탈로그 규칙 변경 시 `CATALOG_VERSION` 범프** (`backend/claude_features/runner.py`): `backend/claude_features/catalog.py`의 `_NOT_APPLICABLE_BY_DOC`, `documented` 기대치, `_CONVERSE_NOT_EXPRESSIBLE`, `is_applicable` 규칙이 바뀌면 함께 범프한다 — v2.23.1에서 누락돼 run #2→#3 변경 15건을 버전 비교로 식별할 수 없었고, 그래서 `/api/features/latest` `changes[].kind`는 `latency_ms IS NULL AND error_message IS NULL`(러너 사전판정 행)로 카탈로그 변경을 식별한다. label/desc 문구만 바뀐 릴리스(v2.24.0)는 범프 대상이 아니다.
 
 ### ECR Image Tag Policy (v2.1.0 강화)
 

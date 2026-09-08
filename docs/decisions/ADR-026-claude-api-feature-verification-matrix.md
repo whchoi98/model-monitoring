@@ -115,3 +115,26 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
 - (−) 신규 피처 추가 시 3단: 카탈로그 행(+documented) → 프로브 함수(5 surface 분기) → 테스트. Converse 표현 불가 목록(`_CONVERSE_NOT_EXPRESSIBLE`) 갱신.
 - (−) `strict_tool_use`/`structured_outputs`/`token_counting` Bedrock 열 drift는 의도적으로 남김(문서 기대치는 그대로 `ga`가 아닌 실측 반영값으로 낮췄으므로 이제 `match` — Bedrock 자체의 플랫폼 갭은 여전히 존재하고 향후 AWS가 지원을 추가하면 실측이 다시 흔들릴 수 있음).
 - (−) 드리프트 배너의 25건은 첫 배포 화면에 그대로 뜬다 — 해소 조건은 Mantle 계정 opt-in.
+
+## Addendum — v2.24.0 UI 상세도 보강 (2026-09-07)
+
+`/parity`(ParityPanel)와 `/claude-features`의 상세도 갭 분석(후보 C1~C11, R1~R12를 코드 라인 단위로 검증) 결과를 반영해 UI와 증거를 패리티
+수준으로 끌어올렸다. 판정 로직(`engine.classify`, `verdict`)과 카탈로그 규칙은 바꾸지 않았고 `CATALOG_VERSION`도 유지한다(desc 문구만 변경).
+
+- **헬스 카드 헤드라인 = 문서 기준 헬스(docHealth)**: 문서상 GA/Beta이면서 실측된(supported/unsupported/broken/inconclusive) 셀 중 supported 비율.
+  기존 `supported/(supported+broken)` 공식은 드리프트 25건이 있는 run #3에서도 5장 전부 100%를 보여 오독을 유발했다(Mantle 실제 63%).
+  카드에는 6상태 분포 막대(전체 셀, N/A 포함), "{total} 셀" 칩, 드리프트 pill을 함께 두고, 실측된 문서 셀이 0이면 "-"를 낸다.
+- **Key Findings 드로어**: 카드 클릭 → verdict 축 6섹션(문서 드리프트, 프로브 오류, 의도된 격차, 문서 미확정, 문서에 없는 동작, 모델별 문서 일치율).
+  순수 파생 `surfaceFindings()`는 vitest로 고정. 칩과 모델 버튼은 증거 모달을 연다.
+- **모델 칩**: 전체 집계 또는 모델 하나의 열만(Mantle Fable 5 클러스터 격리) — 셀, 헬스 카드, 배너, 드로어가 같은 필터를 공유한다.
+- **변경 배너 `kind`**: `/api/features/latest` `changes[]`에 `kind: catalog | measured`. 직전 런에 없던 셀 또는 어느 한쪽이 러너 사전판정 행
+  (`latency_ms IS NULL AND error_message IS NULL`)이면 `catalog`. latency가 없어도 `error_message`가 있으면 프로브 실패(전송기 초기화·실행 실패)이므로
+  `measured`로 남긴다. run #2→#3의 15건은 전부 v2.23.1 `_NOT_APPLICABLE_BY_DOC` 규칙 변경이었으나 배너가 실측 회귀와 구분하지
+  못했고, `CATALOG_VERSION` 범프가 누락돼 버전 비교로도 잡을 수 없었다 → CLAUDE.md 릴리스 체크리스트에 "카탈로그 규칙 변경 시 `CATALOG_VERSION` 범프" 추가.
+  배너는 직전 런이 있으면 항상 렌더(0건은 "변경 없음" 카드), 드리프트 0건도 "문서 드리프트 없음" 카드로 명시한다.
+- **증거 보강(백엔드)**: 실패 셀에도 전송기가 마지막으로 보낸 요청 본문을 남긴다(`transports.record_request`/`last_request`, 스레드 로컬 —
+  run #3 unsupported 206셀 중 182셀, 드리프트 25건 전부가 `{"model"}`만 남겼다); 오류 문자열에 boto operation 이름
+  (`ValidationException (CountTokens): …`)과 빈 본문 라우트(`HTTP 404: (empty body) GET /v1/files`)를 표기 — 분류 마커에 걸리지 않음을
+  회귀 핀 38건으로 보장; 요청 스냅샷 메타 키를 `api`/`note`로 통일; thinking 증거에 `usage` 저장.
+- **MCP connector 정책 차이**(패리티는 ADR-023으로 제외, features는 포함 후 장애를 inconclusive로 격리)는 의도된 차이로 유지한다 — 문서 피처 목록을
+  그대로 따르는 것이 이 매트릭스의 목적이다.
