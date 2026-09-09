@@ -161,4 +161,16 @@ describe("SchedulerStack", () => {
       })]),
     }));
   });
+
+  it("autoprober task def에 OpenAI US CRIS 라우팅 + GPT-6 Astra model id가 주입된다 (v2.25.0)", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({
+        Command: ["python", "-m", "auto_prober_runner", "--once"],
+        Environment: Match.arrayWith([
+          Match.objectLike({ Name: "OPENAI_US_BASE_URL", Value: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1" }),
+          Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", Value: "openai.gpt-6-astra" }),
+        ]),
+      })]),
+    }));
+  });
 });
