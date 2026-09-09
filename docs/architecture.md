@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 43개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 46개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
 
 ### 데이터 흐름 (Critical Path)
 
@@ -26,7 +26,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 43 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 46 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
    ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9채널 TTFB/TTFT 벤치 → RDS
@@ -66,7 +66,7 @@ EventBridge Scheduler
 |--------|------|
 | AgentCore Memory `BedrockMonitorChatMemory` | 사용자 대화 30일 보존 |
 | AgentCore IAM Managed Policy | backend Task Role에 attach |
-| Bedrock Runtime | 모니터링 카탈로그 활성 43개: Claude Fable 5.1 (v2.22.0) / Fable 5 / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 8채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna (Bedrock Mantle 13 + GPT-5.6 Global CRIS 3 = 16, v2.20.0; 1P direct 5는 v2.19.1부터 휴면/비노출) |
+| Bedrock Runtime | 모니터링 카탈로그 활성 46개: Claude Fable 5.1 (v2.22.0) / Fable 5 / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 8채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna + GPT 6 Astra (Bedrock Mantle 인리전 14 + Global CRIS 4 + US CRIS 1 = 19, v2.25.0; 1P direct 5는 v2.19.1부터 휴면/비노출) |
 
 #### 주기 잡 / Scheduling
 | 리소스 | 역할 |
@@ -114,7 +114,7 @@ EventBridge Scheduler
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-026 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-027 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -153,7 +153,7 @@ EventBridge Scheduler
 
 ### System Overview
 
-Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 43-channel active catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
+Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 46-channel active catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
 
 ### Critical Path
 
@@ -167,7 +167,7 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 43 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 46 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
    ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9-channel TTFB/TTFT bench → RDS
@@ -186,7 +186,7 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-026 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-027 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 
