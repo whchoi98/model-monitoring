@@ -52,6 +52,21 @@ def _fake_call(ttfb=800.0, ttft=1700.0, error=None):
     return call
 
 
+def test_bench_channels_excludes_gpt6_astra(bench_env, monkeypatch):
+    """GPT 6 Astra는 벤치 대상 아님 (v2.25.0 사용자 결정) — env가 있어도 채널 미생성.
+
+    _BENCH_SPECS에 pseudo-region "us"를 추가하려면 bench_channels의 리전→env 매핑에도
+    "us": "OPENAI_US_BASE_URL"을 함께 넣어야 한다(현재 없어서 KeyError).
+    """
+    import gptbench
+
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "openai.gpt-6-astra")
+    monkeypatch.setenv("OPENAI_US_BASE_URL", "https://us/openai/v1")
+    chans = gptbench.bench_channels()
+    assert len(chans) == 9
+    assert not [c for c in chans if "astra" in c["model_id"]]
+
+
 def test_bench_channels_matrix(bench_env):
     """5.4×3 + 5.5×2(us-west-2 미제공) + terra×4(Global 포함, v2.20.1) = 9채널."""
     import gptbench

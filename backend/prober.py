@@ -187,6 +187,8 @@ def _is_reasoning_model(model_id: str) -> bool:
 # region이 채널 식별자 (같은 model_id를 두 리전에 호출). bearer 토큰 인증.
 # pseudo-region "global" (v2.20.0): Bedrock global cross-region 프로파일 —
 # "openai:global:global.openai.gpt-5.6-sol" 형태 (actual_id 자체에 global. 접두사 포함).
+# pseudo-region "us" (v2.25.0): Bedrock US cross-region 프로파일 —
+# "openai:us:us.openai.gpt-6-astra" 형태 (actual_id 자체에 us. 접두사 포함).
 # =====================================================================
 _OPENAI_REGION_ENV: dict[str, str] = {
     "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
@@ -196,13 +198,28 @@ _OPENAI_REGION_ENV: dict[str, str] = {
     # bedrock-runtime OpenAI-compat 엔드포인트를 통해서만 호출 가능(bedrock-mantle 호스트는 미지원).
     # 운영값: https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1 (Seoul 라우팅).
     "global": "OPENAI_GLOBAL_BASE_URL",
+    # pseudo-region "us" (v2.25.0) — Bedrock US cross-region 프로파일(us.openai.*).
+    # 운영값: https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1 (2026-09-09 라이브 200 확인).
+    "us": "OPENAI_US_BASE_URL",
+}
+
+# pseudo-region → (CRIS 프로파일 접두사, 라벨 서픽스). in-region 채널은 이 표에 없음.
+# 라벨 표기는 Claude 채널과 동일한 "(Global)", "(US)" — DB model_name에 영구 기록되므로
+# frontend MODEL_COLORS/channelRank가 기대하는 표기와 정확히 일치해야 한다.
+_OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
+    "global": ("global.", "Global"),
+    "us": ("us.", "US"),
 }
 
 # 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
 # (model-id env var, display family, 제공 리전 튜플)
-# "global"은 GPT-5.6 세대만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
-# global 채널의 모델 id는 in-region id에 "global." 접두사를 파생(등록 루프에서 처리).
+# "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
+# "us"(US CRIS)는 GPT-6 Astra만 확인(2026-09-09 라이브 200) — 다른 세대는 미검증이라 미기재.
+# pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
+# GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 404 not_found_error
+# (2026-09-09 실측, 모델 액세스는 AUTHORIZED이므로 Mantle 호스트 온보딩 이슈) → 스펙 미기재.
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1", "us-east-2")),
     ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1", "us-east-2", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1", "us-east-2", "us-west-2")),
@@ -311,12 +328,14 @@ def _register_openai_models() -> None:
                 env_name = _OPENAI_REGION_ENV.get(region)
                 if not env_name or not os.environ.get(env_name):
                     continue
-                if region == "global":
-                    # global cross-region 프로파일 id = "global." + in-region id (AWS 규약).
-                    # 라벨은 Claude 채널과 동일하게 "(Global)" 대문자 — DB model_name에 영구
-                    # 기록되므로 frontend MODEL_COLORS/channelRank가 기대하는 표기와 일치해야 함.
-                    channel_id = f"global.{actual_id}"
-                    label = f"OpenAI {family} (Global)"
+                pseudo = _OPENAI_PSEUDO_REGIONS.get(region)
+                if pseudo:
+                    # CRIS 프로파일 id = 접두사("global."/"us.") + in-region id (AWS 규약).
+                    # 라벨은 Claude 채널과 동일하게 "(Global)", "(US)" 대문자 — DB model_name에
+                    # 영구 기록되므로 frontend MODEL_COLORS/channelRank 기대 표기와 일치해야 함.
+                    prefix, label_suffix = pseudo
+                    channel_id = f"{prefix}{actual_id}"
+                    label = f"OpenAI {family} ({label_suffix})"
                 else:
                     channel_id = actual_id
                     label = f"OpenAI {family} ({region})"
