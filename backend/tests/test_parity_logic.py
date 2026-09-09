@@ -24,6 +24,8 @@ def test_surfaces_for_each_provider_path():
     assert surfaces_for("anthropic:claude-sonnet-5") == ["messages"]
     assert surfaces_for("openai:us-east-1:openai.gpt-5.5") == ["chat_completions", "responses"]
     assert surfaces_for("openai:1p:gpt-5.4") == ["chat_completions", "responses"]
+    # US CRIS pseudo-region도 동일 surface — 패리티 런이 openai:us:* 키에서 깨지지 않아야 함 (v2.25.0)
+    assert surfaces_for("openai:us:us.openai.gpt-6-astra") == ["chat_completions", "responses"]
 
 
 def test_mantle_fm_id_strips_profile_prefix():

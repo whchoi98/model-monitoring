@@ -1,11 +1,13 @@
 // Model Explorer (v2.9.0) — 모델 ID에서 호출 채널·네이티브 ID·코드 예제·문서 링크를 유도.
 //
-// 5개 provider path의 키 스킴 (ADR-019/020, backend prober.py와 동일):
+// 6개 provider path의 키 스킴 (ADR-019/020/027, backend prober.py와 동일):
 //   global.* / us.*            → Bedrock inference profile (boto3 converse_stream)
 //   anthropic:<id>             → Anthropic CP on AWS (anthropic SDK + vendor endpoint)
 //   openai:<region>:openai.<m> → OpenAI via Bedrock Mantle (openai SDK + mantle base_url)
 //   openai:global:global.openai.<m> → OpenAI Bedrock global CRIS (openai SDK +
 //                                 bedrock-runtime Seoul OpenAI-compat base_url, v2.20.0)
+//   openai:us:us.openai.<m>    → OpenAI Bedrock US CRIS (openai SDK +
+//                                 us-east-1 bedrock-runtime OpenAI-compat base_url, v2.25.0)
 //   openai:1p:<m>              → OpenAI 1P direct (openai SDK + api.openai.com)
 // 코드 예제는 실제 prober가 쓰는 호출 방식과 일치시킨다 — 복붙해서 바로 동작하는 것이 목표.
 
@@ -62,6 +64,17 @@ export function channelOf(modelId: string): ChannelInfo {
       endpoint: "https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1",
       // 카드 배지에 그대로 노출되므로 다른 채널("us-east-1"/"1P")처럼 짧은 식별자 유지.
       region: "Global",
+    };
+  }
+  if (modelId.startsWith("openai:us:")) {
+    // us. cross-region 프로파일도 global과 같은 이유로 bedrock-mantle 호스트가 지원하지 않음 —
+    // us-east-1 bedrock-runtime OpenAI-compat 엔드포인트로만 호출 가능 (prober와 동일 경로, v2.25.0).
+    return {
+      type: "openai-mantle",
+      label: "OpenAI (Bedrock US CRIS)",
+      endpoint: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
+      // 카드 배지에 그대로 노출되므로 다른 채널("Global"/"us-east-1"/"1P")처럼 짧은 식별자 유지.
+      region: "US",
     };
   }
   if (modelId.startsWith("openai:")) {
@@ -194,21 +207,21 @@ with client.messages.stream(
   }
 
   if (ch.type === "openai-mantle") {
-    // Global CRIS는 같은 openai SDK 호출이지만 엔드포인트가 bedrock-runtime(Seoul) OpenAI-compat —
-    // 설명/주석의 "Bedrock Mantle" 표기가 실제 경로와 어긋나지 않게 분기.
-    const isGlobalCris = modelId.startsWith("openai:global:");
+    // Global/US CRIS는 같은 openai SDK 호출이지만 엔드포인트가 bedrock-runtime OpenAI-compat —
+    // 설명, 주석의 "Bedrock Mantle" 표기가 실제 경로와 어긋나지 않게 분기.
+    const isCris = modelId.startsWith("openai:global:") || modelId.startsWith("openai:us:");
     return [
       {
         label: "Python (openai SDK)",
         api: "Responses API",
-        description: isGlobalCris
-          ? L("OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Global cross-region profiles are served by the bedrock-runtime OpenAI-compatible endpoint (not the bedrock-mantle host); the call shape is identical and the key is a Bedrock bearer (ABSK-...).", "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. Global cross-region 프로파일은 bedrock-runtime OpenAI 호환 엔드포인트로 호출합니다(bedrock-mantle 호스트 미지원). 호출 형식은 동일하며 키는 Bedrock bearer(ABSK-…)를 사용합니다.")
+        description: isCris
+          ? L("OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Cross-region profiles (global.* and us.*) are served by the bedrock-runtime OpenAI-compatible endpoint (not the bedrock-mantle host); the call shape is identical and the key is a Bedrock bearer (ABSK-...).", "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. cross-region 프로파일(global.*, us.*)은 bedrock-runtime OpenAI 호환 엔드포인트로 호출합니다(bedrock-mantle 호스트 미지원). 호출 형식은 동일하며 키는 Bedrock bearer(ABSK-…)를 사용합니다.")
           : L("OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Bedrock Mantle is an OpenAI-compatible endpoint, so the call shape is identical but the key is a Bedrock bearer (ABSK-...).", "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. Bedrock Mantle은 OpenAI 호환 엔드포인트라 동일한 형식으로 호출하되, 키는 Bedrock bearer(ABSK-…)를 사용합니다."),
         language: "python",
         code: `from openai import OpenAI
 
-${isGlobalCris
-  ? L("# Bedrock Global CRIS — bedrock-runtime OpenAI-compatible endpoint + Bedrock bearer key (ABSK-...)", "# Bedrock Global CRIS — bedrock-runtime OpenAI 호환 엔드포인트 + Bedrock bearer 키(ABSK-…)")
+${isCris
+  ? L("# Bedrock CRIS (cross-region profile) — bedrock-runtime OpenAI-compatible endpoint + Bedrock bearer key (ABSK-...)", "# Bedrock CRIS(cross-region 프로파일) — bedrock-runtime OpenAI 호환 엔드포인트 + Bedrock bearer 키(ABSK-…)")
   : L("# Bedrock Mantle — OpenAI-compatible endpoint + Bedrock bearer key (ABSK-...)", "# Bedrock Mantle — OpenAI 호환 엔드포인트 + Bedrock bearer 키(ABSK-…)")}
 client = OpenAI(
     api_key="<ABSK-...>",  # Bedrock long-term API key

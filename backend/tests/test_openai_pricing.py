@@ -16,6 +16,27 @@ def test_normalize_openai_global_key():
     assert pricing._normalize_key("global.anthropic.claude-opus-5") == "claude-opus-5"
 
 
+def test_normalize_openai_us_cris_key():
+    # US CRIS(pseudo-region "us")도 채널 단가 분리 대상 — "-us" suffix (v2.25.0).
+    assert pricing._normalize_key("openai:us:us.openai.gpt-6-astra") == "gpt-6-astra-us"
+    assert pricing._normalize_key("openai:global:global.openai.gpt-6-astra") == "gpt-6-astra-global"
+    assert pricing._normalize_key("openai:us-west-2:openai.gpt-6-astra") == "gpt-6-astra"
+    # in-region, 1P 키는 suffix 없음 — 회귀 방지.
+    assert pricing._normalize_key("openai:us-east-1:openai.gpt-5.6-sol") == "gpt-5.6-sol"
+    assert pricing._normalize_key("openai:1p:gpt-5.4") == "gpt-5.4"
+
+
+def test_gpt6_astra_pricing_deferred_returns_none():
+    """GPT 6 Astra는 단가 미확정 — 3채널 모두 None(비용 "-"). prefix fallback도 매칭 금지."""
+    for mid in (
+        "openai:global:global.openai.gpt-6-astra",
+        "openai:us:us.openai.gpt-6-astra",
+        "openai:us-west-2:openai.gpt-6-astra",
+    ):
+        assert pricing.get_pricing(mid) is None
+        assert pricing.estimate_cost_usd(mid, 1_000_000, 1_000_000) is None
+
+
 def test_get_pricing_openai():
     assert pricing.get_pricing("openai:us-east-1:openai.gpt-5.4") == {"input": 2.75, "output": 16.5}
     assert pricing.get_pricing("openai:us-east-2:openai.gpt-5.5") == {"input": 5.5, "output": 33.0}
@@ -47,5 +68,6 @@ def test_existing_pricing_unbroken():
 def test_channel_openai():
     assert _channel("openai:us-east-1:openai.gpt-5.4") == "OpenAI"
     assert _channel("openai:global:global.openai.gpt-5.6-sol") == "OpenAI"
+    assert _channel("openai:us:us.openai.gpt-6-astra") == "OpenAI"
     assert _channel("us.anthropic.claude-opus-4-8") == "Bedrock US"
     assert _channel("anthropic:claude-fable-5") == "Anthropic (CP on AWS)"

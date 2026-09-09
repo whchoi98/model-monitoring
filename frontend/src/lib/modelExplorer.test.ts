@@ -1,11 +1,11 @@
 /**
  * Model Explorer (v2.9.0) — 모델 ID에서 호출 채널·네이티브 ID·코드 예제·링크를 유도하는
- * 순수 로직 테스트. 5개 provider path의 키 스킴(ADR-019/020)을 고정한다.
+ * 순수 로직 테스트. 6개 provider path의 키 스킴(ADR-019/020/027)을 고정한다.
  */
 import { describe, expect, test } from "vitest";
 import { channelOf, nativeId, codeExamples, modelLinks } from "./modelExplorer";
 
-describe("channelOf — 5개 provider path 판별", () => {
+describe("channelOf — 6개 provider path 판별", () => {
   test("Bedrock Global 프로파일", () => {
     const ch = channelOf("global.anthropic.claude-fable-5");
     expect(ch.type).toBe("bedrock");
@@ -37,6 +37,21 @@ describe("channelOf — 5개 provider path 판별", () => {
     expect(ch.endpoint).toBe("https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1");
     expect(ch.label).toContain("Global");
   });
+  test("OpenAI Bedrock US CRIS (v2.25.0)", () => {
+    const ch = channelOf("openai:us:us.openai.gpt-6-astra");
+    expect(ch.type).toBe("openai-mantle");
+    // us. 프로파일도 bedrock-mantle 호스트 미지원 — us-east-1 bedrock-runtime OpenAI-compat만 가능.
+    expect(ch.endpoint).toBe("https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1");
+    expect(ch.endpoint).not.toContain("bedrock-mantle"); // 존재하지 않는 호스트 회귀 방지
+    expect(ch.region).toBe("US");
+    expect(ch.label).toContain("US");
+  });
+  test("GPT 6 Astra 인리전(us-west-2)은 기존 Mantle 호스트", () => {
+    const ch = channelOf("openai:us-west-2:openai.gpt-6-astra");
+    expect(ch.type).toBe("openai-mantle");
+    expect(ch.endpoint).toBe("https://bedrock-mantle.us-west-2.api.aws/openai/v1");
+    expect(ch.region).toBe("us-west-2");
+  });
 });
 
 describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
@@ -54,6 +69,10 @@ describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
   });
   test("OpenAI Global CRIS는 global. 접두사 포함 프로파일 id", () => {
     expect(nativeId("openai:global:global.openai.gpt-5.6-terra")).toBe("global.openai.gpt-5.6-terra");
+  });
+  test("OpenAI US CRIS는 us. 접두사 포함 프로파일 id", () => {
+    expect(nativeId("openai:us:us.openai.gpt-6-astra")).toBe("us.openai.gpt-6-astra");
+    expect(nativeId("openai:us-west-2:openai.gpt-6-astra")).toBe("openai.gpt-6-astra");
   });
 });
 
@@ -104,6 +123,15 @@ describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () 
     expect(ex[0].code).toContain("bedrock-runtime.ap-northeast-2");
     expect(ex[0].code).not.toContain("bedrock-mantle.global"); // 존재하지 않는 호스트 회귀 방지
     expect(ex[0].code).toContain("global.openai.gpt-5.6-luna");
+  });
+  test("OpenAI US CRIS → Responses API + us-east-1 bedrock-runtime base_url", () => {
+    const ex = codeExamples("openai:us:us.openai.gpt-6-astra");
+    expect(ex.map((e) => e.api)).toEqual(["Responses API"]);
+    expect(ex[0].code).toContain("bedrock-runtime.us-east-1");
+    expect(ex[0].code).not.toContain("bedrock-mantle."); // 존재하지 않는 호스트 회귀 방지
+    expect(ex[0].code).toContain('"us.openai.gpt-6-astra"');
+    expect(ex[0].code).toContain("ABSK");
+    expect(ex[0].description).toContain("cross-region");
   });
 });
 

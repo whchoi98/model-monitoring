@@ -39,7 +39,15 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     "gpt-5.6-sol-global": {"input": 5.00, "output": 30.00},
     "gpt-5.6-terra-global": {"input": 2.00, "output": 12.00},
     "gpt-5.6-luna-global": {"input": 0.20, "output": 1.20},
+    # GPT 6 Astra (v2.25.0, 2026-09-09): 단가 미확정 — 의도적으로 미기재(추정값 금지).
+    # Price List API에 GPT-6 항목이 없고 공식 모델 카드 단가도 미공개 → get_pricing이 None을
+    # 돌려주게 두어 비용을 "-"로 표시한다. 확정되면 in-region "gpt-6-astra" / Global CRIS
+    # "gpt-6-astra-global" / US CRIS "gpt-6-astra-us" 3키를 함께 추가할 것 (ADR-027).
 }
+
+# OpenAI pseudo-region(Bedrock CRIS) — 채널 단가가 in-region과 달라 base 키에 "-<region>"
+# suffix를 붙여 분리한다("-global"/"-us"). in-region, 1P 채널은 suffix 없음.
+_OPENAI_CRIS_REGIONS: tuple[str, ...] = ("global", "us")
 
 
 def _normalize_key(model_id: str) -> str:
@@ -47,12 +55,13 @@ def _normalize_key(model_id: str) -> str:
     key = model_id
     if key.startswith("anthropic:"):
         key = key[len("anthropic:"):]
-    openai_global = False
+    openai_cris_suffix = ""
     if key.startswith("openai:"):
-        # openai:<region>:<actual_id> → <actual_id>. pseudo-region "global"(Bedrock global
-        # CRIS)은 in-region과 단가가 달라 base 키에 "-global" suffix를 붙여 구분한다.
+        # openai:<region>:<actual_id> → <actual_id>. pseudo-region "global"/"us"(Bedrock
+        # CRIS)은 in-region과 단가가 달라 base 키에 "-<region>" suffix를 붙여 구분한다.
         segs = key.split(":", 2)
-        openai_global = len(segs) == 3 and segs[1] == "global"
+        if len(segs) == 3 and segs[1] in _OPENAI_CRIS_REGIONS:
+            openai_cris_suffix = f"-{segs[1]}"
         key = segs[-1]
     parts = key.split(".", 1)
     if len(parts) == 2 and parts[0] in ("global", "us", "eu", "apac"):
@@ -63,8 +72,8 @@ def _normalize_key(model_id: str) -> str:
         key = key[len("amazon."):]
     if key.startswith("openai."):
         key = key[len("openai."):]
-    if openai_global:
-        key = f"{key}-global"
+    if openai_cris_suffix:
+        key = f"{key}{openai_cris_suffix}"
     return key
 
 

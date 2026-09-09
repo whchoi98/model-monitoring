@@ -21,7 +21,7 @@ Dashboard UI for monitoring Bedrock LLM model performance.
 - PWA (v2.21.0): `src/app/manifest.ts`(→ /manifest.webmanifest) + `app/icon.png`·`apple-icon.png` 컨벤션 + `public/icons/*`(maskable 포함). iOS standalone은 layout.tsx `appleWebApp`/`viewport-fit=cover` + globals.css의 `display-mode: standalone` safe-area 패딩이 세트 — 아이콘 재생성은 Pillow 스크립트(커밋 메시지 참조), middleware no-store matcher에서 PWA 자산 제외 유지
 - UI text must go through `src/lib/i18n.ts` (Korean primary, English secondary)
 - Components use Tailwind dark theme (bg-gray-900/950 palette); v2.8.0부터 화이트 테마 토글 (`html.light` class + `light:` variant, `lib/theme.ts`)
-- Model cards are sorted by: channel (Anthropic → Global[Bedrock·OpenAI `(Global)` 공통] → Bedrock US → OpenAI 리전) → family (newest first), via `lib/sortModels.ts` `channelRank`/`familyRank`
+- Model cards are sorted by: channel (Anthropic → Global[Bedrock·OpenAI `(Global)` 공통] → US[Bedrock US·OpenAI US CRIS] → OpenAI 리전) → family (newest first), via `lib/sortModels.ts` `channelRank`/`familyRank`
 - Pages: `/` 대시보드, `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/gpt-on-aws` GPT on AWS 벤치 (v2.18.0), `/claude-features` Claude API Features 매트릭스 (v2.23.0), `/prompts`, `/cost`, `/reliability`, `/efficiency`, `/analysis`
 
 ## Commands

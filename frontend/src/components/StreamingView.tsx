@@ -49,6 +49,10 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 5.6 Luna (us-east-2)": "bg-green-300",
   "GPT 5.6 Luna (us-west-2)": "bg-teal-300",
   "GPT 5.6 Luna (1P)": "bg-lime-500",
+  // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 (배지 텍스트는 흰색).
+  "GPT 6 Astra (Global)": "bg-lime-900",
+  "GPT 6 Astra (US)": "bg-emerald-900",
+  "GPT 6 Astra (us-west-2)": "bg-green-900",
 };
 
 function getModelColor(name: string): string {
@@ -93,8 +97,14 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
     // openai:<region>:<actual_id> — region 직접 파싱.
     // pseudo-region "1p" → "1P", "global"(Bedrock global CRIS) → "Global" 표기.
     const rawRegion = modelId.split(":")[1] || "";
-    const region = rawRegion === "1p" ? "1P" : rawRegion === "global" ? "Global" : rawRegion;
-    const fam = modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
+    // pseudo-region "us"(Bedrock US CRIS, v2.25.0)는 "US" 대문자 — prober가 DB에 기록하는
+    // model_name("OpenAI GPT 6 Astra (US)")과 표기를 맞춘다.
+    const region = rawRegion === "1p" ? "1P"
+      : rawRegion === "global" ? "Global"
+      : rawRegion === "us" ? "US"
+      : rawRegion;
+    const fam = modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
+      : modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
       : modelId.includes("gpt-5.6-terra") ? "GPT 5.6 Terra"
       : modelId.includes("gpt-5.6-luna") ? "GPT 5.6 Luna"
       : modelId.includes("gpt-5.5") ? "GPT 5.5"
