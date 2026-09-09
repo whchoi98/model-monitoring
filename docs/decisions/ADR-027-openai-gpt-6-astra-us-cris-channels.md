@@ -70,7 +70,17 @@ Price List API에는 GPT-6 항목이 아직 없다.
 활성 카탈로그 **43 → 46** (OpenAI 16 → 19 = Mantle 인리전 14 + Global CRIS 4 + US CRIS 1;
 휴면 1P 5 포함 총계 48 → 51). reliability/cost/analysis/efficiency/anomalies/챗봇 tools/parity는
 전부 `AVAILABLE_MODELS` 기반 동적이라 무변경 자동 편입 — 패리티 런은 12h당 3채널 × 2 surface
-(`chat_completions`, `responses`) ≈ 60셀이 늘어난다.
+(`chat_completions`, `responses`) × 19 피처 = 114셀이 늘어난다(`is_applicable` 실측: 프로브 48 +
+사전 skipped 66, 그중 `reasoning`/`reasoning_effort` 12셀은 아래 판단으로 skipped).
+
+- **`_REASONING_MARKERS`에 `gpt-6`을 넣지 않는다 (2026-09-09 라이브 확인 근거).** Global 경로
+  Responses API `reasoning: {"effort": "low"}`("17 x 23은?", max_output_tokens 2048)와 US CRIS
+  `effort: "high"`, Mantle us-west-2 chat completions `reasoning_effort: "low"` 세 호출 모두 200으로
+  **파라미터는 수락**되지만 usage의 `reasoning_tokens`가 전부 **0**이었다. 패리티 `reasoning` 프로브는
+  `reasoning_tokens > 0`을 지원 판정 근거로 쓰므로(`parity/probes.py`), 마커를 넣으면 12셀이 "지원
+  안 함"으로 찍힌다 — 실제로는 "수락하나 추론 토큰을 보고하지 않음"이라 판정 근거가 불충분하다. GPT-5.x
+  계열은 같은 호출에서 reasoning_tokens가 양수라 마커에 포함돼 있다. 후속: Astra의 추론 노출 방식이
+  문서화되거나 reasoning_tokens가 보고되기 시작하면 `"gpt-6"`을 마커에 추가한다(+12셀, 12h당 프로브 +4).
 
 ## Consequences
 

@@ -140,6 +140,7 @@ EventBridge Scheduler
 | 024 | RUM 통합 — aws-rum-pipeline + 자체 호스팅 SDK, NEXT_PUBLIC_* 빌드 타임 주입 |
 | 025 | OpenAI GPT-5.6 Global CRIS 채널 3개 추가 + 채널별 가격 분리 |
 | 026 | Claude API Features 검증 매트릭스 — 문서 기대치 vs 실측 드리프트, Mantle `/anthropic` 리전 `us-east-1` 전환 |
+| 027 | OpenAI GPT-6 Astra 채널 3개 — 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us` 신설, Mantle 인리전은 us-west-2만 서빙(us-east-1/2 404), 단가 미확정 |
 
 ### 운영 / Operations
 
