@@ -37,23 +37,28 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   "gpt-5.6-terra": { input: 2.20, output: 13.20 },
   "gpt-5.6-luna": { input: 0.22, output: 1.32 },
   // Global CRIS(openai:global:global.openai.*)는 in-region보다 저렴한 별도 단가 — "-global" suffix 키.
-  // ⚠️ 새 모델에 global 리전을 추가하면 여기 "-global" 키도 반드시 함께 추가할 것 —
+  // US CRIS(openai:us:us.openai.*, v2.25.0)도 같은 규칙으로 "-us" suffix 키를 쓴다.
+  // ⚠️ 새 모델에 global/us pseudo-region을 추가하면 여기 "-global"/"-us" 키도 반드시 함께 추가할 것 —
   // 누락 시 getPricing의 prefix fallback이 in-region 단가로 조용히 매칭돼 과대 산정됨.
   "gpt-5.6-sol-global": { input: 5.00, output: 30.00 },
   "gpt-5.6-terra-global": { input: 2.00, output: 12.00 },
   "gpt-5.6-luna-global": { input: 0.20, output: 1.20 },
+  // GPT 6 Astra (v2.25.0): 공식 단가 미확정 — AWS Price List API에도 엔트리가 없어 의도적으로 비움.
+  // 3채널(gpt-6-astra / -us / -global) 단가는 확정 시 한 번에 함께 추가한다. 하나만 추가하면
+  // 나머지 두 키가 prefix fallback으로 그 단가에 매칭돼 채널별 비용이 뒤섞인다.
 };
 
 /** model_id → ModelPricing. 매칭 실패 시 null. */
 export function getPricing(modelId: string): ModelPricing | null {
   // anthropic:<id> → <id>
   let key = modelId.startsWith("anthropic:") ? modelId.slice("anthropic:".length) : modelId;
-  // openai:<region>:<actual_id> → <actual_id>. pseudo-region "global"(Bedrock global CRIS)은
-  // in-region과 단가가 달라 base 키에 "-global" suffix를 붙여 구분.
-  let openaiGlobal = false;
+  // openai:<region>:<actual_id> → <actual_id>. pseudo-region "global"(Bedrock global CRIS)과
+  // "us"(Bedrock US CRIS, v2.25.0)는 in-region과 단가가 달라 base 키에 "-global", "-us"
+  // suffix를 붙여 구분한다. 실제 리전("us-east-1", "us-west-2" 등)은 suffix 없음.
+  let openaiCris = ""; // "global" | "us" | ""
   if (key.startsWith("openai:")) {
     const segs = key.split(":");
-    openaiGlobal = segs[1] === "global";
+    if (segs[1] === "global" || segs[1] === "us") openaiCris = segs[1];
     key = segs.slice(2).join(":");
   }
   // global.X.Y / us.X.Y → X.Y (Y는 그대로)
@@ -66,7 +71,7 @@ export function getPricing(modelId: string): ModelPricing | null {
   if (key.startsWith("anthropic.")) key = key.slice("anthropic.".length);
   if (key.startsWith("amazon.")) key = key.slice("amazon.".length);
   if (key.startsWith("openai.")) key = key.slice("openai.".length);
-  if (openaiGlobal) key = `${key}-global`;
+  if (openaiCris) key = `${key}-${openaiCris}`;
 
   // 정확 매칭 우선
   if (PRICE_TABLE[key]) return PRICE_TABLE[key];

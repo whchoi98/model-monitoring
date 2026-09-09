@@ -56,6 +56,10 @@ const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
+  // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 3채널.
+  "OpenAI GPT 6 Astra (Global)": "#7fffd4",
+  "OpenAI GPT 6 Astra (US)": "#2e8b57",
+  "OpenAI GPT 6 Astra (us-west-2)": "#66cdaa",
   "OpenAI GPT 5.6 Sol (Global)": "#00fa9a",
   "OpenAI GPT 5.6 Sol (us-east-1)": "#22c55e",
   "OpenAI GPT 5.6 Sol (us-east-2)": "#16a34a",
@@ -91,6 +95,7 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Sonnet 4.6", "#8b5cf6"],
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
+  ["GPT 6 Astra", "#2e8b57"],
   ["GPT 5.6 Sol", "#22c55e"],
   ["GPT 5.6 Terra", "#a3e635"],
   ["GPT 5.6 Luna", "#4ade80"],
