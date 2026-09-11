@@ -1,8 +1,8 @@
 "use client";
 
-// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra 9채널
-// (미국 3리전 + Terra Global CRIS, v2.20.1)을 15분마다 채널당 10회
-// 정밀 측정(TTFB/TTFT/GAP)한 결과의 스코어 카드 + 시계열.
+// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra / 6 Astra 12채널
+// (미국 3리전 + Terra Global CRIS v2.20.1 + Astra Global·US CRIS·us-west-2 v2.25.1)을
+// 15분마다 채널당 10회 정밀 측정(TTFB/TTFT/GAP)한 결과의 스코어 카드 + 시계열.
 // 방법론은 docs/benchmarks (ttft_bench) 계보: TTFB=첫 스트림 이벤트, GAP≈thinking.
 
 import { useCallback, useEffect, useMemo, useState } from "react";
@@ -26,27 +26,32 @@ const RANGE_OPTIONS = [
   { hours: 168, labelKo: "7일", labelEn: "7d" },
 ];
 
-// 이중 인코딩으로 9개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
-// (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 색 × family 3패턴으로 교체)
+// 이중 인코딩으로 12개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
+// (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 색 × family 패턴으로 교체)
 const REGION_COLORS: Record<string, string> = {
   "us-east-1": "#3b82f6", // blue
   "us-east-2": "#f59e0b", // amber
   "us-west-2": "#10b981", // emerald
-  "Global": "#a855f7",    // violet — Terra Global CRIS (Seoul 라우팅, v2.20.1)
+  "Global": "#a855f7",    // violet — Global CRIS (Seoul 라우팅, v2.20.1)
+  "US": "#db2777",        // pink-600 — US CRIS (us-east-1 라우팅, v2.25.1)
 };
 
 const FAMILY_DASH: Record<string, string | undefined> = {
+  "GPT 6 Astra": "10 3 2 3",  // 일점쇄선
   "GPT 5.6 Terra": undefined, // 실선
   "GPT 5.5": "7 4",           // 파선
   "GPT 5.4": "2 4",           // 점선
 };
 
-function regionOf(name: string): string {
-  const m = name.match(/\((us-[a-z]+-\d|Global)\)/);
+/** model_name 서픽스 → 리전 키. pseudo-region "(US)"(v2.25.1)는 "(us-west-2)"와 구분된다. */
+export function regionOf(name: string): string {
+  const m = name.match(/\((us-[a-z]+-\d|Global|US)\)/);
   return m ? m[1] : "";
 }
 
-function familyOf(name: string): string {
+/** model_name → family 키. "6 Astra"를 먼저 보지 않으면 5.4로 접힌다(기본값이 5.4). */
+export function familyOf(name: string): string {
+  if (name.includes("6 Astra")) return "GPT 6 Astra";
   if (name.includes("5.6 Terra")) return "GPT 5.6 Terra";
   if (name.includes("5.5")) return "GPT 5.5";
   return "GPT 5.4";
@@ -197,8 +202,8 @@ export default function GptOnAwsPanel() {
           <h1 className="text-2xl font-bold text-gray-100">GPT on AWS</h1>
           <p className="text-sm text-gray-500 mt-1">
             {L(
-              "Bedrock Mantle (3P) precision latency bench — GPT 5.4 / 5.5 / 5.6 Terra × 3 US regions + Terra Global CRIS (Seoul-routed), 10 sequential calls per channel every 15 minutes with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
-              "Bedrock Mantle(3P) 정밀 레이턴시 벤치 — GPT 5.4 / 5.5 / 5.6 Terra × 미국 3리전 + Terra Global CRIS(Seoul 라우팅)를 15분마다 채널당 10회 순차 호출 (~55.8k 토큰 고정 캐시 프롬프트). TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
+              "Bedrock Mantle (3P) precision latency bench — 12 channels: GPT 5.4 / 5.5 / 5.6 Terra × 3 US regions, Terra Global CRIS (Seoul-routed) and GPT 6 Astra (Global / US CRIS / us-west-2), 10 sequential calls per channel every 15 minutes with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
+              "Bedrock Mantle(3P) 정밀 레이턴시 벤치 — 12채널: GPT 5.4 / 5.5 / 5.6 Terra × 미국 3리전, Terra Global CRIS(Seoul 라우팅), GPT 6 Astra(Global, US CRIS, us-west-2)를 15분마다 채널당 10회 순차 호출 (~55.8k 토큰 고정 캐시 프롬프트). TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
             )}
           </p>
         </div>
@@ -266,9 +271,10 @@ export default function GptOnAwsPanel() {
               )}
             </div>
           </div>
-          {/* family별 열 배치: 1열 GPT 5.6 Terra · 2열 GPT 5.5 · 3열 GPT 5.4 (모바일은 세로 스택) */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-            {(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] as const).map((fam) => (
+          {/* family별 열 배치: 1열 GPT 6 Astra, 2열 GPT 5.6 Terra, 3열 GPT 5.5, 4열 GPT 5.4
+              (폰은 세로 스택, md 2열, xl 4열) */}
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+            {(["GPT 6 Astra", "GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] as const).map((fam) => (
               <div key={fam} className="space-y-3">
                 <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-1">
                   {fam}
