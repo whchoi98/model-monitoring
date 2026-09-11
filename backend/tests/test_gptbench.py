@@ -301,3 +301,14 @@ def test_latest_orders_astra_first(session_factory, client):
         "OpenAI GPT 5.5 (us-east-1)",
         "OpenAI GPT 5.4 (us-west-2)",
     ]
+
+
+def test_bench_channels_unknown_region_skipped(bench_env, monkeypatch):
+    """_BENCH_SPECS에 프로버 테이블(_OPENAI_REGION_ENV)에 없는 리전이 들어가도 KeyError 없이
+    그 채널만 건너뛴다 — 오타/선행 추가 한 줄이 15분 사이클 전체를 비우지 않도록 (v2.25.1 리뷰 Minor)."""
+    import gptbench
+    monkeypatch.setattr(gptbench, "_BENCH_SPECS",
+                        [("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "eu-typo", "us-west-2"))])
+    chans = gptbench.bench_channels()
+    assert [c["region"] for c in chans] == ["global", "us-west-2"]
+

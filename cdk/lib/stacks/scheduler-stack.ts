@@ -279,7 +279,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/parityrun",
     );
 
-    // GPT on AWS 벤치 (v2.18.0) — Mantle 8채널 × 10회 TTFB/TTFT 측정, 15분 주기.
+    // GPT on AWS 벤치 (v2.18.0) — GPT 12채널(Mantle 인리전 9 + CRIS 3, v2.25.1) × 10회 TTFB/TTFT 측정, 15분 주기.
     // OpenAI bearer 키(secret)만 사용 — bedrock IAM 불필요하지만 autoprober role 재사용 (패턴 통일).
     const gptBenchTaskDef = buildTaskDef(
       "GptBenchTaskDef",
@@ -377,7 +377,7 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "GptBenchSchedule", {
-      // 15분 주기 — 사이클(8채널 × 워밍업1 + 10회 순차) ~6-9분, 데드라인 13분 (겹침 방지)
+      // 15분 주기 — 사이클(12채널 × 워밍업1 + 10회 순차) ~4.8분(최악 ~7분), 데드라인 13분 (겹침 방지)
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(15)),
       description: "GPT on AWS bench: Mantle TTFB/TTFT every 15 minutes",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {

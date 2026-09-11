@@ -94,7 +94,10 @@ def bench_channels() -> list[dict]:
         if not actual_id:
             continue
         for region in regions:
-            if not os.environ.get(_OPENAI_REGION_ENV[region]):
+            env_name = _OPENAI_REGION_ENV.get(region)
+            if not env_name or not os.environ.get(env_name):
+                # prober와 동일: 미등록 리전(오타/선행 추가)은 채널 하나만 건너뛴다 — KeyError로
+                # 15분 사이클 전체가 비는 사고 방지.
                 continue
             pseudo = _OPENAI_PSEUDO_REGIONS.get(region)
             if pseudo:
