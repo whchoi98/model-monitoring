@@ -32,9 +32,11 @@ BENCH_ENV = {
     "OPENAI_US_EAST_2_BASE_URL": "http://e2",
     "OPENAI_US_WEST_2_BASE_URL": "http://w2",
     "OPENAI_GLOBAL_BASE_URL": "http://gl",
+    "OPENAI_US_BASE_URL": "http://us",
     "BEDROCK_OPENAI_GPT_54_MODEL_ID": "openai.gpt-5.4",
     "BEDROCK_OPENAI_GPT_55_MODEL_ID": "openai.gpt-5.5",
     "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID": "openai.gpt-5.6-terra",
+    "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID": "openai.gpt-6-astra",
 }
 
 
@@ -52,44 +54,86 @@ def _fake_call(ttfb=800.0, ttft=1700.0, error=None):
     return call
 
 
-def test_bench_channels_excludes_gpt6_astra(bench_env, monkeypatch):
-    """GPT 6 Astra는 벤치 대상 아님 (v2.25.0 사용자 결정) — env가 있어도 채널 미생성.
+def test_bench_channels_includes_gpt6_astra_three_channels(bench_env):
+    """GPT 6 Astra 3채널 편입 (v2.25.1 사용자 결정) — Global CRIS, US CRIS, Mantle us-west-2.
 
-    _BENCH_SPECS에 pseudo-region "us"를 추가하려면 bench_channels의 리전→env 매핑에도
-    "us": "OPENAI_US_BASE_URL"을 함께 넣어야 한다(현재 없어서 KeyError).
+    Mantle us-east-1 / us-east-2는 Astra를 서빙하지 않는다(404 not_found_error, 2026-09-09
+    실측) — 스펙에 넣으면 매 사이클이 오류 행이 되므로 채널이 생기면 안 된다.
     """
     import gptbench
 
-    monkeypatch.setenv("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "openai.gpt-6-astra")
-    monkeypatch.setenv("OPENAI_US_BASE_URL", "https://us/openai/v1")
-    chans = gptbench.bench_channels()
-    assert len(chans) == 9
-    assert not [c for c in chans if "astra" in c["model_id"]]
+    astra = [c for c in gptbench.bench_channels() if c["family"] == "GPT 6 Astra"]
+    assert [(c["model_id"], c["model_name"]) for c in astra] == [
+        ("openai:global:global.openai.gpt-6-astra", "OpenAI GPT 6 Astra (Global)"),
+        ("openai:us:us.openai.gpt-6-astra", "OpenAI GPT 6 Astra (US)"),
+        ("openai:us-west-2:openai.gpt-6-astra", "OpenAI GPT 6 Astra (us-west-2)"),
+    ]
+    assert not [c for c in astra if c["region"] in ("us-east-1", "us-east-2")]
 
 
 def test_bench_channels_matrix(bench_env):
-    """5.4×3 + 5.5×2(us-west-2 미제공) + terra×4(Global 포함, v2.20.1) = 9채널."""
+    """5.4×3 + 5.5×2(us-west-2 미제공) + terra×4(Global 포함, v2.20.1)
+    + astra×3(Global, US CRIS, us-west-2 — v2.25.1) = 12채널."""
     import gptbench
 
     chans = gptbench.bench_channels()
-    assert len(chans) == 9
+    assert [(c["model_id"], c["model_name"]) for c in chans] == [
+        ("openai:us-east-1:openai.gpt-5.4", "OpenAI GPT 5.4 (us-east-1)"),
+        ("openai:us-east-2:openai.gpt-5.4", "OpenAI GPT 5.4 (us-east-2)"),
+        ("openai:us-west-2:openai.gpt-5.4", "OpenAI GPT 5.4 (us-west-2)"),
+        ("openai:us-east-1:openai.gpt-5.5", "OpenAI GPT 5.5 (us-east-1)"),
+        ("openai:us-east-2:openai.gpt-5.5", "OpenAI GPT 5.5 (us-east-2)"),
+        ("openai:global:global.openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (Global)"),
+        ("openai:us-east-1:openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (us-east-1)"),
+        ("openai:us-east-2:openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (us-east-2)"),
+        ("openai:us-west-2:openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (us-west-2)"),
+        ("openai:global:global.openai.gpt-6-astra", "OpenAI GPT 6 Astra (Global)"),
+        ("openai:us:us.openai.gpt-6-astra", "OpenAI GPT 6 Astra (US)"),
+        ("openai:us-west-2:openai.gpt-6-astra", "OpenAI GPT 6 Astra (us-west-2)"),
+    ]
     assert sum(1 for c in chans if c["family"] == "GPT 5.5") == 2
     assert not any(c["family"] == "GPT 5.5" and c["region"] == "us-west-2" for c in chans)
-    # Global CRIS는 Terra만 — id는 global. 접두사 파생, 라벨 "(Global)" 대문자 (prober 규약).
+    # pseudo-region 채널 id는 접두사 파생, 라벨은 "(Global)"/"(US)" 대문자 (prober 규약).
     glb = [c for c in chans if c["region"] == "global"]
-    assert len(glb) == 1 and glb[0]["family"] == "GPT 5.6 Terra"
-    assert glb[0]["model_id"] == "openai:global:global.openai.gpt-5.6-terra"
-    assert glb[0]["model_name"] == "OpenAI GPT 5.6 Terra (Global)"
+    assert [c["family"] for c in glb] == ["GPT 5.6 Terra", "GPT 6 Astra"]
+
+
+def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
+    """벤치 채널 키/라벨은 prober._register_openai_models 산출물과 바이트 동일해야 한다.
+
+    gpt_bench_results.model_id/model_name은 대시보드 채널과 같은 스킴이어야 화면(MODEL_COLORS,
+    channelRank)과 정렬되고, id 파생 규칙이 두 곳에 중복되면 조용히 드리프트한다.
+    """
+    import gptbench
+    import prober
+
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    prober._register_openai_models()
+
+    for c in gptbench.bench_channels():
+        assert prober.AVAILABLE_MODELS.get(c["model_id"]) == c["model_name"], c["model_id"]
 
 
 def test_bench_channels_no_global_env(bench_env, monkeypatch):
-    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널만 조용히 빠지고 기존 8채널 유지."""
+    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Terra, Astra)만 조용히 빠진다."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 8
+    assert len(chans) == 10
     assert not any(c["region"] == "global" for c in chans)
+
+
+def test_bench_channels_no_us_env(bench_env, monkeypatch):
+    """OPENAI_US_BASE_URL 미설정이면 US CRIS 채널만 빠지고(KeyError 없이) 나머지 11채널 유지."""
+    import gptbench
+
+    monkeypatch.delenv("OPENAI_US_BASE_URL")
+    chans = gptbench.bench_channels()
+    assert len(chans) == 11
+    assert not any(c["region"] == "us" for c in chans)
+    assert sum(1 for c in chans if c["family"] == "GPT 6 Astra") == 2
 
 
 def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
@@ -101,11 +145,11 @@ def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
 
     res = gptbench.run_cycle()
-    assert res["rows"] == 18 and res["errors"] == 0  # 9ch × 2
+    assert res["rows"] == 24 and res["errors"] == 0  # 12ch × 2
 
     s = session_factory()
     rows = s.query(models.GptBenchResult).all()
-    assert len(rows) == 18
+    assert len(rows) == 24
     assert all(r.cycle_ts == rows[0].cycle_ts for r in rows)  # 사이클 그룹 키 동일
     assert rows[0].gap_ms == pytest.approx(900.0)
     s.close()
@@ -123,7 +167,7 @@ def test_run_cycle_deadline_skips_channels(bench_env, session_factory, monkeypat
 
     res = gptbench.run_cycle()
     assert res["rows"] == 0
-    assert len(res["skipped_channels"]) == 9
+    assert len(res["skipped_channels"]) == 12
 
 
 def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0, start_min_ago=20):
@@ -219,3 +263,41 @@ def test_latest_uses_only_cycle_even_if_fresh(session_factory, client):
     _seed(session_factory, cycles=1, channels=2, runs=2, start_min_ago=3)
     data = client.get("/api/gptbench/latest").json()
     assert len(data["channels"]) == 2
+
+
+def test_latest_orders_astra_first(session_factory, client):
+    """카드 정렬은 family(카탈로그 순) → region — GPT 6 Astra가 맨 앞, 리전은 Global, US, us-west-2.
+
+    v2.25.1에서 Astra 3채널이 편입되면서 fam_rank에 누락되면 rank 9로 밀려 맨 뒤에 찍힌다.
+    """
+    s = session_factory()
+    cts = datetime.now(timezone.utc) - timedelta(minutes=20)  # 완료 사이클
+    seeded = [
+        ("GPT 5.4", "us-west-2", "openai:us-west-2:openai.gpt-5.4"),
+        ("GPT 5.6 Terra", "us-east-1", "openai:us-east-1:openai.gpt-5.6-terra"),
+        ("GPT 6 Astra", "us-west-2", "openai:us-west-2:openai.gpt-6-astra"),
+        ("GPT 5.5", "us-east-1", "openai:us-east-1:openai.gpt-5.5"),
+        ("GPT 6 Astra", "global", "openai:global:global.openai.gpt-6-astra"),
+        ("GPT 5.6 Terra", "global", "openai:global:global.openai.gpt-5.6-terra"),
+        ("GPT 6 Astra", "us", "openai:us:us.openai.gpt-6-astra"),
+    ]
+    for family, region, model_id in seeded:
+        label = "Global" if region == "global" else ("US" if region == "us" else region)
+        s.add(models.GptBenchResult(
+            cycle_ts=cts, timestamp=cts, model_id=model_id,
+            model_name=f"OpenAI {family} ({label})", family=family, region=region,
+            run_no=1, status="success", ttfb_ms=800, ttft_ms=1700, gap_ms=900,
+        ))
+    s.commit()
+    s.close()
+
+    data = client.get("/api/gptbench/latest").json()
+    assert [c["model_name"] for c in data["channels"]] == [
+        "OpenAI GPT 6 Astra (Global)",
+        "OpenAI GPT 6 Astra (US)",
+        "OpenAI GPT 6 Astra (us-west-2)",
+        "OpenAI GPT 5.6 Terra (Global)",
+        "OpenAI GPT 5.6 Terra (us-east-1)",
+        "OpenAI GPT 5.5 (us-east-1)",
+        "OpenAI GPT 5.4 (us-west-2)",
+    ]

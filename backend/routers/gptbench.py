@@ -129,7 +129,7 @@ def latest(db: Session = Depends(get_db)):
             last_error=(errs[-1].error_message if errs else None),
         ))
     # 정렬: family(카탈로그 순) → region
-    fam_rank = {"GPT 5.6 Terra": 0, "GPT 5.5": 1, "GPT 5.4": 2}
+    fam_rank = {"GPT 6 Astra": 0, "GPT 5.6 Terra": 1, "GPT 5.5": 2, "GPT 5.4": 3}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
@@ -139,7 +139,7 @@ def trend(
     hours: int = Query(24, ge=1, le=720),
     db: Session = Depends(get_db),
 ):
-    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 9채널 규모라 Python 집계로 충분."""
+    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 12채널 규모라 Python 집계로 충분."""
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     query = (db.query(GptBenchResult)
              .filter(GptBenchResult.cycle_ts >= since))
