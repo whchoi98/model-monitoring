@@ -29,7 +29,7 @@ EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 46 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
-   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9채널 TTFB/TTFT 벤치 → RDS
+   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 12채널(Mantle 인리전 9 + CRIS 3) TTFB/TTFT 벤치 → RDS
    └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×5 surface×4모델 실행-증거 스윕 → RDS
 ```
 
@@ -79,7 +79,7 @@ EventBridge Scheduler
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
-| GptBench TaskDef | `python -m gptbench_runner --once` — Mantle GPT 9채널 TTFB/TTFT 벤치 |
+| GptBench TaskDef | `python -m gptbench_runner --once` — GPT 12채널(Mantle 인리전 9 + CRIS 3) TTFB/TTFT 벤치 (GPT 5.4/5.5/5.6 Terra + GPT 6 Astra Global, US CRIS, us-west-2 — v2.25.1) |
 | FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×4모델 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
 
 #### 네트워크 / Network
@@ -171,7 +171,7 @@ EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 46 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
-   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → Mantle GPT 9-channel TTFB/TTFT bench → RDS
+   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 12-channel (9 Mantle in-region + 3 CRIS) TTFB/TTFT bench → RDS
    └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 5 surfaces × 4 models evidence sweep → RDS
 ```
 

@@ -66,6 +66,14 @@ Price List API에는 GPT-6 항목이 아직 없다.
 
 - **gptbench `_BENCH_SPECS` 미포함, 1P 스펙 미추가.** gptbench는 별도 카탈로그이며 15분 주기라
   채널 추가는 비용 결정 사항(ADR-025 선례). 1P는 v2.19.1부터 휴면.
+  → v2.25.1(2026-09-11)에서 사용자 결정으로 벤치에 3채널 편입(ADR-027 후속): `_BENCH_SPECS`에
+  `("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-west-2"))`를
+  추가해 벤치가 9 → 12채널이 됐고, `bench_channels`의 리전→env 매핑과 pseudo-region 분기를
+  prober(`_OPENAI_REGION_ENV`, `_OPENAI_PSEUDO_REGIONS`) 지연 import로 대체해 채널 키/라벨이
+  대시보드와 드리프트할 수 없게 했다. Astra 단가가 미확정이라 벤치 비용은 추정 불가이며,
+  물량은 입력 약 1.6억 토큰/일(측정 10회 기준, 대부분 캐시 히트)이다. 사이클 소요는 운영 로그의
+  9채널 171~197초(이상치 1건 313초)에 Astra 3채널 약 106초(호출당 실측 2.2~3.6초)를 더한
+  약 4.8분으로, 데드라인 13분 이내다.
 
 활성 카탈로그 **43 → 46** (OpenAI 16 → 19 = Mantle 인리전 14 + Global CRIS 4 + US CRIS 1;
 휴면 1P 5 포함 총계 48 → 51). reliability/cost/analysis/efficiency/anomalies/챗봇 tools/parity는
@@ -93,7 +101,8 @@ Price List API에는 GPT-6 항목이 아직 없다.
   넣으면 비용은 조회 시점 계산이라 소급 재계산된다(ADR-025와 동일 정책).
 - (−) **Mantle us-east-1/us-east-2 공백** — 표에는 "Mantle 미온보딩(404) — 재확인"으로 남는다.
   재확인 후 404가 풀리면 스펙 튜플의 리전 목록에 두 리전을 추가하는 것만으로 편입된다.
-- (−) gptbench `/gpt-on-aws` 벤치에는 GPT-6 Astra가 보이지 않는다(별도 결정 필요).
+- (−) → 해소: v2.25.1에서 `/gpt-on-aws` 벤치에 Astra 3채널(Global, US, us-west-2)이 표시된다.
+  남은 (−)는 Astra 단가 미확정으로 이 3채널의 **벤치 비용을 추정할 수 없다**는 점이다.
 - 배포 검증: autoprober 로그/`/api/auto-probe/latest`에서 OpenAI 19행 + 신규 3채널 첫 `success`
   확인 필수. env 주입 누락 시 prober가 **조용히 skip**하므로 한쪽 스택만 배포하면 대시보드와 스케줄
   태스크의 카탈로그가 어긋난다(1P, v2.20.0과 동일 메커니즘 — deploy.md 체크리스트 준수).

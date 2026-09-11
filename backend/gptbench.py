@@ -1,4 +1,4 @@
-"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 채널 TTFB/TTFT 정밀 측정 (v2.18.0).
+"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 12채널 TTFB/TTFT 정밀 측정 (v2.18.0).
 
 docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   TTFB = 요청→첫 스트림 이벤트, TTFT = 요청→첫 output_text.delta, GAP = TTFT−TTFB ≈ thinking.
@@ -28,13 +28,17 @@ CYCLE_DEADLINE_S = float(os.environ.get("GPT_BENCH_DEADLINE", "780"))  # 13 min
 INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sentence."
 
 # (family, model-id env var, 제공 리전) — prober._OPENAI_MODEL_SPECS의 3P(Mantle) 서브셋.
-# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra).
-# pseudo-region "global" = Terra의 Global CRIS 채널 (v2.20.1, 2026-08-18 사용자 승인) —
-# 5.4/5.5는 global 프로파일 미지원. 모델 id는 in-region id에 "global." 접두사 파생 (prober와 동일 규약).
+# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra).
+# pseudo-region "global" = Global CRIS 채널 (Terra v2.20.1, 2026-08-18 사용자 승인) —
+# 5.4/5.5는 global 프로파일 미지원. pseudo-region "us" = US CRIS (Astra 전용, v2.25.1).
+# pseudo-region 채널의 모델 id/라벨은 prober 규약(_OPENAI_PSEUDO_REGIONS)으로 파생한다.
+# GPT 6 Astra는 v2.25.1(2026-09-11) 사용자 결정으로 편입 — Mantle 인리전은 us-west-2 단독
+# (us-east-1/us-east-2는 404 not_found_error, 2026-09-09 실측 → 넣으면 오류 행만 쌓임).
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),
     ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1", "us-east-2")),
     ("GPT 5.6 Terra", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", ("global", "us-east-1", "us-east-2", "us-west-2")),
+    ("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-west-2")),
 ]
 
 # ~55.8k 토큰 고정 컨텍스트 — 벤치 스크립트와 동일 (변경 시 캐시 무효 + 측정 연속성 깨짐 주의).
@@ -79,24 +83,29 @@ def bench_channels() -> list[dict]:
     if not os.environ.get("OPENAI_API_KEY"):
         logger.warning("OPENAI_API_KEY not set - GPT bench skipped")
         return []
+    # 리전→env 매핑과 pseudo-region 규약(id 접두사·라벨 서픽스)은 prober가 source of truth —
+    # 여기서 재정의하면 gpt_bench_results의 키/라벨이 대시보드 채널과 조용히 드리프트한다.
+    # 지연 import는 _client_for와 동일한 이유(모듈 로드 시 등록 부작용 없음).
+    from prober import _OPENAI_PSEUDO_REGIONS, _OPENAI_REGION_ENV
+
     chans = []
     for family, env_var, regions in _BENCH_SPECS:
         actual_id = os.environ.get(env_var)
         if not actual_id:
             continue
         for region in regions:
-            if not os.environ.get({
-                "us-east-1": "OPENAI_US_EAST_1_BASE_URL",
-                "us-east-2": "OPENAI_US_EAST_2_BASE_URL",
-                "us-west-2": "OPENAI_US_WEST_2_BASE_URL",
-                "global": "OPENAI_GLOBAL_BASE_URL",
-            }[region]):
+            env_name = _OPENAI_REGION_ENV.get(region)
+            if not env_name or not os.environ.get(env_name):
+                # prober와 동일: 미등록 리전(오타/선행 추가)은 채널 하나만 건너뛴다 — KeyError로
+                # 15분 사이클 전체가 비는 사고 방지.
                 continue
-            if region == "global":
-                # Global CRIS 프로파일 id = "global." + in-region id, 라벨 "(Global)" 대문자 —
-                # prober._register_openai_models와 동일 규약 (키/라벨이 대시보드 채널과 정렬됨).
-                channel_id = f"global.{actual_id}"
-                label = f"OpenAI {family} (Global)"
+            pseudo = _OPENAI_PSEUDO_REGIONS.get(region)
+            if pseudo:
+                # CRIS 프로파일 id = 접두사("global."/"us.") + in-region id, 라벨은
+                # "(Global)"/"(US)" 대문자 — prober._register_openai_models와 동일 규약.
+                prefix, label_suffix = pseudo
+                channel_id = f"{prefix}{actual_id}"
+                label = f"OpenAI {family} ({label_suffix})"
             else:
                 channel_id = actual_id
                 label = f"OpenAI {family} ({region})"
