@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.26.1 — 2026-09-22
+
+### Fixed
+- Restore focus after a prompt deletion only after the confirmation dialog unmounts. A frame callback could run while the page was still inert, leaving keyboard focus on the document body in CI.
+- 프롬프트 삭제 후 확인 대화상자가 닫힌 다음 목록으로 포커스를 복구한다. 페이지가 아직 비활성 상태일 때 프레임 콜백이 실행되어 포커스가 본문에 남을 수 있던 문제를 수정했다.
+
 ## v2.26.0 — 2026-09-22
 
 ### Added

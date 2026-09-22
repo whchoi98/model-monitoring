@@ -101,6 +101,13 @@ export default function PromptsPanel({ user, onLoginClick }: Props) {
   const [deleting, setDeleting] = useState<PromptSet | null>(null);
   const [deleteNotice, setDeleteNotice] = useState<{ name: string; error: boolean } | null>(null);
   const deleteDialogOpen = useRef(false);
+  const focusSavedAfterClose = useRef(false);
+  useEffect(() => {
+    if (deleteTarget !== null || !focusSavedAfterClose.current) return;
+    focusSavedAfterClose.current = false;
+    // The modal's unmount cleanup has released the background's inert state.
+    savedTitle.current?.focus();
+  }, [deleteTarget]);
   const mutationBusy = creating || deleting !== null;
 
   // Optimize
@@ -150,16 +157,12 @@ export default function PromptsPanel({ user, onLoginClick }: Props) {
     setDeleteTarget(prompt);
   };
 
-  const focusSavedTitle = () => {
-    requestAnimationFrame(() => savedTitle.current?.focus());
-  };
-
   const closeDeleteDialog = () => {
     deleteDialogOpen.current = false;
+    if (deleting) focusSavedAfterClose.current = true;
     setDeleteTarget(null);
     // Closing an in-flight dialog only dismisses its UI; progress remains in
     // the saved-list section and the disabled initiating button cannot take focus.
-    if (deleting) focusSavedTitle();
   };
 
   const handleDelete = async () => {
@@ -176,8 +179,8 @@ export default function PromptsPanel({ user, onLoginClick }: Props) {
       setDeleteNotice({ name: target.name, error: false });
       const wasOpen = deleteDialogOpen.current;
       deleteDialogOpen.current = false;
+      if (wasOpen) focusSavedAfterClose.current = true;
       setDeleteTarget(null);
-      if (wasOpen) focusSavedTitle();
       void resource.refresh();
     } catch {
       setDeleteNotice({ name: target.name, error: true });
