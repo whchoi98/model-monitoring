@@ -15,7 +15,7 @@ help: ## 사용 가능한 타겟 목록을 출력
 # v2 자가검증
 # ----------------------------------------------------------------------
 .PHONY: verify
-verify: cdk-install cdk-lint cdk-typecheck cdk-test cdk-synth backend-lint backend-test frontend-lint ## CDK + 백엔드 + 프론트엔드 전체 검증
+verify: cdk-install cdk-lint cdk-typecheck cdk-test cdk-synth backend-lint backend-test frontend-lint frontend-test ## CDK + 백엔드 + 프론트엔드 전체 검증
 	@echo "✓ make verify PASS"
 
 .PHONY: cdk-install
@@ -63,10 +63,18 @@ backend-test: ## 백엔드 pytest 단위 테스트
 .PHONY: frontend-lint
 frontend-lint: ## 프론트엔드 TypeScript 타입 검사 (lint는 v2 후속 Phase에서)
 	@if [ -d frontend/node_modules ]; then \
-		cd frontend && npx tsc --noEmit; \
+		cd frontend && npm run typecheck; \
 	else \
 		echo "(skip) frontend/node_modules 없음 — 'cd frontend && npm install'"; \
 	fi
+
+.PHONY: frontend-test
+frontend-test: ## 프론트엔드 데이터·스트림 로직 회귀 테스트
+	cd frontend && npm test
+
+.PHONY: test-ui
+test-ui: ## 모의 API를 사용하는 브라우저 회귀 테스트 (Playwright Chromium 필요)
+	cd frontend && npm run test:e2e
 
 # ----------------------------------------------------------------------
 # 빌드

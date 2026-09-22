@@ -8,6 +8,10 @@ import {
 } from "@/lib/api";
 import { useLang } from "@/lib/i18n-context";
 import { formatCost } from "@/lib/pricing";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { DataEmpty, DataError, DataLoading } from "./DataState";
+import RefreshControls from "./RefreshControls";
 
 const WINDOW_OPTIONS = [
   { value: "1h", labelKo: "1시간", labelEn: "1h" },
@@ -27,32 +31,21 @@ export default function EfficiencyPanel() {
   const { lang } = useLang();
   const [windowSpec, setWindowSpec] = useState("24h");
   const [category, setCategory] = useState<string | null>(null);
-  const [categories, setCategories] = useState<{ id: string; label_ko: string; label_en: string }[]>([]);
-  const [data, setData] = useState<EfficiencyResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    fetchWorkloadCategories().then(setCategories).catch(() => {});
-  }, []);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const d = await fetchEfficiency(windowSpec, category);
-      setData(d);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowSpec, category]);
-
-  useEffect(() => { load(); }, [load]);
+  const categoriesResource = useAsyncResource("workload-categories", fetchWorkloadCategories);
+  const resource = useAsyncResource<EfficiencyResponse>(
+    `efficiency:${windowSpec}:${category ?? "all"}`,
+    (signal) => fetchEfficiency(windowSpec, category, signal),
+  );
+  const categories = categoriesResource.data ?? [];
+  const { data } = resource;
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([resource.refresh(), categoriesResource.refresh()]);
+  }, [resource.refresh, categoriesResource.refresh]);
+  const { enabled, setEnabled, countdown, reset } = useAutoRefresh(refreshAll, 30_000);
+  useEffect(reset, [windowSpec, category, reset]);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-100">
@@ -64,14 +57,16 @@ export default function EfficiencyPanel() {
               : "비용·출력 토큰·지연·TPS·성공률을 종합한 점수. 같은 카테고리에서 모델 간 공정 비교용."}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">{lang === "en" ? "Window" : "기간"}</span>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {WINDOW_OPTIONS.map((w) => (
               <button
                 key={w.value}
+                type="button"
+                aria-pressed={windowSpec === w.value}
                 onClick={() => setWindowSpec(w.value)}
-                className={`px-2.5 py-1 text-xs rounded-md ${windowSpec === w.value ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+                className={windowSpec === w.value ? "ui-button-primary" : "ui-button"}
               >
                 {lang === "en" ? w.labelEn : w.labelKo}
               </button>
@@ -80,63 +75,85 @@ export default function EfficiencyPanel() {
         </div>
       </div>
 
+      <RefreshControls
+        refreshing={resource.refreshing || categoriesResource.refreshing}
+        onRefresh={() => { reset(); void refreshAll(); }}
+        updatedAt={resource.updatedAt}
+        enabled={enabled}
+        onEnabledChange={setEnabled}
+        countdown={countdown}
+      />
+
       {/* Category chip filter */}
-      {categories.length > 0 && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 flex items-center gap-2 flex-wrap">
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-3">
+        <div role="group" aria-label={lang === "en" ? "Workload" : "워크로드"} className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-gray-400">
             {lang === "en" ? "Workload" : "워크로드"}
           </span>
           <button
+            type="button"
+            aria-pressed={category === null}
             onClick={() => setCategory(null)}
-            className={`px-2.5 py-1 text-xs rounded-md ${category === null ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+            className={category === null ? "ui-button-primary" : "ui-button"}
           >
             {lang === "en" ? "All" : "전체"}
           </button>
           {categories.map((c) => (
             <button
               key={c.id}
+              type="button"
+              aria-pressed={category === c.id}
               onClick={() => setCategory(c.id)}
-              className={`px-2.5 py-1 text-xs rounded-md ${category === c.id ? "bg-blue-600 text-white" : "bg-gray-800 text-gray-400 hover:bg-gray-700"}`}
+              className={category === c.id ? "ui-button-primary" : "ui-button"}
             >
               {lang === "en" ? c.label_en : c.label_ko}
             </button>
           ))}
           {category === null && (
-            <span className="text-[10px] text-amber-400/70 ml-2">
+            <span className="text-[11px] text-amber-400">
               {lang === "en"
                 ? "Tip: pick a single category for fair comparison (same prompt)."
                 : "Tip: 같은 프롬프트 기준 공정 비교를 위해 카테고리를 선택하세요."}
             </span>
           )}
         </div>
-      )}
+        <DataError
+          error={categoriesResource.error}
+          resource={lang === "en" ? "workload categories" : "워크로드 카테고리"}
+          onRetry={() => { reset(); void categoriesResource.refresh(); }}
+          hasData={categoriesResource.data !== null}
+        />
+        {categoriesResource.loading && <DataLoading />}
+        {!categoriesResource.error && !categoriesResource.refreshing && categoriesResource.data?.length === 0 && (
+          <DataEmpty
+            title={lang === "en" ? "No workload categories available." : "사용할 수 있는 워크로드 카테고리가 없습니다."}
+            description={lang === "en" ? "Select All to compare all workloads." : "전체를 선택해 모든 워크로드를 비교할 수 있습니다."}
+          />
+        )}
+      </div>
 
-      {error && (
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-md p-3 text-xs text-rose-400">
-          {error}
-        </div>
-      )}
-
-      {loading ? (
-        <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
-      ) : !data || data.models.length === 0 ? (
-        <div className="text-xs text-gray-500">
-          {lang === "en" ? "No data in selected window." : "선택한 기간에 데이터가 없습니다."}
-        </div>
-      ) : (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-          <table className="w-full text-xs">
+      <DataError
+        error={resource.error}
+        resource={lang === "en" ? "token efficiency" : "토큰 효율성"}
+        onRetry={() => { reset(); void resource.refresh(); }}
+        hasData={data !== null}
+      />
+      {resource.loading && <DataLoading />}
+      {!resource.error && !resource.refreshing && data?.models.length === 0 && <DataEmpty />}
+      {data && data.models.length > 0 && (
+        <div className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 overflow-x-auto">
+          <table className="w-full min-w-[720px] text-xs">
             <thead>
               <tr className="text-gray-500 border-b border-gray-800">
                 <th className="text-left py-2 pr-3">#</th>
-                <th className="text-left py-2 pr-3">Model</th>
-                <th className="text-right py-2 px-2">Score</th>
-                <th className="text-right py-2 px-2">Success</th>
-                <th className="text-right py-2 px-2">Avg out tok</th>
-                <th className="text-right py-2 px-2">Avg cost</th>
-                <th className="text-right py-2 px-2">Avg latency</th>
-                <th className="text-right py-2 px-2">Avg TPS</th>
-                <th className="text-right py-2 pl-2">Samples</th>
+                <th className="text-left py-2 pr-3">{lang === "en" ? "Model" : "모델"}</th>
+                <th className="text-right py-2 px-2">{lang === "en" ? "Score" : "점수"}</th>
+                <th className="text-right py-2 px-2">{lang === "en" ? "Success" : "성공률"}</th>
+                <th className="text-right py-2 px-2">{lang === "en" ? "Avg out tok" : "평균 출력 토큰"}</th>
+                <th className="text-right py-2 px-2">{lang === "en" ? "Avg cost" : "평균 비용"}</th>
+                <th className="text-right py-2 px-2">{lang === "en" ? "Avg latency" : "평균 지연"}</th>
+                <th className="text-right py-2 px-2">{lang === "en" ? "Avg TPS" : "평균 TPS"}</th>
+                <th className="text-right py-2 pl-2">{lang === "en" ? "Samples" : "표본 수"}</th>
               </tr>
             </thead>
             <tbody>

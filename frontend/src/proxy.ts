@@ -3,7 +3,7 @@ import type { NextRequest } from "next/server";
 
 // Cache-Control 응답 헤더를 모든 HTML route에 `no-store`로 강제.
 //
-// 이유: Next.js 14 standalone이 "use client" 페이지에도 자동으로
+// 과거 standalone 배포에서 "use client" 페이지에도
 //   cache-control: s-maxage=31536000, stale-while-revalidate
 // 를 박아 CloudFront/브라우저/회사 프록시가 옛 HTML을 1년 캐시.
 // 매 deploy 시 새 buildId의 chunk URL이 박힌 새 HTML이 즉시 전파되어야
@@ -11,7 +11,7 @@ import type { NextRequest } from "next/server";
 //
 // `_next/static/*` (hash-based filename)와 `/api/*`는 matcher에서 제외해
 // 정적 자산 immutable 캐시와 API SSE 스트리밍이 영향받지 않게 한다.
-export function middleware(request: NextRequest) {
+export function proxy(_request: NextRequest) {
   const response = NextResponse.next();
   response.headers.set(
     "Cache-Control",

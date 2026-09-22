@@ -5,6 +5,93 @@ export interface MetricInfo {
 }
 
 export interface Translations {
+  common: {
+    loading: string;
+    retry: string;
+    refresh: string;
+    refreshing: string;
+    autoRefresh: string;
+    paused: string;
+    updatedAt: string;
+    notUpdated: string;
+    failedToLoad: (resource: string) => string;
+    lastGoodData: string;
+    loadErrorHint: string;
+    timeoutHint: string;
+    authRequired: string;
+    noData: string;
+    noDataHint: string;
+    resetFilters: string;
+    streamInterrupted: string;
+  };
+  monitoring: {
+    title: string;
+    description: string;
+    overview: string;
+    monitored: string;
+    observed: (count: number) => string;
+    healthy: string;
+    healthyHint: string;
+    attention: string;
+    attentionHint: string;
+    successRate: string;
+    successRateHint: string;
+    health: Record<"healthy" | "error" | "overloaded" | "stale" | "unknown", string>;
+    collection: string;
+    overdue: string;
+    failed: string;
+    unverified: string;
+    cadence: (minutes: number) => string;
+    categoryCadence: (minutes: number) => string;
+    latestResults: string;
+    catalog: string;
+    catalogRequired: string;
+    unlistedChannels: (count: number) => string;
+    recentFailures: string;
+    recentFailuresTitle: (count: number) => string;
+    noFailures: string;
+    noProbes: string;
+    probeCount: (count: number) => string;
+    viewReliability: string;
+    viewTrends: string;
+    trends: string;
+    search: string;
+    searchPlaceholder: string;
+    statusFilter: string;
+    sort: string;
+    sortFamily: string;
+    sortAttention: string;
+    sortTtft: string;
+    allStatuses: string;
+    failuresOnly: string;
+    staleOnly: string;
+    visibleCount: (visible: number, total: number) => string;
+    noMatchingModels: string;
+    selectHint: string;
+    selection: (count: number) => string;
+    clearSelection: string;
+    selectModel: (name: string) => string;
+    compareSelection: string;
+    noTrend: string;
+    noTrendHint: string;
+    noMetric: string;
+    noMetricHint: string;
+    trendHint: string;
+    singlePoint: string;
+    aggregationHint: string;
+    showDetails: string;
+    missingHint: string;
+    staleHint: string;
+    unknownTime: string;
+    lastResult: string;
+    loginToTrigger: string;
+    triggerAccepted: string;
+    triggerBusy: string;
+    triggerFailed: string;
+    metricGuide: string;
+    channelsGuide: string;
+    selectionMissing: string;
+  };
   // Top tabs
   dashboardTab: string;
   manualProbeTab: string;
@@ -111,6 +198,51 @@ export interface Translations {
 }
 
 export const ko: Translations = {
+  common: {
+    loading: "데이터를 불러오는 중…", retry: "다시 시도", refresh: "새로고침", refreshing: "갱신 중…",
+    autoRefresh: "자동 새로고침", paused: "일시 정지", updatedAt: "마지막 확인", notUpdated: "아직 확인 전",
+    failedToLoad: (resource) => `${resource} 데이터를 불러오지 못했습니다.`,
+    lastGoodData: "마지막으로 조회한 결과입니다. 최신 상태와 다를 수 있습니다.",
+    loadErrorHint: "연결 상태를 확인하고 다시 시도하세요.", timeoutHint: "응답이 지연되고 있습니다. 잠시 후 다시 시도하세요.",
+    authRequired: "로그인이 필요합니다.", noData: "선택한 조건에 데이터가 없습니다.",
+    noDataHint: "조회 기간을 늘리거나 필터를 변경해 보세요.", resetFilters: "필터 초기화",
+    streamInterrupted: "완료 전에 연결이 끊겼습니다. 수집된 결과는 유지됩니다. 연결을 확인한 뒤 다시 실행하세요.",
+  },
+  monitoring: {
+    title: "모델 모니터링", description: "채널별 최신 응답, 수집 상태와 성능 추세를 확인하세요.",
+    overview: "모니터링 요약", monitored: "모니터링 채널", observed: (count) => `${count}개 채널에서 결과 수집`,
+    healthy: "정상", healthyHint: "최근 수집 주기 안에 응답 성공",
+    attention: "확인 필요", attentionHint: "오류·과부하·수집 지연·미수집",
+    successRate: "최신 실행 성공률", successRateHint: "수집된 채널의 마지막 결과 기준",
+    health: { healthy: "정상", error: "오류", overloaded: "과부하", stale: "수집 지연", unknown: "미수집" },
+    collection: "자동 수집", overdue: "수집 지연", failed: "수집 실패", unverified: "상태 확인 필요",
+    cadence: (minutes) => `${minutes}분 주기`, categoryCadence: (minutes) => `선택한 워크로드는 약 ${minutes}분마다 수집됩니다.`,
+    latestResults: "최신 모델 상태", catalog: "모델 목록", catalogRequired: "전체 채널 목록 확인 필요",
+    unlistedChannels: (count) => `${count}개 채널의 정보를 확인하지 못했습니다. 모델 목록을 다시 불러오세요.`,
+    recentFailures: "최근 실패 이력",
+    recentFailuresTitle: (count) => `최근 12시간 실패 ${count}건`, noFailures: "최근 12시간 실패 없음",
+    noProbes: "최근 12시간 수집 기록 없음", probeCount: (count) => `자동 프로브 ${count.toLocaleString()}회 기준`,
+    viewReliability: "신뢰성 상세", viewTrends: "추세 보기", trends: "성능 추세",
+    search: "모델 검색", searchPlaceholder: "모델 이름 또는 ID 검색", statusFilter: "모델 상태 필터",
+    sort: "모델 정렬", sortFamily: "모델 계열순", sortAttention: "문제 우선", sortTtft: "TTFT 높은 순",
+    allStatuses: "전체 상태", failuresOnly: "오류·과부하", staleOnly: "지연·미수집",
+    visibleCount: (visible, total) => `${total}개 중 ${visible}개 표시`, noMatchingModels: "조건에 맞는 모델이 없습니다.",
+    selectHint: "카드를 선택하면 해당 모델의 추세를 비교할 수 있습니다.",
+    selection: (count) => `${count}개 선택`, clearSelection: "선택 해제", selectModel: (name) => `${name} 추세 비교 선택`,
+    compareSelection: "선택 모델 추세 보기", noTrend: "이 기간에 수집된 추세 데이터가 없습니다.",
+    noTrendHint: "조회 기간을 늘려 보세요. 짧은 기간에는 수집 주기에 따라 결과가 없을 수 있습니다.",
+    noMetric: "이 지표의 측정값이 없습니다.", noMetricHint: "측정되지 않은 값과 실패 구간은 그래프의 빈 구간으로 표시합니다.",
+    trendHint: "카드 선택은 세 그래프에 함께 적용됩니다. 빈 구간은 측정값 없음 또는 호출 실패를 의미합니다.",
+    singlePoint: "측정값이 한 건뿐이므로 추세선 대신 점으로 표시합니다.",
+    aggregationHint: "시간별 평균과 최소–최대 범위입니다. 성공한 호출의 측정값만 포함합니다.",
+    showDetails: "오류 상세", missingHint: "이 조건의 최신 실행에 결과가 없습니다.",
+    staleHint: "예상 수집 주기를 지났습니다. 마지막 결과가 현재 상태를 보장하지 않습니다.",
+    unknownTime: "수집 시각 확인 필요", lastResult: "마지막 결과",
+    loginToTrigger: "로그인 후 프로브 실행", triggerAccepted: "프로브 실행을 요청했습니다. 결과 수집 후 화면에 반영됩니다.",
+    triggerBusy: "이미 수집 중입니다. 완료 후 다시 실행할 수 있습니다.",
+    triggerFailed: "프로브 실행 요청에 실패했습니다.", metricGuide: "지표 해설", channelsGuide: "호출 채널 안내",
+    selectionMissing: "선택한 모델 중 이 조건에 결과가 없는 모델이 있습니다.",
+  },
   // Top tabs
   dashboardTab: "대시보드",
   manualProbeTab: "수동 프로브",
@@ -194,7 +326,7 @@ export const ko: Translations = {
   success: "성공",
   error: "오류",
   overloaded: "일시 과부하",
-  overloadedHint: "Vendor 일시 과부하 — 2초/4초/8초 backoff로 자동 재시도 완료. 다음 5분 주기에 자동 재시도합니다.",
+  overloadedHint: "공급자가 일시적인 과부하 상태입니다. 다음 수집 주기에 다시 확인합니다.",
   workloadLabel: "워크로드",
   workloadAll: "전체",
 
@@ -253,6 +385,51 @@ export const ko: Translations = {
 };
 
 export const en: Translations = {
+  common: {
+    loading: "Loading data…", retry: "Retry", refresh: "Refresh", refreshing: "Refreshing…",
+    autoRefresh: "Auto refresh", paused: "Paused", updatedAt: "Last checked", notUpdated: "Not checked yet",
+    failedToLoad: (resource) => `Could not load ${resource}.`,
+    lastGoodData: "Showing the last successful result. It may no longer reflect the current state.",
+    loadErrorHint: "Check your connection and try again.", timeoutHint: "The request is taking too long. Try again shortly.",
+    authRequired: "Sign in to continue.", noData: "No data matches these filters.",
+    noDataHint: "Choose a longer time range or change the filters.", resetFilters: "Reset filters",
+    streamInterrupted: "The connection ended before completion. Partial results are preserved. Check your connection and run again.",
+  },
+  monitoring: {
+    title: "Model monitoring", description: "Track the latest responses, collection health and performance across channels.",
+    overview: "Monitoring overview", monitored: "Monitored channels", observed: (count) => `${count} channels with results`,
+    healthy: "Healthy", healthyHint: "Successful response within the collection cadence",
+    attention: "Needs attention", attentionHint: "Errors, overloads, stale or missing results",
+    successRate: "Latest run success rate", successRateHint: "Last result from channels with observations",
+    health: { healthy: "Healthy", error: "Error", overloaded: "Overloaded", stale: "Stale", unknown: "Unmeasured" },
+    collection: "Collection", overdue: "Collection overdue", failed: "Collection failed", unverified: "Status unverified",
+    cadence: (minutes) => `Every ${minutes} min`, categoryCadence: (minutes) => `This workload is collected about every ${minutes} minutes.`,
+    latestResults: "latest model status", catalog: "model catalog", catalogRequired: "Full channel coverage is unknown",
+    unlistedChannels: (count) => `${count} channels could not be identified. Retry loading the model catalog.`,
+    recentFailures: "recent failures",
+    recentFailuresTitle: (count) => `${count} failures in the last 12h`, noFailures: "No failures in the last 12h",
+    noProbes: "No probes in the last 12h", probeCount: (count) => `Across ${count.toLocaleString()} automatic probes`,
+    viewReliability: "Reliability details", viewTrends: "View trends", trends: "Performance trends",
+    search: "Search models", searchPlaceholder: "Search by model name or ID", statusFilter: "Model status filter",
+    sort: "Sort models", sortFamily: "Model family", sortAttention: "Attention first", sortTtft: "Highest TTFT",
+    allStatuses: "All statuses", failuresOnly: "Errors and overloads", staleOnly: "Stale and unmeasured",
+    visibleCount: (visible, total) => `${visible} of ${total} channels`, noMatchingModels: "No models match these filters.",
+    selectHint: "Select cards to compare their performance trends.",
+    selection: (count) => `${count} selected`, clearSelection: "Clear selection", selectModel: (name) => `Compare trends for ${name}`,
+    compareSelection: "Compare selected models", noTrend: "No trend data in this time range.",
+    noTrendHint: "Choose a longer range. A short window may fall between collection cycles.",
+    noMetric: "No measurements for this metric.", noMetricHint: "Missing measurements and failed calls appear as gaps.",
+    trendHint: "Model selection applies to all three charts. Gaps indicate missing measurements or failed calls.",
+    singlePoint: "Only one measurement is available; shown as a point instead of a trend line.",
+    aggregationHint: "Hourly averages with minimum–maximum ranges. Only successful calls contribute measurements.",
+    showDetails: "Error details", missingHint: "No result for this channel in the latest matching run.",
+    staleHint: "The expected collection cadence has elapsed. This result may not reflect the current state.",
+    unknownTime: "Collection time unknown", lastResult: "Last result",
+    loginToTrigger: "Sign in to run a probe", triggerAccepted: "Probe requested. Results will appear after collection completes.",
+    triggerBusy: "Collection is already running. Wait for it to finish before starting another probe.",
+    triggerFailed: "Could not start the probe.", metricGuide: "Metric guide", channelsGuide: "Channel guide",
+    selectionMissing: "Some selected models have no results matching these filters.",
+  },
   // Top tabs
   dashboardTab: "Dashboard",
   manualProbeTab: "Manual Probe",
@@ -336,7 +513,7 @@ export const en: Translations = {
   success: "OK",
   error: "Error",
   overloaded: "Overloaded",
-  overloadedHint: "Vendor temporarily overloaded — auto-retried 2× with 2/4/8s backoff. Will auto-retry next 5-min cycle.",
+  overloadedHint: "The provider is temporarily overloaded. The next collection cycle will check again.",
   workloadLabel: "Workload",
   workloadAll: "All",
 

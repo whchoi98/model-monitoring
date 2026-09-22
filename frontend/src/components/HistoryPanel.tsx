@@ -1,11 +1,15 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
 import { ModelStats } from "@/lib/types";
 import { fetchStats } from "@/lib/api";
-import { useT } from "@/lib/i18n-context";
+import { useLang, useT } from "@/lib/i18n-context";
 import { Translations } from "@/lib/i18n";
 import { sortResults } from "@/lib/sortModels";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { DataEmpty, DataError, DataLoading } from "./DataState";
+import Dialog from "./Dialog";
+import RefreshControls from "./RefreshControls";
 
 interface HistoryPanelProps {
   isOpen: boolean;
@@ -36,53 +40,70 @@ function getStartTime(range: TimeRange): string {
   }
 }
 
-function formatNum(val: number | null, decimals: number = 0): string {
-  if (val === null || val === undefined) return "-";
-  return val.toFixed(decimals);
+type Measurement = number | null | undefined;
+
+function formatMeasurement(value: Measurement, unit: string, decimals = 0): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  return `${value.toFixed(decimals)} ${unit}`;
 }
 
-function getTtftColor(ms: number | null): string {
-  if (ms === null) return "text-gray-500";
+function getTtftColor(ms: Measurement): string {
+  if (ms == null || !Number.isFinite(ms)) return "text-gray-500";
   if (ms < 1000) return "text-emerald-400";
   if (ms < 3000) return "text-amber-400";
   return "text-rose-400";
 }
 
-function getLatencyColor(ms: number | null): string {
-  if (ms === null) return "text-gray-500";
+function getLatencyColor(ms: Measurement): string {
+  if (ms == null || !Number.isFinite(ms)) return "text-gray-500";
   if (ms < 2000) return "text-emerald-400";
   if (ms < 5000) return "text-amber-400";
   return "text-rose-400";
 }
 
-function getTpsColor(tps: number | null): string {
-  if (tps === null) return "text-gray-500";
+function getTpsColor(tps: Measurement): string {
+  if (tps == null || !Number.isFinite(tps)) return "text-gray-500";
   if (tps > 50) return "text-emerald-400";
   if (tps > 20) return "text-amber-400";
   return "text-rose-400";
 }
 
-function isGlobal(name: string): boolean {
-  return name.includes("(Global)");
-}
-
-// 카드 정렬과 동일: family 우선 → Anthropic → Bedrock Global → Bedrock US 순서.
-function sortStats(stats: ModelStats[]): ModelStats[] {
-  return sortResults(stats);
-}
-
 function getRegionBadge(name: string, t: Translations) {
-  if (isGlobal(name)) {
-    return (
-      <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-blue-500/15 text-blue-400 border border-blue-500/25">
-        {t.regionGlobal}
-      </span>
-    );
-  }
+  const region = name.match(/\(([^)]+)\)$/)?.[1];
+  if (!region) return null;
   return (
-    <span className="inline-flex px-2 py-0.5 rounded-full text-[10px] font-semibold bg-amber-500/15 text-amber-400 border border-amber-500/25">
-      {t.regionUS}
+    <span className={`inline-flex shrink-0 rounded-full border px-2 py-0.5 text-[10px] font-semibold ${
+      region === "Global"
+        ? "border-blue-500/25 bg-blue-500/15 text-blue-400"
+        : "border-amber-500/25 bg-amber-500/15 text-amber-400"
+    }`}>
+      {region === "Global" ? t.regionGlobal : region === "US" ? t.regionUS : region}
     </span>
+  );
+}
+
+function MetricRow({ label, values, unit, color, decimals = 0 }: {
+  label: string;
+  values: [Measurement, Measurement, Measurement];
+  unit: string;
+  color: (value: Measurement) => string;
+  decimals?: number;
+}) {
+  const t = useT();
+  return (
+    <div role="group" aria-label={label} className="min-w-0 space-y-1.5">
+      <p className="text-xs font-medium text-gray-400">{label}</p>
+      <dl className="grid grid-cols-3 gap-2 text-xs">
+        {[t.avg, "p50", "p95"].map((name, index) => (
+          <div key={name} className="min-w-0">
+            <dt className="text-gray-500">{name}</dt>
+            <dd className={`mt-0.5 break-words font-mono tabular-nums ${color(values[index])}`}>
+              {formatMeasurement(values[index], unit, decimals)}
+            </dd>
+          </div>
+        ))}
+      </dl>
+    </div>
   );
 }
 
@@ -101,11 +122,9 @@ function getTimeRanges(t: Translations): { value: TimeRange; label: string }[] {
 }
 
 export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
-  const t = useT();
-  const [stats, setStats] = useState<ModelStats[]>([]);
+  // Keep the user's filters across close/reopen, but mount the resource only
+  // while the dialog is open so hidden history never fetches.
   const [timeRange, setTimeRange] = useState<TimeRange>("24h");
-  const [loading, setLoading] = useState(false);
-  // 대시보드와 동일 규칙: 빈 Set = 전체 표시. 조회 기간을 바꿔도 선택은 유지.
   const [selectedModels, setSelectedModels] = useState<Set<string>>(new Set());
   const toggleModel = (name: string) => {
     setSelectedModels((prev) => {
@@ -117,204 +136,112 @@ export default function HistoryPanel({ isOpen, onClose }: HistoryPanelProps) {
   };
   const clearSelection = () => setSelectedModels(new Set());
 
-  const loadStats = useCallback(async () => {
-    setLoading(true);
-    try {
-      const startTime = getStartTime(timeRange);
-      const data = await fetchStats(startTime);
-      setStats(data);
-    } catch (err) {
-      console.error("Failed to fetch stats:", err);
-    } finally {
-      setLoading(false);
-    }
-  }, [timeRange]);
-
-  useEffect(() => {
-    if (isOpen) {
-      loadStats();
-    }
-  }, [isOpen, loadStats]);
-
   if (!isOpen) return null;
+  return (
+    <OpenHistoryPanel
+      onClose={onClose} timeRange={timeRange} onTimeRangeChange={setTimeRange}
+      selectedModels={selectedModels} onToggleModel={toggleModel} onClearSelection={clearSelection}
+    />
+  );
+}
 
-  const sorted = sortStats(stats);
+function OpenHistoryPanel({ onClose, timeRange, onTimeRangeChange, selectedModels, onToggleModel, onClearSelection }: {
+  onClose: () => void;
+  timeRange: TimeRange;
+  onTimeRangeChange: (range: TimeRange) => void;
+  selectedModels: Set<string>;
+  onToggleModel: (name: string) => void;
+  onClearSelection: () => void;
+}) {
+  const t = useT();
+  const { lang } = useLang();
+  const resource = useAsyncResource<ModelStats[]>(
+    `history:${timeRange}`,
+    (signal) => fetchStats(getStartTime(timeRange), undefined, null, signal),
+  );
+  const sorted = sortResults(resource.data ?? []);
   const visible = selectedModels.size
     ? sorted.filter((s) => selectedModels.has(s.model_name))
     : sorted;
   const timeRanges = getTimeRanges(t);
 
   return (
-    <div className="fixed inset-0 z-50 flex">
-      {/* Backdrop */}
-      <div
-        className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-        onClick={onClose}
+    <Dialog title={t.historyTitle} onClose={onClose} className="max-w-4xl">
+      <RefreshControls
+        refreshing={resource.refreshing}
+        onRefresh={() => { void resource.refresh(); }}
+        updatedAt={resource.updatedAt}
       />
-
-      {/* Panel */}
-      <div className="relative ml-auto w-full max-w-4xl bg-gray-950 border-l border-gray-800 overflow-y-auto">
-        <div className="sticky top-0 bg-gray-950/95 backdrop-blur border-b border-gray-800 px-6 py-4 flex items-center justify-between z-10">
-          <h2 className="text-lg font-semibold text-gray-200">
-            {t.historyTitle}
-          </h2>
+      <div role="group" aria-label={lang === "en" ? "Time range" : "조회 기간"} className="flex flex-wrap gap-2">
+        {timeRanges.map((tr) => (
           <button
-            onClick={onClose}
-            className="text-gray-400 hover:text-gray-200 transition-colors"
+            key={tr.value} type="button" aria-pressed={timeRange === tr.value}
+            onClick={() => onTimeRangeChange(tr.value)}
+            className={timeRange === tr.value ? "ui-button-primary" : "ui-button"}
           >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-              strokeWidth={2}
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
+            {tr.label}
           </button>
-        </div>
+        ))}
+      </div>
 
-        <div className="p-6 space-y-6">
-          {/* Time Range Selector */}
-          <div className="flex gap-2">
-            {timeRanges.map((tr) => (
-              <button
-                key={tr.value}
-                onClick={() => setTimeRange(tr.value)}
-                className={`px-3 py-1.5 text-sm rounded-lg transition-colors ${
-                  timeRange === tr.value
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-200"
-                }`}
-              >
-                {tr.label}
+      {sorted.length > 0 && (
+        <div role="group" aria-label={t.historyModelFilter} className="min-w-0 space-y-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <span className="text-xs font-semibold text-gray-500">{t.historyModelFilter}</span>
+            <button type="button" onClick={onClearSelection} aria-pressed={selectedModels.size === 0}
+              className={selectedModels.size === 0 ? "ui-button-primary" : "ui-button"}>
+              {t.allModels}
+            </button>
+            {selectedModels.size > 0 && (
+              <span className="text-xs text-gray-500">{t.monitoring.selection(selectedModels.size)}</span>
+            )}
+          </div>
+          <div className="flex flex-wrap gap-1.5">
+            {sorted.map((s) => (
+              <button key={s.model_id} type="button" onClick={() => onToggleModel(s.model_name)}
+                aria-pressed={selectedModels.has(s.model_name)}
+                className={`max-w-full break-words text-left ${selectedModels.has(s.model_name) ? "ui-button-primary" : "ui-button"}`}>
+                {s.model_name}
               </button>
             ))}
           </div>
-
-          {/* Model Filter — 빈 선택 = 전체 (대시보드 카드 필터와 동일 규칙) */}
-          {sorted.length > 0 && (
-            <div className="space-y-2">
-              <div className="flex items-center gap-3">
-                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                  {t.historyModelFilter}
-                </span>
-                <button
-                  onClick={clearSelection}
-                  className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
-                    selectedModels.size === 0
-                      ? "bg-blue-600 border-blue-600 text-white"
-                      : "bg-gray-800 border-gray-700 text-gray-400 hover:text-gray-200"
-                  }`}
-                >
-                  {t.allModels}
-                </button>
-                {selectedModels.size > 0 && (
-                  <span className="text-xs text-gray-500">
-                    {selectedModels.size}/{sorted.length}
-                  </span>
-                )}
-              </div>
-              <div className="flex flex-wrap gap-1.5">
-                {sorted.map((s) => {
-                  const active = selectedModels.has(s.model_name);
-                  return (
-                    <button
-                      key={s.model_id}
-                      onClick={() => toggleModel(s.model_name)}
-                      className={`px-2.5 py-1 text-[11px] rounded-full border transition-colors ${
-                        active
-                          ? "bg-blue-600/20 border-blue-500/60 text-blue-300"
-                          : "bg-gray-900 border-gray-800 text-gray-500 hover:border-gray-600 hover:text-gray-300"
-                      }`}
-                    >
-                      {s.model_name}
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-          )}
-
-          {/* Loading State */}
-          {loading && (
-            <div className="flex items-center justify-center py-12">
-              <div className="w-6 h-6 border-2 border-blue-500 border-t-transparent rounded-full animate-spin" />
-            </div>
-          )}
-
-          {/* Stats Cards */}
-          {!loading && visible.length > 0 && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {visible.map((s) => (
-                <div
-                  key={s.model_id}
-                  className="rounded-xl border border-gray-800 bg-gray-900/50 hover:border-gray-700 transition-colors"
-                >
-                  {/* Card Header */}
-                  <div className="flex items-center justify-between px-4 py-3 border-b border-gray-800/50">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-2 h-2 rounded-full shrink-0 ${s.count > 0 ? "bg-emerald-400" : "bg-gray-600"}`} />
-                      <h3 className="text-sm font-semibold text-gray-200 truncate">
-                        {s.model_name}
-                      </h3>
-                      {getRegionBadge(s.model_name, t)}
-                    </div>
-                    <span className="text-xs text-gray-500 tabular-nums shrink-0 ml-2">
-                      {s.count}{t.historyProbes}
-                    </span>
-                  </div>
-
-                  {/* Card Body */}
-                  <div className="px-4 py-3 space-y-2.5">
-                    {/* TTFT row */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500 w-16 shrink-0">TTFT</span>
-                      <div className="flex gap-4 text-xs font-mono tabular-nums">
-                        <span className="text-gray-500">{t.avg}: <span className={getTtftColor(s.avg_ttft_ms)}>{formatNum(s.avg_ttft_ms)}ms</span></span>
-                        <span className="text-gray-500">p50: <span className={getTtftColor(s.p50_ttft_ms)}>{formatNum(s.p50_ttft_ms)}ms</span></span>
-                        <span className="text-gray-500">p95: <span className={getTtftColor(s.p95_ttft_ms)}>{formatNum(s.p95_ttft_ms)}ms</span></span>
-                      </div>
-                    </div>
-
-                    {/* Latency row */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500 w-16 shrink-0">Latency</span>
-                      <div className="flex gap-4 text-xs font-mono tabular-nums">
-                        <span className="text-gray-500">{t.avg}: <span className={getLatencyColor(s.avg_latency_ms)}>{formatNum(s.avg_latency_ms)}ms</span></span>
-                        <span className="text-gray-500">p50: <span className={getLatencyColor(s.p50_latency_ms)}>{formatNum(s.p50_latency_ms)}ms</span></span>
-                        <span className="text-gray-500">p95: <span className={getLatencyColor(s.p95_latency_ms)}>{formatNum(s.p95_latency_ms)}ms</span></span>
-                      </div>
-                    </div>
-
-                    {/* TPS row */}
-                    <div className="flex items-center justify-between">
-                      <span className="text-xs text-gray-500 w-16 shrink-0">TPS</span>
-                      <div className="flex gap-4 text-xs font-mono tabular-nums">
-                        <span className="text-gray-500">{t.avg}: <span className={getTpsColor(s.avg_tps)}>{formatNum(s.avg_tps, 1)}</span></span>
-                        <span className="text-gray-500">p50: <span className={getTpsColor(s.p50_tps)}>{formatNum(s.p50_tps, 1)}</span></span>
-                        <span className="text-gray-500">p95: <span className={getTpsColor(s.p95_tps)}>{formatNum(s.p95_tps, 1)}</span></span>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {!loading && visible.length === 0 && (
-            <div className="text-center py-12">
-              <p className="text-gray-500">
-                {t.historyNoData}
-              </p>
-            </div>
-          )}
         </div>
-      </div>
-    </div>
+      )}
+
+      <DataError error={resource.error} resource={t.historyTitle}
+        onRetry={() => { void resource.refresh(); }} hasData={resource.data !== null} />
+      {resource.loading && <DataLoading />}
+      {visible.length > 0 && (
+        <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
+          {visible.map((s) => (
+            <article key={s.model_id} aria-label={s.model_name}
+              className="min-w-0 rounded-xl border border-gray-800 bg-gray-900/50">
+              <div className="space-y-2 border-b border-gray-800/50 px-4 py-3">
+                <h3 className="break-words text-sm font-semibold text-gray-200">{s.model_name}</h3>
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  {getRegionBadge(s.model_name, t)}
+                  <span className="text-xs tabular-nums text-gray-500">{s.count}{t.historyProbes}</span>
+                </div>
+              </div>
+              <div className="min-w-0 space-y-3 px-4 py-3">
+                <MetricRow label="TTFT" unit="ms" color={getTtftColor}
+                  values={[s.avg_ttft_ms, s.p50_ttft_ms, s.p95_ttft_ms]} />
+                <MetricRow label="Latency" unit="ms" color={getLatencyColor}
+                  values={[s.avg_latency_ms, s.p50_latency_ms, s.p95_latency_ms]} />
+                <MetricRow label="TPS" unit="tok/s" decimals={1} color={getTpsColor}
+                  values={[s.avg_tps, s.p50_tps, s.p95_tps]} />
+              </div>
+            </article>
+          ))}
+        </div>
+      )}
+      {!resource.error && !resource.refreshing && resource.data !== null && visible.length === 0 && (
+        <DataEmpty title={sorted.length === 0 ? t.historyNoData : t.common.noData}>
+          {selectedModels.size > 0 && (
+            <button type="button" className="ui-button" onClick={onClearSelection}>{t.common.resetFilters}</button>
+          )}
+        </DataEmpty>
+      )}
+    </Dialog>
   );
 }

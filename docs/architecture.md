@@ -146,7 +146,7 @@ EventBridge Scheduler
 
 - **배포**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
 - **롤백**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
-- **검증**: `make verify` — CDK lint + typecheck + 63 tests + cdk-nag + ruff + pytest 23 + frontend tsc.
+- **검증**: `make verify` — CDK lint/typecheck/tests/synth + ruff + pytest + frontend tsc/vitest.
 
 ---
 
@@ -193,4 +193,4 @@ See ADR-001 through ADR-027 in [`docs/decisions/`](./decisions/).
 
 - **Deploy**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
 - **Rollback**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
-- **Verify**: `make verify` — CDK lint + typecheck + 63 tests + cdk-nag + ruff + pytest 23 + frontend tsc.
+- **Verify**: `make verify` — CDK lint/typecheck/tests/synth + ruff + pytest + frontend tsc/vitest.

@@ -1,15 +1,37 @@
 import type { TrendPoint } from "./types";
+import { parseTimestamp } from "./format";
 
 export type TrendMetric = "ttft_ms" | "total_latency_ms" | "tps";
 
 export interface PivotedTrend {
   modelNames: string[];
-  chartData: Array<Record<string, string | number | number[] | null>>;
+  chartData: TrendRow[];
+  /** Only a model's own samples belong to its line; explicit failures stay null. */
+  seriesData: Record<string, TrendRow[]>;
+}
+
+export interface TrendRow {
+  timestamp: string;
+  time: number;
+  [key: string]: string | number | number[] | null;
 }
 
 export interface PivotOptions {
   /** true면 집계 행의 [min,max]를 `<모델명>__range` 컬럼으로 추가 (Recharts range Area용). */
   withRange?: boolean;
+  cadenceSeconds?: number;
+}
+
+/** Isolated successes need dots even when dense charts omit ordinary markers. */
+export function isolatedSampleTimes(
+  points: ReadonlyArray<Record<string, unknown>>,
+  valueKey: string,
+  timeKey = "time",
+): Set<number> {
+  const measured = (point: Record<string, unknown> | undefined) => typeof point?.[valueKey] === "number" && Number.isFinite(point[valueKey]);
+  return new Set(points.filter((point, index) =>
+    measured(point) && !measured(points[index - 1]) && !measured(points[index + 1]) && typeof point[timeKey] === "number",
+  ).map((point) => point[timeKey] as number));
 }
 
 /**
@@ -28,36 +50,33 @@ export function pivotTrend(
   const hasSelection = !!selectedModels && selectedModels.size > 0;
 
   const modelSet = new Set<string>();
-  const rows = new Map<string, Record<string, string | number | number[] | null>>();
+  const rows = new Map<number, TrendRow>();
+  const series = new Map<string, Map<number, TrendRow>>();
 
   for (const d of data) {
     if (hasSelection && !selectedModels!.has(d.model_name)) continue;
+    const time = parseTimestamp(d.timestamp);
+    if (time === null) continue;
     modelSet.add(d.model_name);
-    let row = rows.get(d.timestamp);
+    let row = rows.get(time);
     if (!row) {
-      row = {
-        timestamp: d.timestamp,
-        time: new Date(d.timestamp).toLocaleTimeString("ko-KR", {
-          hour: "2-digit",
-          minute: "2-digit",
-        }),
-      };
-      rows.set(d.timestamp, row);
+      row = { timestamp: d.timestamp, time };
+      rows.set(time, row);
     }
-    row[d.model_name] = d[metric];
-    if (options?.withRange) {
+    row[d.model_name] = d.status === "success" && d[metric] != null && Number.isFinite(d[metric]) ? d[metric] : null;
+    if (!series.has(d.model_name)) series.set(d.model_name, new Map());
+    series.get(d.model_name)!.set(time, row);
+    if (options?.withRange && d.status === "success") {
       const lo = d[`${metric}_min` as keyof TrendPoint] as number | null | undefined;
       const hi = d[`${metric}_max` as keyof TrendPoint] as number | null | undefined;
-      if (lo != null && hi != null) {
+      if (lo != null && hi != null && Number.isFinite(lo) && Number.isFinite(hi) && lo <= hi) {
         row[`${d.model_name}__range`] = [lo, hi];
       }
     }
   }
 
   const modelNames = Array.from(modelSet);
-  const chartData = Array.from(rows.values()).sort((a, b) =>
-    (a.timestamp as string) < (b.timestamp as string) ? -1 : 1,
-  );
+  const chartData = Array.from(rows.values()).sort((a, b) => a.time - b.time);
   // 결측 모델 컬럼을 null로 채움 (Line dataKey가 undefined면 tooltip/connectNulls 동작 차이 방지).
   for (const row of chartData) {
     for (const name of modelNames) {
@@ -65,5 +84,20 @@ export function pivotTrend(
     }
   }
 
-  return { modelNames, chartData };
+  const seriesData: Record<string, TrendRow[]> = Object.create(null);
+  for (const name of modelNames) {
+    const points = Array.from(series.get(name)!.values()).sort((a, b) => a.time - b.time);
+    const cadence = options?.cadenceSeconds;
+    const withGaps: TrendRow[] = [];
+    for (const point of points) {
+      const previous = withGaps[withGaps.length - 1];
+      if (cadence && previous && point.time - previous.time > (cadence + Math.min(cadence, 300)) * 1000) {
+        const time = previous.time + cadence * 1000;
+        withGaps.push({ time, timestamp: new Date(time).toISOString(), [name]: null });
+      }
+      withGaps.push(point);
+    }
+    seriesData[name] = withGaps;
+  }
+  return { modelNames, chartData, seriesData };
 }

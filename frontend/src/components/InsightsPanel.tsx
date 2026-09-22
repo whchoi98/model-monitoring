@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchLatestInsight,
-  fetchMe,
-  getToken,
   streamRegenerateInsight,
 } from "@/lib/api";
 import { Insight } from "@/lib/types";
 import { useLang } from "@/lib/i18n-context";
-import LoginForm from "./LoginForm";
+import { useAuth } from "@/lib/auth-context";
 import MessageMarkdown from "./chat/MessageMarkdown";
 
 // 인사이트 위젯 - 최신 인사이트 표시 + (인증 후) SSE 스트리밍 재생성.
@@ -22,8 +20,8 @@ export default function InsightsPanel() {
   const [regenerating, setRegenerating] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState<string>("");
-  const [authed, setAuthed] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
+  const { user, checking, openLogin } = useAuth();
+  const authed = user !== null;
 
   const load = useCallback(async () => {
     try {
@@ -42,29 +40,10 @@ export default function InsightsPanel() {
     return () => clearInterval(id);
   }, [load]);
 
-  // 인증 상태 확인.
-  const refreshAuth = useCallback(() => {
-    if (!getToken()) {
-      setAuthed(false);
-      return;
-    }
-    fetchMe()
-      .then(() => setAuthed(true))
-      .catch(() => setAuthed(false));
-  }, []);
-
-  useEffect(() => {
-    refreshAuth();
-    // 다른 컴포넌트(헤더 LoginForm 등)에서 로그인/로그아웃 시 broadcast되는 이벤트 청취.
-    const onAuthChange = () => refreshAuth();
-    window.addEventListener("auth-changed", onAuthChange);
-    return () => window.removeEventListener("auth-changed", onAuthChange);
-  }, [refreshAuth]);
-
   const handleRegenerate = () => {
-    if (regenerating) return;
+    if (regenerating || checking) return;
     if (!authed) {
-      setLoginOpen(true);
+      openLogin();
       return;
     }
     setRegenerating(true);
@@ -91,11 +70,6 @@ export default function InsightsPanel() {
     );
   };
 
-  const handleLoginSuccess = () => {
-    setLoginOpen(false);
-    refreshAuth();
-  };
-
   return (
     <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-4">
       {/* Header */}
@@ -114,7 +88,7 @@ export default function InsightsPanel() {
             <button
               type="button"
               onClick={handleRegenerate}
-              disabled={regenerating}
+              disabled={regenerating || checking}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600/80 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
               title={
                 lang === "en"
@@ -146,7 +120,8 @@ export default function InsightsPanel() {
           ) : (
             <button
               type="button"
-              onClick={() => setLoginOpen(true)}
+              onClick={() => openLogin()}
+              disabled={checking}
               className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-gray-700 hover:bg-gray-600 text-white transition-colors"
               title={
                 lang === "en"
@@ -207,30 +182,6 @@ export default function InsightsPanel() {
         </div>
       )}
 
-      {/* Search section 제거됨 - 검색은 채팅봇에서 대신 수행. */}
-
-      {/* Login modal */}
-      {loginOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            aria-label="overlay"
-            onClick={() => setLoginOpen(false)}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          />
-          <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-6">
-            <button
-              type="button"
-              onClick={() => setLoginOpen(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-white text-xl leading-none"
-              aria-label="close"
-            >
-              ×
-            </button>
-            <LoginForm onLoginSuccess={handleLoginSuccess} />
-          </div>
-        </div>
-      )}
     </div>
   );
 }

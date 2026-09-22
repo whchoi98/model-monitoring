@@ -1,6 +1,7 @@
 "use client";
 
 import Script from "next/script";
+import { APP_VERSION } from "@/lib/version";
 
 // RUM(Real User Monitoring) 수집 — aws-rum-pipeline 연동.
 // NEXT_PUBLIC_* 값은 빌드 시점에 주입되며, 미설정 시 수집이 완전히 비활성화된다(개발 환경 기본).
@@ -34,7 +35,7 @@ export default function RumProvider() {
           endpoint: RUM_ENDPOINT,
           apiKey: RUM_API_KEY,
           appName: "llm-monitor", // rum-pipeline 파티션 식별자 (^[a-z0-9-]{1,64}$)
-          appVersion: "2.16.2",
+          appVersion: APP_VERSION.replace(/^v/, ""),
         });
       }}
     />

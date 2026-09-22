@@ -1,11 +1,10 @@
 import { fileURLToPath } from "node:url";
 import { defineConfig } from "vitest/config";
 
-// Next.js용 tsconfig는 jsx: "preserve"(SWC가 변환)라서 vite가 .tsx를 그대로 읽으면 파싱이
-// 깨진다 — 테스트 실행에서만 automatic runtime으로 변환하고 "@/" 별칭을 src로 해석한다.
-// 순수 로직(src/lib/*.test.ts)만 있던 시절에는 설정 없이 동작했으나, 컴포넌트에서 export한
-// 순수 헬퍼(GptOnAwsPanel의 regionOf/familyOf, v2.25.1)를 테스트하려면 둘 다 필요하다.
+// 컴포넌트에서 export한 순수 헬퍼도 검사한다. 테스트의 JSX 런타임과 @/ 경로 해석을
+// 명시해 Next.js 빌드 설정과 같은 방식으로 TSX를 읽고, 브라우저 테스트는 별도로 실행한다.
 export default defineConfig({
+  test: { include: ["src/**/*.test.{ts,tsx}"] },
   oxc: { jsx: { runtime: "automatic" } },
   resolve: {
     alias: { "@": fileURLToPath(new URL("./src", import.meta.url)) },

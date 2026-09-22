@@ -6,11 +6,14 @@
 
 from __future__ import annotations
 
+import asyncio
+import json as _json
 import logging
 import threading
 from typing import List, Optional
 
 from fastapi import APIRouter, Depends, Query
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
@@ -124,9 +127,6 @@ def regenerate(
 # SSE 스트리밍 regenerate - Bedrock converse_stream으로 token 단위 즉시 emit.
 # 완료 시 DB 저장.
 # ---------------------------------------------------------------------
-from fastapi.responses import StreamingResponse
-import asyncio
-import json as _json
 
 
 @router.post("/stream-regenerate")

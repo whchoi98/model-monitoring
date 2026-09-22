@@ -4,7 +4,7 @@
 
 - AWS account with Bedrock access (us-east-1, ap-northeast-2)
 - Python 3.11+ installed
-- Node.js 20+ and npm installed
+- Node.js 20.9+ and npm installed
 - Docker and docker compose installed
 
 ## Local Development Setup
@@ -56,8 +56,9 @@ npm run dev
 
 - **Auto Prober**: Separate Fargate task (EventBridge Scheduler, every 5 min) that probes all models — `run_cycle()` in `auto_prober.py`, NOT an in-process daemon
 - **Manual Probe**: Authenticated SSE streaming probe via `/api/probes/run`
-- **Model Cards**: Dashboard grid showing latest metrics per model
-- **Trend Charts**: Time-series visualization of TTFT, latency, and TPS
+- **Model Cards**: Catalog coverage, current failures, stale results and unmeasured channels; search/filter/sort and select cards to compare trends.
+- **Trend Charts**: Actual elapsed time with explicit gaps for failed or missing measurements. Filter/selection state is preserved in dashboard URLs.
+- **Shared UI**: Public pages render during sign-in checks. Failed reads keep same-query cached results with a warning and retry; a changed filter cannot display an older query's data.
 - **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, pricing, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)
 - **Parity Run** (`/parity`, v2.11.0): Fargate sweep every 12 hours probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
 - **Comparison Lab**: one prompt → N models in parallel via `/api/compare/run` (SSE, auth)
@@ -73,5 +74,22 @@ npm run dev
 | View backend logs (prod) | `aws logs tail /ecs/backend --follow` |
 | View autoprober logs | `aws logs tail /ecs/autoprober --since 1h` |
 | View parity run logs | `aws logs tail /ecs/parityrun --since 1d` |
-| Trigger probe (local) | `curl -X POST http://localhost:8000/api/auto-probe/trigger` |
+| Trigger probe (local, JWT) | `curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/auto-probe/trigger` |
 | Access DB (local) | `docker exec -it monitoring-postgres psql -U postgres -d monitoring` |
+
+## UI regression checks
+
+```bash
+cd frontend
+npm ci
+npx playwright install --with-deps chromium webkit
+npm test
+npm run test:e2e
+# Run the same browser flows against a production build:
+npm run build
+PLAYWRIGHT_USE_PRODUCTION=1 npm run test:e2e
+```
+
+Browser tests intercept API requests and use fixtures. They do not start paid
+probes or write monitoring data. Stop a development server on port 3100 before
+using production mode; the local test runner reuses an existing server.

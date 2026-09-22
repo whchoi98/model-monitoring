@@ -2,14 +2,14 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.25.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.26.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
 ### Tech Stack
 
 - **Backend**: FastAPI + SQLAlchemy + RDS PostgreSQL 16 (t4g.micro, Single-AZ) + AgentCore Memory
-- **Frontend**: Next.js 14 standalone + React 18 + Tailwind + Recharts + react-markdown + FloatingChat + PWA(iPhone/iPad 홈 화면 설치 — manifest.ts·앱 아이콘·safe-area, v2.21.0)
+- **Frontend**: Next.js 16 standalone + React + Tailwind + Recharts + react-markdown + FloatingChat + PWA(iPhone/iPad 홈 화면 설치 — manifest.ts·앱 아이콘·safe-area, v2.21.0)
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
 - **Edge**: CloudFront VPC Origin → Internal ALB (HTTPS-only) → ECS Fargate × 2 (backend, frontend)
 - **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`) + ParityRun (12시간 주기) Fargate Tasks
@@ -262,8 +262,8 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 - **Register**: `username`은 **EmailStr** 검증 강제 (v2.1.0). approved=0 → admin SES → approved=1 → login
 - **Admin email**: `whchoi98@gmail.com` (`backend/auth.py:ADMIN_EMAIL`)
   - SES region: `us-east-1`. **Sandbox 모드 시 sender/recipient 둘 다 verified identity 필요**
-- **Public**: `/api/auto-probe/*`, `/api/results/*`, `/api/models`
-- **Auth required**: `/api/probes/run`, `/api/prompts` (POST/DELETE), `/api/insights/stream-regenerate`, `/api/chat/*`
+- **Public**: `/api/auto-probe/*` GET endpoints, `/api/results/*`, `/api/models`
+- **Auth required**: `/api/auto-probe/trigger` (202 accepted / 409 active reservation), `/api/probes/run`, `/api/prompts` (POST/DELETE), `/api/insights/stream-regenerate`, `/api/chat/*`
 - **Admin only**: `/api/admin/*` (username == "admin"). admin 비밀번호는 `SEED_ADMIN_PASSWORD` env var (8자 이상)
 
 ---

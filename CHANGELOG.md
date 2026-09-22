@@ -7,6 +7,28 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.26.0 — 2026-09-22
+
+### Added
+- Monitoring overview with observed coverage, fresh success, attention counts, last-run success rate, and an accessible channel status strip. Search, health filters and sorting make failures, stale results and unmeasured channels easy to locate; filters and comparison selections remain shareable in the URL.
+- 모니터링 채널·정상·확인 필요·최신 실행 성공률 요약과 채널별 상태 표시를 추가했다. 모델 검색, 상태 필터, 정렬로 오류·수집 지연·미수집 채널을 찾을 수 있으며, 필터와 비교 선택을 URL로 공유할 수 있다.
+- Browser regression tests covering partial failures, request races, login, keyboard navigation, dialogs, mobile layouts, themes and languages. CI runs these against the production build; `make verify` now also runs frontend unit tests.
+
+### Changed
+- Shared navigation, authentication, language preferences, request state, refresh controls and dialogs across monitoring pages. Public dashboards render while authentication is being checked; temporary service failures preserve sessions. Manual probing has a reloadable URL (`/?view=manual`).
+- 모니터링 화면의 메뉴·로그인·언어·조회 상태·새로고침·대화상자 동작을 통일했다. 로그인 확인 중에도 공개 화면을 표시하고, 일시적인 서버 오류로 로그아웃되지 않게 했다. 수동 프로브는 `/?view=manual`로 직접 열 수 있다.
+- Charts use actual elapsed time, date-aware labels and explicit gaps for failed/missing measurements. Legends stay outside the plot, and functional labels and state colors remain readable in both themes.
+
+### Fixed
+- Delayed requests no longer overwrite newly selected periods or categories. Errors are distinct from empty datasets, successful companion sections remain visible, and retry is available without changing filters. Cost projections use the period of the returned data.
+- Auto-probe status is based on database reservations, with overdue and crashed-run handling. Manual triggers require authentication, return `202` on acceptance and `409` for an active cycle; scheduler and manual admission share a transaction lock. Anomaly counts exclude manual probes and respect the workload filter.
+- 자동 수집 상태를 DB 실행 기록과 연동하고 지연·실패를 구분했다. 수동 실행에 인증과 중복 실행 방지를 적용했으며, 이상 징후 집계는 자동 프로브와 선택한 워크로드를 기준으로 한다. 시간별 추세 평균에 실패 호출의 지연시간이 섞이지 않게 했다.
+- Interrupted manual streams report failure while preserving partial results; Korean composition Enter no longer sends an unfinished chat message.
+
+### Security
+- Upgrade Next.js to 16.3.5 and refresh compatible dependencies. Migrate the shared layout to asynchronous cookies and the HTML cache guard to the `proxy.ts` convention; preserve the existing API/static-asset exclusions.
+- Next.js 16.3.5와 호환 종속성 보안 패치를 적용했다. 공용 레이아웃의 쿠키 접근을 비동기로 전환하고 HTML 캐시 보호를 `proxy.ts` 규약으로 옮겼다. API·정적 자산 제외 규칙은 유지한다.
+
 ## v2.25.1 — 2026-09-11
 
 ### Added

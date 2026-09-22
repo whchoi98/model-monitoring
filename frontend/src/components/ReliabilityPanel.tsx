@@ -1,12 +1,15 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   fetchMultiChannelReliability,
   MultiChannelReliability,
-  ReliabilityChannelRow,
 } from "@/lib/api";
 import { useLang } from "@/lib/i18n-context";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { DataEmpty, DataError, DataLoading } from "./DataState";
+import RefreshControls from "./RefreshControls";
 
 const WINDOW_OPTIONS = [
   { value: "1h", labelKo: "1시간", labelEn: "1h" },
@@ -59,31 +62,22 @@ function rateColor(r: number | null): string {
 export default function ReliabilityPanel() {
   const { lang } = useLang();
   const [windowSpec, setWindowSpec] = useState("24h");
-  const [data, setData] = useState<MultiChannelReliability | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const d = await fetchMultiChannelReliability(windowSpec);
-      setData(d);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowSpec]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  const resource = useAsyncResource<MultiChannelReliability>(
+    `reliability:${windowSpec}`,
+    (signal) => fetchMultiChannelReliability(windowSpec, signal),
+  );
+  const { data } = resource;
+  const { enabled, setEnabled, countdown, reset } = useAutoRefresh(resource.refresh, 30_000);
+  useEffect(reset, [windowSpec, reset]);
+  const refresh = () => {
+    reset();
+    void resource.refresh();
+  };
 
   const errLabels = lang === "en" ? ERROR_BUCKET_LABELS_EN : ERROR_BUCKET_LABELS_KO;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-100">
@@ -91,24 +85,22 @@ export default function ReliabilityPanel() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
-              ? "Same model family across Bedrock Global / US, Anthropic CP on AWS, and OpenAI (Mantle regions + 1P direct) channels — for failover decisions."
-              : "동일 모델을 Bedrock Global / US, Anthropic CP on AWS, OpenAI(Mantle 리전 + 1P direct) 채널별로 비교 — failover 의사결정용."}
+              ? "Same model family across Bedrock Global / US, Anthropic CP on AWS, and OpenAI (Global / US cross-region + Mantle regions) channels — for failover decisions."
+              : "동일 모델을 Bedrock Global / US, Anthropic CP on AWS, OpenAI(Global / US 교차 리전 + Mantle 리전) 채널별로 비교 — failover 의사결정용."}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">
             {lang === "en" ? "Window" : "기간"}
           </span>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {WINDOW_OPTIONS.map((w) => (
               <button
                 key={w.value}
+                type="button"
+                aria-pressed={windowSpec === w.value}
                 onClick={() => setWindowSpec(w.value)}
-                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                  windowSpec === w.value
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
-                }`}
+                className={windowSpec === w.value ? "ui-button-primary" : "ui-button"}
               >
                 {lang === "en" ? w.labelEn : w.labelKo}
               </button>
@@ -117,19 +109,24 @@ export default function ReliabilityPanel() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-md p-3 text-xs text-rose-400">
-          {error}
-        </div>
-      )}
+      <RefreshControls
+        refreshing={resource.refreshing}
+        onRefresh={refresh}
+        updatedAt={resource.updatedAt}
+        enabled={enabled}
+        onEnabledChange={setEnabled}
+        countdown={countdown}
+      />
 
-      {loading ? (
-        <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
-      ) : !data || data.families.length === 0 ? (
-        <div className="text-xs text-gray-500">
-          {lang === "en" ? "No data in selected window." : "선택한 기간에 데이터가 없습니다."}
-        </div>
-      ) : (
+      <DataError
+        error={resource.error}
+        resource={lang === "en" ? "channel reliability" : "채널 신뢰성"}
+        onRetry={refresh}
+        hasData={data !== null}
+      />
+      {resource.loading && <DataLoading />}
+      {!resource.error && !resource.refreshing && data?.families.length === 0 && <DataEmpty />}
+      {data && data.families.length > 0 && (
         <div className="space-y-4">
           {data.families.map((fam) => {
             // family 내 채널 중 최고 성공률 식별 (winner highlight)
@@ -147,10 +144,10 @@ export default function ReliabilityPanel() {
                         key={c.channel}
                         className={`rounded-lg border p-3 ${CHANNEL_BG[c.channel] ?? "bg-gray-800 border-gray-700"} ${isWinner ? "ring-1 ring-emerald-500/40" : ""}`}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <div className="text-xs font-semibold">{c.channel}</div>
+                        <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
+                          <div className="text-xs font-semibold break-words">{c.channel}</div>
                           {isWinner && (
-                            <span className="text-[10px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                               {lang === "en" ? "BEST" : "최우수"}
                             </span>
                           )}
@@ -158,10 +155,10 @@ export default function ReliabilityPanel() {
                         <div className={`text-2xl font-bold tabular-nums ${rateColor(c.success_rate)}`}>
                           {formatRate(c.success_rate)}
                         </div>
-                        <div className="text-[10px] opacity-70 mt-0.5">
+                        <div className="text-[11px] mt-0.5">
                           {c.success}/{c.samples} {lang === "en" ? "success" : "성공"}
                         </div>
-                        <div className="text-[10px] mt-2 grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <div className="text-[11px] mt-2 grid grid-cols-2 gap-x-2 gap-y-0.5">
                           <div className="opacity-70">avg TTFT</div>
                           <div className="text-right tabular-nums">
                             {c.avg_ttft_ms !== null ? `${c.avg_ttft_ms.toFixed(0)} ms` : "—"}
@@ -181,14 +178,14 @@ export default function ReliabilityPanel() {
                         </div>
                         {(c.error > 0 || c.overloaded > 0) && (
                           <div className="mt-2 pt-2 border-t border-current/20">
-                            <div className="text-[10px] opacity-70 mb-1">
+                            <div className="text-[11px] mb-1">
                               {lang === "en" ? "Failure modes" : "실패 유형"}
                             </div>
                             <div className="flex flex-wrap gap-1">
                               {Object.entries(c.error_buckets).map(([k, v]) => (
                                 <span
                                   key={k}
-                                  className="text-[10px] px-1.5 py-0.5 rounded bg-black/30"
+                                  className="text-[11px] px-1.5 py-0.5 rounded bg-black/30 light:bg-gray-800"
                                 >
                                   {errLabels[k] ?? k}: {v}
                                 </span>

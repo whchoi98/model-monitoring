@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
-[![Version](https://img.shields.io/badge/version-2.25.1-blue.svg)](CHANGELOG.md)
+![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
+[![Version](https://img.shields.io/badge/version-2.26.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -18,7 +18,7 @@ Amazon Bedrock + Anthropic CP on AWS LLM 채널의 응답 속도·처리량·신
 
 ## Overview
 
-Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 46 LLM channels across Bedrock Global / US inference profiles, Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle (Path 4) plus Bedrock Global and US cross-region profiles for GPT-5.6 and GPT-6 Astra (v2.20.0, v2.25.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, and 30-day cost projections — all behind a Next.js dashboard with six analytical views.
+Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 46 LLM channels across Bedrock Global / US inference profiles, Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle (Path 4) plus Bedrock Global and US cross-region profiles for GPT-5.6 and GPT-6 Astra (v2.20.0, v2.25.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, and 30-day cost projections — all behind a Next.js dashboard with ten monitoring views.
 
 The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories. A built-in chatbot (Claude Sonnet 4.6 with four Bedrock tools) lets you query the time-series data conversationally.
 
@@ -39,7 +39,7 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 ## Prerequisites
 
 - AWS account with administrator credentials in `ap-northeast-2` (Seoul)
-- Node.js >= 20 and npm (CDK)
+- Node.js >= 20.9 and npm (CDK)
 - Python >= 3.11 (backend)
 - Docker (image build for backend and frontend)
 - PostgreSQL 16 (local development only)
@@ -131,7 +131,7 @@ The dashboard installs as a full-screen standalone app on iPhone and iPad — no
 | App icons | `src/app/icon.png` (512), `src/app/apple-icon.png` (180), `public/icons/*` | Next.js file conventions auto-inject the icon `<link>` tags; `public/icons` carries the manifest set including Android `maskable` variants (art scaled into the 80% safe zone). Regenerated with a Pillow script (1024 px master → LANCZOS downscale) |
 | iOS meta tags | `src/app/layout.tsx` | `metadata.appleWebApp` (capable, black-translucent status bar, app title) + a separate `viewport` export with `viewport-fit=cover` |
 | Safe areas | `src/app/globals.css` | Applied only under `@media (display-mode: standalone)`: the sticky header gains `env(safe-area-inset-top)` (notch / Dynamic Island) and the body gains side/bottom insets (home indicator). Regular browser tabs are unaffected |
-| Caching | `src/middleware.ts` | The `no-store` matcher excludes the PWA static assets (same treatment as `favicon.ico`) so CloudFront may cache them |
+| Caching | `src/proxy.ts` | The `no-store` matcher excludes the PWA static assets (same treatment as `favicon.ico`) with edge caching configured separately |
 
 A service worker is deliberately **not** used: offline caching would show stale metrics on a real-time dashboard, and iOS home-screen install does not require one.
 
@@ -159,7 +159,7 @@ model-monitoring/
 │   ├── pricing.py                # token unit price table
 │   ├── claude_features/          # catalog (39 rows × 5 surfaces), transports, probes, engine, runner (v2.23.0)
 │   └── routers/                  # 17 router modules (auth, admin, analysis, cost, gptbench, features, …)
-├── frontend/                     # Next.js 14 standalone + 11 routes (installable PWA)
+├── frontend/                     # Next.js 16 standalone + 11 routes (installable PWA)
 │   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA icons
 │   ├── src/components/           # 30+ React components (dashboard, panels, chat)
 │   └── src/lib/                  # api client, i18n, sortModels, pricing mirror, version
@@ -171,13 +171,13 @@ model-monitoring/
 │   ├── decisions/                # ADR-001 through ADR-027
 │   └── runbooks/                 # deploy, rollback procedures
 ├── CHANGELOG.md                  # Keep a Changelog format (bilingual, repo root)
-└── Makefile                      # `make verify` runs CDK lint + tests + ruff + tsc
+└── Makefile                      # `make verify` runs CDK/backend checks + frontend types and unit tests
 ```
 
 ## Testing
 
 ```bash
-# Full verification (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 23 pytest + frontend tsc)
+# Full verification (CDK checks + backend tests + frontend typecheck and unit tests)
 make verify
 
 # Backend tests only
@@ -187,8 +187,19 @@ cd backend && pytest -q
 cd cdk && npm test
 
 # Frontend typecheck
-cd frontend && npx tsc --noEmit
+cd frontend && npm run typecheck
 ```
+
+Browser regression checks (fixture APIs, no paid model calls):
+
+```bash
+cd frontend
+npm ci
+npx playwright install --with-deps chromium webkit
+npm run test:e2e
+```
+
+The dashboard distinguishes healthy, failed, overloaded, stale and unmeasured channels. Search/status/sort and chart selections are preserved in URLs. Public pages share navigation, login, language preferences and recovery controls. See `docs/reviews/2026-09-22-monitoring-ux.md` for the review and verification record.
 
 ## API Documentation
 
@@ -204,7 +215,7 @@ Key endpoint groups:
 | Group | Path prefix | Authentication |
 |-------|-------------|----------------|
 | Auth | `/api/auth/*` | login/register public, `/me` requires JWT |
-| Auto-probe | `/api/auto-probe/*` | public |
+| Auto-probe | `/api/auto-probe/*` | public reads; trigger requires JWT |
 | Results | `/api/results/*` | public |
 | Manual probe | `/api/probes/run` | JWT required |
 | Cost / Reliability / Efficiency / Analysis | `/api/{cost,reliability,efficiency,analysis}/*` | public |
@@ -224,7 +235,7 @@ Run `make verify` before pushing — CI uses the same target as the merge gate.
 
 ## License
 
-This project is licensed under the [MIT License](LICENSE).
+This project is licensed under the MIT License.
 
 ## Contact
 
@@ -261,7 +272,7 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic
 ## 사전 요구 사항
 
 - `ap-northeast-2` (서울) 리전 관리자 권한이 있는 AWS 계정
-- Node.js 20 이상 + npm (CDK 용)
+- Node.js 20.9 이상 + npm (CDK 용)
 - Python 3.11 이상 (백엔드)
 - Docker (backend / frontend 이미지 빌드)
 - PostgreSQL 16 (로컬 개발 시에만 필요)
@@ -353,7 +364,7 @@ curl -N -H "Authorization: Bearer $TOKEN" \
 | 앱 아이콘 | `src/app/icon.png` (512), `src/app/apple-icon.png` (180), `public/icons/*` | Next.js 파일 컨벤션이 아이콘 `<link>` 태그를 자동 주입. `public/icons`는 Android `maskable` 변형(아트를 80% 안전영역으로 축소) 포함 manifest용 세트. Pillow 스크립트로 재생성 (1024px 원본 → LANCZOS 다운스케일) |
 | iOS 메타태그 | `src/app/layout.tsx` | `metadata.appleWebApp`(capable, 반투명 상태바, 앱 타이틀) + 별도 `viewport` export의 `viewport-fit=cover` |
 | Safe area | `src/app/globals.css` | `@media (display-mode: standalone)` 한정 적용: sticky 헤더에 `env(safe-area-inset-top)`(노치/Dynamic Island), body에 좌우/하단 인셋(홈 인디케이터). 일반 브라우저 탭은 무영향 |
-| 캐싱 | `src/middleware.ts` | `no-store` matcher에서 PWA 정적 자산 제외(`favicon.ico`와 동일 취급) — CloudFront 캐시 허용 |
+| 캐싱 | `src/proxy.ts` | `no-store` matcher에서 PWA 정적 자산 제외(`favicon.ico`와 동일 취급) — 엣지 캐시는 별도 정책으로 제어 |
 
 서비스워커는 의도적으로 **미도입**: 실시간 대시보드에서 오프라인 캐시는 낡은 지표를 보여주는 반기능이고, iOS 홈 화면 설치에는 필요하지 않습니다.
 
@@ -381,7 +392,7 @@ model-monitoring/
 │   ├── pricing.py                # 토큰 단가 테이블
 │   ├── claude_features/          # 카탈로그(39행 × 5 surface) + 전송기 + 프로브 + 엔진 + 러너 (v2.23.0)
 │   └── routers/                  # 17개 라우터 (auth, admin, analysis, cost, gptbench, features, …)
-├── frontend/                     # Next.js 14 standalone + 11 라우트 (설치형 PWA)
+├── frontend/                     # Next.js 16 standalone + 11 라우트 (설치형 PWA)
 │   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA 아이콘
 │   ├── src/components/           # 30+ React 컴포넌트 (대시보드, 패널, 챗)
 │   └── src/lib/                  # API 클라이언트, i18n, sortModels, pricing 미러, version
@@ -393,13 +404,13 @@ model-monitoring/
 │   ├── decisions/                # ADR-001 ~ ADR-027
 │   └── runbooks/                 # 배포 / 롤백 절차
 ├── CHANGELOG.md                  # Keep a Changelog 형식 (bilingual, 저장소 루트)
-└── Makefile                      # `make verify` — CDK lint + tests + ruff + tsc 일괄 실행
+└── Makefile                      # `make verify` — CDK/백엔드 검사 + 프론트엔드 타입·단위 테스트
 ```
 
 ## 테스트
 
 ```bash
-# 전체 검증 (CDK lint + typecheck + 63 Jest tests + cdk-nag + ruff + 23 pytest + frontend tsc)
+# 전체 검증 (CDK 검사 + 백엔드 테스트 + 프론트엔드 타입·단위 테스트)
 make verify
 
 # 백엔드 테스트
@@ -409,8 +420,19 @@ cd backend && pytest -q
 cd cdk && npm test
 
 # 프론트엔드 타입 체크
-cd frontend && npx tsc --noEmit
+cd frontend && npm run typecheck
 ```
+
+브라우저 회귀 검증은 모의 API를 사용하며 유료 모델 호출을 실행하지 않습니다.
+
+```bash
+cd frontend
+npm ci
+npx playwright install --with-deps chromium webkit
+npm run test:e2e
+```
+
+대시보드에서 정상·오류·과부하·수집 지연·미수집을 구분하고, 검색·상태·정렬·추세 선택을 URL로 유지합니다. 공용 메뉴·로그인·언어·오류 복구 동작을 모니터링 화면 전반에 적용했습니다. 리뷰와 검증 기록은 `docs/reviews/2026-09-22-monitoring-ux.md`에 있습니다.
 
 ## API 문서
 
@@ -426,7 +448,7 @@ https://<your-cloudfront-domain>/openapi.json
 | 그룹 | 경로 prefix | 인증 |
 |------|-------------|------|
 | 인증 | `/api/auth/*` | login/register 공개, `/me` JWT 필요 |
-| 자동 프로빙 | `/api/auto-probe/*` | 공개 |
+| 자동 프로빙 | `/api/auto-probe/*` | 조회 공개, 실행은 JWT 필요 |
 | 결과 조회 | `/api/results/*` | 공개 |
 | 수동 프로빙 | `/api/probes/run` | JWT 필요 |
 | 비용 / 신뢰성 / 효율성 / 분석 | `/api/{cost,reliability,efficiency,analysis}/*` | 공개 |
@@ -446,7 +468,7 @@ Push 전에 `make verify`를 실행하세요. CI에서도 동일한 target을 �
 
 ## 라이선스
 
-이 프로젝트는 [MIT 라이선스](LICENSE) 하에 배포됩니다.
+이 프로젝트는 MIT 라이선스 하에 배포됩니다.
 
 ## 연락처
 

@@ -6,7 +6,7 @@ FastAPI router modules defining all API endpoints (17 routers, registered in `ma
 ## Files
 - `auth.py` — `/api/auth/*` — login (public), register (EmailStr enforced), email approval, `/me` (JWT)
 - `admin.py` — `/api/admin/*` — reset-monitoring-data, users CRUD (admin only: `username == "admin"`)
-- `auto_probe.py` — `/api/auto-probe/*` — status (DB-sourced), latest, trend, categories, trigger, anomalies?hours= (최근 실패 요약, 대시보드 배너용) (public)
+- `auto_probe.py` — `/api/auto-probe/*` — status (DB reservation + overdue state), latest, trend, categories, anomalies?hours=&category= (automatic runs only) are public. `trigger` requires JWT and returns 202/409/503; scheduler/manual admission is serialized in `auto_prober.py`.
 - `probes.py` — `/api/probes/run` — SSE streaming manual probe (JWT)
 - `results.py` — `/api/results/*` — stored results query + stats (public)
 - `models.py` — `/api/models` — `AVAILABLE_MODELS` list (public)

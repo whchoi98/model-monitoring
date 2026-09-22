@@ -9,7 +9,7 @@
 
 import pytest
 
-from parity.catalog import FEATURES, SURFACES, surfaces_for, is_applicable
+from parity.catalog import FEATURES, surfaces_for, is_applicable
 from parity.engine import classify_error, check_canary, check_json_object, check_tool_roundtrip, check_cached_tokens
 
 

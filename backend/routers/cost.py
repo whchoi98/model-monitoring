@@ -21,7 +21,7 @@ from fastapi import Depends
 from database import get_db
 from models import ProbeResult
 from visibility import hidden_patterns
-from pricing import get_pricing, estimate_cost_usd
+from pricing import estimate_cost_usd
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cost", tags=["cost"])

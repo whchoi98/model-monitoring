@@ -9,7 +9,9 @@ import {
   AuthUser,
   ChatStreamEvents,
   Insight,
+  AutoProbeAnomalies,
 } from "./types";
+import { ApiError, fetchJson } from "./http";
 import type {
   FeatureCell, FeatureChange, FeatureDef, FeatureGroupDef, FeatureRunInfo, ModelDef, SurfaceDef,
 } from "./claudeFeatures";
@@ -23,7 +25,7 @@ let _token: string | null = null;
 export function getToken(): string | null {
   if (_token) return _token;
   if (typeof window !== "undefined") {
-    _token = localStorage.getItem("auth_token");
+    try { _token = localStorage.getItem("auth_token"); } catch { /* Session-only auth when storage is blocked. */ }
   }
   return _token;
 }
@@ -31,8 +33,10 @@ export function getToken(): string | null {
 export function setToken(token: string | null) {
   _token = token;
   if (typeof window !== "undefined") {
-    if (token) localStorage.setItem("auth_token", token);
-    else localStorage.removeItem("auth_token");
+    try {
+      if (token) localStorage.setItem("auth_token", token);
+      else localStorage.removeItem("auth_token");
+    } catch { /* Keep the in-memory session usable. */ }
     // 다른 컴포넌트가 자체 useEffect로 mount 시 1회만 auth check 하는 패턴이라
     // 상단 헤더 로그인 후에도 InsightsPanel / FloatingChat가 옛 unauth state를 유지.
     // 전역 이벤트로 모든 listener가 재확인하도록 broadcast.
@@ -43,6 +47,29 @@ export function setToken(token: string | null) {
 function authHeaders(): Record<string, string> {
   const t = getToken();
   return t ? { Authorization: `Bearer ${t}` } : {};
+}
+
+async function authenticatedJson<T>(url: string, init: RequestInit = {}): Promise<T> {
+  const token = getToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  try {
+    return await fetchJson<T>(url, { ...init, headers });
+  } catch (error) {
+    // An obsolete request must not sign out a newer login.
+    if (error instanceof ApiError && error.status === 401 && token && getToken() === token) setToken(null);
+    throw error;
+  }
+}
+
+/** Keep streaming/action requests' auth recovery consistent without imposing a short read timeout. */
+async function authenticatedFetch(url: string, init: RequestInit): Promise<Response> {
+  const token = getToken();
+  const headers = new Headers(init.headers);
+  if (token) headers.set("Authorization", `Bearer ${token}`);
+  const response = await fetch(url, { ...init, headers });
+  if (response.status === 401 && token && getToken() === token) setToken(null);
+  return response;
 }
 
 // --- Auth API ---
@@ -73,16 +100,12 @@ export async function register(username: string, password: string): Promise<Auth
   return res.json();
 }
 
-export async function fetchMe(): Promise<AuthUser> {
-  const res = await fetch(`${BASE}/api/auth/me`, { headers: authHeaders() });
-  if (!res.ok) throw new Error("인증 만료");
-  return res.json();
+export async function fetchMe(signal?: AbortSignal): Promise<AuthUser> {
+  return fetchJson(`${BASE}/api/auth/me`, { headers: authHeaders(), signal });
 }
 
-export async function fetchModels(): Promise<ModelInfo[]> {
-  const res = await fetch(`${BASE}/api/models`);
-  if (!res.ok) throw new Error(`Failed to fetch models: ${res.statusText}`);
-  return res.json();
+export async function fetchModels(signal?: AbortSignal): Promise<ModelInfo[]> {
+  return fetchJson(`${BASE}/api/models`, { signal });
 }
 
 export async function fetchResults(params?: {
@@ -107,6 +130,7 @@ export async function fetchStats(
   startTime?: string,
   endTime?: string,
   category?: string | null,
+  signal?: AbortSignal,
 ): Promise<ModelStats[]> {
   const searchParams = new URLSearchParams();
   if (startTime) searchParams.set("start_time", startTime);
@@ -114,9 +138,7 @@ export async function fetchStats(
   if (category) searchParams.set("category", category);
 
   const qs = searchParams.toString();
-  const res = await fetch(`${BASE}/api/results/stats${qs ? `?${qs}` : ""}`);
-  if (!res.ok) throw new Error(`Failed to fetch stats: ${res.statusText}`);
-  const data = await res.json();
+  const data = await fetchJson<{ models?: ModelStats[] }>(`${BASE}/api/results/stats${qs ? `?${qs}` : ""}`, { signal });
   return data.models ?? [];
 }
 
@@ -127,11 +149,8 @@ export async function fetchLatestResults(): Promise<ProbeResult[]> {
   return res.json();
 }
 
-export async function fetchPromptSets(): Promise<PromptSet[]> {
-  const res = await fetch(`${BASE}/api/prompts`);
-  if (!res.ok)
-    throw new Error(`Failed to fetch prompt sets: ${res.statusText}`);
-  return res.json();
+export async function fetchPromptSets(signal?: AbortSignal): Promise<PromptSet[]> {
+  return fetchJson(`${BASE}/api/prompts`, { signal });
 }
 
 export async function createPromptSet(data: {
@@ -140,18 +159,15 @@ export async function createPromptSet(data: {
   temperature: number;
   max_tokens: number;
 }): Promise<PromptSet> {
-  const res = await fetch(`${BASE}/api/prompts`, {
+  return authenticatedJson(`${BASE}/api/prompts`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(data),
   });
-  if (!res.ok)
-    throw new Error(`Failed to create prompt set: ${res.statusText}`);
-  return res.json();
 }
 
 export async function deletePromptSet(id: number): Promise<void> {
-  const res = await fetch(`${BASE}/api/prompts/${id}`, {
+  const res = await authenticatedFetch(`${BASE}/api/prompts/${id}`, {
     method: "DELETE",
     headers: authHeaders(),
   });
@@ -169,7 +185,7 @@ export async function optimizePrompt(data: {
   target_model_id: string;
   request_id: string | null;
 }> {
-  const res = await fetch(`${BASE}/api/prompts/optimize`, {
+  const res = await authenticatedFetch(`${BASE}/api/prompts/optimize`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify(data),
@@ -184,9 +200,7 @@ export async function optimizePrompt(data: {
 // --- Auto-probe API ---
 
 export async function fetchAutoStatus(signal?: AbortSignal): Promise<AutoProbeStatus> {
-  const res = await fetch(`${BASE}/api/auto-probe/status`, { signal });
-  if (!res.ok) throw new Error(`Failed to fetch auto-probe status: ${res.statusText}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/auto-probe/status`, { signal });
 }
 
 export async function fetchAutoLatest(
@@ -194,9 +208,7 @@ export async function fetchAutoLatest(
   signal?: AbortSignal,
 ): Promise<ProbeResult[]> {
   const qs = category ? `?category=${encodeURIComponent(category)}` : "";
-  const res = await fetch(`${BASE}/api/auto-probe/latest${qs}`, { signal });
-  if (!res.ok) throw new Error(`Failed to fetch auto-probe latest: ${res.statusText}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/auto-probe/latest${qs}`, { signal });
 }
 
 export async function fetchAutoTrend(
@@ -206,21 +218,21 @@ export async function fetchAutoTrend(
 ): Promise<TrendPoint[]> {
   const sp = new URLSearchParams({ hours: String(hours) });
   if (category) sp.set("category", category);
-  const res = await fetch(`${BASE}/api/auto-probe/trend?${sp.toString()}`, { signal });
-  if (!res.ok) throw new Error(`Failed to fetch auto-probe trend: ${res.statusText}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/auto-probe/trend?${sp.toString()}`, { signal });
 }
 
 export async function triggerAutoProbe(): Promise<{ message: string; triggered: boolean }> {
-  const res = await fetch(`${BASE}/api/auto-probe/trigger`, { method: "POST" });
-  if (!res.ok) throw new Error(`Failed to trigger auto-probe: ${res.statusText}`);
-  return res.json();
+  return authenticatedJson(`${BASE}/api/auto-probe/trigger`, { method: "POST" });
 }
 
-export async function fetchWorkloadCategories(): Promise<{ id: string; label_ko: string; label_en: string }[]> {
-  const res = await fetch(`${BASE}/api/auto-probe/categories`);
-  if (!res.ok) throw new Error(`Failed to fetch categories: ${res.statusText}`);
-  return res.json();
+export async function fetchWorkloadCategories(signal?: AbortSignal): Promise<{ id: string; label_ko: string; label_en: string }[]> {
+  return fetchJson(`${BASE}/api/auto-probe/categories`, { signal });
+}
+
+export async function fetchAutoAnomalies(hours = 12, category?: string | null, signal?: AbortSignal): Promise<AutoProbeAnomalies> {
+  const params = new URLSearchParams({ hours: String(hours) });
+  if (category) params.set("category", category);
+  return fetchJson(`${BASE}/api/auto-probe/anomalies?${params}`, { signal });
 }
 
 export interface SSECallbacks {
@@ -249,7 +261,7 @@ export function runProbe(
 
   (async () => {
     try {
-      const res = await fetch(`${BASE}/api/probes/run`, {
+      const res = await authenticatedFetch(`${BASE}/api/probes/run`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(config),
@@ -267,14 +279,15 @@ export function runProbe(
 
       const decoder = new TextDecoder();
       let buffer = "";
+      let completed = false;
 
-      while (true) {
+      while (!completed) {
         const { done, value } = await reader.read();
         if (done) break;
 
         buffer += decoder.decode(value, { stream: true });
 
-        const parts = buffer.split("\n\n");
+        const parts = buffer.split(/\r?\n\r?\n/);
         buffer = parts.pop() || "";
 
         for (const part of parts) {
@@ -294,10 +307,10 @@ export function runProbe(
 
           if (!eventData) continue;
 
-          try {
-            const parsed = JSON.parse(eventData);
-
-            switch (eventType) {
+          let parsed;
+          try { parsed = JSON.parse(eventData); }
+          catch { continue; }
+          switch (eventType) {
               case "token":
                 callbacks.onToken?.(parsed);
                 break;
@@ -308,14 +321,23 @@ export function runProbe(
                 callbacks.onResult?.(parsed);
                 break;
               case "complete":
+                completed = true;
                 callbacks.onComplete?.(parsed);
                 break;
+              case "error":
+                completed = true;
+                callbacks.onError?.(new Error(parsed.message ?? parsed.error ?? "Probe failed"));
+                break;
             }
-          } catch {
-            // skip unparseable events
-          }
+          if (completed) break;
         }
       }
+      if (!completed && !controller.signal.aborted) {
+        const error = new Error("The probe connection ended before completion. Partial results are preserved.");
+        error.name = "StreamInterruptedError";
+        throw error;
+      }
+      await reader.cancel().catch(() => {});
     } catch (err: unknown) {
       if (err instanceof Error && err.name === "AbortError") return;
       callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
@@ -343,7 +365,7 @@ export function chatStream(
       const token = getToken();
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`${BASE}/api/chat/stream`, {
+      const res = await authenticatedFetch(`${BASE}/api/chat/stream`, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -438,7 +460,7 @@ export async function fetchInsights(limit: number = 10): Promise<Insight[]> {
 export async function regenerateInsight(
   window: string = "6h",
 ): Promise<{ triggered: boolean; message: string }> {
-  const res = await fetch(`${BASE}/api/insights/regenerate`, {
+  const res = await authenticatedFetch(`${BASE}/api/insights/regenerate`, {
     method: "POST",
     headers: { "Content-Type": "application/json", ...authHeaders() },
     body: JSON.stringify({ window }),
@@ -487,7 +509,7 @@ export function compareStream(
       const token = getToken();
       if (token) headers["Authorization"] = `Bearer ${token}`;
 
-      const res = await fetch(`${BASE}/api/compare/run`, {
+      const res = await authenticatedFetch(`${BASE}/api/compare/run`, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -564,7 +586,7 @@ export function streamRegenerateInsight(
         Accept: "text/event-stream",
         ...authHeaders(),
       };
-      const res = await fetch(`${BASE}/api/insights/stream-regenerate`, {
+      const res = await authenticatedFetch(`${BASE}/api/insights/stream-regenerate`, {
         method: "POST",
         headers,
         body: JSON.stringify(body),
@@ -660,16 +682,12 @@ export interface CostTrend {
   points: CostTrendPoint[];
 }
 
-export async function fetchCostSummary(window: string = "24h"): Promise<CostSummary> {
-  const res = await fetch(`${BASE}/api/cost/summary?window=${encodeURIComponent(window)}`);
-  if (!res.ok) throw new Error(`fetchCostSummary failed: ${res.statusText}`);
-  return res.json();
+export async function fetchCostSummary(window: string = "24h", signal?: AbortSignal): Promise<CostSummary> {
+  return fetchJson(`${BASE}/api/cost/summary?window=${encodeURIComponent(window)}`, { signal });
 }
 
-export async function fetchChannelCompare(window: string = "24h"): Promise<ChannelCompare> {
-  const res = await fetch(`${BASE}/api/cost/channel-compare?window=${encodeURIComponent(window)}`);
-  if (!res.ok) throw new Error(`fetchChannelCompare failed: ${res.statusText}`);
-  return res.json();
+export async function fetchChannelCompare(window: string = "24h", signal?: AbortSignal): Promise<ChannelCompare> {
+  return fetchJson(`${BASE}/api/cost/channel-compare?window=${encodeURIComponent(window)}`, { signal });
 }
 
 export async function fetchCostTrend(window: string = "24h"): Promise<CostTrend> {
@@ -706,10 +724,8 @@ export interface MultiChannelReliability {
   families: ReliabilityFamily[];
 }
 
-export async function fetchMultiChannelReliability(window: string = "24h"): Promise<MultiChannelReliability> {
-  const res = await fetch(`${BASE}/api/reliability/multi-channel?window=${encodeURIComponent(window)}`);
-  if (!res.ok) throw new Error(`fetchMultiChannelReliability failed: ${res.statusText}`);
-  return res.json();
+export async function fetchMultiChannelReliability(window: string = "24h", signal?: AbortSignal): Promise<MultiChannelReliability> {
+  return fetchJson(`${BASE}/api/reliability/multi-channel?window=${encodeURIComponent(window)}`, { signal });
 }
 
 // --- Token Efficiency Score (Phase 5) ---
@@ -741,12 +757,10 @@ export interface EfficiencyResponse {
   models: ModelEfficiency[];
 }
 
-export async function fetchEfficiency(window: string = "24h", category?: string | null): Promise<EfficiencyResponse> {
+export async function fetchEfficiency(window: string = "24h", category?: string | null, signal?: AbortSignal): Promise<EfficiencyResponse> {
   const sp = new URLSearchParams({ window });
   if (category) sp.set("category", category);
-  const res = await fetch(`${BASE}/api/efficiency/score?${sp.toString()}`);
-  if (!res.ok) throw new Error(`fetchEfficiency failed: ${res.statusText}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/efficiency/score?${sp.toString()}`, { signal });
 }
 
 // --- Output Analysis: Stop Reasons + Output Length ---
@@ -765,12 +779,10 @@ export interface StopReasonResponse {
   rows: StopReasonRow[];
 }
 
-export async function fetchStopReasons(window: string = "7d", category?: string | null): Promise<StopReasonResponse> {
+export async function fetchStopReasons(window: string = "7d", category?: string | null, signal?: AbortSignal): Promise<StopReasonResponse> {
   const sp = new URLSearchParams({ window });
   if (category) sp.set("category", category);
-  const res = await fetch(`${BASE}/api/analysis/stop-reasons?${sp.toString()}`);
-  if (!res.ok) throw new Error(`fetchStopReasons failed: ${res.statusText}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/analysis/stop-reasons?${sp.toString()}`, { signal });
 }
 
 export interface OutputLengthRow {
@@ -793,12 +805,10 @@ export interface OutputLengthResponse {
   rows: OutputLengthRow[];
 }
 
-export async function fetchOutputLength(window: string = "7d", category?: string | null): Promise<OutputLengthResponse> {
+export async function fetchOutputLength(window: string = "7d", category?: string | null, signal?: AbortSignal): Promise<OutputLengthResponse> {
   const sp = new URLSearchParams({ window });
   if (category) sp.set("category", category);
-  const res = await fetch(`${BASE}/api/analysis/output-length?${sp.toString()}`);
-  if (!res.ok) throw new Error(`fetchOutputLength failed: ${res.statusText}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/analysis/output-length?${sp.toString()}`, { signal });
 }
 
 // ── GPT on AWS 벤치 (v2.18.0) ────────────────────────────────────────────
@@ -843,16 +853,12 @@ export interface GptBenchTrend {
   series: GptBenchTrendSeries[];
 }
 
-export async function fetchGptBenchLatest(): Promise<GptBenchLatest> {
-  const res = await fetch(`${BASE}/api/gptbench/latest`);
-  if (!res.ok) throw new Error(`fetchGptBenchLatest failed: ${res.statusText}`);
-  return res.json();
+export async function fetchGptBenchLatest(signal?: AbortSignal): Promise<GptBenchLatest> {
+  return fetchJson(`${BASE}/api/gptbench/latest`, { signal });
 }
 
-export async function fetchGptBenchTrend(hours: number = 24): Promise<GptBenchTrend> {
-  const res = await fetch(`${BASE}/api/gptbench/trend?hours=${hours}`);
-  if (!res.ok) throw new Error(`fetchGptBenchTrend failed: ${res.statusText}`);
-  return res.json();
+export async function fetchGptBenchTrend(hours: number = 24, signal?: AbortSignal): Promise<GptBenchTrend> {
+  return fetchJson(`${BASE}/api/gptbench/trend?hours=${hours}`, { signal });
 }
 
 // ── Claude API Features 검증 (v2.23.0) ──────────────────────────────────
@@ -867,28 +873,19 @@ export interface FeaturesEvidence extends FeatureCell {
   doc_url: string | null; verification: string | null; notes: string | null;
 }
 
-export async function fetchFeaturesCatalog(): Promise<FeaturesCatalog> {
-  const res = await fetch(`${BASE}/api/features/catalog`);
-  if (!res.ok) throw new Error(`fetchFeaturesCatalog failed: ${res.statusText}`);
-  return res.json();
+export async function fetchFeaturesCatalog(signal?: AbortSignal): Promise<FeaturesCatalog> {
+  return fetchJson(`${BASE}/api/features/catalog`, { signal });
 }
 
-export async function fetchFeaturesLatest(): Promise<FeaturesLatest> {
-  const res = await fetch(`${BASE}/api/features/latest`);
-  if (!res.ok) throw new Error(`fetchFeaturesLatest failed: ${res.statusText}`);
-  return res.json();
+export async function fetchFeaturesLatest(signal?: AbortSignal): Promise<FeaturesLatest> {
+  return fetchJson(`${BASE}/api/features/latest`, { signal });
 }
 
-export async function fetchFeaturesEvidence(q: { run_id: number; feature: string; surface: string; model_key: string }): Promise<FeaturesEvidence> {
+export async function fetchFeaturesEvidence(q: { run_id: number; feature: string; surface: string; model_key: string }, signal?: AbortSignal): Promise<FeaturesEvidence> {
   const sp = new URLSearchParams({ run_id: String(q.run_id), feature: q.feature, surface: q.surface, model_key: q.model_key });
-  const res = await fetch(`${BASE}/api/features/evidence?${sp}`);
-  if (!res.ok) throw new Error(`fetchFeaturesEvidence failed: ${res.status}`);
-  return res.json();
+  return fetchJson(`${BASE}/api/features/evidence?${sp}`, { signal });
 }
 
 export async function triggerFeaturesRun(): Promise<{ triggered: boolean; message: string }> {
-  const res = await fetch(`${BASE}/api/features/trigger`, { method: "POST", headers: authHeaders() });
-  const body = await res.json().catch(() => ({}));
-  if (!res.ok) return { triggered: false, message: body.detail ?? `HTTP ${res.status}` };
-  return body;
+  return authenticatedJson(`${BASE}/api/features/trigger`, { method: "POST" });
 }

@@ -31,6 +31,51 @@ const DATA: TrendPoint[] = [
 ];
 
 describe("pivotTrend", () => {
+  test("uses elapsed time instead of treating uneven sampling intervals as equal", () => {
+    const { chartData } = pivotTrend([
+      point("Model A", "2026-07-08T01:00:00Z", 100),
+      point("Model A", "2026-07-08T01:01:00Z", 110),
+      point("Model A", "2026-07-08T02:00:00Z", 120),
+    ], "ttft_ms");
+    expect(Number(chartData[1].time) - Number(chartData[0].time)).toBe(60_000);
+    expect(Number(chartData[2].time) - Number(chartData[1].time)).toBe(3_540_000);
+  });
+
+  test("a failed request cannot appear as a successful latency measurement", () => {
+    const { chartData } = pivotTrend([
+      { ...point("Model A", "2026-07-08T01:00:00Z", 120_000), status: "error" },
+    ], "total_latency_ms");
+    expect(chartData[0]["Model A"]).toBeNull();
+  });
+
+  test("per-model series preserve a real failure gap without inventing gaps at other models' sample times", () => {
+    const { seriesData } = pivotTrend([
+      point("Model A", "2026-07-08T01:00:00Z", 100),
+      point("Model B", "2026-07-08T01:00:02Z", 200),
+      { ...point("Model A", "2026-07-08T01:05:00Z", null), status: "error" },
+      point("Model A", "2026-07-08T01:10:00Z", 120),
+    ], "ttft_ms");
+    expect(seriesData["Model A"].map((row) => row["Model A"])).toEqual([100, null, 120]);
+    expect(seriesData["Model B"]).toHaveLength(1);
+  });
+
+  test("missing collection cycles break the line instead of drawing over an outage", () => {
+    const { seriesData } = pivotTrend([
+      point("Model A", "2026-07-08T01:00:00Z", 100),
+      point("Model A", "2026-07-08T02:00:00Z", 110),
+    ], "ttft_ms", undefined, { cadenceSeconds: 300 });
+    expect(seriesData["Model A"].map((row) => row["Model A"])).toEqual([100, null, 110]);
+  });
+
+  test("invalid timestamps and non-finite metrics never reach the chart", () => {
+    const { chartData } = pivotTrend([
+      point("Model A", "bad-date", 100),
+      point("Model A", "2026-07-08T01:00:00Z", Infinity),
+    ], "ttft_ms");
+    expect(chartData).toHaveLength(1);
+    expect(chartData[0]["Model A"]).toBeNull();
+  });
+
   test("timestamp별 한 행, 모델별 컬럼으로 피벗한다", () => {
     const { modelNames, chartData } = pivotTrend(DATA, "ttft_ms");
 

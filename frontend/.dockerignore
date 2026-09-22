@@ -11,3 +11,6 @@ yarn-error.log
 .vscode
 .idea
 coverage
+test-results
+playwright-report
+e2e

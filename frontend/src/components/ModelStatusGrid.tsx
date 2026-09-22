@@ -1,245 +1,105 @@
 "use client";
 
-import { ProbeResult } from "@/lib/types";
-import { Translations } from "@/lib/i18n";
-import { useT } from "@/lib/i18n-context";
-import { useState } from "react";
+import { useLang, useT } from "@/lib/i18n-context";
+import type { MonitoringRow } from "@/lib/monitoring";
+import { formatAge, formatDateTime } from "@/lib/format";
 import { groupByFamily } from "@/lib/sortModels";
+import { HealthBadge } from "./MonitoringOverview";
 
 interface Props {
-  results: ProbeResult[];
-  /** 모델 카드 클릭 시 호출 (다중 선택 토글). */
-  onToggleModel?: (modelName: string) => void;
-  /** 현재 선택된 모델 set - 카드 highlight + 다시 클릭 시 해제. */
-  selectedModels?: Set<string>;
+  rows: MonitoringRow[];
+  onToggleModel: (name: string) => void;
+  selectedModels: Set<string>;
+  now: number;
+  grouped?: boolean;
 }
 
-function MetricTooltip({ text }: { text: string }) {
-  const [show, setShow] = useState(false);
-  return (
-    <span
-      className="relative inline-flex items-center"
-      onMouseEnter={() => setShow(true)}
-      onMouseLeave={() => setShow(false)}
-    >
-      <svg className="w-3.5 h-3.5 text-gray-500 hover:text-gray-300 cursor-help ml-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-        <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-      </svg>
-      {show && (
-        <div className="absolute z-50 bottom-full left-1/2 -translate-x-1/2 mb-2 w-64 p-2 bg-gray-800 border border-gray-700 rounded-lg shadow-xl text-xs text-gray-300 leading-relaxed">
-          {text}
-          <div className="absolute top-full left-1/2 -translate-x-1/2 -mt-px border-4 border-transparent border-t-gray-800" />
-        </div>
-      )}
-    </span>
-  );
-}
-
-function getLatencyColor(ms: number | null): string {
-  if (ms === null) return "text-gray-500";
-  if (ms < 2000) return "text-emerald-400";
-  if (ms < 5000) return "text-amber-400";
-  return "text-rose-400";
-}
-
-function getTtftColor(ms: number | null): string {
-  if (ms === null) return "text-gray-500";
-  if (ms < 1000) return "text-emerald-400";
-  if (ms < 3000) return "text-amber-400";
-  return "text-rose-400";
-}
-
-function getTpsColor(tps: number | null): string {
-  if (tps === null) return "text-gray-500";
-  if (tps > 50) return "text-emerald-400";
-  if (tps > 20) return "text-amber-400";
-  return "text-rose-400";
-}
-
-function getStatusBadge(status: string, t: Translations) {
-  if (status === "success") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-emerald-500/10 text-emerald-400 border border-emerald-500/20">
-        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-        {t.success}
-      </span>
-    );
-  }
-  if (status === "overloaded") {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-amber-500/10 text-amber-400 border border-amber-500/30">
-        <span className="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse" />
-        {t.overloaded ?? "Overloaded"}
-      </span>
-    );
-  }
-  return (
-    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-rose-500/10 text-rose-400 border border-rose-500/20">
-      <span className="w-1.5 h-1.5 rounded-full bg-rose-400" />
-      {t.error}
-    </span>
-  );
-}
-
-function formatTime(timestamp: string | undefined, t: Translations): string {
-  if (!timestamp) return "-";
-  const d = new Date(timestamp);
-  const now = new Date();
-  const diffMs = now.getTime() - d.getTime();
-  const diffMin = Math.floor(diffMs / 60000);
-  if (diffMin < 1) return t.justNow;
-  if (diffMin < 60) return t.minutesAgo(diffMin);
-  return t.hoursAgo(Math.floor(diffMin / 60));
-}
-
-export default function ModelStatusGrid({ results, onToggleModel, selectedModels }: Props) {
+export default function ModelStatusGrid({ rows, onToggleModel, selectedModels, now, grouped = true }: Props) {
   const t = useT();
-
-  if (results.length === 0) return null;
-
-  const groups = groupByFamily(results);
+  const { lang } = useLang();
+  const m = t.monitoring;
+  const groups = grouped ? groupByFamily(rows.map((row) => ({ ...row, model_name: row.model.name }))) : [rows];
 
   return (
-    <div>
-      <h2 className="text-lg font-semibold text-gray-100 mb-4">{t.modelStatus}</h2>
-      <div className="space-y-4">
-        {groups.map((grp, gi) => (
-          <div key={gi} className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {grp.map((r) => {
-          const isSelected = Boolean(selectedModels?.has(r.model_name));
-          const clickable = Boolean(onToggleModel);
-          return (
-          <div
-            key={r.model_id}
-            onClick={
-              clickable
-                ? () => onToggleModel?.(r.model_name)
-                : undefined
-            }
-            role={clickable ? "button" : undefined}
-            tabIndex={clickable ? 0 : undefined}
-            onKeyDown={
-              clickable
-                ? (e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onToggleModel?.(r.model_name);
-                    }
-                  }
-                : undefined
-            }
-            className={`rounded-xl border p-4 transition-colors ${
-              clickable ? "cursor-pointer" : ""
-            } ${
-              isSelected
-                ? "bg-blue-500/10 border-blue-500/60 ring-2 ring-blue-500/40"
-                : r.status === "success"
-                  ? "bg-gray-900/50 border-gray-800 hover:border-gray-700"
-                  : r.status === "overloaded"
-                    ? "bg-amber-950/20 border-amber-900/40 hover:border-amber-800/50"
-                    : "bg-rose-950/20 border-rose-900/30 hover:border-rose-800/40"
+    <div className="space-y-4">
+      {groups.map((group) => (
+      <div key={group[0]?.model.id ?? "models"} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {group.map(({ model, result, health, freshness }) => {
+        const selected = selectedModels.has(model.name);
+        const success = result?.status === "success";
+        return (
+          <article
+            key={model.id}
+            className={`min-w-0 rounded-xl border bg-gray-900/50 transition-colors ${
+              selected ? "border-blue-500 ring-1 ring-blue-500/40"
+                : health === "error" ? "border-rose-500/35"
+                  : health === "overloaded" || health === "stale" ? "border-amber-500/30" : "border-gray-800"
             }`}
           >
-            {/* Header */}
-            <div className="flex items-start justify-between mb-3 gap-2">
-              <div className="min-w-0 flex-1">
-                <h3 className="text-sm font-semibold text-gray-200 truncate">
-                  {r.model_name}
-                </h3>
-                {/* 실제 호출되는 inference model ID */}
-                <code className="block text-[10px] text-gray-500 truncate mt-0.5" title={r.model_id}>
-                  {r.model_id}
-                </code>
-              </div>
-              {getStatusBadge(r.status, t)}
-            </div>
-
-            {r.status === "success" ? (
-              <div className="space-y-2">
-                {/* TTFT */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 flex items-center">
-                    {t.metrics.ttft.name}
-                    <MetricTooltip text={t.metrics.ttft.desc} />
-                  </span>
-                  <span className={`text-sm font-mono font-medium ${getTtftColor(r.ttft_ms)}`}>
-                    {r.ttft_ms !== null ? `${r.ttft_ms.toFixed(0)} ms` : "-"}
-                  </span>
-                </div>
-
-                {/* Total Latency */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 flex items-center">
-                    {t.metrics.totalLatency.name}
-                    <MetricTooltip text={t.metrics.totalLatency.desc} />
-                  </span>
-                  <span className={`text-sm font-mono font-medium ${getLatencyColor(r.total_latency_ms)}`}>
-                    {r.total_latency_ms !== null ? `${(r.total_latency_ms / 1000).toFixed(1)}s` : "-"}
-                  </span>
-                </div>
-
-                {/* TPS */}
-                <div className="flex items-center justify-between">
-                  <span className="text-xs text-gray-500 flex items-center">
-                    {t.metrics.tps.name}
-                    <MetricTooltip text={t.metrics.tps.desc} />
-                  </span>
-                  <span className={`text-sm font-mono font-medium ${getTpsColor(r.tps)}`}>
-                    {r.tps !== null ? `${r.tps.toFixed(1)} tok/s` : "-"}
-                  </span>
-                </div>
-
-                {/* Tokens + 프로빙 시간 — 한 줄 (v2.16.4) */}
-                <div className="flex items-center justify-between gap-2 pt-1 border-t border-gray-800/50">
-                  <span className="text-xs text-gray-600 truncate">
-                    {t.metrics.inputTokens.name}: {r.input_tokens ?? "-"} / {t.metrics.outputTokens.name}: {r.output_tokens ?? "-"}
-                  </span>
-                  <span className="text-xs text-gray-600 whitespace-nowrap shrink-0">{formatTime(r.timestamp, t)}</span>
-                </div>
-              </div>
-            ) : r.status === "overloaded" ? (
-              <div className="text-xs text-amber-300/90 leading-relaxed">
-                {t.overloadedHint ?? "Vendor temporarily overloaded — auto-retried 2× with 2/4/8s backoff. Next cycle auto-retries in 5 min."}
-                <div className="text-[10px] text-amber-500/60 mt-1 truncate" title={r.error_message ?? ""}>
-                  {r.error_message}
-                </div>
-              </div>
-            ) : (
-              <div className="text-xs text-rose-400/80 truncate">
-                {r.error_message || "Unknown error"}
-              </div>
+            <button
+              type="button"
+              aria-label={m.selectModel(model.name)}
+              aria-pressed={selected}
+              onClick={() => onToggleModel(model.name)}
+              className="block w-full rounded-xl p-4 text-left hover:bg-gray-800/25"
+            >
+              <span className="mb-3 flex items-start justify-between gap-2">
+                <span className="min-w-0">
+                  <span className="block text-sm font-semibold leading-snug text-gray-200">{model.name}</span>
+                  <code className="mt-1 block truncate text-[11px] text-gray-500" title={model.id}>{model.id}</code>
+                </span>
+                <HealthBadge health={health} />
+              </span>
+              {success && result ? (
+                <span className="grid grid-cols-3 gap-2">
+                  {[
+                    { name: "TTFT", value: result.ttft_ms == null ? "—" : `${Math.round(result.ttft_ms)}`, unit: "ms" },
+                    { name: t.metrics.totalLatency.name, value: result.total_latency_ms == null ? "—" : (result.total_latency_ms / 1000).toFixed(1), unit: "s" },
+                    { name: "TPS", value: result.tps == null ? "—" : result.tps.toFixed(1), unit: "tok/s" },
+                  ].map((metric) => (
+                    <span key={metric.name}>
+                      <span className="block text-[11px] text-gray-500">{metric.name}</span>
+                      <span className="mt-1 block font-mono text-base font-medium tabular-nums text-gray-200">
+                        {metric.value}<span className="ml-1 text-[11px] font-normal text-gray-500">{metric.value !== "—" ? metric.unit : ""}</span>
+                      </span>
+                    </span>
+                  ))}
+                </span>
+              ) : (
+                <span className={`line-clamp-2 break-words text-xs leading-relaxed ${result?.status === "overloaded" ? "text-amber-300" : result ? "text-rose-300" : "text-gray-400"}`}>
+                  {result?.status === "overloaded" ? t.overloadedHint : result?.error_message || m.missingHint}
+                </span>
+              )}
+              {success && result && (
+                <span className="mt-3 block text-[11px] text-gray-500">
+                  {t.metrics.inputTokens.name}: {result.input_tokens ?? "—"} · {t.metrics.outputTokens.name}: {result.output_tokens ?? "—"}
+                </span>
+              )}
+              <span className="mt-3 flex flex-wrap items-center justify-between gap-1 border-t border-gray-800 pt-2 text-[11px] text-gray-500">
+                <span>{selected ? `✓ ${m.selection(1)}` : m.lastResult}</span>
+                <span title={formatDateTime(result?.timestamp, lang)}>
+                  {result?.timestamp ? formatAge(result.timestamp, lang, now) : "—"}
+                </span>
+              </span>
+              {(freshness === "stale" || (result && freshness === "unknown")) && (
+                <span className="mt-2 block text-xs leading-relaxed text-amber-300">
+                  {freshness === "stale" ? m.staleHint : m.unknownTime}
+                </span>
+              )}
+            </button>
+            {result?.error_message && (
+              <details className="mx-4 mb-3 border-t border-gray-800 pt-2">
+                <summary className="cursor-pointer text-xs text-gray-400">{m.showDetails}</summary>
+                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-950 p-3 text-xs leading-relaxed text-rose-300">
+                  {result.error_message}
+                </pre>
+              </details>
             )}
-
-            {/* Timestamp — 성공 카드는 토큰 행에 병기하므로 오류/과부하 카드에만 표시 */}
-            {r.status !== "success" && (
-              <div className="mt-2 text-xs text-gray-600 text-right">
-                {formatTime(r.timestamp, t)}
-              </div>
-            )}
-          </div>
-          );
-        })}
-          </div>
-        ))}
+          </article>
+        );
+      })}
       </div>
-      {selectedModels && selectedModels.size > 0 && onToggleModel && (
-        <div className="mt-3 text-xs text-gray-400 flex items-center gap-2 flex-wrap">
-          <span className="px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
-            🔍 {selectedModels.size}개 모델 선택됨
-          </span>
-          <span>선택한 모델만 추세 그래프에 표시됩니다.</span>
-          <button
-            type="button"
-            onClick={() => {
-              // 모두 해제 - 부모에 각 모델을 toggle 호출하면 됨.
-              selectedModels.forEach((n) => onToggleModel(n));
-            }}
-            className="text-gray-500 hover:text-gray-200 underline"
-          >
-            모두 해제
-          </button>
-        </div>
-      )}
+      ))}
     </div>
   );
 }

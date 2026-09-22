@@ -2,19 +2,43 @@
 
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone, timedelta
 
-from fastapi import APIRouter, Depends, Query, Response
-from sqlalchemy import desc
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
+from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
+import auto_prober as prober_service
+from auth import get_current_user
 from auto_prober import auto_prober
 from database import get_db
 from models import ProbeRun, ProbeResult
-from visibility import visible_only
+from visibility import hidden_patterns, visible_only
 from schemas import ProbeResultResponse
 
 router = APIRouter(prefix="/api/auto-probe", tags=["auto-probe"])
+logger = logging.getLogger(__name__)
+
+
+def _utc(value: datetime | None) -> datetime | None:
+    if value is None:
+        return None
+    # SQLite / legacy rows may be naive; stored monitoring timestamps are UTC.
+    if value.tzinfo is None:
+        return value.replace(tzinfo=timezone.utc)
+    return value.astimezone(timezone.utc)
+
+
+def _utc_iso(value: datetime | None) -> str | None:
+    value = _utc(value)
+    return value.isoformat() if value is not None else None
+
+
+def _result_response(row: ProbeResult) -> ProbeResultResponse:
+    return ProbeResultResponse.model_validate(row).model_copy(
+        update={"timestamp": _utc(row.timestamp)}
+    )
 
 
 class _Bucket:
@@ -32,9 +56,10 @@ class _Bucket:
 
 
 def _downsample_hourly(rows):
-    """(model_name, 시각 정시 버킷)별 metric 평균. null metric은 평균에서 제외.
+    """(model_name, 시각 정시 버킷)별 성공 행의 metric 평균. null metric은 제외.
 
-    status는 버킷 내 성공이 하나라도 있으면 success (차트는 metric null 여부로 결측 표현).
+    실패 소요 시간은 성공 응답 지연과 섞지 않는다. 실패만 있는 버킷은 null metric으로 보존.
+    status는 버킷 내 성공이 하나라도 있으면 success.
     category는 버킷 내 첫 값 — 카테고리 필터 지정 시엔 모두 동일, 미지정 시 혼합 대표값.
     """
     groups: dict[tuple, list] = {}
@@ -52,9 +77,10 @@ def _downsample_hourly(rows):
 
     out = []
     for (model_name, bucket_ts), items in groups.items():
-        ttft_avg, ttft_min, ttft_max = stats(i.ttft_ms for i in items)
-        lat_avg, lat_min, lat_max = stats(i.total_latency_ms for i in items)
-        tps_avg, tps_min, tps_max = stats(i.tps for i in items)
+        successful = [i for i in items if i.status == "success"]
+        ttft_avg, ttft_min, ttft_max = stats(i.ttft_ms for i in successful)
+        lat_avg, lat_min, lat_max = stats(i.total_latency_ms for i in successful)
+        tps_avg, tps_min, tps_max = stats(i.tps for i in successful)
         out.append(_Bucket(
             model_id=items[0].model_id,
             model_name=model_name,
@@ -62,7 +88,7 @@ def _downsample_hourly(rows):
             ttft_ms=ttft_avg, ttft_ms_min=ttft_min, ttft_ms_max=ttft_max,
             total_latency_ms=lat_avg, total_latency_ms_min=lat_min, total_latency_ms_max=lat_max,
             tps=tps_avg, tps_min=tps_min, tps_max=tps_max,
-            status="success" if any(i.status == "success" for i in items) else "error",
+            status="success" if successful else "error",
             category=items[0].category,
         ))
     out.sort(key=lambda b: b.timestamp)
@@ -71,30 +97,64 @@ def _downsample_hourly(rows):
 
 @router.get("/status")
 def get_status(db: Session = Depends(get_db)):
-    """Return current auto-prober status.
-
-    v2: EventBridge Scheduler가 별도 Fargate Task로 실행하므로 backend in-process state는
-    부정확하다. DB의 최근 ProbeRun(is_auto=1)을 기반으로 last/next run time을 계산한다.
-    """
-    interval = 300
+    """Observed activity, not Scheduler configuration; no provider calls."""
+    now = datetime.now(timezone.utc)
+    interval = prober_service.PROBE_INTERVAL_SECONDS
+    # Select scalar fields to avoid ProbeRun.results' selectin relationship:
+    # polling status must not load all output text from the latest cycle.
+    runs = db.query(ProbeRun.id, ProbeRun.created_at, ProbeRun.status).filter(
+        ProbeRun.is_auto == 1
+    )
     last_run = (
-        db.query(ProbeRun)
-        .filter(ProbeRun.is_auto == 1)
-        .order_by(desc(ProbeRun.created_at))
+        runs.order_by(desc(ProbeRun.created_at), desc(ProbeRun.id)).first()
+    )
+    completed = (
+        runs.filter(ProbeRun.status == "completed")
+        .order_by(desc(ProbeRun.created_at), desc(ProbeRun.id))
         .first()
     )
-    last_iso: str | None = None
-    next_iso: str | None = None
-    if last_run and last_run.created_at:
-        last_iso = last_run.created_at.isoformat()
-        next_iso = (last_run.created_at + timedelta(seconds=interval)).isoformat()
+    completed_time = None
+    if completed is not None:
+        completed_time = (
+            visible_only(db.query(func.max(ProbeResult.timestamp)), ProbeResult.model_name)
+            .filter(ProbeResult.run_id == completed.id)
+            .scalar()
+        )
+    active = prober_service.get_active_auto_run(db, now)
+    started = _utc(last_run.created_at) if last_run else None
+    if active is not None:
+        state = "running"
+    elif last_run is None:
+        state = "never_run"
+    elif started is None or (
+        now - started
+    ).total_seconds() >= prober_service.OVERDUE_AFTER_SECONDS:
+        state = "overdue"
+    else:
+        state = "failed" if last_run.status == "failed" else "completed"
+
+    hidden = hidden_patterns()
+    expected_models = sum(
+        not any(pattern in name for pattern in hidden)
+        for name in prober_service.AVAILABLE_MODELS.values()
+    )
+    category_count = len(prober_service.WORKLOAD_PRESETS)
     return {
-        # v2는 EventBridge가 항상 ENABLED이므로 True로 노출 — 단순화.
-        "is_running": True,
-        "last_run_time": last_iso,
-        "next_run_time": next_iso,
+        "cycle_state": state,
+        "is_running": state in {"running", "completed"},
+        "last_run_id": last_run.id if last_run else None,
+        "last_run_status": last_run.status if last_run else None,
+        "last_run_time": _utc_iso(started),
+        "last_completed_run_id": completed.id if completed else None,
+        "last_completed_time": _utc_iso(completed_time),
+        "next_run_time": _utc_iso(started + timedelta(seconds=interval)) if started else None,
         "interval_seconds": interval,
-        "current_cycle_running": auto_prober.current_cycle_running,
+        "current_cycle_running": active is not None,
+        "expected_model_count": expected_models,
+        "category_count": category_count,
+        "category_interval_seconds": interval * category_count,
+        "overdue_after_seconds": prober_service.OVERDUE_AFTER_SECONDS,
+        "running_timeout_seconds": prober_service.RUNNING_TIMEOUT_SECONDS,
     }
 
 
@@ -138,7 +198,7 @@ def get_latest(
             .order_by(ProbeResult.model_name)
             .all()
         )
-        return results
+        return [_result_response(r) for r in results]
 
     # category 미지정 — 가장 최근 auto run의 모든 결과
     latest_run = (
@@ -156,7 +216,7 @@ def get_latest(
         .order_by(ProbeResult.model_name)
         .all()
     )
-    return results
+    return [_result_response(r) for r in results]
 
 
 @router.get("/trend")
@@ -190,7 +250,7 @@ def get_trend(
         .filter(
             ProbeRun.is_auto == 1,
             ProbeRun.status == "completed",
-            ProbeRun.created_at >= cutoff,
+            ProbeResult.timestamp >= cutoff,
         )
     )
     if category:
@@ -208,7 +268,7 @@ def get_trend(
         {
             "model_id": r.model_id,
             "model_name": r.model_name,
-            "timestamp": r.timestamp.isoformat() if r.timestamp else None,
+            "timestamp": _utc_iso(r.timestamp),
             "ttft_ms": r.ttft_ms,
             "total_latency_ms": r.total_latency_ms,
             "tps": r.tps,
@@ -239,6 +299,7 @@ def get_categories():
 def get_anomalies(
     response: Response,
     hours: int = Query(12, ge=1, le=168),
+    category: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
     """최근 N시간 프로브 실패 요약 — 대시보드 상단 이상 징후 박스용 (v2.12.0)."""
@@ -246,20 +307,39 @@ def get_anomalies(
 
     response.headers["Cache-Control"] = "public, max-age=0, s-maxage=60"
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    rows = (
+    query = (
         visible_only(db.query(ProbeResult.model_name, ProbeResult.status,
                               ProbeResult.error_message, ProbeResult.timestamp),
                      ProbeResult.model_name)
-        .filter(ProbeResult.timestamp >= since)
-        .all()
+        .join(ProbeRun, ProbeRun.id == ProbeResult.run_id)
+        .filter(ProbeRun.is_auto == 1, ProbeResult.timestamp >= since)
     )
-    return {"hours": hours, **summarize_anomalies(rows)}
+    if category:
+        query = query.filter(ProbeResult.category == category)
+    rows = (
+        (r.model_name, r.status, r.error_message, _utc(r.timestamp))
+        for r in query.all()
+    )
+    return {"hours": hours, "category": category, **summarize_anomalies(rows)}
 
 
-@router.post("/trigger")
-def trigger_probe():
-    """Manually trigger an immediate auto-probe cycle."""
-    if auto_prober.current_cycle_running:
-        return {"message": "A cycle is already running", "triggered": False}
-    auto_prober.trigger()
-    return {"message": "Probe cycle triggered", "triggered": True}
+@router.post("/trigger", status_code=202)
+def trigger_probe(user=Depends(get_current_user)):
+    """Authenticate and reserve before accepting asynchronous probe work."""
+    try:
+        run_id = auto_prober.trigger()
+    except prober_service.CycleAlreadyRunning as exc:
+        raise HTTPException(status_code=409, detail={
+            "code": "cycle_running", "run_id": exc.run_id,
+            "message": "자동 프로브가 이미 실행 중입니다.",
+        }) from exc
+    except Exception as exc:
+        logger.exception("Failed to accept manual auto-probe")
+        raise HTTPException(status_code=503, detail={
+            "code": "trigger_failed",
+            "message": "프로브를 시작하지 못했습니다. 잠시 후 다시 시도하세요.",
+        }) from exc
+    return {
+        "triggered": True, "run_id": run_id,
+        "message": "프로브 실행을 접수했습니다.",
+    }

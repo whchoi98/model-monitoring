@@ -1,7 +1,9 @@
 import type { Metadata, Viewport } from "next";
 import { Inter } from "next/font/google";
+import { cookies } from "next/headers";
 import "./globals.css";
 import RumProvider from "@/components/RumProvider";
+import Providers from "@/components/Providers";
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -27,13 +29,14 @@ export const viewport: Viewport = {
   themeColor: "#030712", // gray-950 — 다크 기본 테마 (화이트 토글은 수동이라 정적 값 유지)
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const initialLang = (await cookies()).get("lang")?.value === "en" ? "en" : "ko";
   return (
-    <html lang="ko" className="dark">
+    <html lang={initialLang} className="dark" suppressHydrationWarning>
       <head>
         {/* 테마 FOUC 방지 — 하이드레이션 전에 localStorage의 화이트 테마 선택을 복원.
             React 렌더 밖에서 실행되어야 하므로 인라인 스크립트가 표준 패턴 (v2.8.0). */}
@@ -45,7 +48,9 @@ export default function RootLayout({
         />
       </head>
       <body className={inter.className}>
-        <div className="min-h-screen bg-gray-950">{children}</div>
+        <Providers initialLang={initialLang}>
+          <div className="min-h-screen bg-gray-950">{children}</div>
+        </Providers>
         <RumProvider />
       </body>
     </html>

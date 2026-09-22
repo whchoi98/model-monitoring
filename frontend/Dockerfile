@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1.7
-# Bedrock Monitor Frontend — Next.js 14 standalone (Node 20 alpine, non-root)
+# Bedrock Monitor Frontend — Next.js 16 standalone (Node 20 >= 20.9, non-root)
 
 # ---- Stage 1: 의존성 ----
 FROM node:20-alpine AS deps

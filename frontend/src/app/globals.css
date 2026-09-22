@@ -14,7 +14,7 @@
   --tw-gray-200: 229 231 235;
   --tw-gray-300: 209 213 219;
   --tw-gray-400: 156 163 175;
-  --tw-gray-500: 107 114 128;
+  --tw-gray-500: 128 136 152;
   --tw-gray-600: 75 85 99;
   --tw-gray-700: 55 65 81;
   --tw-gray-800: 31 41 55;
@@ -85,7 +85,7 @@ html.light {
   --tw-gray-200: 30 41 59;    /* 제목/강조 (#1E293B) */
   --tw-gray-300: 51 65 85;    /* 본문 (#334155) */
   --tw-gray-400: 71 85 105;   /* 보조 텍스트 (#475569) */
-  --tw-gray-500: 100 116 139; /* 흐린 텍스트 (#64748B) */
+  --tw-gray-500: 85 99 120; /* 보조 텍스트 */
   --tw-gray-600: 148 163 184; /* 가장 흐린 텍스트 (#94A3B8) */
   --tw-gray-700: 203 213 225; /* hover 배경/진보더 (#CBD5E1) */
   --tw-gray-800: 226 232 240; /* 보더/칩 배경 (#E2E8F0) */
@@ -97,10 +97,10 @@ html.light {
   --tw-blue-400: 37 99 235;
   --tw-emerald-200: 6 95 70;
   --tw-emerald-300: 4 120 87;
-  --tw-emerald-400: 5 150 105;
+  --tw-emerald-400: 4 120 87;
   --tw-amber-200: 146 64 14;
   --tw-amber-300: 180 83 9;
-  --tw-amber-400: 217 119 6;
+  --tw-amber-400: 180 83 9;
   --tw-rose-200: 159 18 57;
   --tw-rose-300: 190 18 60;
   --tw-rose-400: 225 29 72;
@@ -150,6 +150,26 @@ body {
   @apply bg-gray-950 text-gray-100;
 }
 
+@layer components {
+  .ui-button {
+    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-button-primary {
+    @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-blue-600 bg-blue-600 px-3 py-2 text-xs font-medium text-white transition-colors hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-50;
+  }
+  .ui-input {
+    @apply min-h-10 min-w-0 rounded-lg border border-gray-700 bg-gray-950 px-3 py-2 text-sm text-gray-200 placeholder:text-gray-500;
+  }
+}
+
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid rgb(var(--tw-blue-400));
+  outline-offset: 3px;
+}
+
+section[id] { scroll-margin-top: 9rem; }
+input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
+
 /* 테마 전환 시 배경·보더가 부드럽게 넘어가도록 (개별 요소 transition은 과함) */
 body,
 .recharts-wrapper {
@@ -196,6 +216,14 @@ html.light .rounded-xl.border {
   @apply text-blue-400;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
 /* ---------------------------------------------------------------------------
  * iOS PWA(홈 화면 설치) safe-area (v2.21.0)
  * standalone + black-translucent 상태바 + viewport-fit=cover 조합에서는 콘텐츠가

@@ -81,6 +81,20 @@ export interface AutoProbeStatus {
   next_run_time: string | null;
   interval_seconds: number;
   current_cycle_running: boolean;
+  last_completed_time?: string | null;
+  category_interval_seconds?: number;
+  expected_model_count?: number;
+  cycle_state?: "running" | "waiting" | "completed" | "overdue" | "failed" | "unknown" | "never_run";
+  overdue_after_seconds?: number;
+  running_timeout_seconds?: number;
+}
+
+export interface AutoProbeAnomalies {
+  hours: number;
+  category?: string | null;
+  total_probes: number;
+  total_failures: number;
+  models: { model_name: string; failures: number; total: number; last_error: string | null }[];
 }
 
 export interface AuthUser {

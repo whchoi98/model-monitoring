@@ -4,7 +4,8 @@
  * "(us-west-2)"와 혼동되거나 GPT 6 Astra가 GPT 5.4로 접히기 쉽다. 그 두 가지를 고정한다.
  */
 import { describe, expect, test } from "vitest";
-import { familyOf, regionOf } from "./GptOnAwsPanel";
+import type { GptBenchTrend, GptBenchTrendPoint } from "@/lib/api";
+import { familyOf, regionOf, toChartData } from "./GptOnAwsPanel";
 
 describe("regionOf", () => {
   test("US CRIS pseudo-region (v2.25.1)", () => {
@@ -32,5 +33,70 @@ describe("familyOf", () => {
     expect(familyOf("OpenAI GPT 5.6 Terra (us-east-1)")).toBe("GPT 5.6 Terra");
     expect(familyOf("OpenAI GPT 5.5 (us-east-2)")).toBe("GPT 5.5");
     expect(familyOf("OpenAI GPT 5.4 (us-west-2)")).toBe("GPT 5.4");
+  });
+});
+
+describe("toChartData", () => {
+  const firstChannel = "OpenAI GPT 6 Astra (US)";
+  const secondChannel = "OpenAI GPT 6 Astra (Global)";
+  const firstPoint: GptBenchTrendPoint = {
+    cycle_ts: "2026-09-22T10:00:00",
+    median_ttfb_ms: 0, median_ttft_ms: 1000, median_gap_ms: 1000, errors: 0,
+  };
+  const recoveredPoint: GptBenchTrendPoint = {
+    cycle_ts: "2026-09-22T11:00:00Z",
+    median_ttfb_ms: 100, median_ttft_ms: 1200, median_gap_ms: 1100, errors: 0,
+  };
+  const trendWith = (points: GptBenchTrendPoint[]): GptBenchTrend => ({
+    hours: 3,
+    series: [
+      { model_id: "astra-us", model_name: firstChannel, points },
+      { model_id: "astra-global", model_name: secondChannel, points },
+    ],
+  });
+
+  test.each([
+    ["median_ttfb_ms", 0, 100],
+    ["median_ttft_ms", 1000, 1200],
+    ["median_gap_ms", 1000, 1100],
+  ] as const)("breaks %s across an hour with no collected cycles", (metric, before, after) => {
+    const { rows, names } = toChartData(trendWith([recoveredPoint, firstPoint]), metric);
+    const start = Date.parse("2026-09-22T10:00:00Z");
+    const end = Date.parse("2026-09-22T11:00:00Z");
+
+    expect(names).toEqual([firstChannel, secondChannel]);
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toEqual({ ts: start, [firstChannel]: before, [secondChannel]: before });
+    expect(rows[2]).toEqual({ ts: end, [firstChannel]: after, [secondChannel]: after });
+    expect(rows[1].ts).toBeGreaterThan(start);
+    expect(rows[1].ts).toBeLessThan(end);
+    expect(rows[1][firstChannel]).toBeNull();
+    expect(rows[1][secondChannel]).toBeNull();
+  });
+
+  test.each([
+    ["15-minute cadence", "2026-09-22T10:15:00Z", 2],
+    ["30-minute grace boundary", "2026-09-22T10:30:00Z", 2],
+    ["just beyond the grace period", "2026-09-22T10:30:00.001Z", 3],
+  ] as const)("respects the %s", (_label, cycle_ts, expectedRows) => {
+    const { rows } = toChartData(trendWith([firstPoint, { ...recoveredPoint, cycle_ts }]), "median_ttft_ms");
+    expect(rows).toHaveLength(expectedRows);
+  });
+
+  test("retains partial-success medians, real zeroes and explicit failed cycles", () => {
+    const { rows } = toChartData(trendWith([
+      { ...firstPoint, errors: 2 },
+      {
+        cycle_ts: "2026-09-22T10:15:00Z",
+        median_ttfb_ms: null, median_ttft_ms: null, median_gap_ms: null, errors: 10,
+      },
+      { ...recoveredPoint, cycle_ts: "2026-09-22T10:30:00Z", errors: 1 },
+    ]), "median_ttfb_ms");
+
+    expect(rows).toEqual([
+      { ts: Date.parse("2026-09-22T10:00:00Z"), [firstChannel]: 0, [secondChannel]: 0 },
+      { ts: Date.parse("2026-09-22T10:15:00Z"), [firstChannel]: null, [secondChannel]: null },
+      { ts: Date.parse("2026-09-22T10:30:00Z"), [firstChannel]: 100, [secondChannel]: 100 },
+    ]);
   });
 });

@@ -6,10 +6,13 @@
 // 응답 헤더가 자동으로 `cache-control: no-store, must-revalidate, max-age=0`로 설정됨.
 export const dynamic = "force-dynamic";
 
-import { useState, useEffect, useCallback } from "react";
-import { ModelInfo, ProbeConfig, PromptSet, AuthUser } from "@/lib/types";
-import { fetchModels, fetchPromptSets, fetchMe, setToken, getToken } from "@/lib/api";
-import { useT, useLang, LanguageProvider } from "@/lib/i18n-context";
+import { Suspense, useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
+import { ModelInfo, ProbeConfig, PromptSet } from "@/lib/types";
+import { fetchModels, fetchPromptSets } from "@/lib/api";
+import { useT, useLang } from "@/lib/i18n-context";
+import { useAuth } from "@/lib/auth-context";
+import AppShell from "@/components/AppShell";
 import { useProbeStream } from "@/hooks/useProbeStream";
 import ModelSelector from "@/components/ModelSelector";
 import ProbeConfigPanel from "@/components/ProbeConfigPanel";
@@ -21,12 +24,6 @@ import ComparisonView from "@/components/ComparisonView";
 import HistoryPanel from "@/components/HistoryPanel";
 import ProgressBar from "@/components/ProgressBar";
 import AutoDashboard from "@/components/AutoDashboard";
-import LoginForm from "@/components/LoginForm";
-import FloatingChat from "@/components/chat/FloatingChat";
-import Link from "next/link";
-import { APP_VERSION } from "@/lib/version";
-import AppHeader, { useNavItems } from "@/components/AppHeader";
-import ThemeToggle from "@/components/ThemeToggle";
 
 const DEFAULT_CONFIG: ProbeConfig = {
   model_ids: [],
@@ -41,17 +38,27 @@ type TopTab = "dashboard" | "manual";
 
 export default function HomePage() {
   return (
-    <LanguageProvider>
+    <Suspense fallback={<HomeFallback />}>
       <HomeContent />
-    </LanguageProvider>
+    </Suspense>
+  );
+}
+
+function HomeFallback() {
+  const { lang } = useLang();
+  return (
+    <AppShell navKey="dashboard">
+      <p role="status" className="p-6 text-sm text-gray-400">{lang === "en" ? "Loading…" : "불러오는 중…"}</p>
+    </AppShell>
   );
 }
 
 function HomeContent() {
   const t = useT();
-  const { lang, setLang } = useLang();
+  const { lang } = useLang();
 
-  const [topTab, setTopTab] = useState<TopTab>("dashboard");
+  const searchParams = useSearchParams();
+  const topTab: TopTab = searchParams.get("view") === "manual" ? "manual" : "dashboard";
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [promptSets, setPromptSets] = useState<PromptSet[]>([]);
   const [config, setConfig] = useState<ProbeConfig>(DEFAULT_CONFIG);
@@ -60,32 +67,8 @@ function HomeContent() {
     "results"
   );
 
-  // Auth state
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
-  const [loginModalOpen, setLoginModalOpen] = useState(false);
-
+  const { user, checking, openLogin } = useAuth();
   const stream = useProbeStream();
-
-  // 공용 헤더 내비 — 대시보드/수동 프로브는 페이지 내 탭이라 onClick으로 덮어씀
-  const baseNav = useNavItems(topTab === "dashboard" ? "dashboard" : "manual");
-  const navItems = baseNav.map((i) =>
-    i.key === "dashboard" ? { ...i, href: undefined, onClick: () => setTopTab("dashboard") }
-    : i.key === "manual" ? { ...i, href: undefined, onClick: () => setTopTab("manual") }
-    : i);
-
-  // Check existing token on mount
-  useEffect(() => {
-    const token = getToken();
-    if (token) {
-      fetchMe()
-        .then(setUser)
-        .catch(() => setToken(null))
-        .finally(() => setAuthChecked(true));
-    } else {
-      setAuthChecked(true);
-    }
-  }, []);
 
   // Load models on mount
   useEffect(() => {
@@ -114,50 +97,49 @@ function HomeContent() {
     setConfig(newConfig);
   };
 
-  const handleLoginSuccess = (username: string) => {
-    setUser({ id: 0, username });
-    // Re-fetch to get the real user object
-    fetchMe().then(setUser).catch(() => {});
-  };
-
-  const handleLogout = () => {
-    setToken(null);
-    setUser(null);
-  };
-
   return (
-    <div className="min-h-screen">
-      {/* Header */}
-      <AppHeader
-        items={navItems}
-        user={user}
-        onLoginClick={() => setLoginModalOpen(true)}
-        onLogout={handleLogout}
-        actions={
-          <button
-            onClick={() => setHistoryOpen(true)}
-            className="flex items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 rounded-lg transition-colors text-xs"
-          >
-            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
-              <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            {t.history}
-          </button>
-        }
-      />
-
+    <AppShell
+      navKey={topTab}
+      actions={
+        <button
+          type="button"
+          onClick={() => setHistoryOpen(true)}
+          className="flex min-h-10 items-center gap-2 px-3 py-1.5 bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-gray-100 rounded-lg transition-colors text-xs"
+        >
+          <svg aria-hidden="true" className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          {t.history}
+        </button>
+      }
+    >
       {/* Dashboard Tab */}
       {topTab === "dashboard" && <AutoDashboard />}
 
       {/* Manual Probe Tab */}
-      {topTab === "manual" && !user && authChecked && (
-        <LoginForm onLoginSuccess={handleLoginSuccess} />
+      {topTab === "manual" && (
+        <div className="border-b border-gray-800 px-4 py-4 sm:px-6">
+          <h1 className="text-xl font-semibold text-gray-100">{t.manualProbeTab}</h1>
+        </div>
+      )}
+      {topTab === "manual" && !user && (
+        <div className="mx-auto max-w-md space-y-4 p-6">
+          <p role={checking ? "status" : undefined} className="text-sm text-gray-400">
+            {checking
+              ? (lang === "en" ? "Checking sign-in…" : "로그인 상태 확인 중…")
+              : (lang === "en" ? "Sign in to configure and run manual probes." : "수동 프로브 설정과 실행은 로그인 후 이용할 수 있습니다.")}
+          </p>
+          <button type="button" onClick={() => openLogin()} disabled={checking}
+            className="min-h-10 rounded-lg bg-blue-600 px-4 text-sm font-medium text-white disabled:opacity-50">
+            {lang === "en" ? "Login" : "로그인"}
+          </button>
+        </div>
       )}
 
       {topTab === "manual" && user && (
         <div className="flex flex-col lg:flex-row">
           {/* Left Sidebar - Config */}
-          <aside className="w-full lg:w-96 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-800 bg-gray-950 lg:sticky lg:top-[57px] lg:h-[calc(100vh-57px)] overflow-y-auto">
+          <aside className="w-full lg:w-96 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-800 bg-gray-950 lg:sticky lg:top-[var(--app-header-height,7rem)] lg:h-[calc(100dvh-var(--app-header-height,7rem))] overflow-y-auto">
             <div className="p-4 space-y-6">
               <ModelSelector
                 selectedModels={config.model_ids}
@@ -180,7 +162,7 @@ function HomeContent() {
           </aside>
 
           {/* Main Content */}
-          <main className="flex-1 min-w-0">
+          <div className="flex-1 min-w-0">
             <div className="p-6 space-y-6">
               {/* Progress Bar */}
               <ProgressBar
@@ -288,43 +270,12 @@ function HomeContent() {
                   </div>
                 )}
             </div>
-          </main>
+          </div>
         </div>
       )}
 
       {/* History Panel */}
       <HistoryPanel isOpen={historyOpen} onClose={() => setHistoryOpen(false)} />
-
-      {/* FloatingChat - 미인증 사용자도 버튼 표시. 클릭 시 로그인 모달 → 로그인 후 자동 오픈. */}
-      <FloatingChat />
-
-      {/* Header 로그인 버튼이 여는 인증 모달 */}
-      {loginModalOpen && !user && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            aria-label="overlay"
-            onClick={() => setLoginModalOpen(false)}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          />
-          <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-6">
-            <button
-              type="button"
-              onClick={() => setLoginModalOpen(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-white text-xl leading-none"
-              aria-label="close"
-            >
-              ×
-            </button>
-            <LoginForm
-              onLoginSuccess={(u) => {
-                handleLoginSuccess(u);
-                setLoginModalOpen(false);
-              }}
-            />
-          </div>
-        </div>
-      )}
-    </div>
+    </AppShell>
   );
 }

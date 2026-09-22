@@ -96,7 +96,7 @@ def _match_anthropic_model(substring: str, all_ids: list[str]) -> str | None:
     """
     longer = [s for s, _ in _ANTHROPIC_TARGETS if s != substring and substring in s]
     return next(
-        (mid for mid in all_ids if substring in mid and not any(l in mid for l in longer)),
+        (mid for mid in all_ids if substring in mid and not any(label in mid for label in longer)),
         None,
     )
 

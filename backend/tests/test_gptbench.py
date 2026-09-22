@@ -248,7 +248,8 @@ def test_latest_skips_in_progress_cycle(session_factory, client):
             model_name=f"OpenAI GPT 5.4 (r{ch})", family="GPT 5.4", region=f"r{ch}",
             run_no=1, status="success", ttfb_ms=800, ttft_ms=1700, gap_ms=900,
         ))
-    s.commit(); s.close()
+    s.commit()
+    s.close()
 
     data = client.get("/api/gptbench/latest").json()
     assert len(data["channels"]) == 8  # 부분(4채널) 사이클이 아니라 완료 사이클
@@ -311,4 +312,3 @@ def test_bench_channels_unknown_region_skipped(bench_env, monkeypatch):
                         [("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "eu-typo", "us-west-2"))])
     chans = gptbench.bench_channels()
     assert [c["region"] for c in chans] == ["global", "us-west-2"]
-

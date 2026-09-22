@@ -2,8 +2,8 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useUaPopupStrategy } from "@/hooks/useUaPopupStrategy";
-import { fetchMe, getToken } from "@/lib/api";
-import LoginForm from "../LoginForm";
+import { useAuth } from "@/lib/auth-context";
+import { useLang } from "@/lib/i18n-context";
 import ChatModal from "./ChatModal";
 
 // 우하단 플로팅 버튼 + iframe modal / popup window 듀얼 모드.
@@ -15,8 +15,8 @@ import ChatModal from "./ChatModal";
 export default function FloatingChat() {
   const { openChat } = useUaPopupStrategy();
   const [modalOpen, setModalOpen] = useState(false);
-  const [loginOpen, setLoginOpen] = useState(false);
-  const [authed, setAuthed] = useState(false);
+  const { user, checking, openLogin } = useAuth();
+  const { lang } = useLang();
   const popupRef = useRef<Window | null>(null);
 
   // popup 창이 사용자에 의해 닫혔는지 1초마다 확인 — 닫혔으면 ref 정리.
@@ -31,28 +31,7 @@ export default function FloatingChat() {
     return () => clearInterval(id);
   }, []);
 
-  // 인증 상태 확인. 토큰 없으면 로그인 모달부터.
-  const refreshAuth = useCallback(() => {
-    if (!getToken()) {
-      setAuthed(false);
-      return;
-    }
-    fetchMe().then(() => setAuthed(true)).catch(() => setAuthed(false));
-  }, []);
-
-  useEffect(() => {
-    refreshAuth();
-    // 다른 컴포넌트(헤더 LoginForm 등)에서 로그인/로그아웃 시 broadcast되는 이벤트 청취.
-    const onAuthChange = () => refreshAuth();
-    window.addEventListener("auth-changed", onAuthChange);
-    return () => window.removeEventListener("auth-changed", onAuthChange);
-  }, [refreshAuth]);
-
-  const handleClick = useCallback(() => {
-    if (!authed) {
-      setLoginOpen(true);
-      return;
-    }
+  const showChat = useCallback(() => {
     if (popupRef.current && !popupRef.current.closed) {
       popupRef.current.focus();
       return;
@@ -63,20 +42,15 @@ export default function FloatingChat() {
     } else {
       setModalOpen(true);
     }
-  }, [authed, openChat]);
+  }, [openChat]);
 
-  const handleLoginSuccess = () => {
-    setLoginOpen(false);
-    refreshAuth();
-    // 로그인 직후 챗봇 자동 오픈.
-    setTimeout(() => {
-      const result = openChat("/chat");
-      if (result.mode === "popup" && result.popup) {
-        popupRef.current = result.popup;
-      } else {
-        setModalOpen(true);
-      }
-    }, 100);
+  const handleClick = () => {
+    if (checking) return;
+    if (!user) {
+      openLogin(showChat);
+      return;
+    }
+    showChat();
   };
 
   return (
@@ -84,9 +58,10 @@ export default function FloatingChat() {
       <button
         type="button"
         onClick={handleClick}
+        disabled={checking}
         className="fixed bottom-24 right-6 z-40 w-16 h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 text-white shadow-2xl border-2 border-blue-300/50 flex items-center justify-center transition-transform hover:scale-110"
-        aria-label="open chatbot"
-        title="Bedrock Monitor 챗봇 열기"
+        aria-label={lang === "en" ? "Open chatbot" : "챗봇 열기"}
+        title={lang === "en" ? "Open Bedrock Monitor chatbot" : "Bedrock Monitor 챗봇 열기"}
       >
         {/* 챗봇 느낌 - 헤드셋/안테나가 있는 친근한 로봇 얼굴 */}
         <svg
@@ -115,27 +90,6 @@ export default function FloatingChat() {
         </svg>
       </button>
       <ChatModal open={modalOpen} onClose={() => setModalOpen(false)} />
-      {loginOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <button
-            type="button"
-            aria-label="overlay"
-            onClick={() => setLoginOpen(false)}
-            className="absolute inset-0 bg-black/60 backdrop-blur-sm"
-          />
-          <div className="relative w-full max-w-md bg-gray-900 border border-gray-800 rounded-xl shadow-2xl p-6">
-            <button
-              type="button"
-              onClick={() => setLoginOpen(false)}
-              className="absolute top-3 right-3 text-gray-400 hover:text-white text-xl leading-none"
-              aria-label="close"
-            >
-              ×
-            </button>
-            <LoginForm onLoginSuccess={handleLoginSuccess} />
-          </div>
-        </div>
-      )}
     </>
   );
 }

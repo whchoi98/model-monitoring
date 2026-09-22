@@ -9,6 +9,11 @@ import {
 } from "@/lib/api";
 import { useLang } from "@/lib/i18n-context";
 import { formatCost } from "@/lib/pricing";
+import { projectMonthlyCost } from "@/lib/costProjection";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { DataEmpty, DataError, DataLoading } from "./DataState";
+import RefreshControls from "./RefreshControls";
 
 const WINDOW_OPTIONS: { value: string; labelKo: string; labelEn: string }[] = [
   { value: "1h", labelKo: "1시간", labelEn: "1h" },
@@ -28,47 +33,29 @@ const CHANNEL_COLORS: Record<string, string> = {
 export default function CostDashboardPanel() {
   const { lang } = useLang();
   const [window, setWindow] = useState("24h");
-  const [summary, setSummary] = useState<CostSummary | null>(null);
-  const [channels, setChannels] = useState<ChannelCompare | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const summaryResource = useAsyncResource<CostSummary>(
+    `cost-summary:${window}`,
+    (signal) => fetchCostSummary(window, signal),
+  );
+  const channelsResource = useAsyncResource<ChannelCompare>(
+    `cost-channels:${window}`,
+    (signal) => fetchChannelCompare(window, signal),
+  );
+  const summary = summaryResource.data;
+  const channels = channelsResource.data;
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([summaryResource.refresh(), channelsResource.refresh()]);
+  }, [summaryResource.refresh, channelsResource.refresh]);
+  const { enabled, setEnabled, countdown, reset } = useAutoRefresh(refreshAll, 30_000);
+  useEffect(reset, [window, reset]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [s, c] = await Promise.all([
-        fetchCostSummary(window),
-        fetchChannelCompare(window),
-      ]);
-      setSummary(s);
-      setChannels(c);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [window]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  // 월 예측: 현재 window의 시간당 비용 × 30일.
-  const monthlyEstimate = (() => {
-    if (!summary) return null;
-    const hours = window.endsWith("d")
-      ? parseInt(window) * 24
-      : window.endsWith("h")
-        ? parseInt(window)
-        : 1;
-    if (hours === 0) return null;
-    const costPerHour = summary.total_cost_usd / hours;
-    return costPerHour * 24 * 30;
-  })();
+  // Use the oldest successful dataset so a partial refresh does not overstate freshness.
+  const checkedAt = [summaryResource.updatedAt, channelsResource.updatedAt].filter((time): time is number => time !== null);
+  const updatedAt = checkedAt.length ? Math.min(...checkedAt) : null;
+  const monthlyEstimate = projectMonthlyCost(summary);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between flex-wrap gap-3">
         <div>
           <h1 className="text-2xl font-bold text-gray-100">
@@ -80,20 +67,18 @@ export default function CostDashboardPanel() {
               : "토큰 사용량 × 공개 단가 → 모델·채널별 추정 비용 (USD)"}
           </p>
         </div>
-        <div className="flex items-center gap-3 flex-wrap">
+        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">
             {lang === "en" ? "Window" : "기간"}
           </span>
-          <div className="flex gap-1">
+          <div className="flex flex-wrap gap-1">
             {WINDOW_OPTIONS.map((w) => (
               <button
                 key={w.value}
+                type="button"
+                aria-pressed={window === w.value}
                 onClick={() => setWindow(w.value)}
-                className={`px-2.5 py-1 text-xs rounded-md transition-colors ${
-                  window === w.value
-                    ? "bg-blue-600 text-white"
-                    : "bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
-                }`}
+                className={window === w.value ? "ui-button-primary" : "ui-button"}
               >
                 {lang === "en" ? w.labelEn : w.labelKo}
               </button>
@@ -102,14 +87,24 @@ export default function CostDashboardPanel() {
         </div>
       </div>
 
-      {error && (
-        <div className="bg-rose-500/10 border border-rose-500/20 rounded-md p-3 text-xs text-rose-400">
-          {error}
-        </div>
-      )}
+      <RefreshControls
+        refreshing={summaryResource.refreshing || channelsResource.refreshing}
+        onRefresh={() => { reset(); void refreshAll(); }}
+        updatedAt={updatedAt}
+        enabled={enabled}
+        onEnabledChange={setEnabled}
+        countdown={countdown}
+      />
+
+      <DataError
+        error={summaryResource.error}
+        resource={lang === "en" ? "cost summary and model breakdown" : "비용 요약 및 모델별 상세"}
+        onRetry={() => { reset(); void summaryResource.refresh(); }}
+        hasData={summary !== null}
+      />
 
       {/* Summary cards */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+      <div aria-busy={summaryResource.refreshing} className="grid grid-cols-1 md:grid-cols-4 gap-3">
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
           <div className="text-xs text-gray-500">
             {lang === "en" ? "Total cost" : "총 비용"}
@@ -117,8 +112,8 @@ export default function CostDashboardPanel() {
           <div className="text-2xl font-bold text-gray-100 tabular-nums mt-1">
             {summary ? formatCost(summary.total_cost_usd) : "—"}
           </div>
-          <div className="text-[10px] text-gray-600 mt-1">
-            {lang === "en" ? `Last ${window}` : `최근 ${window}`}
+          <div className="text-[11px] text-gray-500 mt-1">
+            {lang === "en" ? `Last ${summary?.window ?? window}` : `최근 ${summary?.window ?? window}`}
           </div>
         </div>
         <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
@@ -141,10 +136,10 @@ export default function CostDashboardPanel() {
           <div className="text-xs text-blue-300">
             {lang === "en" ? "30-day projection" : "30일 예상"}
           </div>
-          <div className="text-2xl font-bold text-blue-100 tabular-nums mt-1">
+          <div className="text-2xl font-bold text-blue-200 tabular-nums mt-1">
             {monthlyEstimate !== null ? formatCost(monthlyEstimate) : "—"}
           </div>
-          <div className="text-[10px] text-blue-300/70 mt-1">
+          <div className="text-[11px] text-blue-300 mt-1">
             {lang === "en"
               ? "Linear extrapolation from current rate"
               : "현재 속도로 단순 외삽"}
@@ -153,17 +148,19 @@ export default function CostDashboardPanel() {
       </div>
 
       {/* Channel comparison */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-        <h2 className="text-sm font-semibold text-gray-200 mb-3">
+      <section aria-labelledby="cost-channels-title" className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
+        <h2 id="cost-channels-title" className="text-sm font-semibold text-gray-200">
           {lang === "en" ? "Channel comparison" : "채널별 비교"}
         </h2>
-        {loading ? (
-          <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
-        ) : !channels || channels.channels.length === 0 ? (
-          <div className="text-xs text-gray-500">
-            {lang === "en" ? "No data in selected window." : "선택한 기간에 데이터가 없습니다."}
-          </div>
-        ) : (
+        <DataError
+          error={channelsResource.error}
+          resource={lang === "en" ? "channel comparison" : "채널별 비교"}
+          onRetry={() => { reset(); void channelsResource.refresh(); }}
+          hasData={channels !== null}
+        />
+        {channelsResource.loading && <DataLoading />}
+        {!channelsResource.error && !channelsResource.refreshing && channels?.channels.length === 0 && <DataEmpty />}
+        {channels && channels.channels.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3">
             {channels.channels.map((c) => (
               <div
@@ -172,7 +169,7 @@ export default function CostDashboardPanel() {
               >
                 <div className="text-xs font-semibold">{c.channel}</div>
                 <div className="text-xl font-bold tabular-nums mt-1">{formatCost(c.cost_usd)}</div>
-                <div className="text-[10px] opacity-70 mt-1 space-y-0.5">
+                <div className="text-[11px] mt-1 space-y-0.5">
                   <div>{c.samples.toLocaleString()} {lang === "en" ? "calls" : "호출"}</div>
                   <div>
                     {c.input_tokens.toLocaleString()} in / {c.output_tokens.toLocaleString()} out
@@ -182,70 +179,68 @@ export default function CostDashboardPanel() {
             ))}
           </div>
         )}
-      </div>
+      </section>
 
       {/* Per-model breakdown */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-        <h2 className="text-sm font-semibold text-gray-200 mb-3">
+      <section aria-labelledby="cost-models-title" className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+        <h2 id="cost-models-title" className="text-sm font-semibold text-gray-200 mb-3">
           {lang === "en" ? "Per-model breakdown" : "모델별 상세"}
         </h2>
-        {loading ? (
-          <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
-        ) : !summary || summary.rows.length === 0 ? (
-          <div className="text-xs text-gray-500">
-            {lang === "en" ? "No data." : "데이터가 없습니다."}
-          </div>
-        ) : (
-          <table className="w-full text-xs">
-            <thead>
-              <tr className="text-gray-500 border-b border-gray-800">
-                <th className="text-left py-2 pr-3">Model</th>
-                <th className="text-left py-2 px-2">Channel</th>
-                <th className="text-right py-2 px-2">Calls</th>
-                <th className="text-right py-2 px-2">In tok</th>
-                <th className="text-right py-2 px-2">Out tok</th>
-                <th className="text-right py-2 px-2">Avg / call</th>
-                <th className="text-right py-2 pl-2">Total</th>
-              </tr>
-            </thead>
-            <tbody>
-              {summary.rows.map((r) => (
-                <tr key={r.model_id} className="border-b border-gray-800/50">
-                  <td className="py-2 pr-3 text-gray-200" title={r.model_id}>
-                    {r.model_name}
-                  </td>
-                  <td className="py-2 px-2">
-                    <span className={`px-1.5 py-0.5 rounded text-[10px] border ${CHANNEL_COLORS[r.channel] ?? ""}`}>
-                      {r.channel}
-                    </span>
-                  </td>
-                  <td className="text-right py-2 px-2 tabular-nums text-gray-300">{r.samples}</td>
-                  <td className="text-right py-2 px-2 tabular-nums text-gray-400">
-                    {r.input_tokens.toLocaleString()}
-                  </td>
-                  <td className="text-right py-2 px-2 tabular-nums text-gray-400">
-                    {r.output_tokens.toLocaleString()}
-                  </td>
-                  <td className="text-right py-2 px-2 tabular-nums text-gray-300">
-                    {formatCost(r.avg_cost_per_call_usd)}
-                  </td>
-                  <td className="text-right py-2 pl-2 tabular-nums text-gray-100 font-semibold">
-                    {formatCost(r.cost_usd)}
-                  </td>
+        {summaryResource.loading && <DataLoading />}
+        {!summaryResource.error && !summaryResource.refreshing && summary?.rows.length === 0 && <DataEmpty />}
+        {summary && summary.rows.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[640px] text-xs">
+              <thead>
+                <tr className="text-gray-500 border-b border-gray-800">
+                  <th className="text-left py-2 pr-3">{lang === "en" ? "Model" : "모델"}</th>
+                  <th className="text-left py-2 px-2">{lang === "en" ? "Channel" : "채널"}</th>
+                  <th className="text-right py-2 px-2">{lang === "en" ? "Calls" : "호출"}</th>
+                  <th className="text-right py-2 px-2">{lang === "en" ? "In tok" : "입력 토큰"}</th>
+                  <th className="text-right py-2 px-2">{lang === "en" ? "Out tok" : "출력 토큰"}</th>
+                  <th className="text-right py-2 px-2">{lang === "en" ? "Avg / call" : "호출당 평균"}</th>
+                  <th className="text-right py-2 pl-2">{lang === "en" ? "Total" : "총 비용"}</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {summary.rows.map((r) => (
+                  <tr key={r.model_id} className="border-b border-gray-800/50">
+                    <td className="py-2 pr-3 text-gray-200" title={r.model_id}>
+                      {r.model_name}
+                    </td>
+                    <td className="py-2 px-2">
+                      <span className={`px-1.5 py-0.5 rounded text-[11px] border ${CHANNEL_COLORS[r.channel] ?? ""}`}>
+                        {r.channel}
+                      </span>
+                    </td>
+                    <td className="text-right py-2 px-2 tabular-nums text-gray-300">{r.samples}</td>
+                    <td className="text-right py-2 px-2 tabular-nums text-gray-400">
+                      {r.input_tokens.toLocaleString()}
+                    </td>
+                    <td className="text-right py-2 px-2 tabular-nums text-gray-400">
+                      {r.output_tokens.toLocaleString()}
+                    </td>
+                    <td className="text-right py-2 px-2 tabular-nums text-gray-300">
+                      {formatCost(r.avg_cost_per_call_usd)}
+                    </td>
+                    <td className="text-right py-2 pl-2 tabular-nums text-gray-100 font-semibold">
+                      {formatCost(r.cost_usd)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         )}
-        <p className="text-[10px] text-gray-600 mt-2">
+        <p className="text-[11px] text-gray-500 mt-2">
           {lang === "en"
             ? "Cost based on public Bedrock + Anthropic pricing. Excludes failed/overloaded calls."
             : "비용은 Bedrock + Anthropic 공개 단가 기반. 실패/과부하 호출은 제외."}
         </p>
-      </div>
+      </section>
 
       {/* 비용 산정 방법 설명 박스 */}
-      <div className="bg-gray-900/40 border border-gray-800/60 rounded-xl p-5 space-y-2 text-xs text-gray-400">
+      <div className="bg-gray-900/40 border border-gray-800/60 rounded-xl p-5 space-y-2 text-xs text-gray-400 break-words">
         <h3 className="text-sm font-semibold text-gray-200">
           {lang === "en" ? "How cost is calculated" : "비용 산정 방법"}
         </h3>

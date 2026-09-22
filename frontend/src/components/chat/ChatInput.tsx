@@ -1,6 +1,7 @@
 "use client";
 
 import { KeyboardEvent, useState } from "react";
+import { useLang } from "@/lib/i18n-context";
 
 interface ChatInputProps {
   disabled?: boolean;
@@ -11,6 +12,7 @@ interface ChatInputProps {
 
 // 입력 박스 — Enter 전송, Shift+Enter 줄바꿈.
 export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }: ChatInputProps) {
+  const { lang } = useLang();
   const [value, setValue] = useState("");
 
   const submit = () => {
@@ -21,6 +23,7 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
   };
 
   const handleKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.nativeEvent.isComposing || e.nativeEvent.keyCode === 229) return;
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       submit();
@@ -36,7 +39,8 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
           onKeyDown={handleKey}
           disabled={disabled}
           rows={1}
-          placeholder={isStreaming ? "응답 생성 중..." : "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)"}
+          aria-label={lang === "en" ? "Message" : "메시지"}
+          placeholder={isStreaming ? (lang === "en" ? "Generating response…" : "응답 생성 중…") : (lang === "en" ? "Message (Enter to send, Shift+Enter for a new line)" : "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)")}
           className="flex-1 bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none max-h-32"
         />
         {isStreaming && onCancel ? (
@@ -45,7 +49,7 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
             onClick={onCancel}
             className="px-3 py-2 rounded-md text-xs font-medium bg-red-600 hover:bg-red-500 text-white"
           >
-            중단
+            {lang === "en" ? "Stop" : "중단"}
           </button>
         ) : (
           <button
@@ -54,7 +58,7 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
             disabled={disabled || !value.trim()}
             className="px-3 py-2 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
           >
-            전송
+            {lang === "en" ? "Send" : "전송"}
           </button>
         )}
       </div>

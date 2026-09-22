@@ -47,3 +47,5 @@ Thumbs.db
 
 # 로컬 스크린샷 (공개 repo에 커밋하지 않음)
 screenshots/
+frontend/test-results/
+frontend/playwright-report/

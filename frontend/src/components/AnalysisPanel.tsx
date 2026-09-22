@@ -9,6 +9,10 @@ import {
   OutputLengthResponse,
 } from "@/lib/api";
 import { useLang } from "@/lib/i18n-context";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { DataEmpty, DataError, DataLoading } from "./DataState";
+import RefreshControls from "./RefreshControls";
 
 const WINDOW_OPTIONS = [
   { value: "24h", labelKo: "24시간", labelEn: "24h" },
@@ -58,38 +62,27 @@ export default function AnalysisPanel() {
   const { lang } = useLang();
   const [windowSpec, setWindowSpec] = useState("7d");
   const [category, setCategory] = useState<string | null>(null);
-  const [categories, setCategories] = useState<
-    { id: string; label_ko: string; label_en: string }[]
-  >([]);
-  const [stopData, setStopData] = useState<StopReasonResponse | null>(null);
-  const [lengthData, setLengthData] = useState<OutputLengthResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const categoriesResource = useAsyncResource("workload-categories", fetchWorkloadCategories);
+  const stopResource = useAsyncResource<StopReasonResponse>(
+    `stop-reasons:${windowSpec}:${category ?? "all"}`,
+    (signal) => fetchStopReasons(windowSpec, category, signal),
+  );
+  const lengthResource = useAsyncResource<OutputLengthResponse>(
+    `output-length:${windowSpec}:${category ?? "all"}`,
+    (signal) => fetchOutputLength(windowSpec, category, signal),
+  );
+  const categories = categoriesResource.data ?? [];
+  const stopData = stopResource.data;
+  const lengthData = lengthResource.data;
+  const refreshAll = useCallback(async () => {
+    await Promise.allSettled([stopResource.refresh(), lengthResource.refresh(), categoriesResource.refresh()]);
+  }, [stopResource.refresh, lengthResource.refresh, categoriesResource.refresh]);
+  const { enabled, setEnabled, countdown, reset } = useAutoRefresh(refreshAll, 30_000);
+  useEffect(reset, [windowSpec, category, reset]);
 
-  useEffect(() => {
-    fetchWorkloadCategories().then(setCategories).catch(() => {});
-  }, []);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [stop, len] = await Promise.all([
-        fetchStopReasons(windowSpec, category),
-        fetchOutputLength(windowSpec, category),
-      ]);
-      setStopData(stop);
-      setLengthData(len);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }, [windowSpec, category]);
-
-  useEffect(() => {
-    load();
-  }, [load]);
+  // The older successful section determines freshness after a partial refresh.
+  const checkedAt = [stopResource.updatedAt, lengthResource.updatedAt].filter((time): time is number => time !== null);
+  const updatedAt = checkedAt.length ? Math.min(...checkedAt) : null;
 
   // 히스토그램 최댓값 — bar 폭 스케일링
   const maxHistogramCount = lengthData
@@ -97,38 +90,52 @@ export default function AnalysisPanel() {
     : 1;
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6">
-      <div className="flex flex-wrap items-center gap-3">
-        <h2 className="text-xl font-semibold text-gray-100">
-          {lang === "en" ? "Output Analysis" : "출력 분석"}
-        </h2>
-        <span className="text-xs text-gray-500">
-          {lang === "en"
-            ? "Stop reason distribution + Output token length"
-            : "정지 사유 분포 + 출력 토큰 길이"}
-        </span>
-
-        <div className="ml-auto flex items-center gap-2">
-          <div className="flex bg-gray-800/60 rounded-lg p-0.5">
+    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+      <div className="flex items-start justify-between flex-wrap gap-3">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-100">
+            {lang === "en" ? "Output Analysis" : "출력 분석"}
+          </h1>
+          <p className="text-sm text-gray-500 mt-1">
+            {lang === "en"
+              ? "Stop reason distribution + Output token length"
+              : "정지 사유 분포 + 출력 토큰 길이"}
+          </p>
+        </div>
+        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
+          <span className="text-xs text-gray-400">{lang === "en" ? "Window" : "기간"}</span>
+          <div className="flex flex-wrap gap-1">
             {WINDOW_OPTIONS.map((w) => (
               <button
                 key={w.value}
+                type="button"
+                aria-pressed={windowSpec === w.value}
                 onClick={() => setWindowSpec(w.value)}
-                className={`px-3 py-1 text-xs font-medium rounded-md ${
-                  windowSpec === w.value
-                    ? "bg-blue-600 text-white"
-                    : "text-gray-400 hover:text-gray-200"
-                }`}
+                className={windowSpec === w.value ? "ui-button-primary" : "ui-button"}
               >
                 {lang === "en" ? w.labelEn : w.labelKo}
               </button>
             ))}
           </div>
+        </div>
+      </div>
 
+      <RefreshControls
+        refreshing={stopResource.refreshing || lengthResource.refreshing || categoriesResource.refreshing}
+        onRefresh={() => { reset(); void refreshAll(); }}
+        updatedAt={updatedAt}
+        enabled={enabled}
+        onEnabledChange={setEnabled}
+        countdown={countdown}
+      />
+
+      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-3">
+        <label className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
+          <span>{lang === "en" ? "Workload" : "워크로드"}</span>
           <select
             value={category ?? ""}
             onChange={(e) => setCategory(e.target.value || null)}
-            className="bg-gray-800/60 text-gray-200 text-xs rounded-lg px-3 py-1.5 border border-gray-700"
+            className="ui-input max-w-full text-xs"
           >
             <option value="">
               {lang === "en" ? "All workloads" : "전체 워크로드"}
@@ -139,38 +146,42 @@ export default function AnalysisPanel() {
               </option>
             ))}
           </select>
-
-          <button
-            onClick={load}
-            className="px-3 py-1.5 text-xs font-medium text-gray-200 bg-gray-800 hover:bg-gray-700 rounded-lg"
-          >
-            {lang === "en" ? "Refresh" : "새로고침"}
-          </button>
-        </div>
+        </label>
+        <DataError
+          error={categoriesResource.error}
+          resource={lang === "en" ? "workload categories" : "워크로드 카테고리"}
+          onRetry={() => { reset(); void categoriesResource.refresh(); }}
+          hasData={categoriesResource.data !== null}
+        />
+        {categoriesResource.loading && <DataLoading />}
+        {!categoriesResource.error && !categoriesResource.refreshing && categoriesResource.data?.length === 0 && (
+          <DataEmpty
+            title={lang === "en" ? "No workload categories available." : "사용할 수 있는 워크로드 카테고리가 없습니다."}
+            description={lang === "en" ? "Select All workloads to compare all results." : "전체 워크로드를 선택해 모든 결과를 비교할 수 있습니다."}
+          />
+        )}
       </div>
 
-      {error && (
-        <div className="bg-rose-950/50 border border-rose-800/50 text-rose-300 text-sm rounded-lg px-4 py-2">
-          {error}
-        </div>
-      )}
-
-      {loading && !stopData && !lengthData && (
-        <div className="text-gray-500 text-sm">{lang === "en" ? "Loading…" : "불러오는 중…"}</div>
-      )}
-
       {/* ───── Stop Reason 분포 ───── */}
-      <section className="bg-gray-900/40 border border-gray-800 rounded-xl p-5 space-y-4">
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">
+      <section aria-labelledby="analysis-stop-title" className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="analysis-stop-title" className="text-sm font-semibold text-gray-200">
             {lang === "en" ? "Stop Reason Distribution" : "Stop Reason 분포"}
-          </h3>
+          </h2>
           <span className="text-xs text-gray-500">
             {lang === "en"
               ? "Why each response ended (success only)"
               : "응답이 끝난 이유 (성공 응답만)"}
           </span>
         </div>
+
+        <DataError
+          error={stopResource.error}
+          resource={lang === "en" ? "stop reason distribution" : "정지 사유 분포"}
+          onRetry={() => { reset(); void stopResource.refresh(); }}
+          hasData={stopData !== null}
+        />
+        {stopResource.loading && <DataLoading />}
 
         {/* legend */}
         <div className="flex flex-wrap gap-3 text-xs">
@@ -182,25 +193,21 @@ export default function AnalysisPanel() {
           ))}
         </div>
 
-        {stopData && stopData.rows.length === 0 && (
-          <div className="text-gray-500 text-sm">
-            {lang === "en" ? "No data in this window" : "이 기간에 데이터 없음"}
-          </div>
-        )}
+        {!stopResource.error && !stopResource.refreshing && stopData?.rows.length === 0 && <DataEmpty />}
 
         <div className="space-y-2">
           {stopData?.rows.map((r) => (
-            <div key={r.model_id} className="grid grid-cols-12 items-center gap-3">
-              <div className="col-span-4 text-sm text-gray-300 truncate" title={r.model_name}>
+            <div key={r.model_id} className="grid grid-cols-12 items-center gap-x-3 gap-y-2">
+              <div className="col-span-12 sm:col-span-4 min-w-0 text-sm text-gray-300 break-words" title={r.model_name}>
                 {r.model_name}
               </div>
-              <div className="col-span-7 flex h-6 rounded overflow-hidden bg-gray-800">
+              <div className="col-span-10 sm:col-span-7 flex h-6 rounded overflow-hidden bg-gray-800">
                 {STOP_REASON_ORDER.filter((k) => (r.counts[k] ?? 0) > 0).map((k) => {
                   const pct = r.percentages[k] ?? 0;
                   return (
                     <div
                       key={k}
-                      className={`${STOP_REASON_COLORS[k] ?? "bg-gray-500"} flex items-center justify-center text-[10px] font-medium text-white`}
+                      className={`${STOP_REASON_COLORS[k] ?? "bg-gray-500"} flex items-center justify-center text-[11px] font-medium text-white`}
                       style={{ width: `${pct}%` }}
                       title={`${labelStopReason(k, lang)}: ${r.counts[k]} (${pct}%)`}
                     >
@@ -209,7 +216,7 @@ export default function AnalysisPanel() {
                   );
                 })}
               </div>
-              <div className="col-span-1 text-xs text-gray-500 text-right tabular-nums">
+              <div className="col-span-2 sm:col-span-1 text-xs text-gray-500 text-right tabular-nums">
                 n={r.total}
               </div>
             </div>
@@ -245,11 +252,11 @@ export default function AnalysisPanel() {
       </section>
 
       {/* ───── Output Length 분포 ───── */}
-      <section className="bg-gray-900/40 border border-gray-800 rounded-xl p-5 space-y-4">
-        <div className="flex items-baseline justify-between">
-          <h3 className="text-lg font-semibold text-gray-100">
+      <section aria-labelledby="analysis-length-title" className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-4">
+        <div className="flex flex-wrap items-baseline justify-between gap-2">
+          <h2 id="analysis-length-title" className="text-sm font-semibold text-gray-200">
             {lang === "en" ? "Output Length Distribution" : "출력 길이 분포"}
-          </h3>
+          </h2>
           <span className="text-xs text-gray-500">
             {lang === "en"
               ? "Output tokens per response (success only)"
@@ -257,15 +264,18 @@ export default function AnalysisPanel() {
           </span>
         </div>
 
-        {lengthData && lengthData.rows.length === 0 && (
-          <div className="text-gray-500 text-sm">
-            {lang === "en" ? "No data in this window" : "이 기간에 데이터 없음"}
-          </div>
-        )}
+        <DataError
+          error={lengthResource.error}
+          resource={lang === "en" ? "output length distribution" : "출력 길이 분포"}
+          onRetry={() => { reset(); void lengthResource.refresh(); }}
+          hasData={lengthData !== null}
+        />
+        {lengthResource.loading && <DataLoading />}
+        {!lengthResource.error && !lengthResource.refreshing && lengthData?.rows.length === 0 && <DataEmpty />}
 
         {lengthData && lengthData.rows.length > 0 && (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm">
+            <table className="w-full min-w-[640px] text-sm">
               <thead className="text-xs text-gray-500 border-b border-gray-800">
                 <tr>
                   <th className="px-2 py-2 text-left">{lang === "en" ? "Model" : "모델"}</th>
@@ -304,7 +314,7 @@ export default function AnalysisPanel() {
                           />
                         ))}
                       </div>
-                      <div className="flex justify-between text-[9px] text-gray-600 mt-0.5">
+                      <div className="flex justify-between text-[11px] text-gray-500 mt-0.5">
                         <span>0</span>
                         <span>4k+</span>
                       </div>

@@ -38,36 +38,70 @@ One-click approval link (sent to admin via email). Returns HTML response.
 
 ---
 
-## Auto Probe (Public)
+## Auto Probe (Public Reads, Authenticated Trigger)
 
 ### GET /api/auto-probe/status
-Returns auto-prober state.
+Returns observed activity from database run reservations. This is not a live
+query of the EventBridge Scheduler configuration. All returned timestamps
+include a UTC offset.
 
 **Response:**
 ```json
 {
   "is_running": true,
   "current_cycle_running": false,
-  "last_run_time": "2026-04-16T16:48:53Z",
-  "next_run_time": "2026-04-16T16:53:53Z",
+  "cycle_state": "completed",
+  "last_run_id": 42,
+  "last_run_status": "completed",
+  "last_run_time": "2026-09-22T12:00:00Z",
+  "last_completed_run_id": 42,
+  "last_completed_time": "2026-09-22T12:02:00Z",
+  "next_run_time": "2026-09-22T12:05:00Z",
   "interval_seconds": 300,
-  "model_count": 46
+  "expected_model_count": 46,
+  "category_count": 6,
+  "category_interval_seconds": 1800,
+  "overdue_after_seconds": 600,
+  "running_timeout_seconds": 900
 }
 ```
 
-### GET /api/auto-probe/latest
-Returns the most recent probe result for each model.
+`cycle_state` is `never_run`, `running`, `completed`, `failed`, or `overdue`.
+`is_running` is true only for observed `running` / recent `completed` states;
+it does not assert that the schedule is enabled. A reservation older than
+15 minutes no longer counts as active. `last_completed_time` is the latest
+visible result timestamp in the last completed run.
+
+### GET /api/auto-probe/latest?category=code-gen
+Returns all visible results from the most recent completed automatic run.
+The optional category selects the last completed run for that workload. A
+catalog model absent from the result is unmeasured, not a successful channel.
 
 ### GET /api/auto-probe/trend?hours=24
-Returns time-series data. Default: 24 hours. Supported: 1, 3, 6, 12, 24, 72, 168.
+Returns automatic-run samples by result timestamp. `hours` is a positive number
+up to 168; fractional windows are accepted. `category` is optional. Windows
+over 24 hours use hourly averages and min–max values from successful calls;
+failed-only buckets retain null metrics.
 
 ### POST /api/auto-probe/trigger
-Trigger an immediate probe cycle.
+**JWT required.** Reserves one automatic probe cycle before starting a
+background worker. Manual triggers and scheduled cycles use the same
+PostgreSQL transaction lock and active-reservation check.
 
-### GET /api/auto-probe/anomalies?hours=12
+- `202`: `{"triggered": true, "run_id": 43, "message": "..."}`
+- `401`: missing/invalid credentials; no work is started.
+- `409`: `{"detail":{"code":"cycle_running","run_id":43,"message":"..."}}`
+- `503`: the reservation or worker could not be started.
+
+An accepted automatic trigger is part of the automatic monitoring dataset.
+It is separate from the user-configured SSE endpoint `/api/probes/run`.
+
+### GET /api/auto-probe/anomalies?hours=12&category=code-gen
 Probe-failure summary for the last N hours (1-168, default 12) — v2.12.0. Returns
 `total_probes`, `total_failures`, and per-model `models` (failures, total, last_error,
-last_at), sorted by failure count. Powers the dashboard anomaly banner.
+last_at), sorted by failure count. Only automatic runs are included, including
+available observations from a failed/ongoing run. The optional workload filter
+matches the dashboard scope. Zero probes means no observations, not 100% success.
 
 ---
 

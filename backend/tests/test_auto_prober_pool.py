@@ -23,6 +23,11 @@ def test_run_cycle_bounds_concurrent_db_sessions(monkeypatch):
     lock = threading.Lock()
 
     class FakeSession:
+        def get_bind(self):
+            from types import SimpleNamespace
+
+            return SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
         def add(self, *a, **k):
             pass
 

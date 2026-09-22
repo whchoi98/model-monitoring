@@ -1,9 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
 import { useChatStream } from "@/hooks/useChatStream";
-import { fetchMe, getToken } from "@/lib/api";
-import { AuthUser } from "@/lib/types";
+import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/i18n-context";
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
@@ -49,8 +47,7 @@ interface ChatPanelProps {
 export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps) {
   const { messages, isStreaming, error, followups, send, cancel, reset } = useChatStream();
   const { lang } = useLang();
-  const [user, setUser] = useState<AuthUser | null>(null);
-  const [authChecked, setAuthChecked] = useState(false);
+  const { user, checking, openLogin, error: authError, retry } = useAuth();
 
   const suggested = lang === "en" ? SUGGESTED_EN : SUGGESTED_KO;
   // 동적 followups가 있으면 사용, 없으면 (초기 상태) 정적 fallback 사용.
@@ -60,21 +57,10 @@ export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps
     send(q);
   };
 
-  useEffect(() => {
-    if (!getToken()) {
-      setAuthChecked(true);
-      return;
-    }
-    fetchMe()
-      .then(setUser)
-      .catch(() => setUser(null))
-      .finally(() => setAuthChecked(true));
-  }, []);
-
-  if (!authChecked) {
+  if (checking && !user) {
     return (
       <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        로그인 상태 확인 중...
+        {lang === "en" ? "Checking sign-in…" : "로그인 상태 확인 중…"}
       </div>
     );
   }
@@ -83,16 +69,17 @@ export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps
     return (
       <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-6">
         <div className="text-gray-300 text-sm">
-          챗봇은 인증된 사용자만 사용할 수 있습니다.<br />
-          대시보드에서 로그인 후 다시 시도해 주세요.
+          {lang === "en" ? "Sign in to ask about your monitoring data." : "로그인하면 모니터링 데이터에 관해 질문할 수 있습니다."}
         </div>
+        <button type="button" onClick={() => openLogin()} className="ui-button-primary">{lang === "en" ? "Login" : "로그인"}</button>
+        {authError && <button type="button" onClick={retry} className="ui-button">{lang === "en" ? "Retry sign-in check" : "로그인 상태 다시 확인"}</button>}
         {variant === "modal" && onClose && (
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 text-xs rounded-md bg-gray-700 hover:bg-gray-600 text-white"
+            className="ui-button"
           >
-            닫기
+            {lang === "en" ? "Close" : "닫기"}
           </button>
         )}
       </div>
@@ -115,14 +102,14 @@ export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps
             onClick={reset}
             className="text-xs text-gray-400 hover:text-gray-200"
           >
-            새 대화
+            {lang === "en" ? "New chat" : "새 대화"}
           </button>
           {variant === "modal" && onClose && (
             <button
               type="button"
               onClick={onClose}
-              className="text-gray-400 hover:text-white text-lg leading-none px-1"
-              aria-label="close"
+              className="text-gray-400 hover:text-gray-100 text-lg leading-none px-1"
+              aria-label={lang === "en" ? "Close chat" : "챗봇 닫기"}
             >
               ×
             </button>
@@ -146,7 +133,7 @@ export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps
       />
 
       {error && (
-        <div className="mx-3 mb-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
+        <div role="alert" className="mx-3 mb-2 px-3 py-1.5 bg-red-500/10 border border-red-500/30 rounded text-xs text-red-400">
           {error}
         </div>
       )}

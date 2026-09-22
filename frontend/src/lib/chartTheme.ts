@@ -14,7 +14,7 @@ export interface ChartTheme {
 const DARK: ChartTheme = {
   grid: "#1f2937",
   axisLine: "#374151",
-  tick: "#6b7280",
+  tick: "#808898",
   tooltipStyle: {
     backgroundColor: "#0f172a",
     border: "1px solid #374151",

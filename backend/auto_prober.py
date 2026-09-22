@@ -13,15 +13,25 @@ from __future__ import annotations
 import logging
 import threading
 from concurrent.futures import ThreadPoolExecutor
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from queue import Queue
 from typing import Optional
+
+from sqlalchemy import text
 
 from database import SessionLocal
 from models import ProbeRun
 from prober import AVAILABLE_MODELS, _get_bedrock_client, _get_region_for_model, _probe_single_model
 
 logger = logging.getLogger(__name__)
+
+PROBE_INTERVAL_SECONDS = 300
+OVERDUE_AFTER_SECONDS = PROBE_INTERVAL_SECONDS * 2
+RUNNING_TIMEOUT_SECONDS = PROBE_INTERVAL_SECONDS * 3
+# Serialize only admission, never paid work. PostgreSQL covers separate API /
+# scheduled processes; the local lock also supports SQLite and same-process races.
+_CYCLE_ADMISSION_LOCK_KEY = 917350002
+_admission_lock = threading.Lock()
 
 # Phase 3 Workload Preset — round-robin 카테고리.
 # 각 cycle마다 다음 카테고리로 회전 → use case별 latency/cost 분포가 시계열로 누적.
@@ -134,6 +144,70 @@ def _next_preset() -> dict:
 PROBE_PROMPT = WORKLOAD_PRESETS[0]["prompt"]
 
 
+class CycleAlreadyRunning(Exception):
+    def __init__(self, run_id: int):
+        super().__init__("An auto-probe cycle is already running")
+        self.run_id = run_id
+
+
+def get_active_auto_run(db, now: datetime):
+    """An old crashed runner must not look active or block admission forever."""
+    return (
+        db.query(ProbeRun.id, ProbeRun.created_at)
+        .filter(
+            ProbeRun.is_auto == 1,
+            ProbeRun.status == "running",
+            ProbeRun.created_at > now - timedelta(seconds=RUNNING_TIMEOUT_SECONDS),
+        )
+        .order_by(ProbeRun.created_at.desc(), ProbeRun.id.desc())
+        .first()
+    )
+
+
+def _reserve_cycle() -> tuple[int, dict]:
+    """Commit a run before launching work; every caller uses this admission gate."""
+    with _admission_lock:
+        db = SessionLocal()
+        try:
+            if db.get_bind().dialect.name == "postgresql":
+                db.execute(
+                    text("SELECT pg_advisory_xact_lock(:key)"),
+                    {"key": _CYCLE_ADMISSION_LOCK_KEY},
+                )
+            now = datetime.now(timezone.utc)
+            active = get_active_auto_run(db, now)
+            if active is not None:
+                raise CycleAlreadyRunning(active.id)
+            preset = _next_preset()
+            run = ProbeRun(
+                created_at=now,
+                prompt=preset["prompt"],
+                temperature=0.1,
+                max_tokens=preset["max_tokens"],
+                concurrency=3,
+                repeat_count=1,
+                status="running",
+                is_auto=1,
+            )
+            db.add(run)
+            db.commit()
+            db.refresh(run)
+            return run.id, preset
+        finally:
+            db.close()
+
+
+def _set_run_status(run_id: int, status: str) -> None:
+    db = SessionLocal()
+    try:
+        run = db.query(ProbeRun).filter(ProbeRun.id == run_id).first()
+        if run:
+            run.status = status
+            db.commit()
+    finally:
+        db.close()
+
+
 class AutoProber:
     """단순 컨테이너 — in-process status 추적 (트리거 endpoint 가독성용)."""
 
@@ -144,49 +218,47 @@ class AutoProber:
         self.is_running = False
         self.next_run_time: Optional[datetime] = None
 
-    def trigger(self) -> None:
-        """수동 트리거 — backend 프로세스 별도 스레드에서 1회 실행."""
-        threading.Thread(target=self._run_once_safe, daemon=True).start()
-
-    def _run_once_safe(self) -> None:
+    def trigger(self) -> int:
+        """Reserve synchronously so accepted work is immediately visible in DB."""
+        run_id, preset = _reserve_cycle()
+        self.current_cycle_running = True
         try:
-            run_cycle()
+            threading.Thread(
+                target=self._run_once_safe, args=(run_id, preset),
+                daemon=True, name="auto-probe",
+            ).start()
+        except Exception:
+            self.current_cycle_running = False
+            _set_run_status(run_id, "failed")
+            raise
+        return run_id
+
+    def _run_once_safe(self, run_id: int, preset: dict) -> None:
+        try:
+            _run_reserved_cycle(run_id, preset)
         except Exception:
             logger.exception("auto_prober manual trigger 실행 실패")
 
 
 def run_cycle() -> int:
-    """모든 모델을 한 번 프로빙하고 DB에 결과를 저장. run_id 반환.
+    """Run one scheduled cycle, or reuse an already-active reservation.
 
     Phase 3: workload preset round-robin — 매 cycle마다 다음 카테고리 prompt 사용.
     """
+    try:
+        run_id, preset = _reserve_cycle()
+    except CycleAlreadyRunning as exc:
+        logger.info("AutoProber: skipping overlapping cycle (run_id=%d)", exc.run_id)
+        return exc.run_id
+    return _run_reserved_cycle(run_id, preset)
+
+
+def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     auto_prober.current_cycle_running = True
-    preset = _next_preset()
     cur_prompt = preset["prompt"]
     cur_max_tokens = preset["max_tokens"]
     cur_category = preset["id"]
     logger.info("AutoProber: starting probe cycle (preset=%s, max_tokens=%d)", cur_category, cur_max_tokens)
-
-    db = SessionLocal()
-    try:
-        run = ProbeRun(
-            prompt=cur_prompt,
-            temperature=0.1,
-            max_tokens=cur_max_tokens,
-            concurrency=3,
-            repeat_count=1,
-            status="running",
-            is_auto=1,
-        )
-        db.add(run)
-        db.commit()
-        db.refresh(run)
-        run_id = run.id
-    except Exception:
-        logger.exception("AutoProber: failed to create probe run")
-        db.close()
-        auto_prober.current_cycle_running = False
-        raise
 
     event_queue: Queue = Queue()
 
@@ -216,27 +288,28 @@ def run_cycle() -> int:
         finally:
             thread_db.close()
 
-    with ThreadPoolExecutor(max_workers=3) as executor:
-        futures = []
-        for model_id, model_name in AVAILABLE_MODELS.items():
-            client = _get_bedrock_client(_get_region_for_model(model_id))
-            futures.append(executor.submit(_probe_worker, client, model_id, model_name))
-
-        for future in futures:
-            try:
-                future.result(timeout=120)
-            except Exception:
-                logger.exception("AutoProber: model probe failed")
-
     try:
-        run = db.query(ProbeRun).filter(ProbeRun.id == run_id).first()
-        if run:
-            run.status = "completed"
-            db.commit()
+        with ThreadPoolExecutor(max_workers=3) as executor:
+            futures = []
+            for model_id, model_name in list(AVAILABLE_MODELS.items()):
+                client = _get_bedrock_client(_get_region_for_model(model_id))
+                futures.append(executor.submit(_probe_worker, client, model_id, model_name))
+
+            failed_probes = 0
+            for future in futures:
+                try:
+                    future.result(timeout=120)
+                except Exception:
+                    failed_probes += 1
+                    logger.exception("AutoProber: model probe failed")
+        if failed_probes:
+            raise RuntimeError(f"{failed_probes} model probes did not finish normally")
+        _set_run_status(run_id, "completed")
     except Exception:
-        logger.exception("AutoProber: failed to update run status")
+        _set_run_status(run_id, "failed")
+        raise
     finally:
-        db.close()
+        auto_prober.current_cycle_running = False
 
     # 데이터 보존 정책 (v2.7.0): 보존 기간 초과 원본을 시간 집계로 이관 후 삭제.
     # 실패해도 probe cycle 자체는 성공으로 유지 — 다음 cycle에서 재시도된다.

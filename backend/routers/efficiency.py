@@ -150,7 +150,9 @@ def get_efficiency_score(
     # 모델별 평균 계산
     per_model: list[dict] = []
     for a in agg.values():
-        avg = lambda lst: round(sum(lst) / len(lst), 4) if lst else None
+        def avg(lst):
+            return round(sum(lst) / len(lst), 4) if lst else None
+
         success_rate = round(a["success"] / a["samples"], 4) if a["samples"] else None
         per_model.append({
             "model_id": a["model_id"],
