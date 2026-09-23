@@ -56,7 +56,7 @@ npm run dev
 
 - **Auto Prober**: Separate Fargate task (EventBridge Scheduler, every 5 min) that probes all models — `run_cycle()` in `auto_prober.py`, NOT an in-process daemon
 - **Manual Probe**: Authenticated SSE streaming probe via `/api/probes/run`
-- **Model Cards**: Catalog coverage, current failures, stale results and unmeasured channels; search/filter/sort and select cards to compare trends.
+- **Model Cards**: Catalog coverage, current failures, stale results and unmeasured channels; search/filter/sort and select cards to compare trends. TTFT / total latency / TPS values are graded per workload category — blue normal, amber ▲ warning, rose ◆ critical; thresholds live in `frontend/src/lib/metricGrade.ts` (v2.28.0, ADR-029).
 - **Trend Charts**: Actual elapsed time with explicit gaps for failed or missing measurements. Filter/selection state is preserved in dashboard URLs.
 - **Shared UI**: Public pages render during sign-in checks. Failed reads keep same-query cached results with a warning and retry; a changed filter cannot display an older query's data.
 - **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, pricing, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)

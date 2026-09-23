@@ -22,6 +22,7 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
    boto3 Converse(프로브가 넘긴 Converse 매핑만)로 흘린다.
    SDK 미사용 — `anthropic>=0.40.0` 미고정으로 빌드 시 1.x 메이저 업이 들어오기 때문.
 3. **대표 모델 4종 고정**(Fable 5.1·Fable 5·Opus 5·Sonnet 5, Haiku 제외). Mantle은 Fable 5.1 제외 — US GovCloud 전용 → `not_applicable`.
+   → v2.28.0(2026-09-23): Claude Opus 5.5를 추가해 **대표 모델 5종**(Fable 5.1·Fable 5·Opus 5.5·Opus 5·Sonnet 5). 아래 부록 참조.
 4. **상태 6종 + 판정 4종** — `supported|unsupported|broken|inconclusive|skipped|not_applicable` × `match|drift|undocumented|none`.
    `inconclusive`(정의 수락, 미호출)와 `not_applicable`(설계상 부적용)을 unsupported와 분리해 오판을 막는다.
 5. **부정 제어(negative)** — effort/inference_geo처럼 응답에 신호가 없는 파라미터는 잘못된 값이 그 파라미터를 지목하는 400으로
@@ -89,7 +90,9 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
   Mantle(`us-east-1`) Fable 5가 모든 피처를 `data retention mode 'default' is not available for this model`로
   거부하는 ×23(Covered Model 데이터 보존 opt-in을 계정/프로젝트에 적용하면 해소되는 계정 단위 단일 원인 — 카탈로그
   기대치는 낮추지 않고 그대로 둔 **결정 항목**) + Mantle `fallback_credit` ×2(해당 `anthropic-beta` 헤더를 Mantle이
-  수락하지 않는 **실제 surface 갭**)로 구성된다. `undocumented` 14건은 전부 `browser_use`
+  수락하지 않는 **실제 surface 갭**)로 구성된다. **(→ v2.28.0 정정: fallback_credit ×2는 surface 갭이 아니라 프로브
+  결함이었다 — 프로브가 CP의 beta 이름 `fallback-credit-2026-07-01`을 Mantle에 보냈고, Mantle은 Bedrock과 같은
+  `fallback-credit-2026-06-01`을 200으로 수락한다. 아래 v2.28.0 부록.)** `undocumented` 14건은 전부 `browser_use`
   (`browser_toolset_20260801`)가 cp(4모델)·mantle(opus-5/sonnet-5)·bedrock_messages(4모델)·bedrock_invoke(4모델)에서
   문서 없이 `tool_use`를 방출(Converse는 표현 필드가 없어 `not_applicable`). 프로브 결함 수정: (1) 구 `CACHE_PAD`가
   자신을 "probe"/"model"로 서술해 안전 거부를 유발했다(CP Fable 5 `refusal`/`cyber`, CP Opus 5
@@ -105,6 +108,7 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
 
 - (+) 문서 드리프트가 배너로 드러남; 셀 클릭으로 요청 스냅샷·응답 신호·문서 링크까지 추적.
 - (+) 문서 상충 지점(Mantle `anthropic-beta` 헤더, Mantle/InvokeModel structured outputs, P-AWS 서버측 fallback)이 실측으로 닫힘.
+  (Mantle `anthropic-beta` 헤더 항목은 v2.28.0에서 정정 — beta 이름 불일치로 인한 프로브 결함이었다.)
 - (+) Mantle 리전을 `us-east-1`로 전환해 패리티 런 `messages_mantle` surface도 함께 개선(Supported 셀 증가 예상) — 별도
   코드 변경 없이 공용 env 하나로 두 매트릭스가 동시에 혜택을 받는다.
 - (+) **v2.23.1 — `data_residency`는 Bedrock/Mantle에서 `not_applicable`로 사전판정**: 공식 데이터 레지던시 문서가 "Amazon Bedrock에서는 엔드포인트 URL 또는
@@ -112,9 +116,12 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
   읽히는 오해를 낳았다(데이터 레지던시 자체는 리전 선택으로 충족). 카탈로그 `_NOT_APPLICABLE_BY_DOC`으로 일반화.
 - (−) 런당 토큰 비용 대략 $5~7(월 ~$150~210, Fable 지배) — 1런 = 프로브 643 + 사전판정 137 = 780셀(v2.23.1, 이전 658 + 122), 캐싱·부정 제어
   포함 ≈800 API 호출. MCP 프로브는 공개 MCP 서버 의존(장애는 inconclusive로 격리).
+  (v2.28.0: 대표 5모델로 975셀 = 프로브 813 + 사전판정 162, 런당 비용 약 +15~25% — 아래 v2.28.0 부록.)
 - (−) 신규 피처 추가 시 3단: 카탈로그 행(+documented) → 프로브 함수(5 surface 분기) → 테스트. Converse 표현 불가 목록(`_CONVERSE_NOT_EXPRESSIBLE`) 갱신.
 - (−) `strict_tool_use`/`structured_outputs`/`token_counting` Bedrock 열 drift는 의도적으로 남김(문서 기대치는 그대로 `ga`가 아닌 실측 반영값으로 낮췄으므로 이제 `match` — Bedrock 자체의 플랫폼 갭은 여전히 존재하고 향후 AWS가 지원을 추가하면 실측이 다시 흔들릴 수 있음).
 - (−) 드리프트 배너의 25건은 첫 배포 화면에 그대로 뜬다 — 해소 조건은 Mantle 계정 opt-in.
+  (v2.28.0: fallback_credit 프로브 수정으로 Mantle opus-5, sonnet-5 2건이 빠지고, 남는 드리프트는 Mantle Fable 5 데이터
+  보존 opt-in 클러스터다.)
 
 ## Addendum — v2.24.0 UI 상세도 보강 (2026-09-07)
 
@@ -138,3 +145,43 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
   회귀 핀 38건으로 보장; 요청 스냅샷 메타 키를 `api`/`note`로 통일; thinking 증거에 `usage` 저장.
 - **MCP connector 정책 차이**(패리티는 ADR-023으로 제외, features는 포함 후 장애를 inconclusive로 격리)는 의도된 차이로 유지한다 — 문서 피처 목록을
   그대로 따르는 것이 이 매트릭스의 목적이다.
+
+## Addendum — v2.28.0 대표 모델 5종 (Claude Opus 5.5 편입, 2026-09-23)
+
+2026-09-22 출시된 Claude Opus 5.5(ADR-028)를 5번째 대표 모델로 추가했다(사용자 결정 2026-09-23). 카탈로그 규칙이
+바뀌지 않아도 **대표 `MODELS`가 바뀌면 런 형태가 달라지므로 `CATALOG_VERSION`을 `2026-09-23`으로 범프**했다.
+
+- **모델 세트(카탈로그 `models` 순서)**: `fable-5-1`, `fable-5`, **`opus-5-5`**, `opus-5`, `sonnet-5`. Opus 5.5 id는 CP
+  `claude-opus-5-5`, Mantle `anthropic.claude-opus-5-5`(us-east-1에서 서빙 — Mantle 열도 프로브 대상), Bedrock
+  `global.anthropic.claude-opus-5-5`(Messages API, InvokeModel, Converse 공통). UI 모델 칩과 셀 안 모델 목록은 카탈로그
+  `models` 순서를 따른다(`buildGroups(..., modelOrder)` — 이전에는 DB 삽입 순이라 셀마다 달랐다).
+- **런 형태**: 39행 × 5 surface × 5모델 = **975셀 = 프로브 813 + 사전판정 162**(이전 780 = 643 + 137). Opus 5.5 몫은
+  195셀 = 프로브 170 + 사전판정 25(Converse 표현 불가 17, 1M 컨텍스트 skipped 4, data_residency 비적용 4). 사전판정
+  162 = Mantle Fable 5.1 39 + Converse 표현 불가 17 × 5 = 85 + context_window_1m 19 + data_residency 19. 런 소요는
+  약 7분 → **약 9분**(수동 트리거 응답 문구도 갱신), 토큰 비용은 런당 **약 +15~25%**(프로브 +26%, Opus 5.5 단가
+  $4 / $20은 런 비용을 지배하는 Fable $10 / $50보다 낮음 — 대략 $5~7 → $6~9).
+- **모델별 프로브 조정**:
+  - `tool_use`: Opus 5.5는 forced `tool_choice`를 400으로 거부하므로 Fable 5.1과 같이 `auto` + 프롬프트 지시로 보낸다
+    (CP, Mantle, Bedrock 세 id 형태 모두 — 테스트 고정, Opus 5는 forced 유지).
+  - `advisor_tool`: `_ADVISOR_FOR`에 `opus-5-5` → `claude-opus-5-5` **자기 페어링**(CP 실측 supported). 이 사전에 키가
+    빠지면 `_advisor_model` KeyError → `run_probe`가 셀을 broken으로 분류하므로 `test_advisor_pairing_covers_every_catalog_model`
+    이 카탈로그 전 모델을 덮는지 지킨다.
+  - `computer_use`: Opus 5.5는 **toolset 전용** — `computer_toolset_20260801`을 CP, Mantle, bedrock-runtime Messages API,
+    InvokeModel이 수락하고 `tool_use`를 방출한다. legacy `computer_20251124`는 400 거부(CP 실측). 카탈로그 note를
+    이 실측으로 교체했다(문구만).
+  - `extended_thinking`: Opus 5.5도 adaptive-only — `budget_tokens`는 문서상 400이 정상, 정확한 거부 문구면 `not_applicable`.
+- **라이브 스모크(2026-09-23, Opus 5.5 단독 195셀, DB 없이)**: **broken 0 / inconclusive 0**. 상태 supported 116,
+  unsupported 49, not_applicable 26(사전판정 21 + extended_thinking 정확 거부 5), skipped 4(1M 컨텍스트). 판정 match 157,
+  none 33, undocumented 4(`browser_use`가 CP, Mantle, Messages API, InvokeModel에서 문서 없이 동작 — 기존 모델과 같은
+  패턴), drift 1(Mantle `fallback_credit` — 아래 수정으로 해소).
+- **fallback_credit 프로브 수정(Mantle beta 이름)**: `probe_fallback_credit`이 Mantle에 CP의 beta 이름
+  `fallback-credit-2026-07-01`을 보내 400 "Unexpected value(s) `fallback-credit-2026-07-01` for the `anthropic-beta`
+  header"를 받고 있었다. v2.28.0부터 surface별 beta 이름은 **CP `fallback-credit-2026-07-01`, Mantle과 Bedrock 3경로
+  `fallback-credit-2026-06-01`**(테스트가 요청 스냅샷까지 고정). Mantle us-east-1 no-DB 스모크: opus-5-5, opus-5,
+  sonnet-5 모두 06-01로 supported / match(200 `end_turn`, 1.7~2.2초). 07-01 대조군은 세 모델 모두 여전히 400. Fable 5는
+  06-01, 07-01 모두 데이터 보존 opt-in 오류("data retention mode 'default' is not available for this model")가 먼저 나
+  기존 클러스터 드리프트로 남고, Fable 5.1은 Mantle에서 `not_applicable`(GovCloud 전용)이다. 판정 로직(`engine.classify`)과
+  분류 핀 `mantle-beta-header`는 바꾸지 않았다(v2.28.0 이전 샘플로 유지). 위 실측 절의 "실제 surface 갭" 결론을 정정한다.
+- **배포 후 첫 런에서 예상되는 화면**: 변경 배너에 **카탈로그 변경 195건**(직전 런에 없던 opus-5-5 셀, `before: null`
+  → `kind: catalog`) — 정상이다. 여기에 Mantle `fallback_credit`의 opus-5, sonnet-5가 unsupported → supported로 바뀐
+  **실측 변경 2건**(지연시간이 있는 프로브 행이라 `kind: measured`)이 더해지고, 드리프트는 그만큼 줄어든다.

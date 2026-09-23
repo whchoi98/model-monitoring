@@ -196,7 +196,11 @@ Latest saved AI insight (bilingual Markdown) / list of recent insights.
 ## Analytics (Public)
 
 ### GET /api/cost/summary · /api/cost/channel-compare · /api/cost/trend
-30-day cost projection, per-channel comparison, cost trend.
+30-day cost projection, per-channel comparison, cost trend. Costs are computed at query time from `backend/pricing.py`
+`PRICE_TABLE` (mirrored in `frontend/src/lib/pricing.ts`), so a price change re-prices past rows. A model without a price key
+has a null cost (shown as "-"). Since v2.28.0 the six GPT-6 Sol/Luna channels are priced from the Bedrock agreement-offer rate
+card (`gpt-6-sol` / `-us` $2.20 / $11, `-global` $2 / $10; `gpt-6-luna` / `-us` $0.11 / $0.55, `-global` $0.10 / $0.50 per
+MTok — ADR-028 v2.28.0 follow-up) instead of null.
 
 ### GET /api/reliability/multi-channel
 Success rate + error buckets grouped by family/channel.
@@ -241,14 +245,16 @@ The 12-hour scheduled run uses a separate Fargate task instead (`python -m parit
 ### GET /api/features/catalog
 Feature catalog: `groups` (7 feature groups with `label_ko`/`label_en`), `surfaces` (5 — `cp`, `mantle`, `bedrock_messages`,
 `bedrock_invoke`, `bedrock_converse`; each `{id, label, short, group, region}`, the Mantle region is `MANTLE_ANTHROPIC_REGION`),
-`models` (4 representative models `fable-5-1`, `fable-5`, `opus-5`, `sonnet-5` with per-surface native ids; `mantle: null` plus
-`mantle_reason` when Mantle does not serve the model) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
+`models` (5 representative models `fable-5-1`, `fable-5`, `opus-5-5`, `opus-5`, `sonnet-5` — Opus 5.5 since v2.28.0; this order is
+also the UI order of model chips and per-cell model lists — with per-surface native ids; `mantle: null` plus `mantle_reason` when
+Mantle does not serve the model) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
 Messages checks + Models API + the strict_tool_use split; each with `label_ko/label_en`, `desc_ko/desc_en`, `doc_url`, per-surface
 `documented` ∈ ga|beta|no|unknown, `verification` ∈ evidence|acceptance|negative|capability, `notes`). Since v2.24.0 the UI takes every
 feature label and surface short name from this payload (`labelMaps`) — it is the single source for banners, modal titles and the drawer.
 
 ### GET /api/features/latest
-Latest completed run: `run` (id, started_at, finished_at, `totals` — the 6 status counts plus `drift`, catalog_version, running flag),
+Latest completed run: `run` (id, started_at, finished_at, `totals` — the 6 status counts plus `drift`; since v2.28.0 the status
+counts sum to 975 cells = 813 probed + 162 pre-decided, catalog_version `2026-09-23`, running flag),
 `previous_run_id`, `changes`, `drift`, `results`. `results[]` = one row per (feature, surface, model_key): `model_label`, `model_id`,
 `status` ∈ supported|unsupported|broken|inconclusive|skipped|not_applicable, `documented`, `verdict` ∈ match|drift|undocumented|none,
 `latency_ms` (null for runner pre-decided rows and for probes that failed before a measurement). `drift[]` = the results whose verdict is
@@ -257,7 +263,8 @@ Latest completed run: `run` (id, started_at, finished_at, `totals` — the 6 sta
 **`kind` (v2.24.0)** is `"catalog"` when the cell did not exist before or when either side is a runner pre-decided row
 (`latency_ms IS NULL AND error_message IS NULL` — a catalog rule such as `_NOT_APPLICABLE_BY_DOC`), else `"measured"`. A row with a NULL
 `latency_ms` but an `error_message` is a failed probe (transport-init or executor failure), not a pre-decided row, so it counts as
-`"measured"`. `Cache-Control: s-maxage=60`.
+`"measured"`. The first run after a representative-model addition (v2.28.0: `opus-5-5`) therefore lists every new cell (195) as
+a `catalog` change. `Cache-Control: s-maxage=60`.
 With no completed run: `{"run": null, "previous_run_id": null, "changes": [], "drift": [], "results": [], "running": false}`.
 
 ### GET /api/features/evidence?run_id=&feature=&surface=&model_key=
@@ -271,9 +278,30 @@ Since v2.24.0 failed cells also carry the last body the transport actually sent 
 (`HTTP 404: (empty body) GET /v1/files`), and the thinking probes store `usage`. 404 if the cell does not exist.
 
 ### POST /api/features/trigger (Auth Required)
-Start a manual Claude API Features run in a backend background thread (약 7분 — the duration the router reports in
-`routers/features.py`). Rejects if already running. The daily scheduled run uses a separate Fargate task instead
+Start a manual Claude API Features run in a backend background thread (약 9분 since v2.28.0, 5 models — the duration the router
+reports in `routers/features.py`; it was 약 7분 with 4 models). Rejects if already running. The daily scheduled run uses a separate Fargate task instead
 (`python -m features_runner --once`).
+
+---
+
+## GPT on AWS bench (Public) — v2.18.0, 18 channels since v2.28.0
+
+Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --once`, every 15 min) measures 18 channels —
+Mantle in-region 11 + CRIS 7: GPT 5.4 (us-east-1, us-east-2, us-west-2), GPT 5.5 (us-east-1, us-east-2), GPT 5.6 Terra (Global,
+us-east-1, us-east-2, us-west-2), GPT 6 Astra (Global, US, us-west-2), GPT 6 Sol and GPT 6 Luna (Global, US, us-east-1) — with a
+fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per channel. Each call has a wall-clock cap
+(`GPT_BENCH_CALL_TIMEOUT`, default 90 s — an expired call is stored as an error row `WallClockTimeout: …`), the client never retries
+(`max_retries=0`), and the cycle skips trailing channels after `GPT_BENCH_DEADLINE` (780 s; Sol/Luna are last).
+
+### GET /api/gptbench/latest
+Latest **complete** cycle: `cycle_ts` + `channels[]` scorecards (`model_id`, `model_name`, `family`, `region`, `runs`, `success`,
+`median_ttfb_ms`, `median_ttft_ms`, `median_gap_ms`, `p95_ttft_ms`, `cache_hit_rate`, `median_reasoning_tokens`, `last_error`).
+A cycle counts as complete only 14 minutes after it started (deadline 13 min + margin); while the newest cycle is still running the
+previous one is returned, so the payload lags the newest cycle by about 15–30 minutes. Sorted by family (GPT 6 Astra, Sol, Luna,
+GPT 5.6 Terra, 5.5, 5.4; unknown families last) then region.
+
+### GET /api/gptbench/trend?hours=24
+Per-cycle median TTFB/TTFT/GAP and error count per channel (`series[].points[]`), `hours` 1–720 (default 24), complete cycles only.
 
 ---
 

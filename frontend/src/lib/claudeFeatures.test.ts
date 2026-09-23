@@ -269,7 +269,7 @@ describe("surfaceFindings", () => {
     mantle({ feature: "messages_basic", model_key: "fable-5-1", model_label: "Claude Fable 5.1", model_id: null, status: "not_applicable", verdict: "none", latency_ms: null }),
     mantle({ feature: "messages_basic", model_key: "fable-5", model_label: "Claude Fable 5", status: "unsupported", verdict: "drift" }),
     mantle({ feature: "messages_basic", model_key: "opus-5", model_label: "Claude Opus 5" }),
-    // fallback_credit (documented beta): 두 모델 모두 drift
+    // fallback_credit (documented beta): 두 모델 모두 drift — 집계 로직용 합성 데이터(운영 Mantle 동작 핀 아님, v2.28.0부터 Mantle opus-5는 supported)
     mantle({ feature: "fallback_credit", model_key: "fable-5", model_label: "Claude Fable 5", documented: "beta", status: "unsupported", verdict: "drift" }),
     mantle({ feature: "fallback_credit", model_key: "opus-5", model_label: "Claude Opus 5", documented: "beta", status: "unsupported", verdict: "drift" }),
     // batch_processing (documented no): 의도된 격차

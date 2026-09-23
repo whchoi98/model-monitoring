@@ -19,8 +19,8 @@ FastAPI router modules defining all API endpoints (17 routers, registered in `ma
 - `efficiency.py` — `/api/efficiency/score` — 0-100 weighted Token Efficiency Score per category
 - `analysis.py` — `/api/analysis/*` — stop-reason distribution + output-length histograms
 - `parity.py` — `/api/parity/*` — catalog, latest (완료 런 매트릭스 + 직전 런 대비 changes diff, s-maxage=60), evidence (셀별 증거), trigger (JWT, backend 내 백그라운드 스레드 — 스케줄 런과 달리 Fargate 아님)
-- `gptbench.py` — `/api/gptbench/*` — latest (최신 사이클 채널 스코어 카드), trend?hours= (사이클×채널 median 시계열) (public, v2.18.0)
-- `features.py` — `/api/features/*` — catalog (39행×5 surface 정의), latest (완료 런 매트릭스 + 직전 런 대비 diff(kind: catalog|measured — 신규 셀, 사전판정 행은 catalog, v2.24.0) + drift), evidence (셀별 요청 스냅샷·응답 신호), trigger (JWT, backend 내 백그라운드 스레드) (v2.23.0)
+- `gptbench.py` — `/api/gptbench/*` — latest (최신 **완료** 사이클 채널 스코어 카드 — 시작 후 14분 지난 사이클만 완료, 18채널 v2.28.0, `fam_rank` Astra, Sol, Luna, Terra, 5.5, 5.4), trend?hours= (사이클×채널 median 시계열) (public, v2.18.0)
+- `features.py` — `/api/features/*` — catalog (39행×5 surface 정의), latest (완료 런 매트릭스 + 직전 런 대비 diff(kind: catalog|measured — 신규 셀, 사전판정 행은 catalog, v2.24.0) + drift), evidence (셀별 요청 스냅샷·응답 신호), trigger (JWT, backend 내 백그라운드 스레드, 5모델 975셀 약 9분 — v2.28.0) (v2.23.0)
 
 ## Conventions
 - All routers use `prefix="/api/..."` and appropriate `tags`

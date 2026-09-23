@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-23
-- **Related**: ADR-019 (Mantle Path 4), ADR-025 (Global CRIS + 채널별 단가 분리), ADR-027 (GPT-6 Astra, 유사 리전 `us`), v2.22.0/v2.22.1 (Fable 5.1 substring 오등록), v2.27.0
+- **Related**: ADR-019 (Mantle Path 4), ADR-025 (Global CRIS + 채널별 단가 분리), ADR-027 (GPT-6 Astra, 유사 리전 `us`), v2.22.0/v2.22.1 (Fable 5.1 substring 오등록), v2.27.0, v2.28.0 후속 (Sol/Luna 단가, 벤치, `/claude-features` Opus 5.5)
 
 ## Context
 
@@ -50,6 +50,7 @@
 5. **단가**: GPT-6 Astra 모델 카드에는 이제 공식 단가가 게재돼 있다(Standard, 입력 272K 이하):
    In-Region, Geo CRIS $11 / $55, Global CRIS $10 / $50 (30분 캐시 쓰기 $13.75 / $12.50, 캐시 읽기
    $1.10 / $1.00, 272K 초과 시 입력 2배). Sol/Luna는 카드가 없고 Price List API에도 항목이 없다.
+   (→ v2.28.0: Bedrock `ListFoundationModelAgreementOffers` rate card에서 단가를 읽어 반영 — 아래 "v2.28.0 후속".)
    Opus 5.5는 Anthropic 정가 $4 / $20이다(Bedrock 가격 페이지는 동적 렌더링이라 수치 미추출 — Opus 5,
    Fable 5.1과 동일하게 정가를 적용).
 
@@ -95,6 +96,7 @@
   - GPT-6 Sol/Luna: **미기재 유지**(추정값 금지). 6채널 모두 `get_pricing`이 `None` → 비용 "-".
     `gpt-6-sol`은 `gpt-6-astra*` 어느 키와도 접두 관계가 아니어서 fallback 오매칭이 없다(회귀 테스트로 고정).
     확정 시 모델마다 인리전, `-global`, `-us` 3키를 **한 커밋에** 추가한다.
+    → **v2.28.0에서 반영**: AWS 소유 1차 출처인 agreement offer rate card로 6키를 한 커밋에 추가했다(아래 "v2.28.0 후속").
 
 - **패리티 `_REASONING_MARKERS`에 `gpt-6`을 넣지 않는다**. Astra(ADR-027)와 같은 이유다 — 프로브 판정 근거인
   `reasoning_tokens > 0`이 effort `low`에서 0이라 마커를 넣으면 "미지원"으로 오판한다. effort `high`에서는
@@ -103,6 +105,8 @@
 - **범위 밖(별도 결정)**: gptbench `_BENCH_SPECS` 미포함(15분 주기 벤치 채널 추가는 비용 결정 — ADR-025,
   v2.25.1 선례), `/claude-features` 대표 모델 미포함(사용자 결정 세트 Fable 5.1·Fable 5·Opus 5·Sonnet 5),
   1P 스펙 미추가(v2.19.1부터 휴면, Astra 선례).
+  → v2.28.0(2026-09-23 사용자 결정): 벤치에 Sol/Luna 6채널 편입(12 → 18채널), `/claude-features` 대표 모델에
+  Opus 5.5 편입(4 → 5모델). 1P는 여전히 미추가. 아래 "v2.28.0 후속"과 ADR-026 부록 참조.
 
 - **배포 경로**: 신규 env `BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID=openai.gpt-6-sol`,
   `BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID=openai.gpt-6-luna`를 CDK AppServices(backend)와 Scheduler
@@ -125,11 +129,59 @@ US CRIS 3; 휴면 1P 5 포함 총계 51 → 60). reliability/cost/analysis/effic
   (인리전 리전만 모델별로 다름).
 - (+) Astra 비용이 "-"에서 실금액으로 바뀌어 30일 예측, 채널 비교 합계에 반영된다.
 - (−) **Sol/Luna 6채널은 비용 "-"** — AWS 모델 카드 게재 후 3키씩 추가 필요.
+  → 해소(v2.28.0): agreement offer rate card 단가 반영. 모델 카드가 게재되면 카드와 재대조만 남는다.
 - (−) **Opus 5 CP 이력 공백** — 오등록 기간(CP가 5.5를 서빙하기 시작한 뒤부터 이번 배포까지) 동안 실제
   `claude-opus-5` CP 측정값이 없다. 그 기간 행은 `label_repair`로 Opus 5.5 이력으로 옮겨지며 복원은 불가.
 - (−) Sol/Luna Mantle us-east-2/us-west-2, Astra Mantle us-east-1/us-east-2 공백 — 재확인 후 스펙 튜플에
   리전만 추가하면 편입된다.
+  → v2.28.0 정정: **Astra Mantle us-east-1/us-east-2는 "현재 미지원 — 2026-09-23 사용자 결정으로 제외"**이며 정기
+  재확인 대상이 아니다(ADR-027 정정). Sol/Luna Mantle us-east-2/us-west-2는 2026-09-23 기준 404이고 별도 결정은 없다.
 - 배포 검증: `/api/auto-probe/latest` 55행, CP 9행에서 `anthropic:claude-opus-5` → `Anthropic Claude Opus 5 (US)`,
   `anthropic:claude-opus-5-5` → `Anthropic Claude Opus 5.5 (US)` 매핑, OpenAI 25행 + 신규 6채널 첫 `success` 확인.
   backend 기동 로그에서 `Label repair: … anthropic:claude-opus-5-5 'Anthropic Claude Opus 5 (US)' -> 'Anthropic Claude Opus 5.5 (US)'`
   확인.
+
+## v2.28.0 후속 (2026-09-23)
+
+- **GPT-6 Sol/Luna 단가 반영 — 출처: Bedrock `ListFoundationModelAgreementOffers` rate card.** AWS 모델 카드와 Price
+  List API에는 여전히 항목이 없지만, `aws bedrock list-foundation-model-agreement-offers --model-id openai.gpt-6-{sol,luna}`
+  (읽기 전용, us-east-1, us-west-2, ap-northeast-2 모두 같은 값)가 offer의 `termDetails.usageBasedPricingTerm.rateCard[]`
+  (per MTok)를 돌려준다. offer id: Sol `offer-pycji3sz5gpcc`, Luna `offer-gmo53nkzc5or6`.
+  - **차원 매핑**: `input_tokens_standard` / `output_tokens_standard` = In-Region(Mantle) + Geo CRIS(US) → base 키와
+    `-us` 키, `input_tokens_global_standard` / `output_tokens_global_standard` = Global CRIS → `-global` 키.
+    priority, flex, long-context(272K 초과) 차원은 쓰지 않는다(프로브는 항상 standard, short-context — Astra와 동일).
+
+    | 키 | input | output | 출처 차원 |
+    |----|-------|--------|-----------|
+    | `gpt-6-sol`, `gpt-6-sol-us` | $2.20 | $11.00 | `*_standard` |
+    | `gpt-6-sol-global` | $2.00 | $10.00 | `*_global_standard` |
+    | `gpt-6-luna`, `gpt-6-luna-us` | $0.11 | $0.55 | `*_standard` |
+    | `gpt-6-luna-global` | $0.10 | $0.50 | `*_global_standard` |
+
+    rate card의 캐시 읽기 단가(Sol $0.22 / Global $0.20, Luna $0.011 / Global $0.01)와 30분 캐시 쓰기 단가(Sol
+    $2.75 / $2.50, Luna $0.1375 / $0.125)도 있으나 `PRICE_TABLE`은 input/output만 둔다(기존 정책).
+  - **교차 검증**: 같은 API로 읽은 Astra offer(`offer-7epta7rbw5aws`, standard $11 / $55, global_standard $10 / $50)가
+    Astra 공식 모델 카드와 정확히 일치한다. Sol/Luna 값은 OpenAI 정가(Sol $2 / $10, Luna $0.10 / $0.50)에 AWS 카드가
+    문서화한 In-Region, Geo +10%를 더한 값과도 같다.
+  - **정책**: 6키를 `backend/pricing.py`와 `frontend/src/lib/pricing.ts`에 한 커밋(d6bf474)으로 추가했고, 테스트가 6채널
+    id의 정확한 채널별 단가와 Astra 키로의 prefix fallback 부재를 고정한다. 비용은 조회 시점 계산이라 v2.27.0 이후
+    Sol/Luna 행도 소급 산정된다(ADR-025 정책). **모델 카드가 게재되면 카드와 다시 대조한다** — 다르면 카드가 우선이다.
+- **GPT on AWS 벤치 편입 (사용자 결정 2026-09-23)**: `gptbench._BENCH_SPECS` 끝에 `("GPT 6 Sol", …, ("global", "us",
+  "us-east-1"))`와 Luna 한 줄씩 → 벤치 **12 → 18채널**(Mantle 인리전 11 + CRIS 7). 목록 끝에 둔 이유는 사이클이
+  데드라인(780초)에 걸리면 뒤 채널부터 skip되므로 컷이 신규 채널에 떨어져 기존 12채널 시계열이 끊기지 않기 때문이다.
+  - 벤치 요청 형태 그대로(Responses 스트림, 고정 입력 55,839토큰, `max_output_tokens` 4096, verbosity low, reasoning
+    effort medium, `include: reasoning.encrypted_content`, `store: false`, `prompt_cache_retention: 24h`)의 6채널 라이브
+    확인: 전부 HTTP 200 `response.completed`. Sol은 `reasoning_tokens` 0(출력 31~35토큰), Luna는 34~47(출력 64~82토큰) —
+    벤치 카드의 Sol reasoning 0은 결함이 아니다(위 Decision의 패리티 판단과 같은 관찰). US, us-east-1은 첫 호출부터
+    캐시 히트 55,837 / 55,839, Global은 첫 호출이 콜드(0)였다.
+  - 사이클 시간: 12채널 실측(2026-09-22, 96사이클) p50 386초, p95 508초, 최대 682초에서 외삽한 18채널 예측은 p50 약
+    10분, p90 약 12분, p95 약 775초로 데드라인 780초에 근접한다 — 초과분은 신규 채널에서 먼저 잘린다.
+  - 비용 추정(신규 6채널): 채널당 사이클 11호출(워밍업 1 + 측정 10) × 96사이클/일 = 1,056호출, 호출당 입력 55,839토큰
+    중 55,837이 캐시 히트 → 채널당 약 59M 캐시 읽기 토큰/일. 위 rate card 캐시 읽기 단가를 곱하면 Sol 3채널 약 $37.7,
+    Luna 3채널 약 $1.9, 출력(Sol 호출당 약 33토큰, Luna 약 64~82토큰) 약 $1.2 → **약 $41/일**(Sol 약 $39, Luna 약 $2).
+    콜드 캐시 호출(Sol 1회 약 $0.12~0.15)은 드물어 제외했다. 캐시가 전혀 없다면 약 $396/일이다.
+  - 같은 릴리스에서 벤치를 하드닝했다: OpenAI 클라이언트 `max_retries=0`, 호출당 wall-clock watchdog(`CALL_TIMEOUT_S`)
+    — 2026-09-16~17 GPT 5.4 us-east-2 워밍업 1회가 약 3,540초 걸린 사고 대응(CHANGELOG v2.28.0).
+- **`/claude-features` 편입**: Claude Opus 5.5를 5번째 대표 모델로 추가 — 975셀, 자세히는 ADR-026 부록(v2.28.0).
+- **Astra Mantle us-east-1/us-east-2**: 2026-09-23 사용자 결정으로 "현재 미지원 — 제외" 확정, 정기 재확인 대상 아님
+  (ADR-027 정정). Sol/Luna Mantle us-east-2/us-west-2(404)에는 별도 결정이 없다.

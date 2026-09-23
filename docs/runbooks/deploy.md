@@ -13,7 +13,7 @@
 make verify
 ```
 
-CDK lint + typecheck + 63 tests + cdk-nag clean + ruff + pytest 23 + frontend tsc 모두 PASS 확인.
+CDK lint + typecheck + jest(v2.28.0 기준 77) + cdk-nag clean + ruff + pytest(318) + frontend tsc + vitest(216) 모두 PASS 확인.
 
 ## 2. 컨테이너 이미지 빌드 + ECR push
 
@@ -63,7 +63,7 @@ td = json.load(open('/tmp/td-be.json'))['taskDefinition']
 out = {k:v for k,v in td.items() if k in ['family','containerDefinitions','volumes','taskRoleArn','executionRoleArn','networkMode','cpu','memory','requiresCompatibilities','runtimePlatform']}
 for c in out['containerDefinitions']:
     if 'bedrock-monitor-backend' in c.get('image',''):
-        c['image'] = '${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/bedrock-monitor-backend:${TAG}'
+        c['image'] = '${ACCOUNT}.dkr.ecr.${REGION}.amazonaws.com/bedrock-monitor-backend-v2:${TAG}'  # ADR-018 repo
 open('/tmp/td-be-new.json','w').write(json.dumps(out))
 "
 BE_ARN=$(aws ecs register-task-definition --region $REGION \
@@ -72,9 +72,13 @@ BE_ARN=$(aws ecs register-task-definition --region $REGION \
 aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
-# Autoprober / Insights / ParityRun / FeaturesVerify schedule도 동일하게 (각각 별도 Fargate Task — backend image 공용)
-# ParityRun (v2.11.0): family BedrockMonitorSchedulerParityRunTaskDef*, schedule rate(12 hours)
-# FeaturesVerify (v2.23.0): family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule rate(24 hours), CLI features_runner --once
+# 스케줄 태스크 5개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
+# AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once
+# Insights:       family BedrockMonitorSchedulerInsightsTaskDef*,       schedule rate(5 minutes),  CLI insights_runner --window 6h
+# ParityRun:      family BedrockMonitorSchedulerParityRunTaskDef*,      schedule rate(12 hours),   CLI parity_runner --once (v2.11.0)
+# GptBench:       family BedrockMonitorSchedulerGptBenchTaskDef*,       schedule rate(15 minutes), CLI gptbench_runner --once (v2.18.0)
+# FeaturesVerify: family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule rate(24 hours),   CLI features_runner --once (v2.23.0)
+# 정확한 family 이름: aws ecs list-task-definition-families --family-prefix BedrockMonitorScheduler --status ACTIVE --region $REGION
 aws ecs describe-task-definition --task-definition BedrockMonitorSchedulerAutoProberTaskDef* \
   --region $REGION > /tmp/td-ap.json
 # ... (위와 동일하게 image 교체 + register) ...
@@ -200,10 +204,12 @@ curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 #   로컬 라이브 검증과 Fargate 내부의 네트워크 경로가 다름 (ADR-025).
 # US CRIS 3채널(openai:us:us.openai.gpt-6-*)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
 #   미주입이면 prober가 조용히 skip해 25행이 22행이 된다 (ADR-027).
-# GPT-6 Astra는 Mantle us-east-1/us-east-2, GPT-6 Sol/Luna는 Mantle us-east-2/us-west-2에서 404라
-#   그 채널은 없는 것이 정상 (ADR-027, ADR-028). Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가
-#   빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지, CDK 양 스택 배포 (v2.27.0).
-# GPT-6 Sol/Luna 6채널은 단가 미확정 — 비용 화면 "-"가 정상 (Astra는 v2.27.0에서 공식 단가 반영).
+# GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원(2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님),
+#   GPT-6 Sol/Luna Mantle us-east-2/us-west-2는 404 — 그 채널은 없는 것이 정상 (ADR-027, ADR-028).
+#   Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가 빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지,
+#   CDK 양 스택 배포 (v2.27.0).
+# v2.28.0부터 GPT-6 Sol/Luna 6채널도 비용이 표시된다(agreement offer rate card 단가 — Sol $2.20/$11, Global $2/$10,
+#   Luna $0.11/$0.55, Global $0.10/$0.50). /cost에서 이 6채널이 "-"면 이미지가 v2.28.0이 아니다(pricing 키 누락).
 # 첫 프로브 cycle 후 아래 명령으로 25행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
@@ -214,6 +220,60 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
 
 - v2.23.0: `aws ecs run-task`로 FeaturesVerify 1회 실행 후 `/ecs/features` 로그에 `bedrock_messages` AccessDenied 0건 +
   `GET /api/features/latest` run.status completed, 드리프트 25건(Mantle fable-5 23 + fallback_credit 2) 대조.
+  (v2.28.0부터 Mantle fallback_credit 2건은 프로브 수정으로 해소 — 아래 v2.28.0 확인 참조.)
+
+### 5-1. v2.28.0 배포 경로와 확인 (2026-09-23)
+
+**배포 경로**: 신규 env, IAM 변경 없음. CDK 변경은 주석과 `FeaturesVerifySchedule` description
+("Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 5 models, daily")뿐이다.
+backend 서비스와 스케줄 태스크 5개가 함께 새 이미지로 가도록 **digest 고정 CDK로 `BedrockMonitor-AppServices` +
+`BedrockMonitor-Scheduler`**를 배포한다(§3 경고 — `-c backendImage=<전체 URI>:$TAG@sha256:…`, `-c frontendImage=…`).
+배포 후 두 스택의 task def image가 새 digest인지 확인한다(`aws ecs describe-task-definition … --query 'taskDefinition.containerDefinitions[].image'`).
+
+**GPT on AWS 벤치 (18채널)**:
+
+```bash
+# 첫 18채널 사이클 로그 — "cycle start: 18 channels x 10 runs", 끝에 "cycle done: rows=180 errors=0 skipped=none elapsed=…s"
+aws logs tail /ecs/gptbench --since 30m --region ap-northeast-2 | grep -E "cycle (start|done)|WallClockTimeout"
+# 스코어 카드 — 18장, 그중 GPT 6 Sol/Luna 6장(Global, US, us-east-1)
+curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{cycle_ts, n: (.channels|length),
+  sol_luna: [.channels[] | select(.family|test("^GPT 6 (Sol|Luna)$")) | {model_name, runs, success, cache_hit_rate, median_reasoning_tokens}]}'
+```
+
+- 기댓값: `n` = 18, Sol/Luna 6장 모두 `runs` 10, `success` 10, `cache_hit_rate` ≈ 1.0(워밍업 1회가 콜드 캐시를 흡수 — 저장되는
+  10회는 캐시 히트), Sol `median_reasoning_tokens` 0은 정상(결함 아님), Luna는 수십 토큰.
+- `/api/gptbench/latest`는 **시작 후 14분이 지난 사이클만 "완료"로 보고** 진행 중이면 직전 사이클을 돌려주므로 최신
+  사이클보다 약 15~30분 늦다. 배포 직후 12장이 보이면 아직 옛 사이클이다 — 다음 15분 뒤 다시 확인.
+- 사이클 예측 p50 약 10분, p95 약 775초(데드라인 780초). `skipped=`에 Sol/Luna가 찍히면 데드라인 컷이다(뒤 채널부터 잘리도록
+  Sol/Luna를 목록 끝에 둠). 반복되면 `GPT_BENCH_RUNS` 또는 `GPT_BENCH_DEADLINE`을 조정한다.
+- `WallClockTimeout: wall-clock timeout after 90s` 오류 행은 호출당 상한(`GPT_BENCH_CALL_TIMEOUT`)에 걸린 호출이다 — 드물어야 정상.
+
+**FeaturesVerify 수동 1회 (975셀)** — 일 1회 스케줄을 기다리지 않고 확인:
+
+```bash
+REGION=ap-northeast-2
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerFeaturesVerifyTaskDef   --status ACTIVE --region $REGION --query 'families[0]' --output text)
+# 네트워크 설정은 스케줄 타깃에서 복사: aws scheduler get-schedule … --query 'Target.EcsParameters.NetworkConfiguration'
+#   (Scheduler는 Subnets/SecurityGroups/AssignPublicIp, run-task는 subnets/securityGroups/assignPublicIp 키)
+aws ecs run-task --cluster bedrock-monitor --task-definition "$FAM" --launch-type FARGATE --region $REGION   --network-configuration '{"awsvpcConfiguration":{"assignPublicIp":"DISABLED","securityGroups":["<sg>"],"subnets":["<subnet-a>","<subnet-b>"]}}'
+# 약 9분 뒤
+curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.catalog_version, totals: .run.totals,
+  n: (.results|length), opus55: ([.results[]|select(.model_key=="opus-5-5")]|length),
+  catalog_changes: ([.changes[]|select(.kind=="catalog")]|length),
+  measured: [.changes[]|select(.kind=="measured")|{feature,surface,model_key,before,after}],
+  fc_mantle: [.results[]|select(.feature=="fallback_credit" and .surface=="mantle")|{model_key,status,verdict}]}'
+```
+
+- 기댓값: `cv` = `2026-09-23`, `n` = 975(totals 6상태 합도 975), `opus55` = 195, broken 0 목표.
+- 변경 배너: **카탈로그 변경 195건**(직전 런에 없던 `opus-5-5` 셀) — 정상. 실측 변경에는 Mantle `fallback_credit`
+  opus-5, sonnet-5의 `unsupported → supported`가 보여야 한다(beta 이름 수정).
+- `fc_mantle`: opus-5-5, opus-5, sonnet-5 = supported / match, fable-5 = unsupported / drift(데이터 보존 opt-in — 기존 클러스터),
+  fable-5-1 = not_applicable. Mantle fallback_credit이 여전히 drift ×3이면 이미지가 v2.28.0이 아니다.
+- 스케줄 런은 이후 일 1회 그대로다. 수동 트리거(`POST /api/features/trigger`, JWT)도 가능하나 backend 스레드에서 약 9분 돈다.
+
+**비용 화면**: `/cost`에서 GPT-6 Sol/Luna 6채널에 금액이 나오는지(위 §5 주석) 확인.
+
+**운영 후속 (코드 없음)**: 패리티 구 라벨 확인은 릴리스 12시간 뒤(다음 패리티 런 이후)로 예약돼 있다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 

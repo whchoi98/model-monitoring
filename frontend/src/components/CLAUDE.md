@@ -7,7 +7,8 @@ React UI components for the monitoring dashboard (monitoring panels, shared UI p
 - `RumProvider.tsx` — RUM(Real User Monitoring, v2.16.5): 자체 호스팅 `public/rum-sdk.min.js`를 next/script로 로드, appName=llm-monitor. `NEXT_PUBLIC_RUM_ENDPOINT/_API_KEY`는 **빌드 타임** 인라인 — 미설정 빌드는 수집 비활성
 - `AppHeader.tsx` — 공용 헤더 (v2.16.0): NavItem 데이터 기반 — 데스크톱(md+) 별도 가로 내비 행 / 모바일 햄버거 드롭다운, 페이지별 `actions` 슬롯. 로그인 필요 메뉴(수동 프로브·프롬프트)는 항목 순서상 맨 뒤 (v2.16.1)
 - `AutoDashboard.tsx` — Main dashboard: monitoring overview, catalog coverage, scoped 12h failures, DB-sourced collection status, model search/health/sort filters, and shareable trend selection
-- `ModelStatusGrid.tsx` — family-grouped cards by default; flat attention/TTFT sorting; explicit freshness, missing results, metrics and expandable errors
+- `ModelStatusGrid.tsx` — family-grouped cards by default; flat attention/TTFT sorting; explicit freshness, missing results, metrics and expandable errors. **Metric value grading (v2.28.0, ADR-029)**: TTFT/total latency/TPS value text is graded per workload category by `lib/metricGrade.ts` (single source — threshold table, `roundForDisplay` so the grade matches the shown number, `GRADE_TEXT_CLASS`, `GRADE_MARKER` ▲/◆); each value has `data-grade` + `title` tooltip, warning/critical values get an `sr-only` description via `aria-describedby`, and `MetricGradeLegend` (`<details>`) above the grid expands into the full threshold table. Change thresholds only in `metricGrade.ts`.
+- `GptOnAwsPanel.tsx` — GPT on AWS bench (v2.18.0): 18 channels since v2.28.0 (Mantle in-region 11 + CRIS 7). Scorecards grouped by generation (`FAMILY_GROUPS` GPT 6 / GPT 5.x, unknown families go to an "Other" column), trend lines color = region × dash = family (`FAMILY_DASH`, 6 distinct patterns, 40px legend swatch); `regionOf`, `familyOf` (anchored regex — "GPT 5.6 Sol" never reads as "6 Sol", unknown → ""), `groupCardsByFamily` are named exports tested by vitest (`frontend/vitest.config.ts`). New bench families need `FAMILY_DASH` + `FAMILY_GROUPS` here and `fam_rank` in `backend/routers/gptbench.py`.
 - `TrendChart.tsx` — Recharts LineChart (TTFT / latency / TPS); `MODEL_COLORS` + `FAMILY_FALLBACK`
 - `LatencyChart.tsx`, `StatsCards.tsx`, `ProgressBar.tsx` — supporting dashboard widgets
 - `ModelSelector.tsx` — multi-select model chips (`selectedModels: Set<string>`)
@@ -31,7 +32,8 @@ React UI components for the monitoring dashboard (monitoring panels, shared UI p
 - Charts retain real time intervals and missing-value gaps; `isolatedSampleTimes` keeps isolated successes visible in dense series.
 
 ## Patterns
-- Color coding: emerald (good) → amber (warning) → rose (bad)
+- Color coding: emerald (good) → amber (warning) → rose (bad) — channel health (`HealthBadge`) and status palettes
+- Metric **value** grades on dashboard cards use a different palette by user request: **blue** (normal) → amber ▲ (warning) → rose ◆ (critical), from `lib/metricGrade.ts` (ADR-029). Do not swap the normal blue for emerald — blue means "fast value", emerald means "healthy channel"
 - `model_name` labels carry a `"Bedrock <family> (<channel>)"` / `"Anthropic <family> (US)"` prefix;
   `TrendChart` `MODEL_COLORS` keys and `lib/sortModels.ts` `FAMILY_ORDER` must match these byte-for-byte
 - Sort order: Anthropic → Global(Bedrock·OpenAI `(Global)` 공통) → US(Bedrock US·OpenAI US CRIS) → OpenAI 리전, family newest-first (`sortModels.ts` `channelRank`/`familyRank`)
