@@ -1,8 +1,38 @@
+import type { WorkloadCategoryId } from "./metricGrade";
+
 export interface MetricInfo {
   name: string;
   unit: string;
   desc: string;
 }
+
+/** 카드 지표 등급 툴팁 입력 (lib/metricGrade.ts describeGrade 결과 + 표시용 이름). */
+export interface GradeHintParams {
+  grade: "normal" | "warning" | "critical";
+  metric: string;
+  scope: string;
+  warnAt: number;
+  critAt: number;
+  unit: "ms" | "tok/s";
+  lowerIsWorse: boolean;
+}
+
+export interface MetricGradeTexts {
+  names: Record<"normal" | "warning" | "critical", string>;
+  legendLabel: string;
+  legendScope: string;
+  showCriteria: string;
+  criteriaNote: string;
+  allWorkloads: string;
+  defaultCategory: string;
+  categories: Record<WorkloadCategoryId, string>;
+  threshold: (value: number, unit: "ms" | "tok/s") => string;
+  hint: (params: GradeHintParams) => string;
+}
+
+// 임계치 표기 — 지연시간은 초 단위(3.5초), TPS는 tok/s 그대로.
+const koThreshold = (value: number, unit: "ms" | "tok/s") => unit === "ms" ? `${Number((value / 1000).toFixed(1))}초` : `${value} tok/s`;
+const enThreshold = (value: number, unit: "ms" | "tok/s") => unit === "ms" ? `${Number((value / 1000).toFixed(1))} s` : `${value} tok/s`;
 
 export interface Translations {
   common: {
@@ -91,6 +121,7 @@ export interface Translations {
     metricGuide: string;
     channelsGuide: string;
     selectionMissing: string;
+    grade: MetricGradeTexts;
   };
   // Top tabs
   dashboardTab: string;
@@ -242,6 +273,22 @@ export const ko: Translations = {
     triggerBusy: "이미 수집 중입니다. 완료 후 다시 실행할 수 있습니다.",
     triggerFailed: "프로브 실행 요청에 실패했습니다.", metricGuide: "지표 해설", channelsGuide: "호출 채널 안내",
     selectionMissing: "선택한 모델 중 이 조건에 결과가 없는 모델이 있습니다.",
+    grade: {
+      names: { normal: "정상", warning: "경고", critical: "위험" },
+      legendLabel: "지표 등급", legendScope: "워크로드 카테고리별 기준", showCriteria: "기준값 보기",
+      criteriaNote: "지연시간은 기준값 이상, TPS는 기준값 미만이면 해당 등급입니다. 성공한 호출의 값만 판정합니다.",
+      allWorkloads: "전체 워크로드 공통", defaultCategory: "카테고리 미지정",
+      categories: { "chat-short": "짧은 대화", structured: "JSON 추출", summarize: "요약", translate: "번역", "code-gen": "코드 생성", reasoning: "추론" },
+      threshold: koThreshold,
+      hint: ({ grade, metric, scope, warnAt, critAt, unit, lowerIsWorse }) => {
+        const name = { normal: "정상", warning: "경고", critical: "위험" }[grade];
+        const [w, c] = [koThreshold(warnAt, unit), koThreshold(critAt, unit)];
+        const worse = lowerIsWorse ? "미만" : "이상";
+        const rule = grade === "normal" ? `${w} ${lowerIsWorse ? "이상" : "미만"}`
+          : grade === "warning" ? `${w} ${worse}, 위험 ${c} ${worse}` : `${c} ${worse}`;
+        return `${name} — ${scope} 기준 ${metric} ${rule}`;
+      },
+    },
   },
   // Top tabs
   dashboardTab: "대시보드",
@@ -429,6 +476,22 @@ export const en: Translations = {
     triggerBusy: "Collection is already running. Wait for it to finish before starting another probe.",
     triggerFailed: "Could not start the probe.", metricGuide: "Metric guide", channelsGuide: "Channel guide",
     selectionMissing: "Some selected models have no results matching these filters.",
+    grade: {
+      names: { normal: "Normal", warning: "Warning", critical: "Critical" },
+      legendLabel: "Metric grades", legendScope: "graded per workload category", showCriteria: "View thresholds",
+      criteriaNote: "Latency is graded at or above each value, TPS below it. Only successful calls are graded.",
+      allWorkloads: "All workloads", defaultCategory: "Uncategorized",
+      categories: { "chat-short": "Short chat", structured: "JSON extraction", summarize: "Summarization", translate: "Translation", "code-gen": "Code generation", reasoning: "Reasoning" },
+      threshold: enThreshold,
+      hint: ({ grade, metric, scope, warnAt, critAt, unit, lowerIsWorse }) => {
+        const name = { normal: "Normal", warning: "Warning", critical: "Critical" }[grade];
+        const [w, c] = [enThreshold(warnAt, unit), enThreshold(critAt, unit)];
+        const worse = lowerIsWorse ? "below" : "at or above";
+        const rule = grade === "normal" ? `${metric} ${lowerIsWorse ? "at or above" : "below"} ${w}`
+          : grade === "warning" ? `${metric} ${worse} ${w}, critical ${worse} ${c}` : `${metric} ${worse} ${c}`;
+        return `${name} — ${scope}: ${rule}`;
+      },
+    },
   },
   // Top tabs
   dashboardTab: "Dashboard",

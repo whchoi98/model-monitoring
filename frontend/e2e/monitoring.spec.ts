@@ -130,3 +130,35 @@ test("a paused display does not keep an expired running cycle marked active", as
   await page.clock.fastForward(16 * 60_000);
   await expect(status).toContainText("수집 지연");
 });
+
+test("card metric values are graded per workload category with a non-color cue in both themes", async ({ page }) => {
+  const fixture = await mockApi(page);
+  // chat-short 기준: TTFT 3200ms → 경고(≥3000), 총 12s → 위험(≥10000), TPS 12 → 위험(<15)
+  const latest = fixture.latest.map((row, index) => index === 0 ? { ...row, ttft_ms: 3200, total_latency_ms: 12_000, tps: 12 } : row);
+  await page.route("**/api/auto-probe/latest*", (route) => route.fulfill({ json: latest }));
+  await page.goto("/");
+  const models = page.getByRole("region", { name: "모델별 최신 상태" });
+  const slow = models.getByRole("article").filter({ hasText: modelCatalog[0].name });
+  const values = slow.locator("[data-grade]");
+  await expect(values).toHaveCount(3);
+  expect(await values.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["warning", "critical", "critical"]);
+  await expect(values.first()).toHaveAttribute("title", "경고 — 짧은 대화 기준 TTFT 3초 이상, 위험 8초 이상");
+  await expect(slow.getByRole("button").first()).toHaveAccessibleDescription(/TTFT 3200ms, 경고 — 짧은 대화 기준/);
+  await expect(values.first()).toContainText("▲");
+  await expect(values.nth(1)).toContainText("◆");
+
+  const healthy = models.getByRole("article").filter({ hasText: modelCatalog[3].name }).locator("[data-grade]");
+  expect(await healthy.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["normal", "normal", "normal"]);
+  await expect(models.getByRole("article").filter({ hasText: modelCatalog[1].name }).locator("[data-grade]")).toHaveCount(0);
+
+  const colors = async () => [values.first(), values.nth(1), healthy.first()].reduce<Promise<string[]>>(
+    async (acc, locator) => [...await acc, await locator.evaluate((node) => getComputedStyle(node).color)], Promise.resolve([]));
+  expect(await colors()).toEqual(["rgb(252, 211, 77)", "rgb(251, 113, 133)", "rgb(147, 197, 253)"]);
+  await page.evaluate(() => document.documentElement.classList.add("light"));
+  expect(await colors()).toEqual(["rgb(180, 83, 9)", "rgb(190, 18, 60)", "rgb(29, 78, 216)"]);
+
+  await models.getByText("기준값 보기", { exact: true }).click();
+  await expect(models.getByRole("row", { name: /짧은 대화/ })).toContainText("3초");
+  await expect(models.getByRole("row", { name: /카테고리 미지정/ })).toContainText("24초");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
