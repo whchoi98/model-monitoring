@@ -82,6 +82,18 @@ describe("buildGroups", () => {
     expect(buildGroups(features, groups, ["cp"], two, "ko", "drift", "sonnet-5").map((g) => g.id)).toEqual(["core"]);
     expect(buildGroups(features, groups, ["cp"], two, "ko", "unsupported", "opus-5")).toEqual([]);
   });
+  test("modelOrder (v2.28.0): per-model list follows catalog order, not DB completion order; unknown keys go last; [] keeps input order", () => {
+    const order = ["fable-5-1", "fable-5", "opus-5-5", "opus-5", "sonnet-5"];
+    // latest.results는 프로브 완료 순 — 5모델이 뒤섞여 들어온다
+    const shuffled = ["sonnet-5", "opus-5", "zz-unknown", "fable-5-1", "opus-5-5", "fable-5"].map((k) => cell({ feature: "a", model_key: k }));
+    const keysOf = (o: readonly string[]) => buildGroups(features, groups, ["cp"], shuffled, "ko", "all", null, o)[0].rows[0].cells.cp.cells.map((c) => c.model_key);
+    expect(keysOf(order)).toEqual([...order, "zz-unknown"]);
+    expect(keysOf([])).toEqual(["sonnet-5", "opus-5", "zz-unknown", "fable-5-1", "opus-5-5", "fable-5"]);
+    // 입력 배열은 건드리지 않는다 (useMemo 입력 불변)
+    expect(shuffled.map((c) => c.model_key)[0]).toBe("sonnet-5");
+    // 모델 칩과 함께 써도 그 모델 하나만
+    expect(buildGroups(features, groups, ["cp"], shuffled, "ko", "all", "opus-5-5", order)[0].rows[0].cells.cp.cells.map((c) => c.model_key)).toEqual(["opus-5-5"]);
+  });
 });
 
 describe("surfaceHealth", () => {

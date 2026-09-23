@@ -36,13 +36,15 @@ def region_for(surface: str) -> str:
     return os.environ.get(meta["region_env"], meta["default_region"])
 
 
-# 대표 모델 4종 (사용자 결정 2026-09-05). mantle=None → Mantle Fable 5.1은 US GovCloud 전용.
+# 대표 모델 5종 (2026-09-05 4종 + 2026-09-23 Opus 5.5). mantle=None → Mantle Fable 5.1은 US GovCloud 전용.
 MODELS: list[dict] = [
     {"key": "fable-5-1", "label": "Claude Fable 5.1", "cp": "claude-fable-5-1", "mantle": None,
      "bedrock": "global.anthropic.claude-fable-5-1",
      "mantle_reason": "측정 불가 — Mantle의 Fable 5.1은 US GovCloud(us-gov-west-1) 리전 전용 (상용 리전 미서빙)"},
     {"key": "fable-5", "label": "Claude Fable 5", "cp": "claude-fable-5", "mantle": "anthropic.claude-fable-5",
      "bedrock": "global.anthropic.claude-fable-5"},
+    {"key": "opus-5-5", "label": "Claude Opus 5.5", "cp": "claude-opus-5-5", "mantle": "anthropic.claude-opus-5-5",
+     "bedrock": "global.anthropic.claude-opus-5-5"},
     {"key": "opus-5", "label": "Claude Opus 5", "cp": "claude-opus-5", "mantle": "anthropic.claude-opus-5",
      "bedrock": "global.anthropic.claude-opus-5"},
     {"key": "sonnet-5", "label": "Claude Sonnet 5", "cp": "claude-sonnet-5", "mantle": "anthropic.claude-sonnet-5",
@@ -102,8 +104,8 @@ FEATURES: list[dict] = [
        "SSE/EventStream — 2+ content deltas", _DOC + "build-with-claude/streaming", ALL, "evidence"),
     _f("system_prompt", "core", "시스템 프롬프트", "System prompt", "system 카나리 강제 → 응답 반영",
        "Canary forced via system → appears in reply", _DOC + "build-with-claude/prompt-engineering/system-prompts", ALL, "evidence"),
-    _f("tool_use", "core", "도구 호출", "Tool use", "echo 도구 카나리 왕복 (Fable 5.1은 auto + 지시)",
-       "Echo tool canary round-trip (Fable 5.1: auto + instruction)", _DOC + "agents-and-tools/tool-use/overview", ALL, "evidence"),
+    _f("tool_use", "core", "도구 호출", "Tool use", "echo 도구 카나리 왕복 (Fable 5.1, Opus 5.5는 auto + 지시)",
+       "Echo tool canary round-trip (Fable 5.1, Opus 5.5: auto + instruction)", _DOC + "agents-and-tools/tool-use/overview", ALL, "evidence"),
     # --- model capabilities ---
     _f("context_window_1m", "model", "1M 컨텍스트", "Context window (1M)", "Models API max_input_tokens == 1,000,000 (CP만 검증 경로 있음)",
        "Models API max_input_tokens == 1,000,000 (only CP has a capability endpoint)",
@@ -144,8 +146,8 @@ FEATURES: list[dict] = [
        {"cp": "ga", "mantle": "unknown", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
        "Bedrock: strict 도구가 'Extra inputs are not permitted' (실측 2026-09-05) — structured outputs와 동일 제약"),
     _f("extended_thinking", "model", "확장 추론(budget)", "Extended thinking (budget_tokens)",
-       "대표 4모델은 adaptive-only → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
-       "All 4 models are adaptive-only → documented 400; exact rejection → not_applicable",
+       "대표 모델은 전부 adaptive-only(Opus 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
+       "All representative models are adaptive-only (incl. Opus 5.5) → documented 400; exact rejection → not_applicable",
        _DOC + "build-with-claude/thinking", ALL, "negative"),
     # --- server-side tools ---
     _f("advisor_tool", "server_tools", "Advisor 도구", "Advisor tool", "advisor_20260301 → server_tool_use + advisor result",
@@ -164,7 +166,8 @@ FEATURES: list[dict] = [
        "실측 2026-09-05: CP on AWS, Bedrock InvokeModel, bedrock-runtime Messages API에서 toolset 수락 + tool_use 방출 (문서상 미제공 → undocumented)"),
     _f("computer_use", "client_tools", "컴퓨터 사용", "Computer use", "toolset 20260801 시도 → 400이면 computer_20251124 + beta",
        "Try toolset 20260801 → on 400 fall back to computer_20251124 + beta", _DOC + "agents-and-tools/tool-use/computer-use-tool", ALL_BETA, "evidence",
-       "P-AWS/Bedrock은 toolset 미제공, 대표 모델은 toolset 전용 모델군 → 미지원 가능(정상 발견)"),
+       "실측 2026-09-23(Opus 5.5): CP on AWS, Mantle, bedrock-runtime Messages API, InvokeModel 모두 computer_toolset_20260801을 "
+       "수락하고 tool_use 방출. Opus 5.5는 toolset 전용 모델이라 legacy computer_20251124는 400 거부(CP 실측)"),
     _f("memory_tool", "client_tools", "메모리 도구", "Memory tool", "memory_20250818 → tool_use{memory view}",
        "memory_20250818 → tool_use{memory view}", _DOC + "agents-and-tools/tool-use/memory-tool", ALL, "evidence"),
     _f("text_editor", "client_tools", "텍스트 에디터", "Text editor", "text_editor_20250728 → tool_use{str_replace_based_edit_tool}",

@@ -481,7 +481,10 @@ def _server_tool_evidence(n: NormalizedResponse, tool_name: str, result_type: st
 
 # ---------------------------------------------------------------- server-side tools
 
-_ADVISOR_FOR = {"fable-5-1": "claude-fable-5-1", "fable-5": "claude-fable-5", "opus-5": "claude-opus-5", "sonnet-5": "claude-opus-5"}
+# catalog.MODEL_KEYS 전부를 덮어야 한다 — 빠진 키는 _advisor_model KeyError → run_probe가 broken으로 분류한다
+# (테스트 test_advisor_pairing_covers_every_catalog_model이 지킨다). Opus 5.5는 자기 자신과 페어링(CP 실측 supported, 2026-09-23).
+_ADVISOR_FOR = {"fable-5-1": "claude-fable-5-1", "fable-5": "claude-fable-5", "opus-5-5": "claude-opus-5-5",
+                "opus-5": "claude-opus-5", "sonnet-5": "claude-opus-5"}
 
 
 def _advisor_model(model_key: str) -> str:
