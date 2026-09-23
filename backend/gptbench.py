@@ -43,7 +43,7 @@ INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sente
 # us-east-1/us-east-2는 현재 미지원(404, 2026-09-09·09-23 실측) — 2026-09-23 사용자 결정으로 제외,
 # 정기 재확인 대상 아님.
 # GPT 6 Sol/Luna는 v2.28.0(2026-09-23) 사용자 결정으로 편입 — Mantle 인리전은 us-east-1 단독
-# (us-east-2/us-west-2는 404, 2026-09-23 실측). 목록 **끝**에 두는 이유: 사이클이 데드라인에
+# (us-east-2/us-west-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님). 목록 **끝**에 두는 이유: 사이클이 데드라인에
 # 걸리면 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에 떨어져 기존 12채널 시계열이 끊기지 않는다.
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),

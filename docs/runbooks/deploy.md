@@ -205,7 +205,7 @@ curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 # US CRIS 3채널(openai:us:us.openai.gpt-6-*)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
 #   미주입이면 prober가 조용히 skip해 25행이 22행이 된다 (ADR-027).
 # GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원(2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님),
-#   GPT-6 Sol/Luna Mantle us-east-2/us-west-2는 404 — 그 채널은 없는 것이 정상 (ADR-027, ADR-028).
+#   GPT-6 Sol/Luna Mantle us-east-2/us-west-2도 현재 미지원(404, 2026-09-23 사용자 결정으로 제외) — 그 채널은 없는 것이 정상 (ADR-027, ADR-028).
 #   Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가 빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지,
 #   CDK 양 스택 배포 (v2.27.0).
 # v2.28.0부터 GPT-6 Sol/Luna 6채널도 비용이 표시된다(agreement offer rate card 단가 — Sol $2.20/$11, Global $2/$10,

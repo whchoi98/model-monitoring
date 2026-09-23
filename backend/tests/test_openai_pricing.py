@@ -64,8 +64,9 @@ def test_get_pricing_openai():
 def test_get_pricing_gpt56_global_vs_in_region():
     # 공식 모델 카드 (Standard tier, short context) — global CRIS가 in-region보다 저렴.
     # in-region은 2026-07-30 인하 반영 (Luna -80%, Terra -20%, Sol 불변).
-    assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-sol") == {"input": 5.0, "output": 30.0}
-    assert pricing.get_pricing("openai:us-east-1:openai.gpt-5.6-sol") == {"input": 5.5, "output": 33.0}
+    # v2.28.1: GPT-5.6 Sol 프로모션 단가 (AWS 카드 + agreement offers, 최소 2026-11-21까지)
+    assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-sol") == {"input": 4.0, "output": 20.0}
+    assert pricing.get_pricing("openai:us-east-1:openai.gpt-5.6-sol") == {"input": 4.4, "output": 22.0}
     assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-terra") == {"input": 2.0, "output": 12.0}
     assert pricing.get_pricing("openai:us-east-2:openai.gpt-5.6-terra") == {"input": 2.2, "output": 13.2}
     assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-luna") == {"input": 0.2, "output": 1.2}

@@ -32,16 +32,19 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     # OpenAI GPT (Bedrock Mantle). cached-input 미추적 — input/output만.
     "gpt-5.4": {"input": 2.75, "output": 16.50},
     "gpt-5.5": {"input": 5.50, "output": 33.00},
-    # GPT-5.6 세대 in-region/Geo 단가 — 2026-07-30 AWS 인하 반영 (Luna -80%, Terra -20%, Sol 불변).
+    # GPT-5.6 세대 in-region/Geo 단가 — 2026-07-30 AWS 인하 반영 (Luna -80%, Terra -20%).
     # 출처: AWS 공식 모델 카드 (Standard tier, short context ≤272K — 프로브는 항상 이 구간).
-    "gpt-5.6-sol": {"input": 5.50, "output": 33.00},
+    # Sol은 v2.28.1(2026-09-23, 사용자 결정)에 **프로모션 단가** 반영: In-Region·Geo $4.40/$22, Global $4/$20
+    # (구 $5.50/$33, $5/$30). 모델 카드와 ListFoundationModelAgreementOffers(offer-gnqokrqqvdbgw) 일치.
+    # ⚠️ 프로모션은 "최소 2026-11-21까지" — 종료 후 카드 재확인 필요. 비용은 조회 시점 계산이라 과거 행에도 소급된다.
+    "gpt-5.6-sol": {"input": 4.40, "output": 22.00},
     "gpt-5.6-terra": {"input": 2.20, "output": 13.20},
     "gpt-5.6-luna": {"input": 0.22, "output": 1.32},
     # Global CRIS(openai:global:global.openai.*)는 in-region보다 저렴한 별도 단가 — "-global" suffix 키.
     # ⚠️ 새 모델에 global 리전을 추가하면 여기 "-global" 키도 반드시 함께 추가할 것 —
     # 누락 시 get_pricing의 prefix fallback이 in-region 단가로 조용히 매칭돼 과대 산정됨.
     # ⚠️ 1P direct(openai:1p:*)는 여전히 base 키(in-region 단가) 공유 — 재노출 전 "-1p" 분리 필요.
-    "gpt-5.6-sol-global": {"input": 5.00, "output": 30.00},
+    "gpt-5.6-sol-global": {"input": 4.00, "output": 20.00},  # 프로모션 (위 Sol 주석 참고)
     "gpt-5.6-terra-global": {"input": 2.00, "output": 12.00},
     "gpt-5.6-luna-global": {"input": 0.20, "output": 1.20},
     # GPT 6 Astra — v2.25.0 미확정 → v2.27.0에서 AWS 공식 모델 카드 단가 반영 (Standard, ≤272K).

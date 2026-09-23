@@ -84,3 +84,16 @@ describe("getPricing — OpenAI pseudo-region 채널 분리", () => {
     expect(getPricing("anthropic:claude-sonnet-5")).toEqual({ input: 2, output: 10 });
   });
 });
+
+describe("getPricing — GPT-5.6 Sol 프로모션 단가 (v2.28.1)", () => {
+  test("In-Region·Geo $4.40/$22, Global $4/$20 (최소 2026-11-21까지)", () => {
+    expect(getPricing("openai:us-east-1:openai.gpt-5.6-sol")).toEqual({ input: 4.4, output: 22 });
+    expect(getPricing("openai:us-east-2:openai.gpt-5.6-sol")).toEqual({ input: 4.4, output: 22 });
+    expect(getPricing("openai:global:global.openai.gpt-5.6-sol")).toEqual({ input: 4, output: 20 });
+  });
+
+  test("Terra, Luna는 변경 없음", () => {
+    expect(getPricing("openai:us-east-1:openai.gpt-5.6-terra")).toEqual({ input: 2.2, output: 13.2 });
+    expect(getPricing("openai:global:global.openai.gpt-5.6-luna")).toEqual({ input: 0.2, output: 1.2 });
+  });
+});

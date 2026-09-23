@@ -7,6 +7,18 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.28.1 — 2026-09-23
+
+### Changed
+- **GPT-5.6 Sol pricing now uses the current AWS promotional rates**: In-Region and Geo CRIS $4.40 / $22, Global CRIS $4 / $20 per MTok (previously $5.50 / $33 and $5 / $30). Both the AWS model card and `ListFoundationModelAgreementOffers` (offer-gnqokrqqvdbgw) show these values; the card states the promotion runs at least through 2026-11-21, so re-check the card after that date. Costs are computed at query time, so historical GPT-5.6 Sol rows are re-priced as well (user decision). Terra and Luna already matched the card and are unchanged.
+- **GPT-5.6 Sol 단가를 현재 AWS 프로모션 단가로 교정했다**: In-Region과 Geo CRIS는 $4.40 / $22, Global CRIS는 $4 / $20 per MTok다(기존 $5.50 / $33, $5 / $30). AWS 모델 카드와 `ListFoundationModelAgreementOffers`(offer-gnqokrqqvdbgw)가 모두 이 값을 보여 준다. 카드에 따르면 프로모션은 최소 2026-11-21까지이므로 그 이후 카드를 다시 확인해야 한다. 비용은 조회 시점에 계산하므로 과거 GPT-5.6 Sol 행도 새 단가로 다시 산정된다(사용자 결정). Terra, Luna는 카드와 이미 일치해 바꾸지 않았다.
+- **GPT-6 Sol/Luna Mantle us-east-2 and us-west-2 are now recorded as "currently unsupported — excluded"** (user decision, 2026-09-23; both return 404 `not_found_error`), the same treatment as GPT-6 Astra Mantle us-east-1/us-east-2. They are no longer a re-check follow-up; if AWS announces support, add the region to the spec tuples. Comments and docs only — no behavior change.
+- **GPT-6 Sol/Luna Mantle us-east-2, us-west-2를 "현재 미지원, 제외"로 확정했다**(2026-09-23 사용자 결정, 두 리전 모두 404 `not_found_error`). GPT-6 Astra Mantle us-east-1, us-east-2와 같은 처리다. 재확인 후속 과제에서 뺐고, AWS가 지원을 발표하면 스펙 튜플에 리전만 추가하면 된다. 주석과 문서만 바뀌었고 동작 변화는 없다.
+
+### Docs
+- `CLAUDE.md` (OpenAI table cells, GPT-5.6 price line, GPT-6 Sol/Luna bullet), ADR-028 follow-up (v2.28.1), `docs/architecture.md`, `docs/runbooks/deploy.md`; tests pin the new Sol prices in both `backend/tests/test_openai_pricing.py` and `frontend/src/lib/pricing.test.ts`. Version bumped to **v2.28.1**.
+- `CLAUDE.md`(OpenAI 표 셀, GPT-5.6 단가 줄, GPT-6 Sol/Luna 항목), ADR-028 후속(v2.28.1), `docs/architecture.md`, `docs/runbooks/deploy.md`를 갱신했다. 새 Sol 단가는 `backend/tests/test_openai_pricing.py`와 `frontend/src/lib/pricing.test.ts`로 고정했다. 버전을 **v2.28.1**로 올렸다.
+
 ## v2.28.0 — 2026-09-23
 
 ### Added

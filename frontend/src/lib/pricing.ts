@@ -37,14 +37,16 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   "gpt-5.5": { input: 5.50, output: 33.00 },
   // GPT-5.6 세대 in-region/Geo 단가 — 2026-07-30 AWS 인하 반영 (Luna -80%, Terra -20%, Sol 불변).
   // 출처: AWS 공식 모델 카드 (Standard tier, short context ≤272K — 프로브는 항상 이 구간).
-  "gpt-5.6-sol": { input: 5.50, output: 33.00 },
+  // Sol: v2.28.1(2026-09-23) 프로모션 단가 — In-Region·Geo $4.40/$22, Global $4/$20 (최소 2026-11-21까지,
+  // 종료 후 카드 재확인). backend/pricing.py와 동일하게 유지.
+  "gpt-5.6-sol": { input: 4.40, output: 22.00 },
   "gpt-5.6-terra": { input: 2.20, output: 13.20 },
   "gpt-5.6-luna": { input: 0.22, output: 1.32 },
   // Global CRIS(openai:global:global.openai.*)는 in-region보다 저렴한 별도 단가 — "-global" suffix 키.
   // US CRIS(openai:us:us.openai.*, v2.25.0)도 같은 규칙으로 "-us" suffix 키를 쓴다.
   // ⚠️ 새 모델에 global/us pseudo-region을 추가하면 여기 "-global"/"-us" 키도 반드시 함께 추가할 것 —
   // 누락 시 getPricing의 prefix fallback이 in-region 단가로 조용히 매칭돼 과대 산정됨.
-  "gpt-5.6-sol-global": { input: 5.00, output: 30.00 },
+  "gpt-5.6-sol-global": { input: 4.00, output: 20.00 },
   "gpt-5.6-terra-global": { input: 2.00, output: 12.00 },
   "gpt-5.6-luna-global": { input: 0.20, output: 1.20 },
   // GPT 6 Astra — v2.27.0에서 AWS 공식 모델 카드 단가 반영 (Standard, ≤272K).

@@ -141,7 +141,7 @@ EventBridge Scheduler
 | 025 | OpenAI GPT-5.6 Global CRIS 채널 3개 추가 + 채널별 가격 분리 |
 | 026 | Claude API Features 검증 매트릭스 — 문서 기대치 vs 실측 드리프트, Mantle `/anthropic` 리전 `us-east-1` 전환 |
 | 027 | OpenAI GPT-6 Astra 채널 3개 — 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us` 신설, Mantle 인리전은 us-west-2만(us-east-1/2는 현재 미지원 — 2026-09-23 사용자 결정으로 제외), v2.27.0 공식 단가 반영 |
-| 028 | Claude Opus 5.5 3채널 + GPT-6 Sol/Luna 6채널 — CP 점 버전 가드(`_is_point_release_of`), Sol/Luna Mantle 인리전은 us-east-1만(us-east-2/us-west-2 404), v2.28.0 후속: Sol/Luna 단가(agreement offer rate card), 벤치 18채널, `/claude-features` Opus 5.5 |
+| 028 | Claude Opus 5.5 3채널 + GPT-6 Sol/Luna 6채널 — CP 점 버전 가드(`_is_point_release_of`), Sol/Luna Mantle 인리전은 us-east-1만(us-east-2/us-west-2는 현재 미지원, 2026-09-23 사용자 결정으로 제외), v2.28.0 후속: Sol/Luna 단가(agreement offer rate card), 벤치 18채널, `/claude-features` Opus 5.5 |
 | 029 | 대시보드 모델 카드 지표 등급 — 워크로드 카테고리별 절대 임계치(48시간 p90/p99), 양호 파랑 / 경고 호박 ▲ / 위험 장미 ◆, TPS는 낮은 쪽만, `lib/metricGrade.ts` 단일 출처 |
 
 ### 운영 / Operations

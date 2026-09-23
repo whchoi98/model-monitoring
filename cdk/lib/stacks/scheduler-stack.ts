@@ -225,7 +225,8 @@ export class SchedulerStack extends cdk.Stack {
           // GPT-6 Astra — Mantle 인리전 native id. Global/US 프로파일 id는 prober가 파생.
           // Mantle us-east-1/us-east-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외 (ADR-027).
           BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID: "openai.gpt-6-astra",
-          // GPT-6 Sol/Luna (v2.27.0) — Mantle 인리전 us-east-1만 서빙. 프로파일 id는 prober가 파생 (ADR-028).
+          // GPT-6 Sol/Luna (v2.27.0) — Mantle 인리전 us-east-1만 서빙(us-east-2/us-west-2는 현재 미지원 —
+          // 2026-09-23 사용자 결정으로 제외). 프로파일 id는 prober가 파생 (ADR-028).
           BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID: "openai.gpt-6-sol",
           BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID: "openai.gpt-6-luna",
           // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.

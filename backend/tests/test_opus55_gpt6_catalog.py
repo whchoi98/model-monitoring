@@ -4,7 +4,8 @@
 - Opus 5.5: Bedrock global.(Seoul) / us.(us-east-1) converse_stream 200, temperature 400,
   forced toolChoice 400. CP /v1/models는 claude-opus-5-5를 claude-opus-5보다 먼저 돌려준다.
 - GPT 6 Sol/Luna: Global CRIS(Seoul bedrock-runtime) / US CRIS(us-east-1 bedrock-runtime) 200,
-  Mantle 인리전은 us-east-1만 200 (us-east-2, us-west-2는 404 not_found_error).
+  Mantle 인리전은 us-east-1만 200 (us-east-2, us-west-2는 404 not_found_error — 2026-09-23 사용자 결정으로
+  미지원 제외, 정기 재확인 대상 아님).
 - GPT 6 Sol/Luna 단가: AWS Bedrock ListFoundationModelAgreementOffers rate card (2026-09-23) —
   In-Region, US CRIS는 Sol $2.20/$11, Luna $0.11/$0.55, Global CRIS는 Sol $2/$10, Luna $0.10/$0.50.
 """
@@ -116,7 +117,7 @@ def _register_with_all_envs(monkeypatch):
 
 
 def test_gpt6_sol_luna_register_exactly_three_channels_each(monkeypatch):
-    """Global CRIS + US CRIS + Mantle us-east-1 — us-east-2/us-west-2는 env가 있어도 미등록(404)."""
+    """Global CRIS + US CRIS + Mantle us-east-1 — us-east-2/us-west-2는 env가 있어도 미등록(미지원 404, 사용자 결정으로 제외)."""
     _register_with_all_envs(monkeypatch)
     keys = sorted(k for k in prober.AVAILABLE_MODELS if "gpt-6-sol" in k or "gpt-6-luna" in k)
     assert keys == sorted(_GPT6_SOL_LUNA_KEYS)

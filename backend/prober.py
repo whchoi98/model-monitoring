@@ -244,7 +244,8 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # (404 not_found_error, 2026-09-09·2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재).
 # 정기 재확인 대상 아님 — AWS가 지원을 발표하면 아래 스펙 튜플에 리전만 추가하면 된다.
 # GPT 6 Sol/Luna(2026-09-22 출시)의 Mantle 인리전은 반대로 us-east-1만 서빙 — us-east-2/us-west-2는
-# 404 not_found_error(2026-09-23 실측). us-east-1 첫 호출은 401 "subscription is being set up"
+# 현재 미지원(404 not_found_error, 2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재),
+# 정기 재확인 대상 아님. us-east-1 첫 호출은 401 "subscription is being set up"
 # (Marketplace 구독 자동 개시)이었다가 수 분 뒤 200.
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-west-2")),
