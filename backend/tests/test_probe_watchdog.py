@@ -41,6 +41,8 @@ def db():
 @pytest.fixture(autouse=True)
 def short_cap(monkeypatch):
     monkeypatch.setattr(prober, "PROBE_WALL_CLOCK_S", CAP)
+    # 출력 예산 하한(max_tokens / 20 tok/s)이 짧은 테스트 상한을 덮지 않게 한다 — 별도 테스트로 검증.
+    monkeypatch.setattr(prober, "_WALL_CLOCK_MIN_TPS", 1e9)
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
 
 
@@ -62,7 +64,7 @@ def _completed(input_tokens=12, output_tokens=5):
 class _HangingStream:
     """이벤트 몇 개 뒤 멈춘다 — close()(watchdog abort)가 와야 풀리며 실제 SDK처럼 읽기 오류를 던진다."""
 
-    def __init__(self, head=None, tail_error=True):
+    def __init__(self, head=None):
         self.closed = threading.Event()
         self.head = head if head is not None else [
             _Ev("response.created"), _Ev("response.output_text.delta", delta="partial")]
@@ -136,6 +138,22 @@ def _probe(db, model_id="openai:us-east-1:openai.gpt-5.6-sol", model_name="OpenA
         ev = q.get_nowait()
         events.append((ev.split("event: ", 1)[1].split("\n", 1)[0], json.loads(ev.split("data: ", 1)[1])))
     return rows, events, elapsed
+
+
+# --- cap --------------------------------------------------------------------
+
+def test_scheduled_presets_use_the_configured_cap_and_long_outputs_get_more(monkeypatch):
+    """자동 사이클 프리셋(max_tokens ≤ 512)은 전부 PROBE_WALL_CLOCK_S 그대로 — 오류 문구 "90s"와
+    auto_prober 모델 상한(+30s 여유)의 전제. 긴 출력의 수동 프로브/Comparison Lab만 늘어난다."""
+    import auto_prober
+
+    monkeypatch.setattr(prober, "PROBE_WALL_CLOCK_S", 90.0)
+    monkeypatch.setattr(prober, "_WALL_CLOCK_MIN_TPS", 20.0)
+    for preset in auto_prober.WORKLOAD_PRESETS:
+        assert prober._wall_clock_limit(preset["max_tokens"]) == 90.0
+    assert prober._wall_clock_limit(4096) == pytest.approx(204.8)  # /api/probes/run 최대
+    assert prober._wall_clock_limit(8192) == pytest.approx(409.6)  # Comparison Lab 최대
+    assert str(prober.WallClockTimeout(90.0)) == "WallClockTimeout: probe exceeded 90s wall-clock"
 
 
 # --- OpenAI client ------------------------------------------------------------

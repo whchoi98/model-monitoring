@@ -38,10 +38,19 @@ logger = logging.getLogger(__name__)
 # 전)는 watchdog이 끊을 수 없어 각 SDK의 connect/read timeout이 상한이다 — auto_prober의 모델별
 # 사이클 타임아웃(PROBE_FUTURE_TIMEOUT_S)이 그 구간까지 포함한 최종 안전망이다.
 PROBE_WALL_CLOCK_S = float(os.environ.get("PROBE_WALL_CLOCK_S", "90"))
+# 긴 출력을 요청한 수동 프로브(/api/probes/run, max_tokens ≤ 4096)와 Comparison Lab(≤ 8192)이 정상
+# 생성 도중 잘리지 않도록 상한의 하한을 출력 예산으로도 잡는다 — 20 tok/s 기준 4096 → 205s,
+# 8192 → 410s. 자동 사이클 프리셋(max_tokens ≤ 512 → 26s)은 PROBE_WALL_CLOCK_S가 그대로 상한이다.
+_WALL_CLOCK_MIN_TPS = 20.0
+
+
+def _wall_clock_limit(max_tokens: int) -> float:
+    """프로브 1회의 wall-clock 상한(초) — PROBE_WALL_CLOCK_S, 단 출력 예산이 크면 그만큼 늘린다."""
+    return max(PROBE_WALL_CLOCK_S, max_tokens / _WALL_CLOCK_MIN_TPS)
 
 
 class WallClockTimeout(Exception):
-    """프로브 스트림이 PROBE_WALL_CLOCK_S를 넘겨 watchdog이 끊었다 (v2.28.2)."""
+    """프로브 스트림이 wall-clock 상한(_wall_clock_limit)을 넘겨 watchdog이 끊었다 (v2.28.2)."""
 
     def __init__(self, limit_s: float):
         super().__init__(f"WallClockTimeout: probe exceeded {limit_s:g}s wall-clock")
@@ -88,6 +97,7 @@ class _ProbeDeadline:
             return exc
         # fired는 abort 전에 lock 아래에서 켜지므로, 만료 뒤의 예외는 abort가 끊은 스트림의 부수 예외다.
         return None if self.done else WallClockTimeout(self.limit_s)
+
 
 # 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
 AVAILABLE_MODELS: dict[str, str] = {
@@ -572,11 +582,13 @@ def _probe_single_model(
     Bedrock 경로(`us.*`, `global.*`)는 boto3 converse_stream.
     Anthropic 직접 API 경로(`anthropic:*`)는 anthropic SDK messages.stream.
 
-    세 경로 모두 PROBE_WALL_CLOCK_S wall-clock 상한 안에서 돈다(v2.28.2) — 재시도·backoff를 포함한
-    프로브 전체 예산이며, 만료되면 스트림을 끊고 오류 행 "WallClockTimeout: …"을 남긴다(재시도 없음).
+    세 경로 모두 wall-clock 상한(_wall_clock_limit — 자동 사이클은 PROBE_WALL_CLOCK_S) 안에서 돈다
+    (v2.28.2) — 재시도·backoff를 포함한 프로브 전체 예산이며, 만료되면 스트림을 끊고 오류 행
+    "WallClockTimeout: …"을 남긴다(재시도 없음).
     """
     start_time = time.monotonic()
-    wall_deadline = start_time + PROBE_WALL_CLOCK_S
+    wall_limit = _wall_clock_limit(max_tokens)
+    wall_deadline = start_time + wall_limit
     first_token_time: float | None = None
     collected_text: list[str] = []
     input_tokens = 0
@@ -598,7 +610,7 @@ def _probe_single_model(
             server_latency_ms = None
             stop_reason = None
         # 이 시도의 watchdog 예산 = 프로브 전체 예산의 남은 몫 (재시도가 상한을 늘리지 않는다).
-        guard = _ProbeDeadline(max(wall_deadline - time.monotonic(), 0.0), PROBE_WALL_CLOCK_S)
+        guard = _ProbeDeadline(max(wall_deadline - time.monotonic(), 0.0), wall_limit)
         try:
             with guard:
                 if _is_anthropic_direct(model_id):
@@ -1055,7 +1067,8 @@ def _compare_single_model(
         event_queue.put(_sse(event_type, data))
 
     # 프로브와 같은 wall-clock 상한 (v2.28.2) — 멈춘 스트림이 compare 워커 스레드를 붙잡지 않게 한다.
-    guard = _ProbeDeadline(PROBE_WALL_CLOCK_S, PROBE_WALL_CLOCK_S)
+    wall_limit = _wall_clock_limit(max_tokens)
+    guard = _ProbeDeadline(wall_limit, wall_limit)
     try:
         try:
             with guard:
