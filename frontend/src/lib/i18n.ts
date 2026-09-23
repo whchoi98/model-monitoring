@@ -35,7 +35,9 @@ const koThreshold = (value: number, unit: "ms" | "tok/s") => unit === "ms" ? `${
 const enThreshold = (value: number, unit: "ms" | "tok/s") => unit === "ms" ? `${Number((value / 1000).toFixed(1))} s` : `${value} tok/s`;
 
 // 등급 이름 단일 출처 — 범례(names)와 툴팁(hint) 문구가 같은 객체를 읽는다.
-const koGradeNames: MetricGradeTexts["names"] = { normal: "정상", warning: "경고", critical: "위험" };
+// KO normal은 "양호": 채널 건강 배지(monitoring.health.healthy "정상")와 같은 단어면 한 카드에
+// "✓ 정상" 배지와 ◆ 위험 값이 함께 보여 모순처럼 읽힌다(ADR-029). EN은 Healthy/Normal로 이미 구분된다.
+const koGradeNames: MetricGradeTexts["names"] = { normal: "양호", warning: "경고", critical: "위험" };
 const enGradeNames: MetricGradeTexts["names"] = { normal: "Normal", warning: "Warning", critical: "Critical" };
 
 export interface Translations {

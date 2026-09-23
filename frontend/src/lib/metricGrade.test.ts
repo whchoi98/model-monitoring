@@ -194,7 +194,7 @@ describe("표시 정밀도 반올림 — 보이는 숫자와 등급이 어긋나
     expect(describeGrade("total", roundForDisplay("total", 9960), "chat-short").grade).toBe("critical");
   });
 
-  test("TPS는 소수 1자리: 39.96은 40.0으로 보이므로 정상, 14.96은 15.0이므로 경고", () => {
+  test("TPS는 소수 1자리: 39.96은 40.0으로 보이므로 양호, 14.96은 15.0이므로 경고", () => {
     expect(roundForDisplay("tps", 39.96)).toBe(40);
     expect(formatMetricValue("tps", roundForDisplay("tps", 39.96))).toBe("40.0");
     expect(describeGrade("tps", roundForDisplay("tps", 39.96), null).grade).toBe("normal");
@@ -250,6 +250,17 @@ describe("i18n 등급 문구 — 이름은 한 곳에서 정의", () => {
   test("KO 문구 고정", () => {
     expect(ko.monitoring.grade.hint({ grade: "warning", metric: "TTFT", scope: "짧은 대화", warnAt: 3000, critAt: 8000, unit: "ms", lowerIsWorse: false }))
       .toBe("경고 — 짧은 대화 기준 TTFT 3초 이상, 위험 8초 이상");
+    expect(ko.monitoring.grade.hint({ grade: "normal", metric: "TTFT", scope: "짧은 대화", warnAt: 3000, critAt: 8000, unit: "ms", lowerIsWorse: false }))
+      .toBe("양호 — 짧은 대화 기준 TTFT 3초 미만");
+  });
+
+  test("KO 등급 이름: 양호/경고/위험 — 채널 건강 배지 이름과 겹치지 않는다", () => {
+    expect(ko.monitoring.grade.names).toEqual({ normal: "양호", warning: "경고", critical: "위험" });
+    expect(en.monitoring.grade.names.normal).toBe("Normal");
+    for (const [t] of [[ko], [en]] as const) {
+      const healthNames = new Set(Object.values(t.monitoring.health));
+      for (const name of Object.values(t.monitoring.grade.names)) expect(healthNames.has(name)).toBe(false);
+    }
   });
 
   test("EN 문구 고정", () => {

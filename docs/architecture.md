@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다. 대시보드 모델 카드의 TTFT·총 응답시간·TPS 값은 워크로드 카테고리별 절대 임계치로 정상(파랑)/경고(호박)/위험(장미) 등급을 표시합니다(v2.28.0, 프런트엔드 `lib/metricGrade.ts` 순수 함수 — 백엔드 변경 없음, ADR-029).
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다. 대시보드 모델 카드의 TTFT·총 응답시간·TPS 값은 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박)/위험(장미) 등급을 표시합니다(v2.28.0, 프런트엔드 `lib/metricGrade.ts` 순수 함수 — 백엔드 변경 없음, ADR-029).
 
 ### 데이터 흐름 (Critical Path)
 
@@ -142,7 +142,7 @@ EventBridge Scheduler
 | 026 | Claude API Features 검증 매트릭스 — 문서 기대치 vs 실측 드리프트, Mantle `/anthropic` 리전 `us-east-1` 전환 |
 | 027 | OpenAI GPT-6 Astra 채널 3개 — 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us` 신설, Mantle 인리전은 us-west-2만(us-east-1/2는 현재 미지원 — 2026-09-23 사용자 결정으로 제외), v2.27.0 공식 단가 반영 |
 | 028 | Claude Opus 5.5 3채널 + GPT-6 Sol/Luna 6채널 — CP 점 버전 가드(`_is_point_release_of`), Sol/Luna Mantle 인리전은 us-east-1만(us-east-2/us-west-2 404), v2.28.0 후속: Sol/Luna 단가(agreement offer rate card), 벤치 18채널, `/claude-features` Opus 5.5 |
-| 029 | 대시보드 모델 카드 지표 등급 — 워크로드 카테고리별 절대 임계치(48시간 p90/p99), 정상 파랑 / 경고 호박 ▲ / 위험 장미 ◆, TPS는 낮은 쪽만, `lib/metricGrade.ts` 단일 출처 |
+| 029 | 대시보드 모델 카드 지표 등급 — 워크로드 카테고리별 절대 임계치(48시간 p90/p99), 양호 파랑 / 경고 호박 ▲ / 위험 장미 ◆, TPS는 낮은 쪽만, `lib/metricGrade.ts` 단일 출처 |
 
 ### 운영 / Operations
 

@@ -25,7 +25,7 @@ Dashboard UI for monitoring Bedrock LLM model performance.
 - UI text must go through `src/lib/i18n.ts` (Korean primary, English secondary)
 - Components use Tailwind dark theme (bg-gray-900/950 palette); v2.8.0부터 화이트 테마 토글 (`html.light` class + `light:` variant, `lib/theme.ts`)
 - Default model cards group by family (newest first), then channel (Anthropic → Global → US → OpenAI regions). Attention/TTFT sorting uses a flat grid. An empty comparison selection means all models.
-- Card metric values are graded per workload category (normal blue / warning amber ▲ / critical rose ◆, v2.28.0). Thresholds, display rounding and color classes live only in `src/lib/metricGrade.ts` (ADR-029); tests and e2e read the `data-grade` attribute, not color classes.
+- Card metric values are graded per workload category (normal blue / warning amber ▲ / critical rose ◆, v2.28.0). The KO grade names are 양호/경고/위험 — never 정상 for a grade, which belongs to the channel health badge. Thresholds, display rounding and color classes live only in `src/lib/metricGrade.ts` (ADR-029); tests and e2e read the `data-grade` attribute, not color classes.
 - Pages: `/` 대시보드, `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/gpt-on-aws` GPT on AWS 벤치 (v2.18.0), `/claude-features` Claude API Features 매트릭스 (v2.23.0), `/prompts`, `/cost`, `/reliability`, `/efficiency`, `/analysis`
 
 ## Commands

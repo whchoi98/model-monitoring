@@ -33,7 +33,7 @@ React UI components for the monitoring dashboard (monitoring panels, shared UI p
 
 ## Patterns
 - Color coding: emerald (good) → amber (warning) → rose (bad) — channel health (`HealthBadge`) and status palettes
-- Metric **value** grades on dashboard cards use a different palette by user request: **blue** (normal) → amber ▲ (warning) → rose ◆ (critical), from `lib/metricGrade.ts` (ADR-029). Do not swap the normal blue for emerald — blue means "fast value", emerald means "healthy channel"
+- Metric **value** grades on dashboard cards use a different palette by user request: **blue** (normal) → amber ▲ (warning) → rose ◆ (critical), from `lib/metricGrade.ts` (ADR-029). Do not swap the normal blue for emerald — blue means "fast value", emerald means "healthy channel". Likewise the KO grade name is 양호 (not 정상, the `HealthBadge` word), pinned by `metricGrade.test.ts`
 - `model_name` labels carry a `"Bedrock <family> (<channel>)"` / `"Anthropic <family> (US)"` prefix;
   `TrendChart` `MODEL_COLORS` keys and `lib/sortModels.ts` `FAMILY_ORDER` must match these byte-for-byte
 - Sort order: Anthropic → Global(Bedrock·OpenAI `(Global)` 공통) → US(Bedrock US·OpenAI US CRIS) → OpenAI 리전, family newest-first (`sortModels.ts` `channelRank`/`familyRank`)

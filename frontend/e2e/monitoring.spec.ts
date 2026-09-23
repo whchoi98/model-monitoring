@@ -149,6 +149,12 @@ test("card metric values are graded per workload category with a non-color cue i
 
   const healthy = models.getByRole("article").filter({ hasText: modelCatalog[3].name }).locator("[data-grade]");
   expect(await healthy.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["normal", "normal", "normal"]);
+  // KO 등급 이름 "양호"는 채널 건강 배지 "정상"과 다른 단어 — 한 카드에 "✓ 정상"과 ◆ 위험이 같은 단어로 겹치지 않게.
+  await expect(healthy.first()).toHaveAttribute("title", /^양호 — /);
+  const legend = models.locator("summary").filter({ hasText: "기준값 보기" });
+  await expect(legend.getByText("지표 등급:", { exact: true })).toBeVisible();
+  await expect(legend).toContainText(/지표 등급:.*양호.*경고.*위험.*워크로드 카테고리별 기준/);
+  await expect(legend).not.toContainText("정상");
   await expect(models.getByRole("article").filter({ hasText: modelCatalog[1].name }).locator("[data-grade]")).toHaveCount(0);
 
   const colors = async () => [values.first(), values.nth(1), healthy.first()].reduce<Promise<string[]>>(

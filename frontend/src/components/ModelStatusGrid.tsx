@@ -55,7 +55,7 @@ function MetricGradeLegend() {
   return (
     <details className="group text-[11px] text-gray-500">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 [&::-webkit-details-marker]:hidden">
-        <span className="sr-only">{g.legendLabel}:</span>
+        <span className="font-medium text-gray-400">{g.legendLabel}:</span>
         {GRADES.map((grade) => (
           <span key={grade} className="inline-flex items-center gap-1">
             <span aria-hidden="true" className={GRADE_TEXT_CLASS[grade]}>{GRADE_MARKER[grade]}</span>
