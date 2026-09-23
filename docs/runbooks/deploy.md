@@ -191,21 +191,25 @@ curl -i "https://$CF_DOMAIN/api/health"
 # 첫 자동 프로빙 결과 (5분 후).
 curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 
-# OpenAI (v2.25.0 기준) — 19개 채널 토큰 수 확인 (Mantle 인리전 14 + Global CRIS 4 + US CRIS 1).
+# OpenAI (v2.27.0 기준) — 25개 채널 토큰 수 확인 (Mantle 인리전 16 + Global CRIS 6 + US CRIS 3).
 # Bedrock Mantle 엔드포인트가 stream_options.include_usage를 무시하면
 # input_tokens/output_tokens 가 0 으로 silent drop → TPS·비용도 0.
 # 1P direct 채널(openai:1p:*)은 v2.19.1부터 휴면(env 미주입 + visibility "(1P)" 필터) — 0행이 정상.
-# Global CRIS 4채널(openai:global:global.openai.gpt-5.6-*, gpt-6-astra)은 첫 success 확인 필수:
+# Global CRIS 6채널(openai:global:global.openai.gpt-5.6-*, gpt-6-*)은 첫 success 확인 필수:
 #   bedrock-runtime.ap-northeast-2 호스트는 BedrockRuntime interface VPC endpoint 경유라
 #   로컬 라이브 검증과 Fargate 내부의 네트워크 경로가 다름 (ADR-025).
-# US CRIS 1채널(openai:us:us.openai.gpt-6-astra)은 v2.25.0 신규 — OPENAI_US_BASE_URL
-#   (bedrock-runtime.us-east-1) 주입 필수. 미주입이면 prober가 조용히 skip해 19행이 18행이 된다 (ADR-027).
-# GPT-6 Astra는 Mantle us-east-1/us-east-2에서 404(2026-09-09 실측)라 그 두 채널은 없는 것이 정상 (ADR-027).
-# GPT-6 Astra 3채널은 단가 미확정 — 비용 화면 "-"가 정상 (pricing 후속 업데이트).
-# 첫 프로브 cycle 후 아래 명령으로 19행 + non-zero 토큰 수를 반드시 확인.
+# US CRIS 3채널(openai:us:us.openai.gpt-6-*)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
+#   미주입이면 prober가 조용히 skip해 25행이 22행이 된다 (ADR-027).
+# GPT-6 Astra는 Mantle us-east-1/us-east-2, GPT-6 Sol/Luna는 Mantle us-east-2/us-west-2에서 404라
+#   그 채널은 없는 것이 정상 (ADR-027, ADR-028). Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가
+#   빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지, CDK 양 스택 배포 (v2.27.0).
+# GPT-6 Sol/Luna 6채널은 단가 미확정 — 비용 화면 "-"가 정상 (Astra는 v2.27.0에서 공식 단가 반영).
+# 첫 프로브 cycle 후 아래 명령으로 25행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
-  | jq '[.results[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
-# 기댓값: 19개 행 (Mantle 14 + Global 4 + US 1), status "success", input_tokens > 0, output_tokens > 0.
+  | jq '[.[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
+# 기댓값: 25개 행 (Mantle 16 + Global 6 + US 3), status "success", input_tokens > 0, output_tokens > 0.
+# CP(anthropic:*)는 9행 — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
+#   "Anthropic Claude Opus 5.5 (US)"인지 확인 (v2.27.0 점 버전 오등록 수정, ADR-028).
 ```
 
 - v2.23.0: `aws ecs run-task`로 FeaturesVerify 1회 실행 후 `/ecs/features` 로그에 `bedrock_messages` AccessDenied 0건 +

@@ -173,4 +173,16 @@ describe("SchedulerStack", () => {
       })]),
     }));
   });
+
+  it("autoprober task def에 GPT-6 Sol/Luna model id가 주입된다 (v2.27.0)", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({
+        Command: ["python", "-m", "auto_prober_runner", "--once"],
+        Environment: Match.arrayWith([
+          Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", Value: "openai.gpt-6-sol" }),
+          Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", Value: "openai.gpt-6-luna" }),
+        ]),
+      })]),
+    }));
+  });
 });

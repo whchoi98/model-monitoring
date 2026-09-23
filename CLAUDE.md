@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.26.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.27.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net)
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 46 model cards + trend)
+                ├── /             — Dashboard (status + 55 model cards + trend)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
                 ├── /cost         — 30-day projection + per-model + channel compare
                 ├── /reliability  — Family/channel success rate + error buckets
@@ -39,7 +39,7 @@ Internal ALB
                 └── /claude-features — Claude API Features (33 문서 피처 × CP/Mantle/Bedrock(Messages API·InvokeModel·Converse) × 4모델 실행-증거 + 문서 드리프트, v2.23.0)
 
 EventBridge Scheduler (rate 5 min)
-  ├── AutoProber Fargate Task  → 1 cycle = 46 models × 1 workload preset (round-robin 6 categories)
+  ├── AutoProber Fargate Task  → 1 cycle = 55 models × 1 workload preset (round-robin 6 categories)
   ├── Insights Fargate Task    → Haiku 4.5 summary, save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0에서 일 1회→12h)
   ├── GptBench Fargate Task    → 15분 주기 GPT 12채널(Mantle 인리전 9 + Global/US CRIS 3) × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1)
@@ -61,7 +61,7 @@ model-monitoring/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
-│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P), AVAILABLE_MODELS (46개 활성 + 1P 5개 휴면), retry, stop_reason capture
+│   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P), AVAILABLE_MODELS (55개 활성 + 1P 5개 휴면), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -98,7 +98,7 @@ model-monitoring/
 ├── frontend/
 │   ├── src/
 │   │   ├── app/             # App Router pages (force-dynamic)
-│   │   │   ├── page.tsx           # Dashboard (status + 46 cards + trend + workload filter)
+│   │   │   ├── page.tsx           # Dashboard (status + 55 cards + trend + workload filter)
 │   │   │   ├── models/page.tsx    # Model Explorer (v2.9.0)
 │   │   │   ├── parity/page.tsx    # Parity Run 매트릭스 (v2.11.0)
 │   │   │   ├── gpt-on-aws/page.tsx # GPT on AWS 벤치 (v2.18.0)
@@ -112,8 +112,8 @@ model-monitoring/
 │   │   │   ├── AppHeader.tsx            # 공용 헤더 — 데스크톱 내비 + 모바일 햄버거, 9개 페이지 공용 (v2.16.0)
 │   │   │   ├── RumProvider.tsx          # RUM 수집 — 자체 호스팅 rum-sdk 로드, NEXT_PUBLIC_RUM_* 미설정 시 비활성 (v2.16.5)
 │   │   │   ├── AutoDashboard.tsx        # workload category filter + multi-select model
-│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 46 cards (Bedrock prefix)
-│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 라벨 (19 Bedrock + 8 Anthropic CP + 19 OpenAI Mantle/Global/US 활성; 1P 5개는 휴면)
+│   │   │   ├── ModelStatusGrid.tsx      # family-grouped 55 cards (Bedrock prefix)
+│   │   │   ├── TrendChart.tsx           # MODEL_COLORS 라벨 (21 Bedrock + 9 Anthropic CP + 25 OpenAI Mantle/Global/US 활성; 1P 5개는 휴면)
 │   │   │   ├── CostDashboardPanel.tsx
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
@@ -183,12 +183,13 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 
 ---
 
-## Monitored Models (46 active) / 모니터링 대상 모델 (활성 46개 — 1P 5개 휴면 제외)
+## Monitored Models (55 active) / 모니터링 대상 모델 (활성 55개 — 1P 5개 휴면 제외)
 
 | Family | Global (ap-northeast-2 cross-region) | US (us-east-1 cross-region) | Anthropic CP on AWS |
 |--------|--------------------------------------|------------------------------|---------------------|
 | Claude Fable 5.1 (v2.22.0) | ✅ | ✅ | ✅ (CP 서빙 시 자동 등록 — 선등록) |
 | Claude Fable 5 | ✅ | ✅ | ✅ |
+| Claude Opus 5.5 (v2.27.0) | ✅ | ✅ | ✅ |
 | Claude Opus 5 (v2.19.0) | ✅ | ✅ | ✅ (2026-07-29 조직 복구로 자동 등록) |
 | Claude Opus 4.8 | ✅ | ✅ | ✅ |
 | Claude Opus 4.7 | ✅ | ✅ | ✅ |
@@ -203,6 +204,8 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | Family | Global CRIS (v2.20.0) | US CRIS (v2.25.0) | us-east-1 | us-east-2 | us-west-2 | 1P direct (휴면) |
 |--------|-----------------------|-------------------|-----------|-----------|-----------|-----------|
 | GPT 6 Astra (v2.25.0) | ✅ | ✅ | ⚠️ Mantle 미온보딩(404) — 재확인 | ⚠️ Mantle 미온보딩(404) — 재확인 | ✅ | — |
+| GPT 6 Sol (v2.27.0) | ✅ | ✅ | ✅ | ⚠️ Mantle 404 — 재확인 | ⚠️ Mantle 404 — 재확인 | — |
+| GPT 6 Luna (v2.27.0) | ✅ | ✅ | ✅ | ⚠️ Mantle 404 — 재확인 | ⚠️ Mantle 404 — 재확인 | — |
 | GPT 5.6 Sol (v2.17.0) | ✅ | — | ✅ | ✅ | — | ✅ |
 | GPT 5.6 Terra (v2.17.0) | ✅ | — | ✅ | ✅ | ✅ | ✅ |
 | GPT 5.6 Luna (v2.17.0) | ✅ | — | ✅ | ✅ | ✅ | ✅ |
@@ -210,16 +213,18 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | GPT 5.4 | — | — | ✅ | ✅ | ✅ | ✅ (v2.6.0) |
 
 - **Mantle (Path 4)** model_id 키: `openai:<region>:openai.gpt-5.x`. 라벨: `OpenAI GPT 5.x (<region>)`. OpenAI-compatible `/openai/v1` + Bedrock bearer 토큰(`OPENAI_API_KEY`, `ABSK-…`). 자세히는 ADR-019.
-- **Global CRIS (v2.20.0, 2026-08-18)**: GPT-5.6 세대(Sol/Terra/Luna) 이상만 Bedrock global cross-region inference profile 지원 (2026-08-17 AWS 발표, GPT-6 Astra는 v2.25.0에서 합류 — ADR-027). 키: `openai:global:global.openai.gpt-5.6-*` (pseudo-region `global`, 프로파일 id는 in-region id에 `global.` 접두사를 prober가 파생 — 별도 model-id env 없음). 라벨: `OpenAI GPT 5.6 * (Global)`. **global 프로파일은 bedrock-mantle 호스트 미지원** — `OPENAI_GLOBAL_BASE_URL=https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1`(Seoul bedrock-runtime OpenAI-compat, 기존 `OPENAI_API_KEY` bearer 재사용)로만 호출. **단가가 in-region보다 저렴**해 pricing은 `-global` suffix 키로 채널 분리 (ADR-025). gptbench(`_BENCH_SPECS`)에는 GPT-5.6 세대 중 Terra Global만 포함(v2.20.1, Sol/Luna Global 미포함)이며 GPT-6 Astra Global은 v2.25.1에서 포함.
-- **GPT-6 Astra (v2.25.0, 2026-09-09)**: 채널 3개. 1. Global CRIS `openai:global:global.openai.gpt-6-astra`, 라벨 `OpenAI GPT 6 Astra (Global)`, 기존 `OPENAI_GLOBAL_BASE_URL`(Seoul bedrock-runtime) 재사용. 2. **US CRIS — 신규 유사 리전 `us`** `openai:us:us.openai.gpt-6-astra`, 라벨 `OpenAI GPT 6 Astra (US)`, 신규 env `OPENAI_US_BASE_URL=https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1`. 3. Mantle 인리전 `openai:us-west-2:openai.gpt-6-astra`, 라벨 `OpenAI GPT 6 Astra (us-west-2)`. Responses API 전용(5.4/5.5/5.6과 동일). env: `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID=openai.gpt-6-astra` 하나만 주입하고 Global/US 프로파일 id는 prober가 `global.`/`us.` 접두로 파생한다. **실측(2026-09-09, 운영 Bedrock 장기 키 + Responses API)**: `bedrock-mantle.us-east-1`, `bedrock-mantle.us-east-2`는 404 `not_found_error`("The model does not exist") — Bedrock 모델 액세스는 전 리전 AVAILABLE/AUTHORIZED이므로 엔티틀먼트가 아니라 Mantle 호스트 온보딩 미완이며, 404 리전을 스펙에 넣으면 프로브가 전부 오류 행이 되므로 두 리전은 이번 릴리스에서 제외하고 재확인을 후속 과제로 남긴다. 접두사 없는 평문 id(`openai.gpt-6-astra`)는 온디맨드 호출 불가(추론 프로파일 필요). **단가 미확정 — 후속 업데이트**: Price List API에 GPT-6 항목이 없어 `PRICE_TABLE`에 키를 넣지 않았고, `get_pricing`/`getPricing`은 세 키 모두 `None`/`null`을 반환한다(접두 fallback 오매칭 없음) — 비용 화면에는 "-"로 표시된다. gptbench `_BENCH_SPECS` 포함(v2.25.1 — Global, US CRIS, us-west-2 3채널로 벤치 9 → 12채널), 1P 스펙 미추가. 자세히는 ADR-027. **패리티 `_REASONING_MARKERS`에 `gpt-6` 미포함**: Responses `reasoning.effort`/chat `reasoning_effort`를 수락하지만 `reasoning_tokens`를 0으로 보고해(2026-09-09 라이브) `reasoning`/`reasoning_effort` 12셀은 skipped 유지 — 판단 근거는 ADR-027.
+- **Global CRIS (v2.20.0, 2026-08-18)**: GPT-5.6 세대(Sol/Terra/Luna) 이상만 Bedrock global cross-region inference profile 지원 (2026-08-17 AWS 발표, GPT-6 Astra는 v2.25.0, GPT-6 Sol/Luna는 v2.27.0에서 합류 — ADR-027, ADR-028). 키: `openai:global:global.openai.gpt-5.6-*` (pseudo-region `global`, 프로파일 id는 in-region id에 `global.` 접두사를 prober가 파생 — 별도 model-id env 없음). 라벨: `OpenAI GPT 5.6 * (Global)`. **global 프로파일은 bedrock-mantle 호스트 미지원** — `OPENAI_GLOBAL_BASE_URL=https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1`(Seoul bedrock-runtime OpenAI-compat, 기존 `OPENAI_API_KEY` bearer 재사용)로만 호출. **단가가 in-region보다 저렴**해 pricing은 `-global` suffix 키로 채널 분리 (ADR-025). gptbench(`_BENCH_SPECS`)에는 GPT-5.6 세대 중 Terra Global만 포함(v2.20.1, Sol/Luna Global 미포함)이며 GPT-6 Astra Global은 v2.25.1에서 포함.
+- **GPT-6 Astra (v2.25.0, 2026-09-09)**: 채널 3개. 1. Global CRIS `openai:global:global.openai.gpt-6-astra`, 라벨 `OpenAI GPT 6 Astra (Global)`, 기존 `OPENAI_GLOBAL_BASE_URL`(Seoul bedrock-runtime) 재사용. 2. **US CRIS — 신규 유사 리전 `us`** `openai:us:us.openai.gpt-6-astra`, 라벨 `OpenAI GPT 6 Astra (US)`, 신규 env `OPENAI_US_BASE_URL=https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1`. 3. Mantle 인리전 `openai:us-west-2:openai.gpt-6-astra`, 라벨 `OpenAI GPT 6 Astra (us-west-2)`. Responses API 전용(5.4/5.5/5.6과 동일). env: `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID=openai.gpt-6-astra` 하나만 주입하고 Global/US 프로파일 id는 prober가 `global.`/`us.` 접두로 파생한다. **실측(2026-09-09, 운영 Bedrock 장기 키 + Responses API)**: `bedrock-mantle.us-east-1`, `bedrock-mantle.us-east-2`는 404 `not_found_error`("The model does not exist") — Bedrock 모델 액세스는 전 리전 AVAILABLE/AUTHORIZED이므로 엔티틀먼트가 아니라 Mantle 호스트 온보딩 미완이며, 404 리전을 스펙에 넣으면 프로브가 전부 오류 행이 되므로 두 리전은 이번 릴리스에서 제외하고 재확인을 후속 과제로 남긴다. 접두사 없는 평문 id(`openai.gpt-6-astra`)는 온디맨드 호출 불가(추론 프로파일 필요). **단가 (v2.27.0에서 반영 — AWS 공식 모델 카드, Standard, 입력 272K 이하)**: `gpt-6-astra`(인리전 us-west-2) $11/$55, `gpt-6-astra-us`(US CRIS) $11/$55, `gpt-6-astra-global` $10/$50 per MTok — 3키는 항상 함께 둔다(하나만 있으면 prefix fallback이 나머지 채널을 오매칭). v2.25.0~v2.26.1에는 미확정이라 "-"였고 비용은 조회 시점 계산이라 소급 산정된다. 2026-09-23 재확인에서도 Mantle us-east-1/us-east-2는 404. gptbench `_BENCH_SPECS` 포함(v2.25.1 — Global, US CRIS, us-west-2 3채널로 벤치 9 → 12채널), 1P 스펙 미추가. 자세히는 ADR-027. **패리티 `_REASONING_MARKERS`에 `gpt-6` 미포함**: Responses `reasoning.effort`/chat `reasoning_effort`를 수락하지만 `reasoning_tokens`를 0으로 보고해(2026-09-09 라이브) `reasoning`/`reasoning_effort` 12셀은 skipped 유지 — 판단 근거는 ADR-027.
+- **GPT-6 Sol / GPT-6 Luna (v2.27.0, 2026-09-23)**: 2026-09-22 출시(AWS 모델 카드 미게재 — `model-cards-openai.html`에는 Astra만). 모델마다 채널 3개: Global CRIS `openai:global:global.openai.gpt-6-{sol,luna}`(라벨 `OpenAI GPT 6 {Sol,Luna} (Global)`), US CRIS `openai:us:us.openai.gpt-6-{sol,luna}`(`(US)`), Mantle 인리전 `openai:us-east-1:openai.gpt-6-{sol,luna}`(`(us-east-1)`). env: `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID` 하나씩, Global/US 프로파일 id는 prober가 파생. **실측(2026-09-23)**: Mantle us-east-2/us-west-2는 404 `not_found_error`("The model 'openai.gpt-6-sol' does not exist")라 제외 — Astra(Mantle us-west-2 단독)와 정반대. Mantle us-east-1 첫 호출은 401 "Your subscription to the model is being set up"(Marketplace 구독 개시) → 수 분 뒤 200. 서울 기준 단건: Sol Global TTFB 559/TTFT 856ms, US 927/2059ms · Luna Global 591/857ms, US 919/1064ms. **단가 미확정**: `PRICE_TABLE` 미기재 → 6채널 모두 `None`/"-"(Astra 키로 fallback 안 됨, 회귀 테스트). 확정 시 모델마다 인리전/`-global`/`-us` 3키를 한 커밋에. **패리티 `_REASONING_MARKERS`에 `gpt-6` 미포함**: 패리티 프로브(effort low, "17 x 23은?")에서 `reasoning_tokens=0`(effort high에서만 13/18) → 넣으면 미지원 오판. gptbench `_BENCH_SPECS`, `/claude-features` 대표 모델, 1P 스펙 미추가. 자세히는 ADR-028.
 - **1P direct (Path 5, v2.6.0 — v2.19.1부터 휴면/비노출)** model_id 키: `openai:1p:gpt-5.x`. 라벨: `OpenAI GPT 5.x (1P)`. `https://api.openai.com/v1` 직접 호출 + **OpenAI platform 키**(`OPENAI_1P_API_KEY`, `sk-proj-…` — Mantle bearer와 호환 불가). native id(`gpt-5.x`, 접두사 없음). 리전 개념 없음(글로벌 라우팅). env: `OPENAI_1P_API_KEY`(SSM `/bedrock-monitor/openai-1p-api-key`), `OPENAI_1P_GPT_54/55_MODEL_ID`, `OPENAI_1P_BASE_URL`(선택). 자세히는 ADR-020. **2026-07-31 사용자 결정으로 비교에서 제외(비노출)**: 코드·DB 행은 보존, CDK `ENABLE_OPENAI_1P=false`로 env 미주입(등록 skip) + backend `visibility.py` `(1P)` 라벨 조회 필터 + frontend `EXCLUDED_FAMILIES` 하드필터. 재노출 = CDK 플래그 true + 유효 키 SSM 저장 + `HIDDEN_MODEL_PATTERNS=""` env + EXCLUDED_FAMILIES에서 제거 + **pricing 1P 단가 분리 선행** (v2.20.0부터 base 키 `gpt-5.6-*`가 in-region 인상 단가($5.50/$33 등)라, 분리 없이 재노출하면 1P 비용이 +10% 과대 산정 — ADR-025).
 - **GPT-5.6 세대 (v2.17.0, 2026-07-14)**: Sol(최상위)/Terra(균형)/Luna(저비용) — Mantle native id `openai.gpt-5.6-{sol,terra,luna}`, 1P native id `gpt-5.6-{sol,terra,luna}`. **Sol은 us-west-2 미제공**. Responses API 전용(5.4/5.5와 동일). env: `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID` + `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`. **현행 단가 (v2.20.0에서 교정 — 2026-07-30 AWS 인하 Luna -80%·Terra -20% 반영, 공식 모델 카드 Standard tier 기준)**: in-region/Geo Sol $5.50/$33, Terra $2.20/$13.20, Luna $0.22/$1.32 · Global CRIS Sol $5/$30, Terra $2/$12, Luna $0.20/$1.20 per MTok (구 기재 "in-region = 1P parity, Sol $5/$30 등"은 낡은 값 — 소급 재계산됨).
 
 - **Claude Fable 5.1 (v2.22.0, 2026-09-01)**: 2026-08-31 출시. Bedrock 프로파일 `global.`/`us.anthropic.claude-fable-5-1` (Seoul·us-east-1 모두 ACTIVE, 라이브 converse 검증). Fable 5와 동일 Covered Model 제약(provider_data_share 리전 opt-in 기존 적용) + 동일 단가 $10/$50. **forced `tool_choice`(type tool/any)는 400 거부** → 패리티 `tool_use` 프로브는 `parity/catalog.py` `supports_forced_tool_choice()`로 `auto`+프롬프트 지시로 대체. CP 채널은 `_ANTHROPIC_TARGETS` 선등록(`fable-5-1`) — `fable-5` substring 접두 충돌은 `_match_anthropic_model()`이 처리.
+- **Claude Opus 5.5 (v2.27.0, 2026-09-23)**: 2026-09-22 출시([AWS 모델 카드](https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-anthropic-claude-opus-5-5.html)). Bedrock `global.anthropic.claude-opus-5-5`(Seoul — Seoul은 Global CRIS만, Geo 없음) + `us.anthropic.claude-opus-5-5`(us-east-1) + CP `anthropic:claude-opus-5-5`(타깃 `opus-5-5`를 `opus-5` 앞에). 라이브 converse_stream 200(TTFT 약 2.8s), CP 200. **temperature 400 + forced `tool_choice` 400** → `_REASONING_MODEL_PATTERNS`의 `"opus-5"`가 substring으로 포함, 패리티 `_NO_FORCED_TOOL_CHOICE_MARKERS`에 `"opus-5-5"` 추가(Opus 5는 forced 유지). 단가 $4/$20 — 정확 키 `claude-opus-5-5` 필수(없으면 prefix fallback이 Opus 5 $5/$25). **CP 오등록 실사고(2026-09-23)**: CP `/v1/models`가 `claude-opus-5-5`를 `claude-opus-5`보다 먼저 반환해 구 코드가 5.5 id를 `Anthropic Claude Opus 5 (US)`로 프로빙(실제 Opus 5 CP 미측정) → 타깃 추가 + `_is_point_release_of()` 가드(substring 뒤 `-<1~2자리 숫자>`가 오는 id는 자기 타깃 없으면 제외, 8자리 날짜 서픽스는 매칭 유지)로 **다음 점 버전(예: sonnet-5-5)도 fail-closed**. 저장 행은 backend 기동 시 `label_repair.py`가 정정. 자세히는 ADR-028.
 
 **제외 모델 (2026-05-20부터)**: Opus 4.5, Sonnet 4.5 — 사용자 요청으로 모니터링 대상에서 제외. Frontend `AutoDashboard.tsx`에 hard-filter도 적용해서 backend silent bug 대비.
 
-**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 46개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface(CP on AWS/Mantle `/anthropic`/Bedrock runtime Messages API/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다(1런 = 프로브 643 + 사전판정 137 = 780셀 — v2.23.1에서 data_residency Bedrock 15셀이 사전판정으로 이동). Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026. **v2.24.0 UI 상세도 보강(패리티 수준)**: 헬스 카드 헤드라인은 문서 기준 헬스(docHealth = 문서상 GA/Beta ∧ 실측 셀 중 supported 비율) + 6상태 분포 막대, 카드 클릭 → Key Findings 드로어(6섹션), 모델 칩(전체/모델별), 변경 배너 `kind`(카탈로그 규칙/실측) 태그, 셀 툴팁 모델별 지연시간; 백엔드는 실패 셀에도 요청 스냅샷 보존(스레드 로컬 recorder), 오류 문자열에 boto operation/빈 본문 라우트 표기(`engine.classify` 판정 불변, 회귀 핀 38건). ADR-026 부록 참조.
+**Claude API Features (v2.23.0)**: `/claude-features` 페이지는 위 55개 모니터링 모델과 별개로 대표 4모델(Claude Fable 5.1·Fable 5·Opus 5·Sonnet 5)만 고정 사용해 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface(CP on AWS/Mantle `/anthropic`/Bedrock runtime Messages API/Bedrock InvokeModel/Bedrock Converse)를 일 1회 실행-증거로 검증한다(1런 = 프로브 643 + 사전판정 137 = 780셀 — v2.23.1에서 data_residency Bedrock 15셀이 사전판정으로 이동). Mantle 열은 Fable 5.1을 제외(US GovCloud 전용 → `not_applicable`). **실측(2026-09-05)**: Mantle 리전 `ap-northeast-1`은 이 계정에서 `anthropic.claude-{fable-5,opus-5,sonnet-5}`를 서빙하지 않음(`not_found_error`) — Opus 4.8만 서빙, sonnet-5는 `us-east-1`에서 서빙(200 확인) → **사용자 결정으로 Mantle 열 리전을 `us-east-1`로 전환**(`MANTLE_ANTHROPIC_REGION` 기본값, CDK 주입). 패리티 런 `messages_mantle` surface도 같은 env를 공유해 이 릴리스부터 `us-east-1`을 프로빙한다(코드 기본값 자체는 `ap-northeast-1` 유지, CDK가 명시 주입으로 override). 자세한 드리프트는 ADR-026. **v2.24.0 UI 상세도 보강(패리티 수준)**: 헬스 카드 헤드라인은 문서 기준 헬스(docHealth = 문서상 GA/Beta ∧ 실측 셀 중 supported 비율) + 6상태 분포 막대, 카드 클릭 → Key Findings 드로어(6섹션), 모델 칩(전체/모델별), 변경 배너 `kind`(카탈로그 규칙/실측) 태그, 셀 툴팁 모델별 지연시간; 백엔드는 실패 셀에도 요청 스냅샷 보존(스레드 로컬 recorder), 오류 문자열에 boto operation/빈 본문 라우트 표기(`engine.classify` 판정 불변, 회귀 핀 38건). ADR-026 부록 참조.
 
 **라벨 정책**: DB의 `model_name`은 항상 `"Bedrock <family> (<channel>)"` 또는 `"Anthropic <family> (<channel>)"` prefix. OpenAI 라벨은 `"OpenAI <family> (<region>)"`(Mantle 인리전) / `"OpenAI <family> (Global)"`(Global CRIS, v2.20.0) / `"OpenAI <family> (US)"`(US CRIS, v2.25.0) / `"OpenAI <family> (1P)"`(1P direct) prefix. Frontend `MODEL_COLORS`/`FAMILY_ORDER`는 이 prefix를 expected. 정렬 순서: **Anthropic → Global(Bedrock·OpenAI 공통, `(Global)` 서픽스) → US(Bedrock US·OpenAI US CRIS, `(US)` 서픽스) → OpenAI 리전** (`channelRank` 함수). OpenAI US CRIS는 `channelRank`에서 리전 채널보다 앞선 US 티어로 분기한다(v2.25.0) — 이 분기가 없으면 ICU `localeCompare`가 `(us-west-2)`를 `(US)`보다 앞에 놓으므로 `sortModels.ts`의 분기 순서를 바꾸지 말 것.
 
@@ -348,6 +353,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `FEATURES_MCP_SERVER_URL` | (선택) | Claude API Features MCP connector 프로브용 공개 MCP 서버 URL (v2.23.0, 장애 시 inconclusive로 격리) |
 | `OPENAI_US_BASE_URL` | `https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1` (CDK 주입) | OpenAI US CRIS(`us.openai.*`) 유사 리전 `us` 라우팅 — bedrock-mantle 호스트 미지원, 기존 `OPENAI_API_KEY` bearer 재사용 (v2.25.0, ADR-027). 미주입 시 prober가 US 채널을 조용히 skip |
 | `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID` | `openai.gpt-6-astra` (CDK 주입) | GPT-6 Astra Mantle 인리전 native id — Global/US 프로파일 id는 prober가 `global.`/`us.` 접두로 파생 (v2.25.0) |
+| `BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID` / `BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID` | `openai.gpt-6-sol` / `openai.gpt-6-luna` (CDK 주입) | GPT-6 Sol/Luna Mantle 인리전(us-east-1) native id — Global/US 프로파일 id는 prober가 `global.`/`us.` 접두로 파생. 미주입 시 해당 모델 3채널을 조용히 skip하므로 AppServices+Scheduler 양 스택 배포 필수 (v2.27.0, ADR-028) |
 
 ---
 

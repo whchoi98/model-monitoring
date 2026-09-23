@@ -90,3 +90,63 @@ describe("sortModels — GPT 6 Astra", () => {
     }
   });
 });
+
+// Opus 5.5 (v2.27.0) — includes 매칭에서 "Claude Opus 5"가 "Claude Opus 5.5"에 포함되는 접두 충돌 회귀 방지.
+describe("sortModels — Opus 5.5 vs Opus 5 family ranking", () => {
+  it("ranks Opus 5.5 between Fable 5 and Opus 5, as separate families", () => {
+    const r55 = familyRank("Bedrock Claude Opus 5.5 (Global)");
+    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Fable 5 (Global)"));
+    expect(r55).toBeLessThan(familyRank("Bedrock Claude Opus 5 (Global)"));
+    expect(familyRank("Anthropic Claude Opus 5.5 (US)")).toBe(r55);
+  });
+
+  it("groups the three Opus 5.5 channels together, Anthropic first", () => {
+    const rows = [
+      { model_name: "Bedrock Claude Opus 5 (US)" },
+      { model_name: "Bedrock Claude Opus 5.5 (US)" },
+      { model_name: "Anthropic Claude Opus 5 (US)" },
+      { model_name: "Anthropic Claude Opus 5.5 (US)" },
+      { model_name: "Bedrock Claude Opus 5.5 (Global)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "Anthropic Claude Opus 5.5 (US)",
+      "Bedrock Claude Opus 5.5 (Global)",
+      "Bedrock Claude Opus 5.5 (US)",
+      "Anthropic Claude Opus 5 (US)",
+      "Bedrock Claude Opus 5 (US)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 2]);
+  });
+});
+
+// GPT 6 Sol / Luna (v2.27.0) — GPT 6 Astra 다음, GPT 5.x보다 위. 채널은 Global → US → us-east-1.
+describe("sortModels — GPT 6 Sol / Luna", () => {
+  it("orders GPT 6 families Astra → Sol → Luna, all above GPT 5.6 Sol", () => {
+    const astra = familyRank("OpenAI GPT 6 Astra (Global)");
+    const sol = familyRank("OpenAI GPT 6 Sol (Global)");
+    const luna = familyRank("OpenAI GPT 6 Luna (Global)");
+    expect(astra).toBeLessThan(sol);
+    expect(sol).toBeLessThan(luna);
+    expect(luna).toBeLessThan(familyRank("OpenAI GPT 5.6 Sol (Global)"));
+  });
+
+  it("sorts each family's three channels Global → US → us-east-1", () => {
+    const rows = [
+      { model_name: "OpenAI GPT 6 Luna (us-east-1)" },
+      { model_name: "OpenAI GPT 6 Sol (us-east-1)" },
+      { model_name: "OpenAI GPT 6 Luna (US)" },
+      { model_name: "OpenAI GPT 6 Sol (Global)" },
+      { model_name: "OpenAI GPT 6 Sol (US)" },
+      { model_name: "OpenAI GPT 6 Luna (Global)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "OpenAI GPT 6 Sol (Global)",
+      "OpenAI GPT 6 Sol (US)",
+      "OpenAI GPT 6 Sol (us-east-1)",
+      "OpenAI GPT 6 Luna (Global)",
+      "OpenAI GPT 6 Luna (US)",
+      "OpenAI GPT 6 Luna (us-east-1)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 3]);
+  });
+});

@@ -13,6 +13,9 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     # Anthropic Claude (USD per 1M tokens: input / output)
     "claude-fable-5-1": {"input": 10.0, "output": 50.0},  # Fable 5.1 — Fable 5와 동일 티어/단가 (v2.22.0)
     "claude-fable-5": {"input": 10.0, "output": 50.0},
+    # Opus 5.5 (v2.27.0) — Anthropic 정가 $4/$20 (Opus 5보다 인하). 정확 키 필수:
+    # 없으면 get_pricing prefix fallback이 "claude-opus-5"($5/$25)로 조용히 매칭된다.
+    "claude-opus-5-5": {"input": 4.0, "output": 20.0},
     "claude-opus-5": {"input": 5.0, "output": 25.0},
     "claude-opus-4-8": {"input": 5.0, "output": 25.0},
     "claude-opus-4-7": {"input": 5.0, "output": 25.0},
@@ -39,10 +42,15 @@ PRICE_TABLE: dict[str, dict[str, float]] = {
     "gpt-5.6-sol-global": {"input": 5.00, "output": 30.00},
     "gpt-5.6-terra-global": {"input": 2.00, "output": 12.00},
     "gpt-5.6-luna-global": {"input": 0.20, "output": 1.20},
-    # GPT 6 Astra (v2.25.0, 2026-09-09): 단가 미확정 — 의도적으로 미기재(추정값 금지).
-    # Price List API에 GPT-6 항목이 없고 공식 모델 카드 단가도 미공개 → get_pricing이 None을
-    # 돌려주게 두어 비용을 "-"로 표시한다. 확정되면 in-region "gpt-6-astra" / Global CRIS
-    # "gpt-6-astra-global" / US CRIS "gpt-6-astra-us" 3키를 함께 추가할 것 (ADR-027).
+    # GPT 6 Astra — v2.25.0 미확정 → v2.27.0에서 AWS 공식 모델 카드 단가 반영 (Standard, ≤272K).
+    # In-Region·Geo CRIS(US)는 OpenAI 정가 +10%, Global CRIS는 정가. 3키는 항상 함께 둔다 —
+    # 하나만 있으면 prefix fallback이 나머지 채널을 그 단가로 오매칭한다.
+    "gpt-6-astra": {"input": 11.00, "output": 55.00},
+    "gpt-6-astra-us": {"input": 11.00, "output": 55.00},
+    "gpt-6-astra-global": {"input": 10.00, "output": 50.00},
+    # GPT 6 Sol / Luna (v2.27.0, 2026-09-22 출시): 단가 미확정 — 의도적으로 미기재(추정값 금지).
+    # AWS 모델 카드가 아직 없고 Price List API에도 항목이 없음 → get_pricing이 None(비용 "-").
+    # 확정되면 모델마다 in-region / "-global" / "-us" 3키를 함께 추가할 것 (ADR-028).
 }
 
 # OpenAI pseudo-region(Bedrock CRIS) — 채널 단가가 in-region과 달라 base 키에 "-<region>"

@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.26.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.27.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -18,7 +18,7 @@ Amazon Bedrock + Anthropic CP on AWS LLM 채널의 응답 속도·처리량·신
 
 ## Overview
 
-Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 46 LLM channels across Bedrock Global / US inference profiles, Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle (Path 4) plus Bedrock Global and US cross-region profiles for GPT-5.6 and GPT-6 Astra (v2.20.0, v2.25.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, and 30-day cost projections — all behind a Next.js dashboard with ten monitoring views.
+Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 55 LLM channels across Bedrock Global / US inference profiles (including Claude Opus 5.5, v2.27.0), Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle (Path 4) plus Bedrock Global and US cross-region profiles for GPT-5.6 and GPT-6 Astra, Sol and Luna (v2.20.0, v2.25.0, v2.27.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, and 30-day cost projections — all behind a Next.js dashboard with ten monitoring views.
 
 The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories. A built-in chatbot (Claude Sonnet 4.6 with four Bedrock tools) lets you query the time-series data conversationally.
 
@@ -27,7 +27,7 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 ## Features
 
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
-- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 46 monitored channels.
+- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 55 monitored channels.
 - **Ten analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (Mantle TTFB/TTFT bench, 15-min cycles), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 19 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
 - **Daily Claude API Features sweep** — a scheduled Fargate task runs the 39-row catalog (= 33 documented features + 4 core Messages + Models API 1 + strict_tool_use split 1) against Claude Platform on AWS, Bedrock Mantle `/anthropic`, and Bedrock runtime (Messages API + InvokeModel + Converse) for 4 representative models, surfacing a documentation-drift banner when observed behavior disagrees with the documented availability.
@@ -100,7 +100,7 @@ See `docs/runbooks/deploy.md` for the full step-by-step procedure including post
 curl https://<your-cloudfront-domain>/api/auto-probe/status
 # {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
 
-# Inspect the latest 46-model probe results
+# Inspect the latest 55-model probe results
 curl https://<your-cloudfront-domain>/api/auto-probe/latest
 
 # Filter by workload category
@@ -154,7 +154,7 @@ A service worker is deliberately **not** used: offline caching would show stale 
 model-monitoring/
 ├── backend/                      # FastAPI + SQLAlchemy + auto-prober
 │   ├── main.py                   # entrypoint, lifespan, DB migration with advisory_lock
-│   ├── prober.py                 # 46-model (+5 dormant 1P) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US
+│   ├── prober.py                 # 55-model (+5 dormant 1P) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US
 │   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
 │   ├── pricing.py                # token unit price table
 │   ├── claude_features/          # catalog (39 rows × 5 surfaces), transports, probes, engine, runner (v2.23.0)
@@ -251,7 +251,7 @@ This project is licensed under the MIT License.
 
 ## 개요
 
-Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle(Path 4) 및 GPT-5.6, GPT-6 Astra Bedrock Global, US cross-region 프로파일(v2.20.0, v2.25.0)을 포함한 46개 LLM 채널을 지속적으로 프로빙하여 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측을 한 대시보드에서 제공하는 운영 등급 관측 플랫폼입니다.
+Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle(Path 4) 및 GPT-5.6, GPT-6 Astra, Sol, Luna Bedrock Global, US cross-region 프로파일(v2.20.0, v2.25.0, v2.27.0)을 포함한 55개 LLM 채널(Claude Opus 5.5 포함, v2.27.0)을 지속적으로 프로빙하여 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측을 한 대시보드에서 제공하는 운영 등급 관측 플랫폼입니다.
 
 이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 워크로드 카테고리를 라운드로빈하여 모든 채널을 프로빙합니다. Claude Sonnet 4.6 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
 
@@ -260,7 +260,7 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic
 ## 주요 기능
 
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
-- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 46개 모니터링 채널에 호출합니다.
+- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 55개 모니터링 채널에 호출합니다.
 - **10개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Mantle TTFB/TTFT 벤치, 15분 주기), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 19 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
 - **일일 Claude API 기능 검증 스윕** — 스케줄된 Fargate 태스크가 39행 카탈로그(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)를 Claude Platform on AWS · Bedrock Mantle `/anthropic` · Bedrock runtime(Messages API + InvokeModel + Converse)에서 대표 모델 4종으로 실행하고, 실측이 문서상 가용성과 어긋나면 문서 드리프트 배너로 표시합니다.
@@ -333,7 +333,7 @@ npx cdk deploy --all \
 curl https://<your-cloudfront-domain>/api/auto-probe/status
 # {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
 
-# 최신 46개 모델 프로빙 결과 조회
+# 최신 55개 모델 프로빙 결과 조회
 curl https://<your-cloudfront-domain>/api/auto-probe/latest
 
 # 워크로드 카테고리별 필터링
@@ -387,7 +387,7 @@ curl -N -H "Authorization: Bearer $TOKEN" \
 model-monitoring/
 ├── backend/                      # FastAPI + SQLAlchemy + auto-prober
 │   ├── main.py                   # 엔트리포인트, lifespan, advisory_lock 기반 DB 마이그레이션
-│   ├── prober.py                 # 46개(+1P 5개 휴면) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI (Mantle + Global + US + 1P)
+│   ├── prober.py                 # 55개(+1P 5개 휴면) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI (Mantle + Global + US + 1P)
 │   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
 │   ├── pricing.py                # 토큰 단가 테이블
 │   ├── claude_features/          # 카탈로그(39행 × 5 surface) + 전송기 + 프로브 + 엔진 + 러너 (v2.23.0)

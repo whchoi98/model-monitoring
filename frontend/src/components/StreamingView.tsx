@@ -13,6 +13,8 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Fable 5.1 (Global)": "bg-sky-600",
   "Claude Fable 5": "bg-teal-700",
   "Claude Fable 5 (Global)": "bg-teal-600",
+  "Claude Opus 5.5": "bg-red-800",
+  "Claude Opus 5.5 (Global)": "bg-red-700",
   "Claude Opus 5": "bg-rose-800",
   "Claude Opus 5 (Global)": "bg-rose-700",
   "Claude Opus 4.8": "bg-fuchsia-700",
@@ -53,6 +55,13 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 6 Astra (Global)": "bg-lime-900",
   "GPT 6 Astra (US)": "bg-emerald-900",
   "GPT 6 Astra (us-west-2)": "bg-green-900",
+  // GPT 6 Sol / Luna (v2.27.0) — Global CRIS / US CRIS / us-east-1 인리전 (배지 텍스트는 흰색).
+  "GPT 6 Sol (Global)": "bg-teal-900",
+  "GPT 6 Sol (US)": "bg-cyan-900",
+  "GPT 6 Sol (us-east-1)": "bg-cyan-800",
+  "GPT 6 Luna (Global)": "bg-sky-900",
+  "GPT 6 Luna (US)": "bg-sky-800",
+  "GPT 6 Luna (us-east-1)": "bg-blue-900",
 };
 
 function getModelColor(name: string): string {
@@ -70,6 +79,10 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
   }
   if (modelId.includes("fable-5")) {
     return modelId.startsWith("global") ? "Claude Fable 5 (Global)" : "Claude Fable 5";
+  }
+  // "opus-5"는 "opus-5-5"에도 포함 — 5.5 분기가 먼저 와야 함.
+  if (modelId.includes("opus-5-5")) {
+    return modelId.startsWith("global") ? "Claude Opus 5.5 (Global)" : "Claude Opus 5.5";
   }
   if (modelId.includes("opus-5")) {
     return modelId.startsWith("global") ? "Claude Opus 5 (Global)" : "Claude Opus 5";
@@ -104,6 +117,8 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
       : rawRegion === "us" ? "US"
       : rawRegion;
     const fam = modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
+      : modelId.includes("gpt-6-sol") ? "GPT 6 Sol"
+      : modelId.includes("gpt-6-luna") ? "GPT 6 Luna"
       : modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
       : modelId.includes("gpt-5.6-terra") ? "GPT 5.6 Terra"
       : modelId.includes("gpt-5.6-luna") ? "GPT 5.6 Luna"

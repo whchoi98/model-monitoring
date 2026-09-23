@@ -58,7 +58,7 @@ include a UTC offset.
   "last_completed_time": "2026-09-22T12:02:00Z",
   "next_run_time": "2026-09-22T12:05:00Z",
   "interval_seconds": 300,
-  "expected_model_count": 46,
+  "expected_model_count": 55,
   "category_count": 6,
   "category_interval_seconds": 1800,
   "overdue_after_seconds": 600,

@@ -38,6 +38,8 @@ const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Fable 5.1 (US)": "#0ea5e9",
   "Bedrock Claude Fable 5 (Global)": "#2dd4bf",
   "Bedrock Claude Fable 5 (US)": "#0d9488",
+  "Bedrock Claude Opus 5.5 (Global)": "#ff8fab",
+  "Bedrock Claude Opus 5.5 (US)": "#e5383b",
   "Bedrock Claude Opus 5 (Global)": "#f43f5e",
   "Bedrock Claude Opus 5 (US)": "#be123c",
   "Bedrock Claude Opus 4.8 (Global)": "#fb7185",
@@ -55,6 +57,7 @@ const MODEL_COLORS: Record<string, string> = {
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
   "Anthropic Claude Fable 5.1 (US)": "#0369a1",
   "Anthropic Claude Fable 5 (US)": "#115e59",
+  "Anthropic Claude Opus 5.5 (US)": "#a4161a",
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
@@ -65,6 +68,13 @@ const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 6 Astra (Global)": "#099268",
   "OpenAI GPT 6 Astra (US)": "#2e8b57",
   "OpenAI GPT 6 Astra (us-west-2)": "#2f855a",
+  // GPT 6 Sol / Luna (v2.27.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널씩.
+  "OpenAI GPT 6 Sol (Global)": "#20c997",
+  "OpenAI GPT 6 Sol (US)": "#12b886",
+  "OpenAI GPT 6 Sol (us-east-1)": "#0ca678",
+  "OpenAI GPT 6 Luna (Global)": "#96f2d7",
+  "OpenAI GPT 6 Luna (US)": "#63e6be",
+  "OpenAI GPT 6 Luna (us-east-1)": "#38d9a9",
   "OpenAI GPT 5.6 Sol (Global)": "#00fa9a",
   "OpenAI GPT 5.6 Sol (us-east-1)": "#22c55e",
   "OpenAI GPT 5.6 Sol (us-east-2)": "#16a34a",
@@ -88,10 +98,11 @@ const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 5.4 (1P)": "#6ee7b7",
 };
 
-// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에도 포함되므로 5.1이 먼저 와야 함.
+// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에, "Opus 5"는 "Opus 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
 const FAMILY_FALLBACK: [string, string][] = [
   ["Fable 5.1", "#0ea5e9"],
   ["Fable 5", "#0d9488"],
+  ["Opus 5.5", "#e5383b"],
   ["Opus 5", "#f43f5e"],
   ["Opus 4.8", "#e11d48"],
   ["Opus 4.7", "#ef4444"],
@@ -101,6 +112,8 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
   ["GPT 6 Astra", "#2e8b57"],
+  ["GPT 6 Sol", "#12b886"],
+  ["GPT 6 Luna", "#63e6be"],
   ["GPT 5.6 Sol", "#22c55e"],
   ["GPT 5.6 Terra", "#a3e635"],
   ["GPT 5.6 Luna", "#4ade80"],

@@ -1,22 +1,45 @@
 /**
  * 토큰 단가 유도(backend/pricing.py 미러) 회귀.
  *
- * v2.25.0: GPT 6 Astra 3채널(Global CRIS, US CRIS, us-west-2 인리전)은 공식 단가 미확정 —
- * PRICE_TABLE에 엔트리가 없어야 하고, prefix fallback이 다른 모델 단가로 조용히 매칭돼서도 안 된다.
+ * v2.27.0: GPT 6 Astra는 AWS 공식 모델 카드 단가 반영(In-Region·Geo CRIS $11/$55, Global $10/$50).
+ * GPT 6 Sol/Luna 6채널(Global CRIS, US CRIS, us-east-1 인리전)은 공식 단가 미확정 —
+ * PRICE_TABLE에 엔트리가 없어야 하고, prefix fallback이 Astra 등 다른 단가로 조용히 매칭돼서도 안 된다.
  */
 import { describe, expect, test } from "vitest";
 import { estimateCost, getPricing } from "./pricing";
 
-const GPT6_ASTRA_IDS = [
-  "openai:global:global.openai.gpt-6-astra",
-  "openai:us:us.openai.gpt-6-astra",
-  "openai:us-west-2:openai.gpt-6-astra",
-];
+const GPT6_SOL_LUNA_IDS = ["sol", "luna"].flatMap((fam) => [
+  `openai:global:global.openai.gpt-6-${fam}`,
+  `openai:us:us.openai.gpt-6-${fam}`,
+  `openai:us-east-1:openai.gpt-6-${fam}`,
+]);
 
-describe("getPricing — GPT 6 Astra는 단가 미확정 (v2.25.0)", () => {
-  test.each(GPT6_ASTRA_IDS)("%s → null (prefix fallback 매칭 없음)", (id) => {
+describe("getPricing — GPT 6 Sol/Luna는 단가 미확정 (v2.27.0)", () => {
+  test.each(GPT6_SOL_LUNA_IDS)("%s → null (prefix fallback 매칭 없음)", (id) => {
     expect(getPricing(id)).toBeNull();
     expect(estimateCost(id, 1000, 1000)).toBeNull();
+  });
+});
+
+describe("getPricing — GPT 6 Astra 공식 단가 (v2.27.0)", () => {
+  test("In-Region, US CRIS는 $11/$55, Global CRIS는 $10/$50", () => {
+    expect(getPricing("openai:us-west-2:openai.gpt-6-astra")).toEqual({ input: 11, output: 55 });
+    expect(getPricing("openai:us:us.openai.gpt-6-astra")).toEqual({ input: 11, output: 55 });
+    expect(getPricing("openai:global:global.openai.gpt-6-astra")).toEqual({ input: 10, output: 50 });
+  });
+});
+
+describe("getPricing — Claude Opus 5.5 (v2.27.0)", () => {
+  test.each([
+    "global.anthropic.claude-opus-5-5",
+    "us.anthropic.claude-opus-5-5",
+    "anthropic:claude-opus-5-5",
+  ])("%s → $4/$20 (claude-opus-5 prefix fallback 아님)", (id) => {
+    expect(getPricing(id)).toEqual({ input: 4, output: 20 });
+  });
+
+  test("Opus 5는 불변", () => {
+    expect(getPricing("anthropic:claude-opus-5")).toEqual({ input: 5, output: 25 });
   });
 });
 
