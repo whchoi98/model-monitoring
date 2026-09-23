@@ -106,3 +106,13 @@ Price List API에는 GPT-6 항목이 아직 없다.
 - 배포 검증: autoprober 로그/`/api/auto-probe/latest`에서 OpenAI 19행 + 신규 3채널 첫 `success`
   확인 필수. env 주입 누락 시 prober가 **조용히 skip**하므로 한쪽 스택만 배포하면 대시보드와 스케줄
   태스크의 카탈로그가 어긋난다(1P, v2.20.0과 동일 메커니즘 — deploy.md 체크리스트 준수).
+
+## 후속 (v2.27.0, 2026-09-23)
+
+- **단가 반영**: AWS 공식 모델 카드에 Astra 단가가 게재돼(Standard, 입력 272K 이하) `PRICE_TABLE`에 3키를
+  함께 추가했다 — `gpt-6-astra`(인리전 us-west-2) $11 / $55, `gpt-6-astra-us`(Geo CRIS) $11 / $55,
+  `gpt-6-astra-global`(Global CRIS) $10 / $50. 인리전, Geo는 OpenAI 정가 +10%, Global은 정가다. 비용은 조회 시점
+  계산이라 v2.25.0 이후 Astra 행도 소급 산정되며, 위 Consequences의 "비용 화면 '-'"와 v2.25.1 "벤치 비용 추정
+  불가" 항목은 해소됐다. 동시 출시된 GPT-6 Sol/Luna는 카드가 없어 같은 "미기재" 정책을 ADR-028에서 이어받는다.
+- **Mantle us-east-1 / us-east-2 재확인**: 2026-09-23에도 `openai.gpt-6-astra`는 두 리전 모두 404
+  `not_found_error` — 스펙 유지(us-west-2 단독). 같은 날 Sol/Luna는 반대로 us-east-1만 200(ADR-028).
