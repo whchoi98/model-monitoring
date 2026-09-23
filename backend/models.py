@@ -202,7 +202,7 @@ class FeatureResult(Base):
     run_id = Column(Integer, ForeignKey("feature_runs.id"), nullable=False)
     feature = Column(Text, nullable=False)      # claude_features.catalog.FEATURE_IDS
     surface = Column(Text, nullable=False)      # cp | mantle | bedrock_messages | bedrock_invoke | bedrock_converse
-    model_key = Column(Text, nullable=False)    # fable-5-1 | fable-5 | opus-5 | sonnet-5
+    model_key = Column(Text, nullable=False)    # fable-5-1 | fable-5 | opus-5-5 | opus-5 | sonnet-5
     model_label = Column(Text, nullable=False)
     model_id = Column(Text, nullable=True)      # surface별 실제 id (not_applicable이면 None)
     status = Column(Text, nullable=False)       # supported | unsupported | broken | inconclusive | skipped | not_applicable
@@ -231,7 +231,7 @@ class GptBenchResult(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False)  # 개별 호출 시각
     model_id = Column(Text, nullable=False)     # openai:<region>:<actual_id>
     model_name = Column(Text, nullable=False)   # "OpenAI GPT 5.4 (us-east-1)"
-    family = Column(Text, nullable=False)       # "GPT 5.4" | "GPT 5.5" | "GPT 5.6 Terra" | "GPT 6 Astra" (v2.25.1)
+    family = Column(Text, nullable=False)       # "GPT 5.4" | "GPT 5.5" | "GPT 5.6 Terra" | "GPT 6 Astra" (v2.25.1) | "GPT 6 Sol" | "GPT 6 Luna" (v2.28.0)
     region = Column(Text, nullable=False)
     run_no = Column(Integer, nullable=False)    # 1..RUNS_PER_CHANNEL
     status = Column(Text, nullable=False)       # success | error
