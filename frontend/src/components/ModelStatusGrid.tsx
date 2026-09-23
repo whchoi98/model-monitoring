@@ -58,7 +58,12 @@ function MetricGradeLegend() {
         <span className="font-medium text-gray-400">{g.legendLabel}:</span>
         {GRADES.map((grade) => (
           <span key={grade} className="inline-flex items-center gap-1">
-            <span aria-hidden="true" className={GRADE_TEXT_CLASS[grade]}>{GRADE_MARKER[grade]}</span>
+            {/* 카드와 같은 규칙: 경고/위험 값에만 모양 표지가 붙으므로 양호는 모양 없는 색 견본만 보여 준다. */}
+            {GRADE_MARKER[grade] ? (
+              <span aria-hidden="true" className={GRADE_TEXT_CLASS[grade]}>{GRADE_MARKER[grade]}</span>
+            ) : (
+              <span aria-hidden="true" data-swatch={grade} className={`inline-block h-2 w-2 rounded-[2px] bg-current ${GRADE_TEXT_CLASS[grade]}`} />
+            )}
             <span className="text-gray-400">{g.names[grade]}</span>
           </span>
         ))}
@@ -152,16 +157,19 @@ export default function ModelStatusGrid({ rows, onToggleModel, selectedModels, n
               {success && result ? (
                 <span className="grid grid-cols-3 gap-2">
                   {metrics.map((metric) => (
-                    <span key={metric.key}>
+                    <span key={metric.key} className="min-w-0">
                       <span className="block text-[11px] text-gray-500">{metric.name}</span>
+                      {/* 값, 단위, 표지를 각각 flex 항목으로 두어 좁은 열(320px 화면의 3열)에서는 표지 앞에서 줄바꿈한다 —
+                          한 줄로 넘치면 표지가 옆 열의 값에 붙어 보인다. */}
                       <span
                         data-grade={metric.rule.grade}
                         title={metric.hint}
-                        className={`mt-1 block font-mono text-base font-medium tabular-nums ${GRADE_TEXT_CLASS[metric.rule.grade]}`}
+                        className={`mt-1 flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-base font-medium tabular-nums ${GRADE_TEXT_CLASS[metric.rule.grade]}`}
                       >
-                        {metric.value}<span className="ml-1 text-[11px] font-normal text-gray-500">{metric.value !== "—" ? metric.unit : ""}</span>
-                        {(metric.rule.grade === "warning" || metric.rule.grade === "critical") && (
-                          <span aria-hidden="true" className="ml-1 align-[1px] text-[11px]">{GRADE_MARKER[metric.rule.grade]}</span>
+                        <span>{metric.value}</span>
+                        {metric.value !== "—" && <span className="text-[11px] font-normal text-gray-500">{metric.unit}</span>}
+                        {GRADE_MARKER[metric.rule.grade] && (
+                          <span aria-hidden="true" data-marker={metric.rule.grade} className="text-xs">{GRADE_MARKER[metric.rule.grade]}</span>
                         )}
                       </span>
                     </span>

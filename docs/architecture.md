@@ -79,7 +79,7 @@ EventBridge Scheduler
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
-| GptBench TaskDef | `python -m gptbench_runner --once` — GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 (GPT 5.4/5.5/5.6 Terra + GPT 6 Astra Global, US CRIS, us-west-2 — v2.25.1 + GPT 6 Sol/Luna Global, US CRIS, us-east-1 — v2.28.0). 호출당 wall-clock watchdog(`GPT_BENCH_CALL_TIMEOUT`, 기본 90초) + `max_retries=0`, 사이클 데드라인 780초(v2.28.0) |
+| GptBench TaskDef | `python -m gptbench_runner --once` — GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 (GPT 5.4/5.5/5.6 Terra + GPT 6 Astra Global, US CRIS, us-west-2 — v2.25.1 + GPT 6 Sol/Luna Global, US CRIS, us-east-1 — v2.28.0). 호출당 wall-clock watchdog(`GPT_BENCH_CALL_TIMEOUT`, 기본 90초) + `max_retries=0`(v2.28.0), 사이클 데드라인 780초(`GPT_BENCH_DEADLINE`, v2.18.0부터) |
 | FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×5모델(Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975셀 = 프로브 813 + 사전판정 162, 약 9분, v2.28.0) 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
 
 #### 네트워크 / Network

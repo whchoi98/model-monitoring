@@ -259,7 +259,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 | Input/Output Tokens | count | 비용 산정, 효율성 지표 |
 | Stop Reason | enum | end_turn / max_tokens / tool_use / stop_sequence / guardrail_intervened / content_filtered (v2.1.0 신규) |
 
-**카드 지표 등급 (v2.28.0, ADR-029)**: 대시보드 모델 카드의 TTFT·총 응답시간·TPS **값 텍스트**를 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박, ▲)/위험(장미, ◆)으로 칠한다(사용자 요청 — 선택지 "카테고리별 절대 기준"). KO 등급 이름은 "양호"다 — 채널 건강 배지가 "정상"이라 같은 단어를 쓰면 "✓ 정상" 배지 옆 ◆ 위험 값이 모순처럼 읽힌다(EN은 Healthy/Normal로 이미 구분). `frontend/src/lib/metricGrade.ts`가 단일 출처(임계치 표, `roundForDisplay` 표시 정밀도 판정, 색 클래스, 표지) — 기준을 바꿀 때는 이 표만 고친다. TPS는 낮을수록 나쁨(경고 <40, 위험 <15 tok/s, 전 카테고리 공통). 임계치는 2026-09-23 운영 48시간 p90/p99 기반(카드 단위 시뮬레이션 양호 89%, 경고 9.4%, 위험 1.4%)이라 주기적 재도출이 필요하며, 원래 느린 모델(GPT-6 Astra, Fable 5/5.1)이 자주 경고색인 것은 의도된 동작이다. 각 값에 `data-grade` 속성, 경고/위험만 sr-only 설명 연결, 카드 위 범례 + 접이식 기준표. 건강 배지(emerald/amber/rose)와 팔레트가 다르다.
+**카드 지표 등급 (v2.28.0, ADR-029)**: 대시보드 모델 카드의 TTFT·총 응답시간·TPS **값 텍스트**를 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박, ▲)/위험(장미, ◆)으로 칠한다(사용자 요청 — 선택지 "카테고리별 절대 기준"). KO 등급 이름은 "양호"다 — 채널 건강 배지가 "정상"이라 같은 단어를 쓰면 "✓ 정상" 배지 옆 ◆ 위험 값이 모순처럼 읽힌다(EN은 Healthy/Normal로 이미 구분). `frontend/src/lib/metricGrade.ts`가 단일 출처(임계치 표, `roundForDisplay` 표시 정밀도 판정, 색 클래스, 표지) — 기준을 바꿀 때는 이 표만 고친다. TPS는 낮을수록 나쁨(경고 <40, 위험 <15 tok/s, 전 카테고리 공통). 임계치는 2026-09-23 운영 48시간 p90/p99 기반(카드 단위 시뮬레이션 — 카드처럼 표시 정밀도로 판정 — 양호 89.0%, 경고 9.6%, 위험 1.4%)이라 주기적 재도출이 필요하며, 원래 느린 모델(GPT-6 Astra, Fable 5/5.1)이 자주 경고색인 것은 의도된 동작이다. 각 값에 `data-grade` 속성, 경고/위험만 sr-only 설명 연결, 카드 위 범례 + 접이식 기준표. 건강 배지(emerald/amber/rose)와 팔레트가 다르다.
 
 ---
 

@@ -7,7 +7,7 @@
 import { describe, expect, test } from "vitest";
 import type { GptBenchCard, GptBenchTrend, GptBenchTrendPoint } from "@/lib/api";
 import {
-  FAMILY_DASH, FAMILY_GROUPS, familyOf, groupCardsByFamily, regionOf, toChartData,
+  FAMILY_DASH, FAMILY_GROUPS, familyOf, groupCardsByFamily, legendItemsBelowFold, regionOf, toChartData,
 } from "./GptOnAwsPanel";
 
 describe("regionOf", () => {
@@ -172,5 +172,26 @@ describe("toChartData", () => {
       { ts: Date.parse("2026-09-22T10:15:00Z"), [firstChannel]: null, [secondChannel]: null },
       { ts: Date.parse("2026-09-22T10:30:00Z"), [firstChannel]: 100, [secondChannel]: 100 },
     ]);
+  });
+});
+
+describe("legendItemsBelowFold — 휴대폰 범례의 숨은 항목 수 안내", () => {
+  // 한 줄 17px + 간격 8px, 보이는 높이 144px(max-h-36) — 390px 화면의 실측 배치
+  const rows = (count: number, perRow = 1) =>
+    Array.from({ length: count }, (_, index) => ({ top: 4 + Math.floor(index / perRow) * 25, height: 17 }));
+
+  test("18개 중 보이는 영역 아래 항목만 센다", () => {
+    expect(legendItemsBelowFold(rows(18), 0, 144)).toBe(12);
+  });
+  test("끝까지 스크롤하면 0", () => {
+    expect(legendItemsBelowFold(rows(18), 18 * 25 - 144, 144)).toBe(0);
+  });
+  test("세로 중심 기준 — 절반 넘게 잘린 항목은 숨은 것으로 센다", () => {
+    expect(legendItemsBelowFold([{ top: 130, height: 17 }], 0, 144)).toBe(0);
+    expect(legendItemsBelowFold([{ top: 137, height: 17 }], 0, 144)).toBe(1);
+  });
+  test("한 행에 여러 항목이 있으면 각각 센다, 넘치지 않으면 0", () => {
+    expect(legendItemsBelowFold(rows(18, 3), 0, 144)).toBe(0);
+    expect(legendItemsBelowFold(rows(18, 2), 0, 144)).toBe(6);
   });
 });

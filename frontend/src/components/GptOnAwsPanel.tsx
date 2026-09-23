@@ -131,6 +131,50 @@ function fmtMs(v: number | null | undefined): string {
 type ChartRow = { ts: number; [name: string]: number | null };
 
 /**
+ * 스크롤 범례에서 보이는 영역 아래로 밀려난 항목 수 — 항목의 세로 중심이 보이는 영역 하단보다 아래면 숨은 것으로 센다.
+ * top은 스크롤 컨테이너 콘텐츠 기준 오프셋, 한 행에 여러 항목이 있으면 각각 센다.
+ */
+export function legendItemsBelowFold(
+  items: readonly { top: number; height: number }[], scrollTop: number, clientHeight: number,
+): number {
+  const bottom = scrollTop + clientHeight;
+  return items.filter((item) => item.top + item.height / 2 > bottom).length;
+}
+
+/**
+ * 범례 목록의 숨은 항목 수를 스크롤, 크기 변경, 항목 변경 때마다 다시 센다.
+ * callback ref라 목록이 나중에(빈 상태 → 데이터) 마운트돼도 관찰을 시작한다.
+ */
+function useLegendBelowFold(key: string) {
+  const [list, setList] = useState<HTMLUListElement | null>(null);
+  const [below, setBelow] = useState(0);
+  useEffect(() => {
+    if (!list) {
+      setBelow(0);
+      return;
+    }
+    const update = () => {
+      // 콘텐츠 기준 top = 화면 좌표 차이 + 현재 스크롤 (offsetTop은 positioned 조상에 따라 기준이 달라 쓰지 않는다)
+      const origin = list.getBoundingClientRect().top + list.clientTop - list.scrollTop;
+      const items = Array.from(list.children).map((item) => {
+        const box = item.getBoundingClientRect();
+        return { top: box.top - origin, height: box.height };
+      });
+      setBelow(legendItemsBelowFold(items, list.scrollTop, list.clientHeight));
+    };
+    update();
+    list.addEventListener("scroll", update, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(list);
+    return () => {
+      list.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [list, key]);
+  return { ref: setList, below };
+}
+
+/**
  * backend/gptbench.py run_cycle() assigns one cycle_ts to every channel.
  * Keep that shared timeline, including cycles missing from a selected channel.
  * The trend API's medians include successful calls only; null means unmeasured,
@@ -181,9 +225,11 @@ function BenchChart({
   const ct = useChartTheme();
   const { lang } = useLang();
   const t = useT();
+  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const { rows, names: allNames } = useMemo(() => toChartData(trend, metric), [trend, metric]);
   // Filter lines after building the timeline so a missing channel never bridges a cycle.
   const names = selected.size === 0 ? allNames : allNames.filter((name) => selected.has(name));
+  const legend = useLegendBelowFold(`${rows.length}|${names.join("|")}`);
   const hasMeasurements = rows.some((row) => names.some((name) => typeof row[name] === "number"));
   const spansDays = rows.length > 1
     && new Date(rows[0].ts).toDateString() !== new Date(rows[rows.length - 1].ts).toDateString();
@@ -235,7 +281,9 @@ function BenchChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <ul aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
+          {/* 휴대폰 폭에서는 18개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
+              2열 배치는 라벨이 2~3줄로 접혀 보이는 항목 수가 늘지 않아(390px 6개, 320px 4개) 쓰지 않았다. */}
+          <ul ref={legend.ref} aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
               className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-[11px] text-gray-400">
             {names.map((name) => (
               <li key={name} className="flex min-w-0 items-center gap-2">
@@ -246,6 +294,11 @@ function BenchChart({
               </li>
             ))}
           </ul>
+          {legend.below > 0 && (
+            <p aria-hidden="true" data-legend-more className="mt-1 text-[11px] text-gray-500 sm:hidden">
+              ↓ {L(`+${legend.below} more, scroll the legend`, `+${legend.below}개 더 있음, 범례를 스크롤하세요`)}
+            </p>
+          )}
         </>
       )}
     </section>

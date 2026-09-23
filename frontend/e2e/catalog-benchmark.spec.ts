@@ -358,6 +358,40 @@ test("catalog details support keyboard tabs, copy feedback and focus return", as
   expect(errors).toEqual([]);
 });
 
+test("the phone trend legend tells how many channels are below the fold and desktop stays unchanged", async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await mockBenchmark(page);
+  await page.goto("/gpt-on-aws");
+  const chart = page.getByRole("region", { name: "TTFB trend (median per cycle)", exact: true });
+  const list = chart.getByRole("list", { name: "Chart legend" });
+  await expect(list.getByRole("listitem")).toHaveCount(18);
+  const cue = chart.locator("[data-legend-more]");
+  await expect(cue).toBeVisible();
+  const hidden = await list.evaluate((element) => {
+    const bottom = element.getBoundingClientRect().top + element.clientTop + element.clientHeight;
+    return Array.from(element.children).filter((item) => {
+      const box = item.getBoundingClientRect();
+      return box.top + box.height / 2 > bottom;
+    }).length;
+  });
+  expect(hidden).toBeGreaterThanOrEqual(10);
+  await expect(cue).toHaveText(`↓ +${hidden} more, scroll the legend`);
+  await list.evaluate((element) => { element.scrollTop = element.scrollHeight; });
+  await expect(cue).toHaveCount(0);
+
+  await page.addInitScript(() => localStorage.setItem("lang", "ko")); // beforeEach의 "en" 뒤에 실행돼 덮어쓴다
+  await page.reload();
+  const koChart = page.getByRole("region", { name: "TTFB 추이 (사이클 median)", exact: true });
+  await expect(koChart.locator("[data-legend-more]")).toHaveText(/^↓ \+\d+개 더 있음, 범례를 스크롤하세요$/);
+
+  // sm 이상은 기존 배치 그대로: flex-wrap, 안내 줄 없음(넘쳐도 숨김)
+  await page.setViewportSize({ width: 640, height: 900 });
+  await expect(koChart.locator("[data-legend-more]")).toBeHidden();
+  await page.setViewportSize({ width: 1280, height: 900 });
+  expect(await koChart.getByRole("list", { name: "차트 범례" }).evaluate((element) => getComputedStyle(element).display)).toBe("flex");
+  await expect(koChart.locator("[data-legend-more]")).toHaveCount(0);
+});
+
 test("benchmark legends and catalog dialogs fit a mobile viewport in both themes", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockBenchmark(page);

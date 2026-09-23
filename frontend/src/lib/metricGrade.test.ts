@@ -70,6 +70,10 @@ describe("임계치 표 형태", () => {
     expect(GRADE_TEXT_CLASS.critical).toContain("rose");
     expect(GRADE_TEXT_CLASS.none).toContain("gray");
     expect(GRADE_MARKER.warning).not.toBe(GRADE_MARKER.critical);
+    expect(GRADE_MARKER.warning).toBeTruthy();
+    expect(GRADE_MARKER.critical).toBeTruthy();
+    // 양호 값에는 표지가 없다 — 범례도 모양 없이 색 견본만 쓴다(카드와 같은 규칙).
+    expect(GRADE_MARKER.normal).toBe("");
     expect(GRADE_MARKER.none).toBe("");
   });
 });
