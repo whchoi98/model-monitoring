@@ -141,8 +141,10 @@ def test_register_openai_models_global_not_for_54_55(monkeypatch):
 def test_register_gpt6_astra_three_channels(monkeypatch):
     """GPT 6 Astra = Global CRIS + US CRIS + Mantle 인리전 us-west-2, 정확히 3채널 (v2.25.0).
 
-    us-east-1, us-east-2는 Mantle 미온보딩(404 not_found_error, 2026-09-09 실측)이라 스펙에
-    없다 — base_url env가 있어도 등록되지 않아야 한다(스펙 리전이 404면 매 프로브가 error 행).
+    us-east-1, us-east-2는 현재 미지원(404 not_found_error, 2026-09-09·2026-09-23 실측) —
+    2026-09-23 사용자 결정으로 제외돼 스펙에 없다(정기 재확인 대상 아님, AWS가 지원을 발표하면
+    스펙 튜플에 리전만 추가). base_url env가 있어도 등록되지 않아야 한다(스펙 리전이 404면 매
+    프로브가 error 행).
     """
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)

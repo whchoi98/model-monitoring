@@ -5,6 +5,8 @@
   forced toolChoice 400. CP /v1/models는 claude-opus-5-5를 claude-opus-5보다 먼저 돌려준다.
 - GPT 6 Sol/Luna: Global CRIS(Seoul bedrock-runtime) / US CRIS(us-east-1 bedrock-runtime) 200,
   Mantle 인리전은 us-east-1만 200 (us-east-2, us-west-2는 404 not_found_error).
+- GPT 6 Sol/Luna 단가: AWS Bedrock ListFoundationModelAgreementOffers rate card (2026-09-23) —
+  In-Region, US CRIS는 Sol $2.20/$11, Luna $0.11/$0.55, Global CRIS는 Sol $2/$10, Luna $0.10/$0.50.
 """
 
 import pricing
@@ -125,11 +127,32 @@ def test_gpt6_sol_luna_register_exactly_three_channels_each(monkeypatch):
         assert prober.AVAILABLE_MODELS[f"openai:us-east-1:openai.gpt-6-{fam}"] == f"OpenAI {label} (us-east-1)"
 
 
-def test_gpt6_sol_luna_pricing_deferred_and_never_matches_astra():
-    """공식 단가 미확정 — 6채널 모두 None. Astra 키(gpt-6-astra*)로 prefix fallback 되면 안 된다."""
-    for mid in _GPT6_SOL_LUNA_KEYS:
-        assert pricing.get_pricing(mid) is None, mid
-        assert pricing.estimate_cost_usd(mid, 1_000_000, 1_000_000) is None
+def test_gpt6_sol_luna_pricing_per_channel_and_never_matches_astra():
+    """AWS offer rate card 단가 (2026-09-23) — In-Region, US CRIS는 OpenAI 정가 +10%, Global CRIS는 정가.
+
+    6채널 모두 자기 정확 키로 매칭돼야 하고, Astra 키(gpt-6-astra*)로 prefix fallback 되면 안 된다.
+    """
+    expected = {
+        "openai:global:global.openai.gpt-6-sol": {"input": 2.00, "output": 10.00},
+        "openai:us:us.openai.gpt-6-sol": {"input": 2.20, "output": 11.00},
+        "openai:us-east-1:openai.gpt-6-sol": {"input": 2.20, "output": 11.00},
+        "openai:global:global.openai.gpt-6-luna": {"input": 0.10, "output": 0.50},
+        "openai:us:us.openai.gpt-6-luna": {"input": 0.11, "output": 0.55},
+        "openai:us-east-1:openai.gpt-6-luna": {"input": 0.11, "output": 0.55},
+    }
+    assert sorted(expected) == sorted(_GPT6_SOL_LUNA_KEYS)
+    astra_prices = [
+        pricing.get_pricing(mid)
+        for mid in (
+            "openai:global:global.openai.gpt-6-astra",
+            "openai:us:us.openai.gpt-6-astra",
+            "openai:us-west-2:openai.gpt-6-astra",
+        )
+    ]
+    assert all(p is not None for p in astra_prices)
+    for mid, price in expected.items():
+        assert pricing.get_pricing(mid) == price, mid
+        assert pricing.get_pricing(mid) not in astra_prices, mid
 
 
 def test_gpt6_openai_reasoning_markers_stay_excluded():
