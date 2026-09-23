@@ -80,7 +80,7 @@ def test_bench_channels_includes_gpt6_astra_three_channels(bench_env):
 def test_bench_channels_includes_gpt6_sol_luna_three_channels_each(bench_env):
     """GPT 6 Sol/Luna 각 3채널 편입 (v2.28.0 사용자 결정) — Global CRIS, US CRIS, Mantle us-east-1.
 
-    Mantle 인리전은 us-east-1 단독(us-east-2/us-west-2는 404, 2026-09-23 실측). 라벨은 prober 등록
+    Mantle 인리전은 us-east-1 단독(us-east-2/us-west-2는 현재 미지원 404 — 사용자 결정으로 제외). 라벨은 prober 등록
     라벨과 바이트 동일해야 한다(아래 test_bench_channel_keys_match_prober_registration이 교차 검증).
     """
     import gptbench

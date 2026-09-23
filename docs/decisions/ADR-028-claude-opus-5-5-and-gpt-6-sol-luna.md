@@ -135,7 +135,7 @@ US CRIS 3; 휴면 1P 5 포함 총계 51 → 60). reliability/cost/analysis/effic
 - (−) Sol/Luna Mantle us-east-2/us-west-2, Astra Mantle us-east-1/us-east-2 공백 — 재확인 후 스펙 튜플에
   리전만 추가하면 편입된다.
   → v2.28.0 정정: **Astra Mantle us-east-1/us-east-2는 "현재 미지원 — 2026-09-23 사용자 결정으로 제외"**이며 정기
-  재확인 대상이 아니다(ADR-027 정정). Sol/Luna Mantle us-east-2/us-west-2는 2026-09-23 기준 404이고 별도 결정은 없다.
+  재확인 대상이 아니다(ADR-027 정정). Sol/Luna Mantle us-east-2/us-west-2도 v2.28.1에서 같은 결정(아래 후속 v2.28.1).
 - 배포 검증: `/api/auto-probe/latest` 55행, CP 9행에서 `anthropic:claude-opus-5` → `Anthropic Claude Opus 5 (US)`,
   `anthropic:claude-opus-5-5` → `Anthropic Claude Opus 5.5 (US)` 매핑, OpenAI 25행 + 신규 6채널 첫 `success` 확인.
   backend 기동 로그에서 `Label repair: … anthropic:claude-opus-5-5 'Anthropic Claude Opus 5 (US)' -> 'Anthropic Claude Opus 5.5 (US)'`
@@ -184,4 +184,15 @@ US CRIS 3; 휴면 1P 5 포함 총계 51 → 60). reliability/cost/analysis/effic
     — 2026-09-16~17 GPT 5.4 us-east-2 워밍업 1회가 약 3,540초 걸린 사고 대응(CHANGELOG v2.28.0).
 - **`/claude-features` 편입**: Claude Opus 5.5를 5번째 대표 모델로 추가 — 975셀, 자세히는 ADR-026 부록(v2.28.0).
 - **Astra Mantle us-east-1/us-east-2**: 2026-09-23 사용자 결정으로 "현재 미지원 — 제외" 확정, 정기 재확인 대상 아님
-  (ADR-027 정정). Sol/Luna Mantle us-east-2/us-west-2(404)에는 별도 결정이 없다.
+  (ADR-027 정정). Sol/Luna Mantle us-east-2/us-west-2(404)는 v2.28.1에서 같은 결정(아래).
+
+## 후속 (v2.28.1, 2026-09-23)
+
+- **GPT-6 Sol/Luna Mantle us-east-2/us-west-2 — "현재 미지원, 제외" (사용자 결정)**: 2026-09-23 실측 404
+  `not_found_error`. Astra Mantle us-east-1/us-east-2와 같은 처리로, 스펙 튜플에 넣지 않고 정기 재확인 대상에서도
+  뺀다. AWS가 지원을 발표하면 `prober._OPENAI_MODEL_SPECS`(와 벤치 `_BENCH_SPECS`)에 리전만 추가한다. 코드 동작 변경 없음.
+- **GPT-5.6 Sol 단가를 프로모션 단가로 교정 (사용자 결정)**: AWS 모델 카드와 `ListFoundationModelAgreementOffers`
+  (offer-gnqokrqqvdbgw)가 모두 In-Region·Geo $4.40/$22, Global $4/$20을 표시한다(구 $5.50/$33, $5/$30). 카드는
+  "최소 2026-11-21까지" 프로모션이라고 밝히므로 종료 후 재확인이 필요하다. 비용은 조회 시점에 계산되므로 과거 행도
+  새 단가로 소급 산정된다(사용자 승인). Terra, Luna는 카드와 저장소가 일치해 변경 없음.
+
