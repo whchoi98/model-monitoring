@@ -409,12 +409,13 @@ def _get_openai_client(base_url: str):
     아래 max_retries=0 + 60s read는 프로브 스트림 hang 대책이지 패리티 판정용 설정이 아니다.
     """
     if base_url not in _openai_client_cache:
-        import httpx
-        from openai import OpenAI
+        # SDK 자체 Timeout 타입을 쓴다 — openai 1.x/2.x는 httpx.Timeout, 3.x(운영 이미지 3.19, httpx2 기반)는
+        # 자체 타입이라 httpx.Timeout을 넘기면 호환 shim에만 기대게 된다(2026-09-23 리뷰, 운영 이미지로 확인).
+        from openai import OpenAI, Timeout
         _openai_client_cache[base_url] = OpenAI(
             api_key=_openai_api_key(base_url),
             base_url=base_url,
-            timeout=httpx.Timeout(_OPENAI_READ_TIMEOUT_S, connect=_OPENAI_CONNECT_TIMEOUT_S),
+            timeout=Timeout(_OPENAI_READ_TIMEOUT_S, connect=_OPENAI_CONNECT_TIMEOUT_S),
             # SDK 재시도 금지 (v2.28.2) — 재시도는 _probe_single_model의 _RETRYABLE_PATTERNS 루프
             # 하나만 둔다. SDK 기본 max_retries=2가 겹치면 한 프로브의 대기가 곱으로 늘어난다.
             max_retries=0,

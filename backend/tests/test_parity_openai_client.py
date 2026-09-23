@@ -30,7 +30,8 @@ def created_clients(monkeypatch):
             self.kwargs = kwargs
             created.append(self)
 
-    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    # 실제 SDK 표면과 맞춘다 — prober 프로브 클라이언트는 openai.Timeout을 import한다(v2.28.2).
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI, Timeout=lambda *a, **k: (a, k)))
     monkeypatch.setattr(prober, "_openai_client_cache", {})
     monkeypatch.setattr(runner, "_openai_client_cache", {})
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")

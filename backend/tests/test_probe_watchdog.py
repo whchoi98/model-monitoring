@@ -12,7 +12,6 @@ import time
 import types
 from queue import Queue
 
-import httpx
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -166,7 +165,12 @@ def test_openai_client_has_no_sdk_retries_and_bounded_timeout(monkeypatch):
         def __init__(self, **kwargs):
             captured.append(kwargs)
 
-    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    # openai.Timeout(SDK 자체 타입)을 쓰는지 본다 — 3.x는 httpx2 기반이라 httpx.Timeout과 다르다.
+    class FakeTimeout:
+        def __init__(self, timeout, *, connect=None):
+            self.read, self.connect = timeout, connect
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI, Timeout=FakeTimeout))
     monkeypatch.setattr(prober, "_openai_client_cache", {})
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_1P_API_KEY", "sk-proj-fake")
@@ -179,7 +183,7 @@ def test_openai_client_has_no_sdk_retries_and_bounded_timeout(monkeypatch):
     for kw in captured:
         assert kw["max_retries"] == 0
         timeout = kw["timeout"]
-        assert isinstance(timeout, httpx.Timeout)
+        assert isinstance(timeout, FakeTimeout)  # SDK 자체 타입 (httpx.Timeout 직접 사용 금지)
         assert (timeout.connect, timeout.read) == (10.0, 60.0)
     # 자격증명 분기는 그대로 (Mantle bearer vs 1P platform 키).
     assert [kw["api_key"] for kw in captured] == ["ABSK-fake", "sk-proj-fake"]

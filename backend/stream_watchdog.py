@@ -45,7 +45,10 @@ def abort_stream(stream) -> None:
     소켓을 먼저 shutdown(SHUT_RDWR)해 블로킹 read를 깨운 뒤 close한다.
     """
     try:
-        sock = _stream_socket(stream)
+        # 이미 닫힌 httpx 응답의 커넥션은 풀로 반납돼 다른 워커가 재사용 중일 수 있다 — 그 소켓을
+        # shutdown하면 무관한 모델의 요청이 끊긴다(v2.28.2 리뷰). 닫힌 응답이면 close만 한다.
+        resp = getattr(stream, "response", None)
+        sock = None if (resp is not None and getattr(resp, "is_closed", False)) else _stream_socket(stream)
         if sock is not None:
             sock.shutdown(socket.SHUT_RDWR)
     except Exception:  # noqa: BLE001 — 이미 닫힘/소켓 미노출 등은 close로 폴백
