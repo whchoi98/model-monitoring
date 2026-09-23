@@ -65,3 +65,12 @@ tools/parity는 전부 동적이라 무변경 자동 편입 (parity는 12h 런�
   네트워크 경로가 다르다 (endpoint policy는 기본 전체 허용이라 동작 예상)
 - env 주입 누락 시 prober가 조용히 skip — 한쪽 스택만 배포하면 대시보드/스케줄
   태스크 간 카탈로그 불일치 (1P 때와 동일 메커니즘, deploy.md 체크리스트 준수)
+
+## 후속 (v2.28.1, 2026-09-23)
+
+- GPT-5.6 Sol 단가를 AWS 프로모션 단가로 교정했다(사용자 결정): In-Region·Geo $4.40/$22, Global CRIS $4/$20
+  (위 표의 $5.50/$33, $5/$30은 당시 값). 모델 카드와 `ListFoundationModelAgreementOffers`(offer-gnqokrqqvdbgw)가
+  일치하며, 카드에 따르면 프로모션은 최소 2026-11-21까지다 — 종료 후 재확인. Terra, Luna는 변경 없음.
+- 1P 재노출 선행 조건(`-1p` 단가 분리)은 그대로다. 다만 방향이 모델마다 다르다: Terra/Luna는 base 키가 1P 정가보다
+  10% 높아 과대 산정, Sol은 프로모션 단가가 1P 정가($5/$30)보다 낮아 과소 산정된다. 자세한 기록은 ADR-028 후속(v2.28.1).
+
