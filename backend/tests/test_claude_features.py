@@ -465,6 +465,44 @@ class _FakeT:
         return {"input_tokens": 42}
 
 
+@pytest.mark.parametrize("surface,expected", [
+    ("cp", "fallback-credit-2026-07-01"),
+    ("mantle", "fallback-credit-2026-06-01"),
+    ("bedrock_messages", "fallback-credit-2026-06-01"),
+    ("bedrock_invoke", "fallback-credit-2026-06-01"),
+    ("bedrock_converse", "fallback-credit-2026-06-01"),
+])
+def test_fallback_credit_beta_name_per_surface(surface, expected):
+    """fallback_credit beta 이름은 CP만 07-01, Bedrock 3경로와 Mantle은 06-01 (v2.28.0).
+
+    Mantle에 CP 이름(07-01)을 보내면 400 "Unexpected value(s) ... for the anthropic-beta header"로
+    모든 모델이 거짓 드리프트가 됐다 — 2026-09-23 라이브: Mantle us-east-1은 06-01에 200(end_turn).
+    """
+    from claude_features.transports import NormalizedResponse
+
+    resp = NormalizedResponse(content=[{"type": "text", "text": "pong"}], stop_reason="end_turn")
+    sent = []
+
+    class _T:
+        routes = frozenset({"messages"})
+
+        def messages(self, model_id, body, betas=(), stream=False):
+            sent.append(list(betas))
+            return resp
+
+        def converse(self, model_id, stream=False, **kw):
+            sent.append(kw["additionalModelRequestFields"]["anthropic_beta"])
+            return resp
+
+    t = _T()
+    t.surface = surface
+    ok, ev = P.probe_fallback_credit(t, "anthropic.claude-opus-5", "opus-5")
+    assert ok is True and ev["verification"] == "acceptance" and ev["stop_reason"] == "end_turn"
+    assert sent == [[expected]]
+    req = ev["request"]["additionalModelRequestFields"] if surface == "bedrock_converse" else ev["request"]
+    assert req["anthropic_beta"] == [expected]  # 증거 모달의 요청 스냅샷도 실제로 보낸 이름을 보여 준다
+
+
 def test_run_probe_classifies_transport_error():
     from claude_features.transports import TransportError
     t = _FakeT(exc=TransportError(400, 'thinking.type.enabled is not supported for this model'))
@@ -814,6 +852,8 @@ _CLASSIFY_PINS = [
     ("invoke-structured-extra-inputs", "HTTP 400: ValidationException: output_config.format: Extra inputs are not permitted", "unsupported"),
     ("mantle-data-retention", 'HTTP 400: {"type": "error", "request_id": "req_37kb", "error": {"type": "invalid_request_error", '
                               '"message": "data retention mode \'default\' is not available for this model"}}', "unsupported"),
+    # mantle-beta-header: v2.28.0 전 프로브가 Mantle에 CP beta 이름(07-01)을 보냈을 때의 실제 오류. 프로브는 이제
+    # Mantle에 06-01을 보낸다(2026-09-23 라이브 200) — 이 핀은 분류 규칙(beta 헤더 거부 = unsupported) 회귀용으로 남긴다.
     ("mantle-beta-header", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
                            '"message": "Unexpected value(s) `fallback-credit-2026-07-01` for the `anthropic-beta` header"}}', "unsupported"),
     ("invoke-tool-type", "HTTP 400: ValidationException: tool type 'advisor_20260301' is not supported for this model", "unsupported"),

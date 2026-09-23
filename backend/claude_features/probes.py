@@ -375,7 +375,12 @@ def probe_effort(t, model_id, model_key):
 
 
 def probe_fallback_credit(t, model_id, model_key):
-    beta = "fallback-credit-2026-06-01" if t.surface.startswith("bedrock") else "fallback-credit-2026-07-01"
+    # beta 이름은 surface마다 다르다: CP는 2026-07-01, Bedrock 3경로와 Mantle은 2026-06-01.
+    # Mantle에 CP 이름(07-01)을 보내면 400 "Unexpected value(s) ... for the anthropic-beta header"로
+    # Mantle 열이 거짓 드리프트가 된다 — 2026-09-23 라이브: Mantle us-east-1은 06-01에 200(end_turn),
+    # 07-01에 400 (opus-5-5, opus-5, sonnet-5. Fable 5는 두 이름 모두 데이터 보존 opt-in 거부가 먼저 난다).
+    aws_beta = t.surface == "mantle" or t.surface.startswith("bedrock")
+    beta = "fallback-credit-2026-06-01" if aws_beta else "fallback-credit-2026-07-01"
     if t.surface == "bedrock_converse":
         kw = {"messages": [{"role": "user", "content": [{"text": _BASIC_PROMPT}]}], "inferenceConfig": {"maxTokens": _MAX},
               "additionalModelRequestFields": {"anthropic_beta": [beta]}}
