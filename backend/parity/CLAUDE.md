@@ -11,6 +11,7 @@
 - `engine.py` — 순수 판정 로직 (외부 의존 없음, 단위 테스트 대상): `classify_error()` (`_UNSUPPORTED_MARKERS` 시그니처 → unsupported, 그 외 → broken), `check_canary` / `check_json_object` / `check_tool_roundtrip` / `check_cached_tokens` / `check_stream_events`
 - `probes.py` — surface별 실행기 5개. `CANARY`, `max_tokens_for(feature)` (structured_output 512 / 기본 256 / reasoning 2048), `_CACHE_PAD` (최소 캐시 토큰 초과용 장문 패딩). 클라이언트는 `prober.py` 헬퍼 재사용
 - `runner.py` — `run_parity()`: ParityRun row 생성 → job 팬아웃 (skipped는 프로브 없이 기록) → ThreadPoolExecutor(4) → 결과 메인 스레드 일괄 저장 (스레드별 DB 세션 금지)
+- **OpenAI 클라이언트는 prober와 따로 둔다** (v2.28.2): `runner._parity_openai_client`가 SDK 기본값(timeout 600s, `max_retries` 2) 클라이언트를 만든다. prober `_get_openai_client`의 `max_retries=0` + read 60s는 대시보드 프로브 hang 대책이고, 패리티에 적용하면 SDK가 재시도해 주던 429/5xx/연결 오류가 `classify_error`에서 broken 셀이 된다. 공유하는 것은 자격증명 선택(`prober._openai_api_key`)뿐 (테스트: `tests/test_parity_openai_client.py`)
 
 ## Entry Points
 - 스케줄: EventBridge 12시간 주기(rate 12 hours) → Fargate `python -m parity_runner --once` (모델 discovery 후 `run_parity()`)
