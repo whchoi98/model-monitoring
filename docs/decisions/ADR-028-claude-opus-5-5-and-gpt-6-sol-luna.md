@@ -23,7 +23,8 @@
 
 2. **CP 오등록 실사고**. CP `/v1/models`가 `claude-opus-5-5`를 `claude-opus-5`보다 **먼저** 돌려준다.
    기존 `_match_anthropic_model("opus-5", …)`는 *등록된* 더 긴 타깃만 후보에서 제외했으므로, `opus-5-5`
-   타깃이 없던 운영 코드는 5.5 id를 Opus 5 라벨로 등록했다. `/api/auto-probe/latest`(2026-09-23 05:02 UTC)에서
+   타깃이 없던 운영 코드는 5.5 id를 Opus 5 라벨로 등록했다(`/ecs/autoprober` 첫 오등록 2026-09-22 16:27 UTC,
+   이후 5분 주기 약 150사이클). `/api/auto-probe/latest`(2026-09-23 05:02 UTC)에서
    `anthropic:claude-opus-5-5 | Anthropic Claude Opus 5 (US)`로 확인 — 실제 Opus 5 CP 채널은 측정되지 않고
    5.5 측정값이 Opus 5 이력에 섞였다. v2.22.1 Fable 5.1(`fable-5` ⊂ `fable-5-1`)과 같은 패턴의 두 번째 사고다.
 
