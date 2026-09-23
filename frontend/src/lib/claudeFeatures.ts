@@ -83,10 +83,14 @@ export interface RowView {
 }
 export interface GroupView { id: string; label: string; rows: RowView[] }
 
+// modelOrder(v2.28.0~): 카탈로그 models[].key 순서. 주면 셀 안 모델 목록(드롭다운, 지연시간 툴팁)을 이 순서로 정렬한다 —
+// latest.results는 DB 삽입(프로브 완료) 순이라 모델 순서가 셀마다 달라진다. 모르는 키는 뒤로(안정 정렬), 빈 배열이면 입력 순서 유지.
 export function buildGroups(
   features: FeatureDef[], groups: FeatureGroupDef[], surfaces: string[], cells: FeatureCell[],
-  lang: string, filter: CellStatus | "all" | "drift", modelKey: string | null = null,
+  lang: string, filter: CellStatus | "all" | "drift", modelKey: string | null = null, modelOrder: readonly string[] = [],
 ): GroupView[] {
+  const rank = new Map(modelOrder.map((k, i) => [k, i]));
+  const byModel = (a: FeatureCell, b: FeatureCell) => (rank.get(a.model_key) ?? rank.size) - (rank.get(b.model_key) ?? rank.size);
   const byKey = new Map<string, FeatureCell[]>();
   for (const c of cells) {
     const k = `${c.feature}|${c.surface}`;
@@ -104,6 +108,7 @@ export function buildGroups(
       for (const s of surfaces) {
         // D5: 모델 칩 선택 시 그 모델의 셀만 집계 → 단일 셀 배지(N/A·문서상 지원 규칙은 aggregateCell/cellBadge가 그대로 적용)
         const cs = (byKey.get(`${f.id}|${s}`) ?? []).filter((c) => modelKey == null || c.model_key === modelKey);
+        if (rank.size) cs.sort(byModel);
         agg[s] = aggregateCell(cs);
         drift += cs.filter((c) => c.verdict === "drift").length;
       }
@@ -213,7 +218,7 @@ export function visibleSegments(summary: SurfaceSummary): SummarySegment[] {
   return SEGMENT_ORDER.filter((seg) => ALWAYS_SEGMENTS.has(seg) || summary.segments[seg] > 0);
 }
 
-/** 런 합계 스트립 (C9): totals의 6 status 키는 합 = 전체 셀(780), drift는 verdict 카운트라 status와 겹침 → 별도 필드로 분리. */
+/** 런 합계 스트립 (C9): totals의 6 status 키는 합 = 전체 셀(975, v2.28.0~; 이전 780), drift는 verdict 카운트라 status와 겹침 → 별도 필드로 분리. */
 export const RUN_STATUS_ORDER: FeatureStatus[] = ["supported", "unsupported", "broken", "inconclusive", "skipped", "not_applicable"];
 export interface RunSummary { total: number; statuses: { status: FeatureStatus; count: number }[]; drift: number }
 
@@ -275,7 +280,7 @@ export function isGroupOpen(filterActive: boolean, collapsed: Set<string>, group
 }
 
 // ── Key Findings 드로어 파생 (v2.24.0, D4) ──────────────────────────────────────────
-// surface 카드 클릭 → verdict 축 6섹션. 셀(모델별 FeatureCell) 단위로 계산하므로 aggregateCell의 4모델 접기와 충돌 없음.
+// surface 카드 클릭 → verdict 축 6섹션. 셀(모델별 FeatureCell) 단위로 계산하므로 aggregateCell의 대표 모델 접기와 충돌 없음.
 // 술어 isProbed/isDocumented는 위(RUL-7)의 단일 정의를 사용한다.
 export interface FindingFeatureGroup { feature: string; count: number; probed: number; models: string[]; cells: FeatureCell[] }
 export interface FindingChip { feature: string; models: string[]; cells: FeatureCell[] }

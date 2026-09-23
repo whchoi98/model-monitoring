@@ -23,7 +23,7 @@ def main() -> int:
     parser.add_argument("--smoke", action="store_true", help="DB 없이 실행 후 표 출력 (로컬 검증)")
     parser.add_argument("--surfaces", help="cp,mantle,bedrock_messages,bedrock_invoke,bedrock_converse")
     parser.add_argument("--features", help="feature id 목록(콤마)")
-    parser.add_argument("--models", help="fable-5-1,fable-5,opus-5,sonnet-5")
+    parser.add_argument("--models", help="fable-5-1,fable-5,opus-5-5,opus-5,sonnet-5")
     parser.add_argument("--json", action="store_true", help="--smoke 결과를 JSON으로 출력")
     args = parser.parse_args()
     if not (args.once or args.smoke):

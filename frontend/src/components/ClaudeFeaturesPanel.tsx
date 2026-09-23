@@ -3,7 +3,7 @@
 // Claude API Features (v2.23.0) — platform.claude.com "Build with Claude" 33피처(+코어 4, Models API)를
 // Claude Platform on AWS / Bedrock Mantle / Bedrock runtime(Messages API · InvokeModel · Converse) 5열에서 실행-증거로 검증.
 // 표 하단 "참조" 블록: Mantle에서 측정 불가한 모델(Fable 5.1 = US GovCloud 전용)을 카탈로그 mantle_reason으로 표기 (v2.23.1).
-// 셀 = 피처 × 엔드포인트(대표 모델 4종 집계) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
+// 셀 = 피처 × 엔드포인트(대표 모델 5종 집계, 모델 목록과 순서는 카탈로그 models가 단일 출처) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
 
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLang, useT } from "@/lib/i18n-context";
@@ -361,7 +361,7 @@ export default function ClaudeFeaturesPanel() {
   const visibleChanges = useMemo(() => pickModel(latest?.changes ?? [], modelFilter), [latest, modelFilter]);
   const changeSummary = useMemo(() => summarizeChanges(visibleChanges), [visibleChanges]);
   const groups = useMemo(
-    () => (catalog ? buildGroups(catalog.features, catalog.groups, surfaces, cells, lang, filter, modelFilter) : []),
+    () => (catalog ? buildGroups(catalog.features, catalog.groups, surfaces, cells, lang, filter, modelFilter, catalog.models.map((m) => m.key)) : []),
     [catalog, surfaces, cells, lang, filter, modelFilter],
   );
   const run = latest?.run ?? null;
