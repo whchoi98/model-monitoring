@@ -240,8 +240,9 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
 # "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
-# GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 404 not_found_error
-# (2026-09-09 실측, 모델 액세스는 AUTHORIZED이므로 Mantle 호스트 온보딩 이슈) → 스펙 미기재.
+# GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 현재 미지원
+# (404 not_found_error, 2026-09-09·2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재).
+# 정기 재확인 대상 아님 — AWS가 지원을 발표하면 아래 스펙 튜플에 리전만 추가하면 된다.
 # GPT 6 Sol/Luna(2026-09-22 출시)의 Mantle 인리전은 반대로 us-east-1만 서빙 — us-east-2/us-west-2는
 # 404 not_found_error(2026-09-23 실측). us-east-1 첫 호출은 401 "subscription is being set up"
 # (Marketplace 구독 자동 개시)이었다가 수 분 뒤 200.

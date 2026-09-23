@@ -38,6 +38,24 @@ def test_gpt6_astra_official_pricing_per_channel():
     assert pricing.estimate_cost_usd("openai:us-west-2:openai.gpt-6-astra", 1_000_000, 1_000_000) == 66.0
 
 
+def test_normalize_gpt6_sol_luna_keys():
+    # GPT 6 Sol/Luna도 Astra와 같은 3키 규칙 — Global/US CRIS는 suffix, Mantle 인리전은 base 키.
+    for fam in ("sol", "luna"):
+        assert pricing._normalize_key(f"openai:us-east-1:openai.gpt-6-{fam}") == f"gpt-6-{fam}"
+        assert pricing._normalize_key(f"openai:us:us.openai.gpt-6-{fam}") == f"gpt-6-{fam}-us"
+        assert pricing._normalize_key(f"openai:global:global.openai.gpt-6-{fam}") == f"gpt-6-{fam}-global"
+        # 정규화된 키가 PRICE_TABLE에 정확히 존재해야 prefix fallback을 타지 않는다.
+        for suffix in ("", "-us", "-global"):
+            assert f"gpt-6-{fam}{suffix}" in pricing.PRICE_TABLE
+
+
+def test_estimate_cost_gpt6_sol_luna():
+    # Sol us-east-1: 1M in @2.20 + 1M out @11.00 = 13.20
+    assert abs(pricing.estimate_cost_usd("openai:us-east-1:openai.gpt-6-sol", 1_000_000, 1_000_000) - 13.20) < 1e-9
+    # Luna Global: 2M in @0.10 + 500K out @0.50 = 0.20 + 0.25 = 0.45
+    assert abs(pricing.estimate_cost_usd("openai:global:global.openai.gpt-6-luna", 2_000_000, 500_000) - 0.45) < 1e-9
+
+
 def test_get_pricing_openai():
     assert pricing.get_pricing("openai:us-east-1:openai.gpt-5.4") == {"input": 2.75, "output": 16.5}
     assert pricing.get_pricing("openai:us-east-2:openai.gpt-5.5") == {"input": 5.5, "output": 33.0}
