@@ -392,22 +392,27 @@ def _openai_base_url(region: str) -> str:
     return url
 
 
-def _get_openai_client(base_url: str):
-    """Lazy-init OpenAI SDK client per base_url.
+def _openai_api_key(base_url: str) -> str:
+    """base_url이 1P(api.openai.com)면 OpenAI platform 키(OPENAI_1P_API_KEY)를,
+    아니면 Bedrock Mantle bearer 키(OPENAI_API_KEY)를 쓴다. 두 자격증명은 호환되지 않음.
+    """
+    if base_url == _openai_1p_base_url():
+        return os.environ["OPENAI_1P_API_KEY"]
+    return os.environ["OPENAI_API_KEY"]
 
-    base_url이 1P(api.openai.com)면 OpenAI platform 키(OPENAI_1P_API_KEY)를,
-    아니면 Bedrock Mantle bearer 키(OPENAI_API_KEY)를 사용한다. 두 자격증명은 호환되지 않음.
+
+def _get_openai_client(base_url: str):
+    """Lazy-init OpenAI SDK client per base_url — 프로브 전용 설정.
+
+    대시보드 사이클, /api/probes/run, Comparison Lab 프로브가 쓴다. 패리티 런은 이 클라이언트를
+    쓰지 않고 SDK 기본값 클라이언트를 따로 만든다(parity/runner.py `_parity_openai_client`) —
+    아래 max_retries=0 + 60s read는 프로브 스트림 hang 대책이지 패리티 판정용 설정이 아니다.
     """
     if base_url not in _openai_client_cache:
         import httpx
         from openai import OpenAI
-        api_key = (
-            os.environ["OPENAI_1P_API_KEY"]
-            if base_url == _openai_1p_base_url()
-            else os.environ["OPENAI_API_KEY"]
-        )
         _openai_client_cache[base_url] = OpenAI(
-            api_key=api_key,
+            api_key=_openai_api_key(base_url),
             base_url=base_url,
             timeout=httpx.Timeout(_OPENAI_READ_TIMEOUT_S, connect=_OPENAI_CONNECT_TIMEOUT_S),
             # SDK 재시도 금지 (v2.28.2) — 재시도는 _probe_single_model의 _RETRYABLE_PATTERNS 루프

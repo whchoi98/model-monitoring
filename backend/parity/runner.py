@@ -29,6 +29,26 @@ logger = logging.getLogger(__name__)
 _MAX_WORKERS = 4
 _PROBE_TIMEOUT_S = 120
 
+_openai_client_cache: dict[str, object] = {}
+
+
+def _parity_openai_client(base_url: str):
+    """패리티 런 OpenAI 클라이언트 — SDK 기본값(timeout 600s, max_retries 2)을 그대로 쓴다.
+
+    prober._get_openai_client의 v2.28.2 설정(max_retries=0, read 60s)은 대시보드 프로브 스트림
+    hang 대책이라 패리티에는 적용하지 않는다. 패리티 OpenAI 프로브는 대부분 non-streaming이고
+    engine.classify_error가 429/5xx/연결 오류/timeout을 broken으로 분류하므로, SDK 재시도가
+    없어지면 일시 오류가 매트릭스의 broken 셀과 변경 배너로 드러난다(2026-09-22 /ecs/parityrun에
+    SDK `Retrying request` 14건). 그래서 자격증명 선택(prober._openai_api_key)만 공유하고
+    클라이언트는 따로 캐시한다. 스레드 경합으로 두 번 만들어져도 하나가 남을 뿐이라 무해하다.
+    """
+    if base_url not in _openai_client_cache:
+        from openai import OpenAI
+        from prober import _openai_api_key
+
+        _openai_client_cache[base_url] = OpenAI(api_key=_openai_api_key(base_url), base_url=base_url)
+    return _openai_client_cache[base_url]
+
 
 def _execute(model_id: str, surface: str, feature: str) -> ProbeOutcome:
     """surface에 맞는 클라이언트를 준비해 프로브 1건 실행."""
@@ -36,7 +56,6 @@ def _execute(model_id: str, surface: str, feature: str) -> ProbeOutcome:
         _anthropic_actual_id,
         _get_anthropic_client,
         _get_bedrock_client,
-        _get_openai_client,
         _get_region_for_model,
         _openai_base_url,
         _openai_parts,
@@ -65,7 +84,7 @@ def _execute(model_id: str, surface: str, feature: str) -> ProbeOutcome:
         return probe_messages(client, mantle_fm_id(model_id), feature)
     # chat_completions / responses
     region, actual_id = _openai_parts(model_id)
-    client = _get_openai_client(_openai_base_url(region))
+    client = _parity_openai_client(_openai_base_url(region))
     fn = probe_chat_completions if surface == "chat_completions" else probe_responses
     return fn(client, actual_id, feature)
 
