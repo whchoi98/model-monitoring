@@ -223,7 +223,7 @@ export class SchedulerStack extends cdk.Stack {
           BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
           BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
           // GPT-6 Astra — Mantle 인리전 native id. Global/US 프로파일 id는 prober가 파생.
-          // Mantle us-east-1/us-east-2는 2026-09-09 실측 404 — 미등록 (ADR-027).
+          // Mantle us-east-1/us-east-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외 (ADR-027).
           BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID: "openai.gpt-6-astra",
           // GPT-6 Sol/Luna (v2.27.0) — Mantle 인리전 us-east-1만 서빙. 프로파일 id는 prober가 파생 (ADR-028).
           BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID: "openai.gpt-6-sol",
@@ -282,7 +282,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/parityrun",
     );
 
-    // GPT on AWS 벤치 (v2.18.0) — GPT 12채널(Mantle 인리전 9 + CRIS 3, v2.25.1) × 10회 TTFB/TTFT 측정, 15분 주기.
+    // GPT on AWS 벤치 (v2.18.0) — GPT 18채널(Mantle 인리전 11 + CRIS 7, v2.28.0) × 10회 TTFB/TTFT 측정, 15분 주기.
     // OpenAI bearer 키(secret)만 사용 — bedrock IAM 불필요하지만 autoprober role 재사용 (패턴 통일).
     const gptBenchTaskDef = buildTaskDef(
       "GptBenchTaskDef",
@@ -292,7 +292,8 @@ export class SchedulerStack extends cdk.Stack {
     );
 
     // Claude API Features 검증 (v2.23.0) — 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)
-    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 4모델 실행-증거, 일 1회.
+    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 5모델 실행-증거, 일 1회
+    //   = 813 + 162 = 975셀 (v2.28.0, Opus 5.5 편입).
     // bedrock:* + bedrock-mantle:* IAM 체인이 필요하므로 autoprober role 재사용. CP는 API 키(secret).
     const featuresTaskDef = buildTaskDef(
       "FeaturesVerifyTaskDef",
@@ -380,7 +381,8 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "GptBenchSchedule", {
-      // 15분 주기 — 사이클(12채널 × 워밍업1 + 10회 순차) ~4.8분(최악 ~7분), 데드라인 13분 (겹침 방지)
+      // 15분 주기 — 18채널 × (워밍업 1 + 10회) 예측 p50 ~10분, p90 ~12분, 데드라인 13분 (v2.28.0, 12채널 실측 p50 6.4분)
+      //   겹침 방지: 사이클 데드라인(GPT_BENCH_DEADLINE) + 호출당 wall-clock 상한(GPT_BENCH_CALL_TIMEOUT, 재시도 0회).
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(15)),
       description: "GPT on AWS bench: Mantle TTFB/TTFT every 15 minutes",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
@@ -394,11 +396,11 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "FeaturesVerifySchedule", {
-      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 658 프로브 + 122 사전판정 = 780셀
-      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 4 모델,
-      //   캐싱·부정 제어 포함 ≈ 800 API 호출, 토큰 비용 대략 $5~7 (Fable 지배)
+      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 813 프로브 + 162 사전판정 = 975셀 (v2.28.0, Opus 5.5 편입)
+      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 5 모델,
+      //   캐싱·부정 제어 포함 API 호출 수와 토큰 비용은 4모델 시절(≈ 800 호출, $5~7, Fable 지배)보다 프로브 수에 비례해 증가
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(24)),
-      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 4 models, daily",
+      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 5 models, daily",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: featuresTaskDef,
         vpcSubnets: props.appSubnets,

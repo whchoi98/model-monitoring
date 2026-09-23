@@ -10,8 +10,11 @@ const catalog = [
 
 function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
   const cycle = new Date(Date.now() - 20 * 60_000).toISOString();
+  // 18채널 (v2.28.0) — /api/gptbench/latest 정렬(Astra → Sol → Luna → Terra → 5.5 → 5.4)과 동일.
   const families = [
     ["GPT 6 Astra", ["Global", "US", "us-west-2"]],
+    ["GPT 6 Sol", ["Global", "US", "us-east-1"]],
+    ["GPT 6 Luna", ["Global", "US", "us-east-1"]],
     ["GPT 5.6 Terra", ["Global", "us-east-1", "us-east-2", "us-west-2"]],
     ["GPT 5.5", ["us-east-1", "us-east-2"]],
     ["GPT 5.4", ["us-east-1", "us-east-2", "us-west-2"]],
@@ -51,6 +54,40 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("lang", "en"));
   await page.route("**/api/models", (route) => route.fulfill({ json: catalog }));
+});
+
+test("benchmark cards show all 18 channels grouped by generation", async ({ page }) => {
+  const data = await mockBenchmark(page);
+  expect(data.latest.channels).toHaveLength(18);
+  await page.goto("/gpt-on-aws");
+  const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
+  for (const channel of data.latest.channels) {
+    await expect(cards.getByRole("button", { name: channel.model_name, exact: true })).toBeVisible();
+  }
+  const gpt6 = cards.getByRole("group", { name: "GPT 6 generation", exact: true });
+  const gpt5 = cards.getByRole("group", { name: "GPT 5.x generation", exact: true });
+  await expect(gpt6.getByRole("heading", { level: 3 })).toHaveText(["GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
+  await expect(gpt5.getByRole("heading", { level: 3 })).toHaveText(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"]);
+  await expect(gpt6.getByRole("button")).toHaveCount(9);
+  await expect(gpt5.getByRole("button")).toHaveCount(9);
+  for (const name of ["OpenAI GPT 6 Sol (Global)", "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (us-east-1)",
+    "OpenAI GPT 6 Luna (Global)", "OpenAI GPT 6 Luna (US)", "OpenAI GPT 6 Luna (us-east-1)"]) {
+    await expect(gpt6.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  await expect(cards.getByRole("group", { name: "Other", exact: true })).toHaveCount(0);
+  const legend = page.getByRole("list", { name: "Chart legend" }).first();
+  await expect(legend.getByRole("listitem")).toHaveCount(18);
+});
+
+test("benchmark cards with an unknown family land in Other instead of disappearing", async ({ page }) => {
+  const data = await mockBenchmark(page);
+  data.latest.channels = [...data.latest.channels, {
+    ...data.latest.channels[0], model_id: "GPT 7 Nova:US", model_name: "OpenAI GPT 7 Nova (US)", family: "GPT 7 Nova",
+  }];
+  await page.goto("/gpt-on-aws");
+  const other = page.getByRole("group", { name: "Other", exact: true });
+  await expect(other.getByRole("button", { name: "OpenAI GPT 7 Nova (US)", exact: true })).toBeVisible();
+  await expect(other.getByRole("button")).toHaveCount(1);
 });
 
 test("a trend failure keeps benchmark cards and offers an independent retry", async ({ page }) => {
@@ -189,7 +226,7 @@ test("benchmark charts use elapsed time and keep failed or missing cycles as gap
 test("dense benchmark charts keep isolated successes without ordinary marker nodes", async ({ page }) => {
   const data = await mockBenchmark(page);
   const latest = Date.parse(data.latest.cycle_ts!);
-  // 96 shared cycles across 12 channels exceed the 700-point marker limit.
+  // 96 shared cycles across 18 channels exceed the 700-point marker limit.
   data.trend.series = data.trend.series.map((series, channel) => ({
     ...series,
     points: Array.from({ length: 96 }, (_, index) => {

@@ -60,7 +60,7 @@ class TrendResponse(BaseModel):
     series: list[TrendSeries] = []
 
 
-# 사이클은 채널 단위로 커밋되므로 실행 중(~7분)에는 max(cycle_ts)가 부분 사이클이다.
+# 사이클은 채널 단위로 커밋되므로 실행 중(18채널 ~10분, v2.28.0)에는 max(cycle_ts)가 부분 사이클이다.
 # 데드라인(13분) + 여유 = 14분 이상 지난 사이클만 "완료"로 간주하고, 최신이 진행 중이면
 # 직전 사이클로 폴백한다 (2026-07-22 "카드 4개만 보임" 실사고).
 _CYCLE_COMPLETE_AFTER = timedelta(minutes=14)
@@ -127,8 +127,9 @@ def latest(db: Session = Depends(get_db)):
             median_reasoning_tokens=_median([r.reasoning_tokens for r in ok]),
             last_error=(errs[-1].error_message if errs else None),
         ))
-    # 정렬: family(카탈로그 순) → region
-    fam_rank = {"GPT 6 Astra": 0, "GPT 5.6 Terra": 1, "GPT 5.5": 2, "GPT 5.4": 3}
+    # 정렬: family(카탈로그 순, GPT 6 세대 → 5.x) → region. 누락된 family는 rank 9로 맨 뒤.
+    fam_rank = {"GPT 6 Astra": 0, "GPT 6 Sol": 1, "GPT 6 Luna": 2,
+                "GPT 5.6 Terra": 3, "GPT 5.5": 4, "GPT 5.4": 5}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
@@ -138,7 +139,7 @@ def trend(
     hours: int = Query(24, ge=1, le=720),
     db: Session = Depends(get_db),
 ):
-    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 12채널 규모라 Python 집계로 충분."""
+    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 18채널 규모라 Python 집계로 충분."""
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
     query = (db.query(GptBenchResult)
              .filter(GptBenchResult.cycle_ts >= since))
