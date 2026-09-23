@@ -187,6 +187,39 @@ def test_abandon_before_commit_discards_the_late_row(env):
     assert fresh.begin() is False
 
 
+def test_real_probe_through_an_abandoned_slot_writes_nothing_and_does_not_raise(env, monkeypatch):
+    """실제 _probe_single_model(성공 경로: add → commit → refresh → id/timestamp 읽기)이 포기된 슬롯의
+    프록시 세션을 거치면 행 없이 조용히 끝난다 — 늦은 워커가 오류 로그나 두 번째 행을 만들지 않는다."""
+    import types
+    from queue import Queue
+
+    import prober
+
+    factory, _ = env
+    events = [
+        types.SimpleNamespace(type="response.output_text.delta", delta="late", response=None),
+        types.SimpleNamespace(type="response.completed", delta=None, response=types.SimpleNamespace(
+            usage=types.SimpleNamespace(input_tokens=3, output_tokens=1),
+            status="completed", incomplete_details=None)),
+    ]
+    client = types.SimpleNamespace(responses=types.SimpleNamespace(create=lambda **kw: iter(events)))
+    monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
+    monkeypatch.setattr(prober, "_get_openai_client", lambda base_url: client)
+
+    slot = worker._ProbeSlot(HUNG, "OpenAI GPT 5.6 Sol (us-east-1)")
+    assert slot.begin() and slot.abandon()
+    raw = factory()
+    q: Queue = Queue()
+    prober._probe_single_model(None, HUNG, slot.model_name, "hi", 0.1, 64, 1, q, 1,
+                               worker._SlotSession(raw, slot), "chat-short")
+    raw.close()
+    assert _rows(factory) == []
+    kinds = []
+    while not q.empty():
+        kinds.append(q.get_nowait().split("\n", 1)[0])
+    assert "event: result" in kinds and "event: error" not in kinds
+
+
 def test_future_timeout_leaves_headroom_over_the_wall_clock_cap():
     import prober
 
