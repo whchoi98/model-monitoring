@@ -17,6 +17,8 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   // Anthropic Claude
   "claude-fable-5-1": { input: 10.0, output: 50.0 }, // Fable 5.1 — Fable 5와 동일 티어/단가 (v2.22.0)
   "claude-fable-5": { input: 10.0, output: 50.0 },
+  // Opus 5.5 (v2.27.0) — Anthropic 정가 $4/$20. 정확 키가 없으면 prefix fallback이 claude-opus-5 단가로 매칭된다.
+  "claude-opus-5-5": { input: 4.0, output: 20.0 },
   "claude-opus-5": { input: 5.0, output: 25.0 },
   "claude-opus-4-8": { input: 5.0, output: 25.0 },
   "claude-opus-4-7": { input: 5.0, output: 25.0 },
@@ -43,9 +45,14 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   "gpt-5.6-sol-global": { input: 5.00, output: 30.00 },
   "gpt-5.6-terra-global": { input: 2.00, output: 12.00 },
   "gpt-5.6-luna-global": { input: 0.20, output: 1.20 },
-  // GPT 6 Astra (v2.25.0): 공식 단가 미확정 — AWS Price List API에도 엔트리가 없어 의도적으로 비움.
-  // 3채널(gpt-6-astra / -us / -global) 단가는 확정 시 한 번에 함께 추가한다. 하나만 추가하면
-  // 나머지 두 키가 prefix fallback으로 그 단가에 매칭돼 채널별 비용이 뒤섞인다.
+  // GPT 6 Astra — v2.27.0에서 AWS 공식 모델 카드 단가 반영 (Standard, ≤272K).
+  // In-Region·Geo CRIS(US)는 OpenAI 정가 +10%, Global CRIS는 정가. 3키는 항상 함께 둔다 —
+  // 하나만 있으면 prefix fallback이 나머지 채널을 그 단가로 오매칭한다.
+  "gpt-6-astra": { input: 11.0, output: 55.0 },
+  "gpt-6-astra-us": { input: 11.0, output: 55.0 },
+  "gpt-6-astra-global": { input: 10.0, output: 50.0 },
+  // GPT 6 Sol / Luna (v2.27.0): 공식 단가 미확정 — AWS 모델 카드·Price List 모두 없음, 의도적으로 비움.
+  // 확정되면 모델마다 in-region / -global / -us 3키를 함께 추가한다 (ADR-028).
 };
 
 /** model_id → ModelPricing. 매칭 실패 시 null. */

@@ -154,12 +154,16 @@ FEATURES: list[dict] = [
 FEATURE_IDS = [f["id"] for f in FEATURES]
 
 # 확장 추론 지원 패밀리 (prober._is_reasoning_model과 정합 — 여기서는 카탈로그 자체 규칙으로 유지)
+# gpt-6(Astra·Sol·Luna)은 미포함: reasoning 프로브(effort low, "17 x 23은?")에서 reasoning_tokens=0
+# (Astra 2026-09-09, Sol/Luna 2026-09-23 실측 — Sol/Luna는 effort high에서만 13~18) → 넣으면 "미지원" 오판.
 _REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "gpt-5")  # "fable-5"는 fable-5-1도 포함
 
 # forced tool_choice(type "tool"/"any")를 400으로 거부하는 모델 — tool_use 프로브는 auto + 프롬프트
 # 지시로 대체한다 (도구 왕복 자체는 검증). Claude Fable 5.1(2026-08-31 출시):
 # 'tool_choice: type "tool" and "any" are not supported for this model.' (v2.22.0)
-_NO_FORCED_TOOL_CHOICE_MARKERS = ("fable-5-1",)
+# Claude Opus 5.5(2026-09-22 출시)도 같은 400 — converse_stream 실측 2026-09-23 (v2.27.0).
+# ⚠️ "opus-5-5"는 opus-5를 포함하지 않지만 반대("opus-5")를 넣으면 Opus 5까지 auto로 바뀐다.
+_NO_FORCED_TOOL_CHOICE_MARKERS = ("fable-5-1", "opus-5-5")
 
 
 def supports_forced_tool_choice(model_id: str) -> bool:

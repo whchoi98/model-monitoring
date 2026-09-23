@@ -26,15 +26,16 @@ def test_normalize_openai_us_cris_key():
     assert pricing._normalize_key("openai:1p:gpt-5.4") == "gpt-5.4"
 
 
-def test_gpt6_astra_pricing_deferred_returns_none():
-    """GPT 6 Astra는 단가 미확정 — 3채널 모두 None(비용 "-"). prefix fallback도 매칭 금지."""
-    for mid in (
-        "openai:global:global.openai.gpt-6-astra",
-        "openai:us:us.openai.gpt-6-astra",
-        "openai:us-west-2:openai.gpt-6-astra",
-    ):
-        assert pricing.get_pricing(mid) is None
-        assert pricing.estimate_cost_usd(mid, 1_000_000, 1_000_000) is None
+def test_gpt6_astra_official_pricing_per_channel():
+    """GPT 6 Astra — v2.25.0 미확정(None) → v2.27.0 AWS 공식 모델 카드 단가 (Standard, ≤272K).
+
+    In-Region·Geo CRIS(US)는 OpenAI 정가 +10%($11/$55), Global CRIS는 정가($10/$50).
+    """
+    assert pricing.get_pricing("openai:us-west-2:openai.gpt-6-astra") == {"input": 11.0, "output": 55.0}
+    assert pricing.get_pricing("openai:us:us.openai.gpt-6-astra") == {"input": 11.0, "output": 55.0}
+    assert pricing.get_pricing("openai:global:global.openai.gpt-6-astra") == {"input": 10.0, "output": 50.0}
+    # 1M in + 1M out = $11 + $55
+    assert pricing.estimate_cost_usd("openai:us-west-2:openai.gpt-6-astra", 1_000_000, 1_000_000) == 66.0
 
 
 def test_get_pricing_openai():

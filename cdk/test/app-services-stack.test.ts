@@ -174,4 +174,16 @@ describe("AppServicesStack", () => {
       })]),
     }));
   });
+
+  it("backend env에 GPT-6 Sol/Luna model id가 주입된다 (v2.27.0)", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({
+        Name: "backend",
+        Environment: Match.arrayWith([
+          Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", Value: "openai.gpt-6-sol" }),
+          Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", Value: "openai.gpt-6-luna" }),
+        ]),
+      })]),
+    }));
+  });
 });

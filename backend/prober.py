@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import logging
 import os
+import re
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -31,6 +32,9 @@ AVAILABLE_MODELS: dict[str, str] = {
     # forced tool_choice(type tool/any)는 400 — 패리티 tool_use 프로브는 auto로 대체 (parity/catalog.py).
     "global.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (Global)",
     "global.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (Global)",
+    # Opus 5.5 (v2.27.0, 2026-09-22 출시): Seoul은 Global CRIS만 제공(Geo 없음), us.는 us-east-1.
+    # temperature 400(추론 전용) · forced tool_choice(type tool/any) 400 — 패리티는 auto로 대체 (parity/catalog.py).
+    "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
     "global.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (Global)",
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
@@ -42,6 +46,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용.
     "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
     "us.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (US)",
+    "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
     "us.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (US)",
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
@@ -58,11 +63,13 @@ AVAILABLE_MODELS: dict[str, str] = {
 # vendor-hosted endpoint: aws-external-anthropic.<region>.api.aws
 # Key prefix "anthropic:<actual-anthropic-model-id>" 형태로 저장.
 # 시작 시 _discover_anthropic_models()가 /v1/models 응답에서 substring 매칭해 자동 등록.
-# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1)가 될 수 있음 — _match_anthropic_model()이
-#    더 긴 타깃을 포함하는 id를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0).
+# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1, opus-5 ⊂ opus-5-5)가 될 수 있음 —
+#    _match_anthropic_model()이 더 긴 타깃을 포함하는 id와, 아직 타깃이 없는 점 버전 id
+#    (예: sonnet-5에 대한 claude-sonnet-5-5)를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0, v2.27.0).
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("fable-5-1", "Anthropic Claude Fable 5.1 (US)"),  # v2.22.0 — CP 서빙 시 자동 발견
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
+    ("opus-5-5", "Anthropic Claude Opus 5.5 (US)"),  # v2.27.0 — CP가 2026-09-22부터 서빙
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
     ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
@@ -87,16 +94,32 @@ def _anthropic_default_headers() -> dict[str, str]:
     return {"anthropic-workspace-id": ws} if ws else {}
 
 
+def _is_point_release_of(substring: str, model_id: str) -> bool:
+    """model_id가 substring 모델의 점 버전(예: 'opus-5' 기준 'claude-opus-5-5')인지.
+
+    substring 바로 뒤에 '-<1~2자리 숫자>'가 오고 그 뒤가 숫자가 아니면 점 버전으로 본다.
+    날짜 서픽스('haiku-4-5' 기준 'claude-haiku-4-5-20251001')는 8자리라 해당하지 않는다.
+    """
+    return re.search(re.escape(substring) + r"-\d{1,2}(?!\d)", model_id) is not None
+
+
 def _match_anthropic_model(substring: str, all_ids: list[str]) -> str | None:
     """/v1/models id 목록에서 타깃 substring에 해당하는 id 하나를 고른다.
 
     같은 접두를 공유하는 더 긴 타깃(예: 'fable-5' vs 'fable-5-1')이 있으면 그 긴 substring을
     포함하는 id는 후보에서 제외 — /v1/models가 claude-fable-5-1을 claude-fable-5보다 먼저 돌려주면
     Fable 5 라벨이 5.1 id에 붙는 오등록이 생기기 때문 (v2.22.0).
+    타깃이 아직 없는 점 버전도 제외한다 — Opus 5.5 출시일(2026-09-22)에 /v1/models가
+    claude-opus-5-5를 claude-opus-5보다 먼저 돌려줘 5.5 id가 Opus 5 라벨로 프로빙된 실사고 (v2.27.0).
     """
     longer = [s for s, _ in _ANTHROPIC_TARGETS if s != substring and substring in s]
     return next(
-        (mid for mid in all_ids if substring in mid and not any(label in mid for label in longer)),
+        (
+            mid for mid in all_ids
+            if substring in mid
+            and not any(label in mid for label in longer)
+            and not _is_point_release_of(substring, mid)
+        ),
         None,
     )
 
@@ -172,7 +195,8 @@ def _anthropic_actual_id(model_id: str) -> str:
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
-# "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)도 포함한다.
+# "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)도, "opus-5"는 opus-5-5(Opus 5.5)도 포함한다
+# (Opus 5.5 temperature 400은 2026-09-23 converse_stream 실측).
 _REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "opus-5", "fable-5", "sonnet-5")
 
 
@@ -214,12 +238,17 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
 # (model-id env var, display family, 제공 리전 튜플)
 # "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
-# "us"(US CRIS)는 GPT-6 Astra만 확인(2026-09-09 라이브 200) — 다른 세대는 미검증이라 미기재.
+# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
 # GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 404 not_found_error
 # (2026-09-09 실측, 모델 액세스는 AUTHORIZED이므로 Mantle 호스트 온보딩 이슈) → 스펙 미기재.
+# GPT 6 Sol/Luna(2026-09-22 출시)의 Mantle 인리전은 반대로 us-east-1만 서빙 — us-east-2/us-west-2는
+# 404 not_found_error(2026-09-23 실측). us-east-1 첫 호출은 401 "subscription is being set up"
+# (Marketplace 구독 자동 개시)이었다가 수 분 뒤 200.
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", "GPT 6 Sol", ("global", "us", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", "GPT 6 Luna", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1", "us-east-2")),
     ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1", "us-east-2", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1", "us-east-2", "us-west-2")),

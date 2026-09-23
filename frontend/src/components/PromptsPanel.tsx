@@ -22,6 +22,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   // Bedrock Global Anthropic
   { id: "global.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (Global)" },
   { id: "global.anthropic.claude-fable-5", label: "Bedrock Claude Fable 5 (Global)" },
+  { id: "global.anthropic.claude-opus-5-5", label: "Bedrock Claude Opus 5.5 (Global)" },
   { id: "global.anthropic.claude-opus-5", label: "Bedrock Claude Opus 5 (Global)" },
   { id: "global.anthropic.claude-opus-4-8", label: "Bedrock Claude Opus 4.8 (Global)" },
   { id: "global.anthropic.claude-opus-4-7", label: "Bedrock Claude Opus 4.7 (Global)" },
@@ -32,6 +33,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   // Bedrock US Anthropic
   { id: "us.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (US)" },
   { id: "us.anthropic.claude-fable-5", label: "Bedrock Claude Fable 5 (US)" },
+  { id: "us.anthropic.claude-opus-5-5", label: "Bedrock Claude Opus 5.5 (US)" },
   { id: "us.anthropic.claude-opus-5", label: "Bedrock Claude Opus 5 (US)" },
   { id: "us.anthropic.claude-opus-4-8", label: "Bedrock Claude Opus 4.8 (US)" },
   { id: "us.anthropic.claude-opus-4-7", label: "Bedrock Claude Opus 4.7 (US)" },
