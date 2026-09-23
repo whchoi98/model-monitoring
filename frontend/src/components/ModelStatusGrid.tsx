@@ -8,7 +8,7 @@ import { formatAge, formatDateTime } from "@/lib/format";
 import { groupByFamily } from "@/lib/sortModels";
 import {
   FALLBACK_LATENCY_THRESHOLDS, GRADE_MARKER, GRADE_TEXT_CLASS, LATENCY_THRESHOLDS, TPS_THRESHOLD, WORKLOAD_CATEGORY_IDS,
-  describeGrade, type GradeRule, type GradeThreshold,
+  describeGrade, formatMetricValue, roundForDisplay, type GradeRule, type GradeThreshold,
 } from "@/lib/metricGrade";
 import { HealthBadge } from "./MonitoringOverview";
 
@@ -113,13 +113,15 @@ export default function ModelStatusGrid({ rows, onToggleModel, selectedModels, n
         const selected = selectedModels.has(model.name);
         const success = result?.status === "success";
         // 성공한 결과만 등급을 매긴다 — 값 텍스트 색은 워크로드 카테고리별 절대 기준(lib/metricGrade.ts).
+        // 표시 정밀도로 반올림한 값으로 판정해 보이는 숫자와 색·툴팁이 어긋나지 않게 한다.
         const metrics = success && result ? ([
-          { key: "ttft", name: "TTFT", raw: result.ttft_ms, value: result.ttft_ms == null ? "—" : `${Math.round(result.ttft_ms)}`, unit: "ms" },
-          { key: "total", name: t.metrics.totalLatency.name, raw: result.total_latency_ms, value: result.total_latency_ms == null ? "—" : (result.total_latency_ms / 1000).toFixed(1), unit: "s" },
-          { key: "tps", name: "TPS", raw: result.tps, value: result.tps == null ? "—" : result.tps.toFixed(1), unit: "tok/s" },
+          { key: "ttft", name: "TTFT", raw: result.ttft_ms, unit: "ms" },
+          { key: "total", name: t.metrics.totalLatency.name, raw: result.total_latency_ms, unit: "s" },
+          { key: "tps", name: "TPS", raw: result.tps, unit: "tok/s" },
         ] as const).map((metric) => {
-          const rule = describeGrade(metric.key, metric.raw, result.category);
-          return { ...metric, rule, hint: gradeHint(m.grade, rule, metric.name) };
+          const shown = roundForDisplay(metric.key, metric.raw);
+          const rule = describeGrade(metric.key, shown, result.category);
+          return { ...metric, value: formatMetricValue(metric.key, shown), rule, hint: gradeHint(m.grade, rule, metric.name) };
         }) : [];
         const issues = metrics.filter((metric) => metric.rule.grade === "warning" || metric.rule.grade === "critical");
         const issuesId = issues.length ? `${idPrefix}-grade-${groupIndex}-${index}` : undefined;
@@ -189,7 +191,7 @@ export default function ModelStatusGrid({ rows, onToggleModel, selectedModels, n
               {/* 버튼 이름은 aria-label이라 내부 값이 읽히지 않는다 — 경고/위험 지표만 설명으로 연결 */}
               {issuesId && (
                 <span id={issuesId} className="sr-only">
-                  {issues.map((metric) => `${metric.name} ${metric.value}${metric.unit}, ${metric.hint}`).join(". ")}
+                  {issues.map((metric) => `${metric.name} ${metric.value} ${metric.unit}, ${metric.hint}`).join(". ")}
                 </span>
               )}
             </button>

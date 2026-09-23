@@ -10,6 +10,7 @@
  * 경계: 지연시간(TTFT, 총 응답시간)은 값 ≥ warn → 경고, 값 ≥ crit → 위험.
  * TPS는 낮을수록 나쁘므로 반대로 값 < warn → 경고, 값 < crit → 위험 (전 카테고리 공통).
  * null, undefined, NaN, ±Infinity는 "none"(측정값 없음, 회색 유지).
+ * 카드는 원값이 아니라 roundForDisplay로 표시 정밀도에 맞춘 값을 판정한다(보이는 숫자와 색이 항상 일치).
  */
 
 export type MetricGrade = "normal" | "warning" | "critical" | "none";
@@ -61,6 +62,26 @@ export function latencyThresholdsFor(category: string | null | undefined): Laten
 
 function isMeasured(value: number | null | undefined): value is number {
   return typeof value === "number" && Number.isFinite(value);
+}
+
+/**
+ * 카드에 표시되는 정밀도로 값을 반올림한다. 등급도 이 값으로 매겨야 색·툴팁이 화면의 숫자와 어긋나지 않는다
+ * (예: chat-short 총 응답시간 3960ms는 "4.0 s"로 보이는데 원값 기준이면 정상 색이 된다).
+ * TTFT는 ms 정수, 총 응답시간은 초 소수 1자리(= 100ms 단위), TPS는 소수 1자리. 측정값 없음은 null.
+ */
+export function roundForDisplay(metric: GradedMetric, value: number | null | undefined): number | null {
+  if (!isMeasured(value)) return null;
+  if (metric === "ttft") return Math.round(value);
+  if (metric === "total") return Math.round(value / 100) * 100;
+  return Math.round(value * 10) / 10;
+}
+
+/** roundForDisplay 결과 → 카드 값 텍스트 (단위 제외). TTFT "3200", 총 응답시간 "4.0"(초), TPS "12.0". */
+export function formatMetricValue(metric: GradedMetric, rounded: number | null): string {
+  if (rounded == null) return "—";
+  if (metric === "ttft") return `${rounded}`;
+  if (metric === "total") return (rounded / 1000).toFixed(1);
+  return rounded.toFixed(1);
 }
 
 function gradeHigherIsWorse(value: number | null | undefined, { warn, crit }: GradeThreshold): MetricGrade {

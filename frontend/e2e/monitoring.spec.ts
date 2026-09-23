@@ -143,7 +143,7 @@ test("card metric values are graded per workload category with a non-color cue i
   await expect(values).toHaveCount(3);
   expect(await values.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["warning", "critical", "critical"]);
   await expect(values.first()).toHaveAttribute("title", "경고 — 짧은 대화 기준 TTFT 3초 이상, 위험 8초 이상");
-  await expect(slow.getByRole("button").first()).toHaveAccessibleDescription(/TTFT 3200ms, 경고 — 짧은 대화 기준/);
+  await expect(slow.getByRole("button").first()).toHaveAccessibleDescription(/TTFT 3200 ms, 경고 — 짧은 대화 기준.*TPS 12\.0 tok\/s, 위험/);
   await expect(values.first()).toContainText("▲");
   await expect(values.nth(1)).toContainText("◆");
 

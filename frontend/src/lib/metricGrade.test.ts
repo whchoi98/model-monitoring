@@ -14,11 +14,14 @@ import {
   TPS_THRESHOLD,
   WORKLOAD_CATEGORY_IDS,
   describeGrade,
+  formatMetricValue,
   gradeTotalLatency,
   gradeTps,
   gradeTtft,
   latencyThresholdsFor,
+  roundForDisplay,
 } from "./metricGrade";
+import { en, ko } from "./i18n";
 
 // 사용자 승인 설계값(2026-09-23)을 그대로 고정 — 표가 바뀌면 이 테스트가 먼저 알려준다.
 const EXPECTED = {
@@ -165,5 +168,92 @@ describe("describeGrade — 툴팁용 규칙 설명", () => {
       }
     }
     for (const value of [0, 14.9, 15, 39.9, 40, 100, null]) expect(describeGrade("tps", value, "summarize").grade).toBe(gradeTps(value));
+  });
+});
+
+describe("표시 정밀도 반올림 — 보이는 숫자와 등급이 어긋나지 않는다", () => {
+  test("TTFT는 ms 정수: 2999.6ms는 3000으로 보이므로 chat-short 경고", () => {
+    expect(roundForDisplay("ttft", 2999.6)).toBe(3000);
+    expect(formatMetricValue("ttft", roundForDisplay("ttft", 2999.6))).toBe("3000");
+    expect(describeGrade("ttft", roundForDisplay("ttft", 2999.6), "chat-short").grade).toBe("warning");
+    expect(describeGrade("ttft", roundForDisplay("ttft", 2999.4), "chat-short").grade).toBe("normal");
+    expect(formatMetricValue("ttft", roundForDisplay("ttft", 2999.4))).toBe("2999");
+  });
+
+  test("총 응답시간은 초 소수 1자리(100ms 단위): 3960ms는 \"4.0 s\"로 보이므로 chat-short 경고", () => {
+    expect(roundForDisplay("total", 3960)).toBe(4000);
+    expect(formatMetricValue("total", roundForDisplay("total", 3960))).toBe("4.0");
+    expect(describeGrade("total", roundForDisplay("total", 3960), "chat-short").grade).toBe("warning");
+    expect(formatMetricValue("total", roundForDisplay("total", 3949))).toBe("3.9");
+    expect(describeGrade("total", roundForDisplay("total", 3949), "chat-short").grade).toBe("normal");
+  });
+
+  test("9960ms는 \"10.0 s\"로 보이므로 chat-short 위험", () => {
+    expect(roundForDisplay("total", 9960)).toBe(10000);
+    expect(formatMetricValue("total", roundForDisplay("total", 9960))).toBe("10.0");
+    expect(describeGrade("total", roundForDisplay("total", 9960), "chat-short").grade).toBe("critical");
+  });
+
+  test("TPS는 소수 1자리: 39.96은 40.0으로 보이므로 정상, 14.96은 15.0이므로 경고", () => {
+    expect(roundForDisplay("tps", 39.96)).toBe(40);
+    expect(formatMetricValue("tps", roundForDisplay("tps", 39.96))).toBe("40.0");
+    expect(describeGrade("tps", roundForDisplay("tps", 39.96), null).grade).toBe("normal");
+    expect(describeGrade("tps", roundForDisplay("tps", 39.94), null).grade).toBe("warning");
+    expect(describeGrade("tps", roundForDisplay("tps", 14.96), null).grade).toBe("warning");
+    expect(describeGrade("tps", roundForDisplay("tps", 14.94), null).grade).toBe("critical");
+  });
+
+  test("측정값 없음은 null → \"—\", 등급 none", () => {
+    for (const metric of ["ttft", "total", "tps"] as const) {
+      for (const value of [null, undefined, Number.NaN, Number.POSITIVE_INFINITY]) {
+        expect(roundForDisplay(metric, value)).toBeNull();
+        expect(formatMetricValue(metric, roundForDisplay(metric, value))).toBe("—");
+        expect(describeGrade(metric, roundForDisplay(metric, value), "chat-short").grade).toBe("none");
+      }
+    }
+  });
+
+  test("표시 문자열을 다시 읽은 값의 등급 = 반올림 값의 등급 (경계 주변 전수)", () => {
+    const scale = { ttft: 1, total: 1000, tps: 1 } as const;
+    for (const category of [...WORKLOAD_CATEGORY_IDS, null]) {
+      const t = latencyThresholdsFor(category);
+      const probes = {
+        ttft: [t.ttft.warn, t.ttft.crit],
+        total: [t.total.warn, t.total.crit],
+        tps: [TPS_THRESHOLD.warn, TPS_THRESHOLD.crit],
+      } as const;
+      for (const metric of ["ttft", "total", "tps"] as const) {
+        const step = metric === "tps" ? 0.01 : metric === "total" ? 7 : 0.1;
+        for (const boundary of probes[metric]) {
+          for (let i = -20; i <= 20; i += 1) {
+            const raw = boundary + i * step;
+            const shown = roundForDisplay(metric, raw);
+            const reparsed = Number(formatMetricValue(metric, shown)) * scale[metric];
+            expect(describeGrade(metric, shown, category).grade).toBe(describeGrade(metric, reparsed, category).grade);
+          }
+        }
+      }
+    }
+  });
+});
+
+describe("i18n 등급 문구 — 이름은 한 곳에서 정의", () => {
+  test.each([["ko", ko], ["en", en]] as const)("%s: 툴팁 문구가 범례 이름을 그대로 쓴다", (_lang, t) => {
+    const g = t.monitoring.grade;
+    const base = { metric: "TTFT", scope: "S", warnAt: 3000, critAt: 8000, unit: "ms" as const, lowerIsWorse: false };
+    for (const grade of ["normal", "warning", "critical"] as const) {
+      expect(g.hint({ ...base, grade }).startsWith(`${g.names[grade]} — `)).toBe(true);
+    }
+    expect(g.hint({ ...base, grade: "warning" }).toLowerCase()).toContain(g.names.critical.toLowerCase());
+  });
+
+  test("KO 문구 고정", () => {
+    expect(ko.monitoring.grade.hint({ grade: "warning", metric: "TTFT", scope: "짧은 대화", warnAt: 3000, critAt: 8000, unit: "ms", lowerIsWorse: false }))
+      .toBe("경고 — 짧은 대화 기준 TTFT 3초 이상, 위험 8초 이상");
+  });
+
+  test("EN 문구 고정", () => {
+    expect(en.monitoring.grade.hint({ grade: "warning", metric: "TPS", scope: "All workloads", warnAt: 40, critAt: 15, unit: "tok/s", lowerIsWorse: true }))
+      .toBe("Warning — All workloads: TPS below 40 tok/s, critical below 15 tok/s");
   });
 });

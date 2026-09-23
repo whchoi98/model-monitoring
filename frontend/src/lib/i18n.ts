@@ -34,6 +34,10 @@ export interface MetricGradeTexts {
 const koThreshold = (value: number, unit: "ms" | "tok/s") => unit === "ms" ? `${Number((value / 1000).toFixed(1))}초` : `${value} tok/s`;
 const enThreshold = (value: number, unit: "ms" | "tok/s") => unit === "ms" ? `${Number((value / 1000).toFixed(1))} s` : `${value} tok/s`;
 
+// 등급 이름 단일 출처 — 범례(names)와 툴팁(hint) 문구가 같은 객체를 읽는다.
+const koGradeNames: MetricGradeTexts["names"] = { normal: "정상", warning: "경고", critical: "위험" };
+const enGradeNames: MetricGradeTexts["names"] = { normal: "Normal", warning: "Warning", critical: "Critical" };
+
 export interface Translations {
   common: {
     loading: string;
@@ -274,18 +278,18 @@ export const ko: Translations = {
     triggerFailed: "프로브 실행 요청에 실패했습니다.", metricGuide: "지표 해설", channelsGuide: "호출 채널 안내",
     selectionMissing: "선택한 모델 중 이 조건에 결과가 없는 모델이 있습니다.",
     grade: {
-      names: { normal: "정상", warning: "경고", critical: "위험" },
+      names: koGradeNames,
       legendLabel: "지표 등급", legendScope: "워크로드 카테고리별 기준", showCriteria: "기준값 보기",
       criteriaNote: "지연시간은 기준값 이상, TPS는 기준값 미만이면 해당 등급입니다. 성공한 호출의 값만 판정합니다.",
       allWorkloads: "전체 워크로드 공통", defaultCategory: "카테고리 미지정",
       categories: { "chat-short": "짧은 대화", structured: "JSON 추출", summarize: "요약", translate: "번역", "code-gen": "코드 생성", reasoning: "추론" },
       threshold: koThreshold,
       hint: ({ grade, metric, scope, warnAt, critAt, unit, lowerIsWorse }) => {
-        const name = { normal: "정상", warning: "경고", critical: "위험" }[grade];
+        const name = koGradeNames[grade];
         const [w, c] = [koThreshold(warnAt, unit), koThreshold(critAt, unit)];
         const worse = lowerIsWorse ? "미만" : "이상";
         const rule = grade === "normal" ? `${w} ${lowerIsWorse ? "이상" : "미만"}`
-          : grade === "warning" ? `${w} ${worse}, 위험 ${c} ${worse}` : `${c} ${worse}`;
+          : grade === "warning" ? `${w} ${worse}, ${koGradeNames.critical} ${c} ${worse}` : `${c} ${worse}`;
         return `${name} — ${scope} 기준 ${metric} ${rule}`;
       },
     },
@@ -477,18 +481,18 @@ export const en: Translations = {
     triggerFailed: "Could not start the probe.", metricGuide: "Metric guide", channelsGuide: "Channel guide",
     selectionMissing: "Some selected models have no results matching these filters.",
     grade: {
-      names: { normal: "Normal", warning: "Warning", critical: "Critical" },
+      names: enGradeNames,
       legendLabel: "Metric grades", legendScope: "graded per workload category", showCriteria: "View thresholds",
       criteriaNote: "Latency is graded at or above each value, TPS below it. Only successful calls are graded.",
       allWorkloads: "All workloads", defaultCategory: "Uncategorized",
       categories: { "chat-short": "Short chat", structured: "JSON extraction", summarize: "Summarization", translate: "Translation", "code-gen": "Code generation", reasoning: "Reasoning" },
       threshold: enThreshold,
       hint: ({ grade, metric, scope, warnAt, critAt, unit, lowerIsWorse }) => {
-        const name = { normal: "Normal", warning: "Warning", critical: "Critical" }[grade];
+        const name = enGradeNames[grade];
         const [w, c] = [enThreshold(warnAt, unit), enThreshold(critAt, unit)];
         const worse = lowerIsWorse ? "below" : "at or above";
         const rule = grade === "normal" ? `${metric} ${lowerIsWorse ? "at or above" : "below"} ${w}`
-          : grade === "warning" ? `${metric} ${worse} ${w}, critical ${worse} ${c}` : `${metric} ${worse} ${c}`;
+          : grade === "warning" ? `${metric} ${worse} ${w}, ${enGradeNames.critical.toLowerCase()} ${worse} ${c}` : `${metric} ${worse} ${c}`;
         return `${name} — ${scope}: ${rule}`;
       },
     },
