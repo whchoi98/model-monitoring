@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.28.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.28.2 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -59,7 +59,7 @@ Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic
 model-monitoring/
 ├── backend/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout)
-│   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon)
+│   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon); 멈춘 모델은 오류 행 + run completed (v2.28.2)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
 │   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P), AVAILABLE_MODELS (55개 활성 + 1P 5개 휴면), retry, stop_reason capture
 │   ├── pricing.py           # 모델별 token 단가 + estimate_cost_usd
@@ -140,7 +140,7 @@ model-monitoring/
 └── docs/
     ├── architecture.md
     ├── decisions/ADR-001~029.md
-    └── runbooks/deploy.md, rollback.md, ...
+    └── runbooks/deploy.md, rollback.md, troubleshooting.md, ...
 ```
 
 ---
@@ -335,6 +335,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 
 ### Auto-Prober는 daemon thread 아님
 - v1: backend 프로세스 안의 thread. v2: **별도 Fargate Task** (EventBridge Scheduler가 5분마다 RunTask). backend의 `auto_prober.py`는 `run_cycle()` 함수만 export, daemon 로직 없음. `auto_prober_runner.py`가 CLI entrypoint.
+- **Probe wall-clock watchdog (v2.28.2)**: 프로브 스트림은 `PROBE_WALL_CLOCK_S`(기본 90초, `backend/stream_watchdog.py`) 상한 — 만료 모델은 오류 행 `WallClockTimeout: …`, 모델별 사이클 타임아웃(max(120, 상한 + 30)초) 초과 모델은 `… (cycle timeout)` 오류 행이고 run은 **completed**로 끝난다. executor `shutdown(wait=False)` + 러너 `os._exit` — `with ThreadPoolExecutor`/`sys.exit`로 되돌리지 말 것 (2026-09-23 대시보드 동결, [`docs/runbooks/troubleshooting.md`](./docs/runbooks/troubleshooting.md)).
 
 ---
 
@@ -352,6 +353,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `ANTHROPIC_AWS_REGION` | `us-east-2` | CP on AWS endpoint region |
 | `NEXT_PUBLIC_RUM_ENDPOINT` / `_API_KEY` | (선택) | RUM 수집 — **빌드 타임 주입** (frontend docker build `--build-arg`), 미설정 시 수집 비활성 (v2.16.5) |
 | `RETENTION_DAYS` | `60` | 원본 probe_results 보존 일수 (초과분은 probe_results_hourly 집계 이관, 0 이하=비활성) |
+| `PROBE_WALL_CLOCK_S` | `90` (선택, 미주입) | 프로브 1회(재시도 포함) wall-clock 상한 — 만료 시 그 모델만 `WallClockTimeout` 오류 행, 모델별 사이클 타임아웃은 max(120, 값 + 30)초로 따라감 (v2.28.2) |
 | `MANTLE_ANTHROPIC_REGION` | `us-east-1` (CDK 주입) | Claude API Features + 패리티 런 `messages_mantle` 공용 Mantle `/anthropic` surface 리전. ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측) → 대표 모델이 서빙되는 us-east-1로 전환(사용자 결정, v2.23.0). env 미주입 시 코드 기본값은 여전히 ap-northeast-1(`parity/runner.py`) |
 | `FEATURES_MCP_SERVER_URL` | (선택) | Claude API Features MCP connector 프로브용 공개 MCP 서버 URL (v2.23.0, 장애 시 inconclusive로 격리) |
 | `OPENAI_US_BASE_URL` | `https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1` (CDK 주입) | OpenAI US CRIS(`us.openai.*`) 유사 리전 `us` 라우팅 — bedrock-mantle 호스트 미지원, 기존 `OPENAI_API_KEY` bearer 재사용 (v2.25.0, ADR-027). 미주입 시 prober가 US 채널을 조용히 skip |
