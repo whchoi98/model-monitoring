@@ -214,6 +214,36 @@ export function toChartData(
   return { rows, names };
 }
 
+/** 차트 범례 — 스크롤 상태(숨은 항목 수)를 이 컴포넌트에만 두어, 휴대폰에서 범례를 스크롤해도
+ *  18개 라인의 LineChart 전체가 다시 그려지지 않게 한다. */
+function BenchLegend({ names, resetKey }: { names: string[]; resetKey: string }) {
+  const { lang } = useLang();
+  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  const legend = useLegendBelowFold(resetKey);
+  return (
+    <>
+      {/* 휴대폰 폭에서는 18개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
+          2열 배치는 라벨이 2~3줄로 접혀 보이는 항목 수가 늘지 않아(390px 6개, 320px 4개) 쓰지 않았다. */}
+      <ul ref={legend.ref} aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
+          className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-[11px] text-gray-400">
+        {names.map((name) => (
+          <li key={name} className="flex min-w-0 items-center gap-2">
+            <svg aria-hidden="true" width="40" height="8" viewBox="0 0 40 8" className="shrink-0">
+              <line x1="1" y1="4" x2="39" y2="4" stroke={color(name)} strokeWidth="2" strokeDasharray={dash(name)} />
+            </svg>
+            <span className="break-words">{name}</span>
+          </li>
+        ))}
+      </ul>
+      {legend.below > 0 && (
+        <p aria-hidden="true" data-legend-more className="mt-1 text-[11px] text-gray-500 sm:hidden">
+          ↓ {L(`+${legend.below} more, scroll the legend`, `+${legend.below}개 더 있음, 범례를 스크롤하세요`)}
+        </p>
+      )}
+    </>
+  );
+}
+
 function BenchChart({
   trend, metric, title, selected,
 }: {
@@ -225,11 +255,9 @@ function BenchChart({
   const ct = useChartTheme();
   const { lang } = useLang();
   const t = useT();
-  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const { rows, names: allNames } = useMemo(() => toChartData(trend, metric), [trend, metric]);
   // Filter lines after building the timeline so a missing channel never bridges a cycle.
   const names = selected.size === 0 ? allNames : allNames.filter((name) => selected.has(name));
-  const legend = useLegendBelowFold(`${rows.length}|${names.join("|")}`);
   const hasMeasurements = rows.some((row) => names.some((name) => typeof row[name] === "number"));
   const spansDays = rows.length > 1
     && new Date(rows[0].ts).toDateString() !== new Date(rows[rows.length - 1].ts).toDateString();
@@ -281,24 +309,7 @@ function BenchChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
-          {/* 휴대폰 폭에서는 18개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
-              2열 배치는 라벨이 2~3줄로 접혀 보이는 항목 수가 늘지 않아(390px 6개, 320px 4개) 쓰지 않았다. */}
-          <ul ref={legend.ref} aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
-              className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-[11px] text-gray-400">
-            {names.map((name) => (
-              <li key={name} className="flex min-w-0 items-center gap-2">
-                <svg aria-hidden="true" width="40" height="8" viewBox="0 0 40 8" className="shrink-0">
-                  <line x1="1" y1="4" x2="39" y2="4" stroke={color(name)} strokeWidth="2" strokeDasharray={dash(name)} />
-                </svg>
-                <span className="break-words">{name}</span>
-              </li>
-            ))}
-          </ul>
-          {legend.below > 0 && (
-            <p aria-hidden="true" data-legend-more className="mt-1 text-[11px] text-gray-500 sm:hidden">
-              ↓ {L(`+${legend.below} more, scroll the legend`, `+${legend.below}개 더 있음, 범례를 스크롤하세요`)}
-            </p>
-          )}
+          <BenchLegend names={names} resetKey={`${rows.length}|${names.join("|")}`} />
         </>
       )}
     </section>
