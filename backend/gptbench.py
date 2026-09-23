@@ -197,8 +197,9 @@ def bench_channels() -> list[dict]:
 def one_call(region: str, actual_id: str) -> dict:
     """단일 스트리밍 호출 — TTFB/TTFT/usage 수집 (벤치 스크립트 one_call과 동일 로직).
 
-    CALL_TIMEOUT_S를 넘긴 호출은 watchdog이 스트림을 끊고 오류("wall-clock timeout after Ns")로
-    반환한다 — run_cycle의 기존 오류 행 경로로 저장된다.
+    CALL_TIMEOUT_S 안에 종료 이벤트를 받지 못한 호출은 watchdog이 스트림을 끊고 오류("wall-clock
+    timeout after Ns")로 반환한다 — run_cycle의 기존 오류 행 경로로 저장된다. 종료 이벤트를 상한 안에
+    받은 호출은 그 뒤 만료된 watchdog의 abort 예외가 나도 측정을 그대로 남긴다.
     """
     client = _client_for(region)
     t0 = time.perf_counter()
@@ -233,7 +234,11 @@ def one_call(region: str, actual_id: str) -> dict:
                     otd = getattr(u, "output_tokens_details", None)
                     reasoning = getattr(otd, "reasoning_tokens", None) if otd else None
     except Exception as e:  # noqa: BLE001 — 개별 호출 실패는 row로 기록하고 계속
-        err = f"{type(e).__name__}: {str(e)[:300]}"
+        # 상한 안에 종료 이벤트를 받은 뒤(done) 만료된 watchdog이 스트림 꼬리([DONE]/연결 종료)
+        # 대기를 끊으면 그 abort가 ReadError 등을 던진다 — 측정은 이미 끝났으므로 오류 행으로
+        # 뒤집지 않는다. fired는 abort 전에 lock 아래에서 켜지므로 abort가 던진 예외면 항상 True다.
+        if not (done and watchdog.fired):
+            err = f"{type(e).__name__}: {str(e)[:300]}"
     finally:
         watchdog.cancel()
     if watchdog.fired and not done:

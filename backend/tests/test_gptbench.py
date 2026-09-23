@@ -429,6 +429,28 @@ class _SlowStream:
         self.closed = True
 
 
+class _CompletedThenHangingStream:
+    """종료 이벤트(response.completed)까지 받은 뒤 스트림 꼬리([DONE]/연결 종료)를 기다리며 멈춘다.
+
+    이 상태에서 watchdog이 만료되면 abort가 끊은 스트림이 실제 SDK처럼 읽기 오류를 던진다 —
+    측정은 이미 상한 안에 끝났으므로 오류 행이 되면 안 된다(경합 회귀).
+    """
+
+    def __init__(self):
+        self.closed = threading.Event()
+
+    def __iter__(self):
+        for et in ("response.created", "response.output_text.delta"):
+            yield _ev(et)
+        yield _ev("response.completed", usage=_usage())
+        # 테스트 안전판 10s — watchdog이 끊지 않으면 이 대기가 끝까지 간다.
+        self.closed.wait(10)
+        raise OSError("[Errno 9] Bad file descriptor")
+
+    def close(self):
+        self.closed.set()
+
+
 class _FakeClient:
     def __init__(self, stream, create_delay=0.0):
         self.stream = stream
@@ -544,7 +566,14 @@ def test_normal_call_unaffected_by_watchdog(monkeypatch):
     stream = _SlowStream(delay=0.02)
     monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 2.0)
     monkeypatch.setattr(gptbench, "_client_for", lambda region: _FakeClient(stream))
-    before = threading.active_count()
+    watchdogs = []
+
+    class RecordingWatchdog(gptbench._CallWatchdog):
+        def __init__(self, limit_s):
+            super().__init__(limit_s)
+            watchdogs.append(self)
+
+    monkeypatch.setattr(gptbench, "_CallWatchdog", RecordingWatchdog)
 
     r = gptbench.one_call("global", "global.openai.gpt-6-luna")
     assert r["error"] is None
@@ -552,8 +581,31 @@ def test_normal_call_unaffected_by_watchdog(monkeypatch):
     assert (r["input_tokens"], r["cached_tokens"], r["reasoning_tokens"], r["output_tokens"]) == (
         55839, 55646, 40, 90)
     assert not stream.closed
-    time.sleep(0.05)
-    assert threading.active_count() <= before  # 타이머는 finally에서 취소되어 남지 않는다
+    # 타이머는 finally에서 취소되어 남지 않는다 — 고정 대기 대신 타이머 스레드를 직접 join(상한 1s)해
+    # CI 부하에서도 흔들리지 않게 한다 (취소된 Timer는 즉시 깨어나 종료한다; 2.0s 상한보다 짧다).
+    [wd] = watchdogs
+    wd._timer.join(timeout=1.0)
+    assert not wd._timer.is_alive()
+    assert not wd.fired
+
+
+def test_completed_then_abort_keeps_measurement(monkeypatch):
+    """상한 안에 response.completed를 받은 뒤 watchdog이 만료되어 스트림을 끊어도(abort가 던진
+    읽기 오류) 끝난 측정은 오류 행으로 뒤집히지 않는다 — 상한 안에 못 끝난 호출만 WallClockTimeout."""
+    import gptbench
+
+    stream = _CompletedThenHangingStream()
+    monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gptbench, "_client_for", lambda region: _FakeClient(stream))
+
+    t0 = time.perf_counter()
+    r = gptbench.one_call("us-west-2", "openai.gpt-6-sol")
+    assert time.perf_counter() - t0 < 2.0  # 안전판(10s)이 아니라 상한 근처에서 풀린다
+    assert stream.closed.is_set()  # watchdog이 실제로 만료되어 abort했다
+    assert r["error"] is None
+    assert r["ttfb_ms"] is not None and r["ttft_ms"] is not None
+    assert (r["input_tokens"], r["cached_tokens"], r["reasoning_tokens"], r["output_tokens"]) == (
+        55839, 55646, 40, 90)
 
 
 def test_run_cycle_records_wall_clock_timeout_row(bench_env, session_factory, monkeypatch):

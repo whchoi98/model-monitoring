@@ -93,7 +93,7 @@ describe("groupCardsByFamily", () => {
     expect(groups.map((group) => group.key)).toEqual(["gpt-6", "gpt-5"]);
     expect(groups[0].columns.map((column) => column.family)).toEqual(["GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
     expect(groups[1].columns.map((column) => column.family)).toEqual(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"]);
-    // 열 안에서는 API 순서(Global → US → 인리전)를 유지한다.
+    // 열 안에서는 입력(API 응답) 순서를 그대로 유지한다 — 여기서 재정렬하지 않는다(US가 Global보다 앞선 입력 그대로).
     expect(groups[0].columns[1].cards.map((c) => c.model_name)).toEqual([
       "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (Global)",
     ]);
