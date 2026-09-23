@@ -17,10 +17,13 @@ from __future__ import annotations
 
 import logging
 import os
-import socket
-import threading
 import time
 from datetime import datetime, timezone
+
+# 호출당 wall-clock watchdog — v2.28.2에서 prober와 공용 모듈로 옮겼다(동작 동일). 기존 이름을 그대로
+# 두는 이유: one_call이 모듈 전역 `_CallWatchdog`을 참조하고 테스트가 이 이름을 monkeypatch한다.
+from stream_watchdog import CallWatchdog as _CallWatchdog
+from stream_watchdog import abort_stream as _abort_stream  # noqa: F401 — 테스트/호환용 재노출
 
 logger = logging.getLogger(__name__)
 
@@ -92,67 +95,6 @@ def _client_for(region: str):
             max_retries=0,
         )
     return _client_cache[base_url]
-
-
-def _abort_stream(stream) -> None:
-    """watchdog 만료 시 열린 스트림을 즉시 끊는다 (best effort).
-
-    stream.close()만으로는 부족하다: 다른 스레드가 recv()에 블로킹돼 있으면 Linux에서 소켓
-    close는 그 recv를 깨우지 않아 read timeout까지 더 기다린다 (2026-09-23 로컬 실험 — close만:
-    10s read timeout까지 대기, shutdown 선행: 즉시 ReadError, 평문·TLS 동일). 그래서 httpcore
-    network_stream의 소켓을 먼저 shutdown(SHUT_RDWR)해 블로킹 read를 깨운 뒤 close한다.
-    """
-    try:
-        resp = getattr(stream, "response", None)
-        ns = resp.extensions.get("network_stream") if resp is not None else None
-        sock = ns.get_extra_info("socket") if ns is not None else None
-        if sock is not None:
-            sock.shutdown(socket.SHUT_RDWR)
-    except Exception:  # noqa: BLE001 — 이미 닫힘/소켓 미노출 등은 close로 폴백
-        pass
-    try:
-        stream.close()
-    except Exception:  # noqa: BLE001
-        pass
-
-
-class _CallWatchdog:
-    """호출 1회의 wall-clock 상한 (CALL_TIMEOUT_S) — v2.28.0 하드닝.
-
-    OpenAI 클라이언트 timeout은 httpx read timeout(청크 간 대기 상한)일 뿐이라, 이벤트가 드문드문
-    계속 오면 호출 전체는 끝없이 길어진다 — 2026-09-16~17 GPT 5.4 us-east-2 워밍업 1회가 ~3,540s
-    (사이클 3,582s, 태스크 최대 4개 겹침). 타이머는 호출 시작부터 돌고, 만료되면 열린 스트림을
-    끊는다. 스트림이 열리기 전(응답 헤더 대기 중)에 만료되면 열리는 즉시 끊는다 — 헤더 대기
-    자체는 httpx connect/read timeout이 상한이다. 순차 실행은 그대로다 (별도 워커 스레드 없음).
-    """
-
-    def __init__(self, limit_s: float):
-        self.limit_s = limit_s
-        self.fired = False
-        self._stream = None
-        self._lock = threading.Lock()
-        self._timer = threading.Timer(limit_s, self._fire)
-        self._timer.daemon = True
-
-    def start(self) -> None:
-        self._timer.start()
-
-    def cancel(self) -> None:
-        self._timer.cancel()
-
-    def attach(self, stream) -> None:
-        with self._lock:
-            self._stream = stream
-            fired = self.fired
-        if fired:
-            _abort_stream(stream)
-
-    def _fire(self) -> None:
-        with self._lock:
-            self.fired = True
-            stream = self._stream
-        if stream is not None:
-            _abort_stream(stream)
 
 
 def bench_channels() -> list[dict]:

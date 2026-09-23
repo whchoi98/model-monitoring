@@ -22,8 +22,82 @@ from botocore.exceptions import ClientError
 from sqlalchemy.orm import Session
 
 from models import ProbeResult, ProbeRun
+from stream_watchdog import CallWatchdog
 
 logger = logging.getLogger(__name__)
+
+# 프로브 1회(재시도·backoff 포함)의 wall-clock 상한 (v2.28.2 핫픽스).
+# 2026-09-23 장애: Mantle us-east-1 GPT-5.6 Sol Responses 스트림이 200 뒤 멈추거나 드문드문 흘러
+# 청크 간 read timeout이 끝내 발동하지 않았고(라이브 재현: read timeout 40s로도 150s 정지), 스레드
+# 하나가 AutoProber 사이클을 멈춰 대시보드가 동결됐다. 만료되면 스트림 소켓을 끊고 해당 모델만
+# 오류 행 "WallClockTimeout: probe exceeded 90s wall-clock"이 된다.
+# 적용 범위: 세 경로 모두(OpenAI Responses, Anthropic CP messages.stream, Bedrock converse_stream).
+# OpenAI/Anthropic SDK는 둘 다 httpx라 read timeout이 청크 간 상한일 뿐이고(같은 trickle 계열),
+# botocore도 read_timeout(기본 60s)이 소켓 read 단위라 드문드문 오는 이벤트에는 발동하지 않는다.
+# 그래서 모델 경로와 무관하게 _probe_single_model에서 공통으로 건다. 헤더 대기(스트림 객체가 생기기
+# 전)는 watchdog이 끊을 수 없어 각 SDK의 connect/read timeout이 상한이다 — auto_prober의 모델별
+# 사이클 타임아웃(PROBE_FUTURE_TIMEOUT_S)이 그 구간까지 포함한 최종 안전망이다.
+PROBE_WALL_CLOCK_S = float(os.environ.get("PROBE_WALL_CLOCK_S", "90"))
+# 긴 출력을 요청한 수동 프로브(/api/probes/run, max_tokens ≤ 4096)와 Comparison Lab(≤ 8192)이 정상
+# 생성 도중 잘리지 않도록 상한의 하한을 출력 예산으로도 잡는다 — 20 tok/s 기준 4096 → 205s,
+# 8192 → 410s. 자동 사이클 프리셋(max_tokens ≤ 512 → 26s)은 PROBE_WALL_CLOCK_S가 그대로 상한이다.
+_WALL_CLOCK_MIN_TPS = 20.0
+
+
+def _wall_clock_limit(max_tokens: int) -> float:
+    """프로브 1회의 wall-clock 상한(초) — PROBE_WALL_CLOCK_S, 단 출력 예산이 크면 그만큼 늘린다."""
+    return max(PROBE_WALL_CLOCK_S, max_tokens / _WALL_CLOCK_MIN_TPS)
+
+
+class WallClockTimeout(Exception):
+    """프로브 스트림이 wall-clock 상한(_wall_clock_limit)을 넘겨 watchdog이 끊었다 (v2.28.2)."""
+
+    def __init__(self, limit_s: float):
+        super().__init__(f"WallClockTimeout: probe exceeded {limit_s:g}s wall-clock")
+
+
+class _ProbeDeadline:
+    """스트리밍 시도 1회의 wall-clock 가드 — stream_watchdog.CallWatchdog + 판정 규칙.
+
+    판정은 gptbench.one_call과 같다:
+      - 종료 이벤트(mark_done) 전에 만료되면 WallClockTimeout (만료 뒤 버퍼에 남은 종료 이벤트도 초과).
+      - 만료 전에 종료 이벤트를 받았으면 그 뒤 abort가 스트림 꼬리를 끊어 예외가 나도 성공 유지.
+      - check()는 이벤트마다 + 스트림 종료 직후 호출한다 — 소켓을 못 끊는 스트림(가짜 스트림 등)이나
+        abort 뒤 조용히 끝난 스트림이 부분 응답 성공으로 기록되지 않게 한다.
+    budget_s는 이 시도에 남은 예산(재시도 시 줄어듦), limit_s는 오류 문구에 쓰는 설정 상한이다.
+    """
+
+    def __init__(self, budget_s: float, limit_s: float):
+        self.limit_s = limit_s
+        self.done = False
+        self._watchdog = CallWatchdog(budget_s)
+
+    def __enter__(self) -> "_ProbeDeadline":
+        self._watchdog.start()
+        return self
+
+    def __exit__(self, *exc_info) -> bool:
+        self._watchdog.cancel()
+        return False
+
+    def attach(self, stream) -> None:
+        self._watchdog.attach(stream)
+
+    def check(self) -> None:
+        if self._watchdog.fired and not self.done:
+            raise WallClockTimeout(self.limit_s)
+
+    def mark_done(self) -> None:
+        """종료 이벤트 수신 — 이미 만료됐다면 done이 아니다(상한 초과 호출)."""
+        self.done = not self._watchdog.fired
+
+    def outcome(self, exc: Exception) -> Exception | None:
+        """시도 중 난 예외의 최종 판정. None = 만료 전에 끝난 스트림(성공 유지)."""
+        if isinstance(exc, WallClockTimeout) or not self._watchdog.fired:
+            return exc
+        # fired는 abort 전에 lock 아래에서 켜지므로, 만료 뒤의 예외는 abort가 끊은 스트림의 부수 예외다.
+        return None if self.done else WallClockTimeout(self.limit_s)
+
 
 # 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
 AVAILABLE_MODELS: dict[str, str] = {
@@ -284,6 +358,12 @@ _OPENAI_INCOMPLETE_MAP: dict[str, str] = {
 
 _openai_client_cache: dict[str, object] = {}
 
+# OpenAI SDK 클라이언트 timeout (v2.28.2) — SDK 기본값은 600s. httpx read timeout은 청크 간 대기
+# 상한일 뿐이라 호출 전체 상한은 PROBE_WALL_CLOCK_S watchdog이 맡고, 이 값은 응답 헤더 대기와
+# 완전 정지(아무것도 안 옴) 구간의 상한이다.
+_OPENAI_CONNECT_TIMEOUT_S = 10.0
+_OPENAI_READ_TIMEOUT_S = 60.0
+
 
 def _is_openai_direct(model_id: str) -> bool:
     return model_id.startswith("openai:")
@@ -312,22 +392,33 @@ def _openai_base_url(region: str) -> str:
     return url
 
 
-def _get_openai_client(base_url: str):
-    """Lazy-init OpenAI SDK client per base_url.
+def _openai_api_key(base_url: str) -> str:
+    """base_url이 1P(api.openai.com)면 OpenAI platform 키(OPENAI_1P_API_KEY)를,
+    아니면 Bedrock Mantle bearer 키(OPENAI_API_KEY)를 쓴다. 두 자격증명은 호환되지 않음.
+    """
+    if base_url == _openai_1p_base_url():
+        return os.environ["OPENAI_1P_API_KEY"]
+    return os.environ["OPENAI_API_KEY"]
 
-    base_url이 1P(api.openai.com)면 OpenAI platform 키(OPENAI_1P_API_KEY)를,
-    아니면 Bedrock Mantle bearer 키(OPENAI_API_KEY)를 사용한다. 두 자격증명은 호환되지 않음.
+
+def _get_openai_client(base_url: str):
+    """Lazy-init OpenAI SDK client per base_url — 프로브 전용 설정.
+
+    대시보드 사이클, /api/probes/run, Comparison Lab 프로브가 쓴다. 패리티 런은 이 클라이언트를
+    쓰지 않고 SDK 기본값 클라이언트를 따로 만든다(parity/runner.py `_parity_openai_client`) —
+    아래 max_retries=0 + 60s read는 프로브 스트림 hang 대책이지 패리티 판정용 설정이 아니다.
     """
     if base_url not in _openai_client_cache:
-        from openai import OpenAI
-        api_key = (
-            os.environ["OPENAI_1P_API_KEY"]
-            if base_url == _openai_1p_base_url()
-            else os.environ["OPENAI_API_KEY"]
-        )
+        # SDK 자체 Timeout 타입을 쓴다 — openai 1.x/2.x는 httpx.Timeout, 3.x(운영 이미지 3.19, httpx2 기반)는
+        # 자체 타입이라 httpx.Timeout을 넘기면 호환 shim에만 기대게 된다(2026-09-23 리뷰, 운영 이미지로 확인).
+        from openai import OpenAI, Timeout
         _openai_client_cache[base_url] = OpenAI(
-            api_key=api_key,
+            api_key=_openai_api_key(base_url),
             base_url=base_url,
+            timeout=Timeout(_OPENAI_READ_TIMEOUT_S, connect=_OPENAI_CONNECT_TIMEOUT_S),
+            # SDK 재시도 금지 (v2.28.2) — 재시도는 _probe_single_model의 _RETRYABLE_PATTERNS 루프
+            # 하나만 둔다. SDK 기본 max_retries=2가 겹치면 한 프로브의 대기가 곱으로 늘어난다.
+            max_retries=0,
         )
     return _openai_client_cache[base_url]
 
@@ -391,13 +482,19 @@ def _register_openai_models() -> None:
         logger.info("OPENAI_1P_API_KEY not set - skipping OpenAI 1P (direct) models")
 
 
-def _openai_stream_events(client, actual_id: str, prompt: str, max_tokens: int):
+def _openai_stream_events(
+    client, actual_id: str, prompt: str, max_tokens: int, guard: _ProbeDeadline | None = None,
+):
     """Stream the OpenAI **Responses API** (gpt-5.x require /responses, NOT /chat/completions).
 
     Normalized tuples를 yield:
       ("delta", text)                                       - 출력 텍스트 조각
       ("final", input_tokens, output_tokens, stop_reason)   - 완료/미완료 시 usage + stop
     temperature는 보내지 않음 (reasoning model). 토큰 한도는 max_output_tokens.
+
+    guard(v2.28.2): 스트림이 열리면 wall-clock watchdog에 붙이고, 이벤트마다 만료를 검사하며
+    종료 이벤트에서 done을 표시한다 — 프로브와 Comparison Lab이 이 제너레이터를 공유하므로 두 경로
+    모두 같은 상한을 받는다. 요청 형태(payload)는 guard 유무와 무관하게 같다.
     """
     stream = client.responses.create(
         model=actual_id,
@@ -405,7 +502,11 @@ def _openai_stream_events(client, actual_id: str, prompt: str, max_tokens: int):
         max_output_tokens=max_tokens,
         stream=True,
     )
+    if guard is not None:
+        guard.attach(stream)
     for ev in stream:
+        if guard is not None:
+            guard.check()
         etype = getattr(ev, "type", "")
         if etype == "response.output_text.delta":
             text = getattr(ev, "delta", "") or ""
@@ -423,6 +524,8 @@ def _openai_stream_events(client, actual_id: str, prompt: str, max_tokens: int):
                 idet = getattr(resp, "incomplete_details", None)
                 reason = getattr(idet, "reason", None) if idet is not None else None
                 stop = _openai_stop_reason(getattr(resp, "status", None), reason)
+            if guard is not None:
+                guard.mark_done()
             yield ("final", in_tok, out_tok, stop)
 
 
@@ -484,8 +587,14 @@ def _probe_single_model(
 
     Bedrock 경로(`us.*`, `global.*`)는 boto3 converse_stream.
     Anthropic 직접 API 경로(`anthropic:*`)는 anthropic SDK messages.stream.
+
+    세 경로 모두 wall-clock 상한(_wall_clock_limit — 자동 사이클은 PROBE_WALL_CLOCK_S) 안에서 돈다
+    (v2.28.2) — 재시도·backoff를 포함한 프로브 전체 예산이며, 만료되면 스트림을 끊고 오류 행
+    "WallClockTimeout: …"을 남긴다(재시도 없음).
     """
     start_time = time.monotonic()
+    wall_limit = _wall_clock_limit(max_tokens)
+    wall_deadline = start_time + wall_limit
     first_token_time: float | None = None
     collected_text: list[str] = []
     input_tokens = 0
@@ -506,17 +615,53 @@ def _probe_single_model(
             output_tokens = 0
             server_latency_ms = None
             stop_reason = None
+        # 이 시도의 watchdog 예산 = 프로브 전체 예산의 남은 몫 (재시도가 상한을 늘리지 않는다).
+        guard = _ProbeDeadline(max(wall_deadline - time.monotonic(), 0.0), wall_limit)
         try:
-            if _is_anthropic_direct(model_id):
-                actual_id = _anthropic_actual_id(model_id)
-                anthropic_client = _get_anthropic_client()
-                with anthropic_client.messages.stream(
-                    model=actual_id,
-                    max_tokens=max_tokens,
-                    messages=[{"role": "user", "content": prompt}],
-                ) as stream:
-                    for text in stream.text_stream:
-                        if text:
+            with guard:
+                if _is_anthropic_direct(model_id):
+                    actual_id = _anthropic_actual_id(model_id)
+                    anthropic_client = _get_anthropic_client()
+                    with anthropic_client.messages.stream(
+                        model=actual_id,
+                        max_tokens=max_tokens,
+                        messages=[{"role": "user", "content": prompt}],
+                    ) as stream:
+                        guard.attach(stream)
+                        for text in stream.text_stream:
+                            guard.check()
+                            if text:
+                                now = time.monotonic()
+                                if first_token_time is None:
+                                    first_token_time = now
+                                    ttft_ms = (first_token_time - start_time) * 1000.0
+                                    event_queue.put(_sse("ttft", {
+                                        "model_id": model_id,
+                                        "model_name": model_name,
+                                        "iteration": iteration,
+                                        "ttft_ms": round(ttft_ms, 2),
+                                    }))
+                                collected_text.append(text)
+                                event_queue.put(_sse("token", {
+                                    "model_id": model_id,
+                                    "model_name": model_name,
+                                    "iteration": iteration,
+                                    "token": text,
+                                }))
+                        final_message = stream.get_final_message()
+                        guard.check()
+                        input_tokens = final_message.usage.input_tokens
+                        output_tokens = final_message.usage.output_tokens
+                        # stop_reason: end_turn | max_tokens | stop_sequence | tool_use
+                        stop_reason = getattr(final_message, "stop_reason", None)
+                        # Anthropic API는 server-side latency를 제공하지 않음 - None 유지.
+                        guard.mark_done()
+                elif _is_openai_direct(model_id):
+                    region, actual_id = _openai_parts(model_id)
+                    oa_client = _get_openai_client(_openai_base_url(region))
+                    for kind, *rest in _openai_stream_events(oa_client, actual_id, prompt, max_tokens, guard):
+                        if kind == "delta":
+                            text = rest[0]
                             now = time.monotonic()
                             if first_token_time is None:
                                 first_token_time = now
@@ -534,98 +679,90 @@ def _probe_single_model(
                                 "iteration": iteration,
                                 "token": text,
                             }))
-                    final_message = stream.get_final_message()
-                    input_tokens = final_message.usage.input_tokens
-                    output_tokens = final_message.usage.output_tokens
-                    # stop_reason: end_turn | max_tokens | stop_sequence | tool_use
-                    stop_reason = getattr(final_message, "stop_reason", None)
-                    # Anthropic API는 server-side latency를 제공하지 않음 - None 유지.
-            elif _is_openai_direct(model_id):
-                region, actual_id = _openai_parts(model_id)
-                oa_client = _get_openai_client(_openai_base_url(region))
-                for kind, *rest in _openai_stream_events(oa_client, actual_id, prompt, max_tokens):
-                    if kind == "delta":
-                        text = rest[0]
-                        now = time.monotonic()
-                        if first_token_time is None:
-                            first_token_time = now
-                            ttft_ms = (first_token_time - start_time) * 1000.0
-                            event_queue.put(_sse("ttft", {
-                                "model_id": model_id,
-                                "model_name": model_name,
-                                "iteration": iteration,
-                                "ttft_ms": round(ttft_ms, 2),
-                            }))
-                        collected_text.append(text)
-                        event_queue.put(_sse("token", {
-                            "model_id": model_id,
-                            "model_name": model_name,
-                            "iteration": iteration,
-                            "token": text,
-                        }))
-                    else:  # ("final", input_tokens, output_tokens, stop_reason)
-                        input_tokens, output_tokens, stop_reason = rest
-                # OpenAI Responses 엔드포인트는 server-side latency 미제공 - None 유지.
-            else:
-                # Bedrock 경로 - 기존 동작.
-                inference_config: dict = {"maxTokens": max_tokens}
-                if not _is_reasoning_model(model_id):
-                    inference_config["temperature"] = temperature
+                        else:  # ("final", input_tokens, output_tokens, stop_reason)
+                            input_tokens, output_tokens, stop_reason = rest
+                    # OpenAI Responses 엔드포인트는 server-side latency 미제공 - None 유지.
+                else:
+                    # Bedrock 경로 - 기존 동작.
+                    inference_config: dict = {"maxTokens": max_tokens}
+                    if not _is_reasoning_model(model_id):
+                        inference_config["temperature"] = temperature
 
-                response = client.converse_stream(
-                    modelId=model_id,
-                    messages=[{"role": "user", "content": [{"text": prompt}]}],
-                    inferenceConfig=inference_config,
-                )
+                    response = client.converse_stream(
+                        modelId=model_id,
+                        messages=[{"role": "user", "content": [{"text": prompt}]}],
+                        inferenceConfig=inference_config,
+                    )
 
-                stream = response["stream"]
-                for event in stream:
-                    if "contentBlockDelta" in event:
-                        delta = event["contentBlockDelta"]["delta"]
-                        text = delta.get("text", "")
-                        if text:
-                            now = time.monotonic()
-                            if first_token_time is None:
-                                first_token_time = now
-                                ttft_ms = (first_token_time - start_time) * 1000.0
+                    stream = response["stream"]
+                    guard.attach(stream)
+                    for event in stream:
+                        guard.check()
+                        if "contentBlockDelta" in event:
+                            delta = event["contentBlockDelta"]["delta"]
+                            text = delta.get("text", "")
+                            if text:
+                                now = time.monotonic()
+                                if first_token_time is None:
+                                    first_token_time = now
+                                    ttft_ms = (first_token_time - start_time) * 1000.0
+                                    event_queue.put(
+                                        _sse("ttft", {
+                                            "model_id": model_id,
+                                            "model_name": model_name,
+                                            "iteration": iteration,
+                                            "ttft_ms": round(ttft_ms, 2),
+                                        })
+                                    )
+                                collected_text.append(text)
                                 event_queue.put(
-                                    _sse("ttft", {
+                                    _sse("token", {
                                         "model_id": model_id,
                                         "model_name": model_name,
                                         "iteration": iteration,
-                                        "ttft_ms": round(ttft_ms, 2),
+                                        "token": text,
                                     })
                                 )
-                            collected_text.append(text)
-                            event_queue.put(
-                                _sse("token", {
-                                    "model_id": model_id,
-                                    "model_name": model_name,
-                                    "iteration": iteration,
-                                    "token": text,
-                                })
-                            )
 
-                    elif "metadata" in event:
-                        metadata = event["metadata"]
-                        usage = metadata.get("usage", {})
-                        metrics = metadata.get("metrics", {})
-                        input_tokens = usage.get("inputTokens", 0)
-                        output_tokens = usage.get("outputTokens", 0)
-                        server_latency_ms = metrics.get("latencyMs")
+                        elif "metadata" in event:
+                            metadata = event["metadata"]
+                            usage = metadata.get("usage", {})
+                            metrics = metadata.get("metrics", {})
+                            input_tokens = usage.get("inputTokens", 0)
+                            output_tokens = usage.get("outputTokens", 0)
+                            server_latency_ms = metrics.get("latencyMs")
+                            # converse_stream의 마지막 이벤트(messageStop 다음) — 여기서 응답 완결.
+                            guard.mark_done()
 
-                    elif "messageStop" in event:
-                        # Bedrock converse_stream: stopReason in messageStop event.
-                        # 값: end_turn | tool_use | max_tokens | stop_sequence | guardrail_intervened | content_filtered
-                        stop_reason = event["messageStop"].get("stopReason")
+                        elif "messageStop" in event:
+                            # Bedrock converse_stream: stopReason in messageStop event.
+                            # 값: end_turn | tool_use | max_tokens | stop_sequence | guardrail_intervened | content_filtered
+                            stop_reason = event["messageStop"].get("stopReason")
+                # abort 뒤 예외 없이 끝난 스트림(연결 종료 = 이벤트 끝)을 부분 응답 성공으로 두지 않는다.
+                guard.check()
             # 성공 — retry loop 탈출
             last_exception = None
             break
         except Exception as exc:
-            last_exception = exc
+            verdict = guard.outcome(exc)
+            if verdict is None:
+                # 상한 안에 응답이 완결된 뒤 만료된 watchdog이 스트림 꼬리를 끊었다 — 측정은 유효.
+                last_exception = None
+                break
+            last_exception = verdict
+            if isinstance(verdict, WallClockTimeout):
+                # 예산을 다 썼다 — 재시도하지 않는다 (재시도는 상한을 넘기는 대기만 늘린다).
+                break
             msg = str(exc)
-            if attempt < len(_RETRY_BACKOFFS) and _is_retryable_error(msg):
+            # 예외 타입명도 함께 본다 — OpenAI SDK의 429는 str()이 "Error code: 429 - …"뿐이라
+            # _RETRYABLE_PATTERNS의 "RateLimitError"가 타입명으로만 매칭된다. v2.28.2부터 OpenAI
+            # 클라이언트가 max_retries=0이므로 SDK가 대신 해 주던 429 재시도를 이 루프가 맡는다.
+            retry_key = f"{type(exc).__name__}: {msg}"
+            if attempt < len(_RETRY_BACKOFFS) and _is_retryable_error(retry_key):
                 backoff = _RETRY_BACKOFFS[attempt]
+                if time.monotonic() + backoff >= wall_deadline:
+                    # backoff 후에는 wall-clock 예산이 남지 않는다 — 이 오류를 그대로 기록한다.
+                    break
                 logger.warning(
                     "Retryable error for %s (attempt %d/%d, backoff %ds): %s",
                     model_id, attempt + 1, len(_RETRY_BACKOFFS) + 1, backoff, msg[:120],
@@ -751,10 +888,15 @@ def _probe_single_model(
     except Exception as exc:
         end_time = time.monotonic()
         total_latency_ms = (end_time - start_time) * 1000.0
-        full_error = f"Unexpected: {str(exc)}"
-        status_value = "overloaded" if _is_overload_error(full_error) else "error"
-
-        logger.exception("Probe %s for %s (iter %d)", status_value, model_id, iteration)
+        if isinstance(exc, WallClockTimeout):
+            # 원인이 분명한 오류 — "Unexpected:" 접두와 traceback 없이 그대로 남긴다 (v2.28.2).
+            full_error = str(exc)
+            status_value = "error"
+            logger.warning("Probe error for %s (iter %d): %s", model_id, iteration, full_error)
+        else:
+            full_error = f"Unexpected: {str(exc)}"
+            status_value = "overloaded" if _is_overload_error(full_error) else "error"
+            logger.exception("Probe %s for %s (iter %d)", status_value, model_id, iteration)
 
         db_result = ProbeResult(
             run_id=run_id,
@@ -930,66 +1072,87 @@ def _compare_single_model(
         data.setdefault("model_name", model_name)
         event_queue.put(_sse(event_type, data))
 
+    # 프로브와 같은 wall-clock 상한 (v2.28.2) — 멈춘 스트림이 compare 워커 스레드를 붙잡지 않게 한다.
+    wall_limit = _wall_clock_limit(max_tokens)
+    guard = _ProbeDeadline(wall_limit, wall_limit)
     try:
-        if _is_anthropic_direct(model_id):
-            actual_id = _anthropic_actual_id(model_id)
-            client = _get_anthropic_client()
-            with client.messages.stream(
-                model=actual_id,
-                max_tokens=max_tokens,
-                messages=[{"role": "user", "content": prompt}],
-            ) as stream:
-                for text in stream.text_stream:
-                    if text:
-                        now = time.monotonic()
-                        if first_token_time is None:
-                            first_token_time = now
-                            emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
-                        collected_text.append(text)
-                        emit("token", {"token": text})
-                final = stream.get_final_message()
-                input_tokens = final.usage.input_tokens
-                output_tokens = final.usage.output_tokens
-        elif _is_openai_direct(model_id):
-            region, actual_id = _openai_parts(model_id)
-            client = _get_openai_client(_openai_base_url(region))
-            for kind, *rest in _openai_stream_events(client, actual_id, prompt, max_tokens):
-                if kind == "delta":
-                    text = rest[0]
-                    now = time.monotonic()
-                    if first_token_time is None:
-                        first_token_time = now
-                        emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
-                    collected_text.append(text)
-                    emit("token", {"token": text})
-                else:  # ("final", input_tokens, output_tokens, _stop)
-                    input_tokens, output_tokens, _stop = rest
-        else:
-            client = _get_bedrock_client(_get_region_for_model(model_id))
-            cfg: dict = {"maxTokens": max_tokens}
-            if not _is_reasoning_model(model_id):
-                cfg["temperature"] = temperature
-            response = client.converse_stream(
-                modelId=model_id,
-                messages=[{"role": "user", "content": [{"text": prompt}]}],
-                inferenceConfig=cfg,
-            )
-            for event in response["stream"]:
-                if "contentBlockDelta" in event:
-                    text = event["contentBlockDelta"]["delta"].get("text", "")
-                    if text:
-                        now = time.monotonic()
-                        if first_token_time is None:
-                            first_token_time = now
-                            emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
-                        collected_text.append(text)
-                        emit("token", {"token": text})
-                elif "metadata" in event:
-                    usage = event["metadata"].get("usage", {})
-                    metrics = event["metadata"].get("metrics", {})
-                    input_tokens = usage.get("inputTokens", 0)
-                    output_tokens = usage.get("outputTokens", 0)
-                    server_latency_ms = metrics.get("latencyMs")
+        try:
+            with guard:
+                if _is_anthropic_direct(model_id):
+                    actual_id = _anthropic_actual_id(model_id)
+                    client = _get_anthropic_client()
+                    with client.messages.stream(
+                        model=actual_id,
+                        max_tokens=max_tokens,
+                        messages=[{"role": "user", "content": prompt}],
+                    ) as stream:
+                        guard.attach(stream)
+                        for text in stream.text_stream:
+                            guard.check()
+                            if text:
+                                now = time.monotonic()
+                                if first_token_time is None:
+                                    first_token_time = now
+                                    emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                                collected_text.append(text)
+                                emit("token", {"token": text})
+                        final = stream.get_final_message()
+                        guard.check()
+                        input_tokens = final.usage.input_tokens
+                        output_tokens = final.usage.output_tokens
+                        guard.mark_done()
+                elif _is_openai_direct(model_id):
+                    region, actual_id = _openai_parts(model_id)
+                    client = _get_openai_client(_openai_base_url(region))
+                    for kind, *rest in _openai_stream_events(client, actual_id, prompt, max_tokens, guard):
+                        if kind == "delta":
+                            text = rest[0]
+                            now = time.monotonic()
+                            if first_token_time is None:
+                                first_token_time = now
+                                emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                            collected_text.append(text)
+                            emit("token", {"token": text})
+                        else:  # ("final", input_tokens, output_tokens, _stop)
+                            input_tokens, output_tokens, _stop = rest
+                else:
+                    client = _get_bedrock_client(_get_region_for_model(model_id))
+                    cfg: dict = {"maxTokens": max_tokens}
+                    if not _is_reasoning_model(model_id):
+                        cfg["temperature"] = temperature
+                    response = client.converse_stream(
+                        modelId=model_id,
+                        messages=[{"role": "user", "content": [{"text": prompt}]}],
+                        inferenceConfig=cfg,
+                    )
+                    stream = response["stream"]
+                    guard.attach(stream)
+                    for event in stream:
+                        guard.check()
+                        if "contentBlockDelta" in event:
+                            text = event["contentBlockDelta"]["delta"].get("text", "")
+                            if text:
+                                now = time.monotonic()
+                                if first_token_time is None:
+                                    first_token_time = now
+                                    emit("ttft", {"ttft_ms": round((now - start_time) * 1000, 2)})
+                                collected_text.append(text)
+                                emit("token", {"token": text})
+                        elif "metadata" in event:
+                            usage = event["metadata"].get("usage", {})
+                            metrics = event["metadata"].get("metrics", {})
+                            input_tokens = usage.get("inputTokens", 0)
+                            output_tokens = usage.get("outputTokens", 0)
+                            server_latency_ms = metrics.get("latencyMs")
+                            guard.mark_done()
+                guard.check()
+        except Exception as exc:
+            verdict = guard.outcome(exc)
+            if verdict is exc:
+                raise
+            if verdict is not None:
+                raise verdict from exc
+            # verdict None: 상한 안에 완결된 응답의 꼬리를 watchdog이 끊었을 뿐 — 결과는 유효.
 
         end_time = time.monotonic()
         total_latency_ms = (end_time - start_time) * 1000.0
@@ -1012,9 +1175,14 @@ def _compare_single_model(
         })
     except Exception as exc:
         end_time = time.monotonic()
-        err_msg = f"{type(exc).__name__}: {exc}"
-        status_value = "overloaded" if _is_overload_error(err_msg) else "error"
-        logger.exception("Compare probe %s for %s", status_value, model_id)
+        if isinstance(exc, WallClockTimeout):
+            err_msg = str(exc)  # 이미 "WallClockTimeout: …" 형태 (v2.28.2)
+            status_value = "error"
+            logger.warning("Compare probe error for %s: %s", model_id, err_msg)
+        else:
+            err_msg = f"{type(exc).__name__}: {exc}"
+            status_value = "overloaded" if _is_overload_error(err_msg) else "error"
+            logger.exception("Compare probe %s for %s", status_value, model_id)
         emit("error", {
             "status": status_value,
             "error": err_msg,

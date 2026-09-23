@@ -12,16 +12,24 @@ from __future__ import annotations
 
 import logging
 import threading
-from concurrent.futures import ThreadPoolExecutor
+import time
+from concurrent.futures import FIRST_COMPLETED, Future, ThreadPoolExecutor, wait
 from datetime import datetime, timedelta, timezone
 from queue import Queue
+from threading import Lock
 from typing import Optional
 
 from sqlalchemy import text
 
 from database import SessionLocal
-from models import ProbeRun
-from prober import AVAILABLE_MODELS, _get_bedrock_client, _get_region_for_model, _probe_single_model
+from models import ProbeResult, ProbeRun
+from prober import (
+    AVAILABLE_MODELS,
+    PROBE_WALL_CLOCK_S,
+    _get_bedrock_client,
+    _get_region_for_model,
+    _probe_single_model,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -32,6 +40,16 @@ RUNNING_TIMEOUT_SECONDS = PROBE_INTERVAL_SECONDS * 3
 # scheduled processes; the local lock also supports SQLite and same-process races.
 _CYCLE_ADMISSION_LOCK_KEY = 917350002
 _admission_lock = threading.Lock()
+
+# 모델 1개의 사이클 상한 (v2.28.2) — 워커가 실제로 시작한 시점부터 잰다. prober의 wall-clock
+# 상한(PROBE_WALL_CLOCK_S, 기본 90s)보다 여유(30s) 있게 커야 watchdog이 먼저 원인이 분명한 오류 행
+# (WallClockTimeout)을 남긴다. 이 값은 watchdog이 끊을 수 없는 구간(응답 헤더 대기, DB 커밋 등)까지
+# 포함한 최종 안전망이다 — 넘기면 사이클이 그 모델만 오류 행으로 기록하고 run은 정상 완료한다.
+PROBE_FUTURE_TIMEOUT_S = max(120.0, PROBE_WALL_CLOCK_S + 30.0)
+# 사이클 전체 상한 — 포기한 워커 스레드가 풀(3)을 채워 대기 중인 모델이 시작조차 못하는 경우의
+# 안전망. RUNNING_TIMEOUT_SECONDS(900s)보다 충분히 작아야 예약이 만료되기 전에 run이 끝난다.
+CYCLE_DEADLINE_SECONDS = float(RUNNING_TIMEOUT_SECONDS - PROBE_INTERVAL_SECONDS)  # 600s
+_CYCLE_POLL_SECONDS = 1.0
 
 # Phase 3 Workload Preset — round-robin 카테고리.
 # 각 cycle마다 다음 카테고리로 회전 → use case별 latency/cost 분포가 시계열로 누적.
@@ -253,6 +271,145 @@ def run_cycle() -> int:
     return _run_reserved_cycle(run_id, preset)
 
 
+class _ProbeSlot:
+    """모델 1개에 대해 워커 스레드와 사이클 스레드가 공유하는 상태 (v2.28.2).
+
+    사이클이 끝나지 않는 모델을 포기(abandon)하면 그 모델의 오류 행은 사이클이 직접 쓴다. 그 뒤에
+    늦게 끝난 워커의 커밋은 _SlotSession이 롤백으로 바꿔 (run_id, model_id) 행이 중복되지 않는다.
+    포기와 워커 커밋은 lock 하나로 직렬화한다 — 워커 커밋이 먼저 끝났으면 사이클은 행을 쓰지 않는다.
+    """
+
+    def __init__(self, model_id: str, model_name: str):
+        self.model_id = model_id
+        self.model_name = model_name
+        self.lock = Lock()
+        self.started_at: Optional[float] = None
+        self.committed = False
+        self.abandoned = False
+
+    def begin(self) -> bool:
+        """워커 시작. 사이클이 이미 포기한 모델이면 False (프로브하지 않는다)."""
+        with self.lock:
+            if self.abandoned:
+                return False
+            self.started_at = time.monotonic()
+            return True
+
+    def abandon(self) -> bool:
+        """사이클 쪽 포기. True = 워커 행이 아직 없으니 호출자가 오류 행을 쓴다."""
+        with self.lock:
+            if self.committed:
+                return False
+            self.abandoned = True
+            return True
+
+
+class _SlotSession:
+    """워커 DB 세션 프록시 — 사이클이 포기한 모델의 늦은 커밋을 롤백으로 바꾼다 (v2.28.2).
+
+    _probe_single_model은 결과 행 하나를 add → commit → refresh한다. 포기된 뒤의 commit은 대기 중인
+    행을 롤백으로 버리고(pending 객체는 expunge, 속성은 그대로), 이어지는 refresh는 건너뛴다.
+    나머지 속성·메서드는 실제 세션으로 위임한다.
+    """
+
+    def __init__(self, session, slot: _ProbeSlot):
+        self._session = session
+        self._slot = slot
+        self._discarded = False
+
+    def commit(self) -> None:
+        with self._slot.lock:
+            if self._slot.abandoned:
+                self._discarded = True
+                self._session.rollback()
+                logger.warning(
+                    "AutoProber: discarded late result for %s (cycle already recorded a timeout row)",
+                    self._slot.model_id,
+                )
+                return
+            self._session.commit()
+            self._slot.committed = True
+
+    def refresh(self, instance, *args, **kwargs):
+        if self._discarded:
+            return None
+        return self._session.refresh(instance, *args, **kwargs)
+
+    def __getattr__(self, name):
+        return getattr(self._session, name)
+
+
+def _record_unfinished_probe(run_id: int, slot: _ProbeSlot, prompt: str, category: str, reason: str) -> bool:
+    """사이클이 포기한 모델의 오류 행 — _probe_single_model 오류 행과 같은 모양. 저장 실패면 False."""
+    started = slot.started_at
+    db = SessionLocal()
+    try:
+        db.add(ProbeResult(
+            run_id=run_id,
+            model_id=slot.model_id,
+            model_name=slot.model_name,
+            timestamp=datetime.now(timezone.utc),
+            prompt=prompt,
+            status="error",
+            ttft_ms=None,
+            total_latency_ms=round((time.monotonic() - started) * 1000.0, 2) if started is not None else None,
+            server_latency_ms=None,
+            input_tokens=None,
+            output_tokens=None,
+            tps=None,
+            output_text=None,
+            error_message=reason,
+            iteration=1,
+            category=category,
+        ))
+        db.commit()
+        return True
+    except Exception:
+        logger.exception("AutoProber: failed to record timeout row for %s", slot.model_id)
+        return False
+    finally:
+        db.close()
+
+
+def _await_probes(pending: dict[Future, _ProbeSlot], run_id: int, prompt: str, category: str) -> tuple[int, int]:
+    """모든 프로브를 기다리되, 끝나지 않는 모델은 포기하고 오류 행으로 기록한다 (v2.28.2).
+
+    반환: (failed, timed_out). failed = 워커가 예외로 끝났거나 타임아웃 행 저장 실패 — run을 failed로
+    만든다(빈 completed 사이클 공개 방지, 기존 정책). timed_out = 포기해 오류 행을 쓴 모델 수 — run은
+    그대로 completed. 모델별 상한은 워커 시작 시점부터 PROBE_FUTURE_TIMEOUT_S, 사이클 전체 상한은
+    CYCLE_DEADLINE_SECONDS(시작 못한 대기 모델 포함).
+    """
+    failed = timed_out = 0
+    cycle_deadline = time.monotonic() + CYCLE_DEADLINE_SECONDS
+    while pending:
+        done, _ = wait(list(pending), timeout=_CYCLE_POLL_SECONDS, return_when=FIRST_COMPLETED)
+        for future in done:
+            slot = pending.pop(future)
+            exc = future.exception()
+            if exc is not None:
+                failed += 1
+                logger.error("AutoProber: model probe failed (%s)", slot.model_id, exc_info=exc)
+        now = time.monotonic()
+        for future, slot in list(pending.items()):
+            started = slot.started_at
+            if started is not None and now - started >= PROBE_FUTURE_TIMEOUT_S:
+                reason = f"probe did not finish within {PROBE_FUTURE_TIMEOUT_S:g}s (cycle timeout)"
+            elif now >= cycle_deadline:
+                verb = "did not finish" if started is not None else "not started"
+                reason = f"probe {verb} before the {CYCLE_DEADLINE_SECONDS:g}s cycle deadline (cycle timeout)"
+            else:
+                continue
+            del pending[future]
+            future.cancel()  # 아직 대기 중이면 실행되지 않는다. 실행 중이면 무효 — 스레드는 버린다.
+            if not slot.abandon():
+                continue  # 방금 워커가 자기 행을 커밋했다 — 쓸 것이 없다
+            timed_out += 1
+            logger.warning("AutoProber: %s — %s; recording an error row", slot.model_id, reason)
+            if not _record_unfinished_probe(run_id, slot, prompt, category, reason):
+                failed += 1
+    return failed, timed_out
+
+
 def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     auto_prober.current_cycle_running = True
     cur_prompt = preset["prompt"]
@@ -269,46 +426,57 @@ def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     # read 트랜잭션을 close까지 유지). 모델 수 12→15 확장으로 한계를 넘어 tail 모델들이
     # "QueuePool limit reached"로 persist 실패. 세션 수명을 worker 실행에 묶어 동시
     # connection 수를 max_workers로 제한 → 모델 수와 무관하게 안전.
-    def _probe_worker(client, model_id: str, model_name: str) -> None:
+    def _probe_worker(slot: _ProbeSlot, client) -> None:
+        if not slot.begin():
+            return  # 시작 전에 사이클이 포기함 — 오류 행은 사이클이 이미 썼다
         thread_db = SessionLocal()
         try:
             _probe_single_model(
                 client,
-                model_id,
-                model_name,
+                slot.model_id,
+                slot.model_name,
                 cur_prompt,
                 0.1,
                 cur_max_tokens,
                 1,
                 event_queue,
                 run_id,
-                thread_db,
+                _SlotSession(thread_db, slot),
                 cur_category,  # category 전달
             )
         finally:
             thread_db.close()
 
+    # context manager(with) 대신 명시적 shutdown (v2.28.2): with 종료는 모든 워커 스레드를 join해서,
+    # 멈춘 프로브 스레드 하나가 사이클 종료와 Fargate 태스크 종료를 30~46분 붙잡았다(2026-09-23 장애).
+    executor = ThreadPoolExecutor(max_workers=3)
+    slots: list[_ProbeSlot] = []
     try:
-        with ThreadPoolExecutor(max_workers=3) as executor:
-            futures = []
-            for model_id, model_name in list(AVAILABLE_MODELS.items()):
-                client = _get_bedrock_client(_get_region_for_model(model_id))
-                futures.append(executor.submit(_probe_worker, client, model_id, model_name))
+        pending: dict[Future, _ProbeSlot] = {}
+        for model_id, model_name in list(AVAILABLE_MODELS.items()):
+            client = _get_bedrock_client(_get_region_for_model(model_id))
+            slot = _ProbeSlot(model_id, model_name)
+            slots.append(slot)
+            pending[executor.submit(_probe_worker, slot, client)] = slot
 
-            failed_probes = 0
-            for future in futures:
-                try:
-                    future.result(timeout=120)
-                except Exception:
-                    failed_probes += 1
-                    logger.exception("AutoProber: model probe failed")
+        failed_probes, timed_out = _await_probes(pending, run_id, cur_prompt, cur_category)
         if failed_probes:
             raise RuntimeError(f"{failed_probes} model probes did not finish normally")
+        if timed_out:
+            logger.warning(
+                "AutoProber: %d model probe(s) timed out — recorded as error rows, run completes", timed_out,
+            )
         _set_run_status(run_id, "completed")
     except Exception:
+        # 실패한 run 뒤에 남은 워커가 행을 쓰지 않게 전부 포기 처리한다 (커밋은 롤백으로 바뀐다).
+        for slot in slots:
+            slot.abandon()
         _set_run_status(run_id, "failed")
         raise
     finally:
+        # 멈춘 스레드를 기다리지 않는다 — 대기 중 작업은 취소, 실행 중 스레드는 버린다(자기 socket
+        # timeout이나 watchdog으로 풀리면 스스로 끝난다). Fargate 러너는 사이클 뒤 os._exit로 끝낸다.
+        executor.shutdown(wait=False, cancel_futures=True)
         auto_prober.current_cycle_running = False
 
     # 데이터 보존 정책 (v2.7.0): 보존 기간 초과 원본을 시간 집계로 이관 후 삭제.
