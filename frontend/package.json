@@ -1,6 +1,6 @@
 {
   "name": "bedrock-monitor",
-  "version": "2.27.0",
+  "version": "2.28.0",
   "private": true,
   "scripts": {
     "dev": "next dev -p 3000",

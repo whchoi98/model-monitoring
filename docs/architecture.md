@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다.
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다. 대시보드 모델 카드의 TTFT·총 응답시간·TPS 값은 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박)/위험(장미) 등급을 표시합니다(v2.28.0, 프런트엔드 `lib/metricGrade.ts` 순수 함수 — 백엔드 변경 없음, ADR-029).
 
 ### 데이터 흐름 (Critical Path)
 
@@ -29,8 +29,8 @@ EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 모델 프로빙 → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
-   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 12채널(Mantle 인리전 9 + CRIS 3) TTFB/TTFT 벤치 → RDS
-   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×5 surface×4모델 실행-증거 스윕 → RDS
+   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 → RDS
+   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×5 surface×5모델(975셀) 실행-증거 스윕 → RDS
 ```
 
 ### 컴포넌트 (Layer별)
@@ -66,7 +66,7 @@ EventBridge Scheduler
 |--------|------|
 | AgentCore Memory `BedrockMonitorChatMemory` | 사용자 대화 30일 보존 |
 | AgentCore IAM Managed Policy | backend Task Role에 attach |
-| Bedrock Runtime | 모니터링 카탈로그 활성 55개: Claude Fable 5.1 (v2.22.0) / Fable 5 / Opus 5.5 (v2.27.0) / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 9채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna + GPT 6 Astra·Sol·Luna (Bedrock Mantle 인리전 16 + Global CRIS 6 + US CRIS 3 = 25, v2.27.0; 1P direct 5는 v2.19.1부터 휴면/비노출) |
+| Bedrock Runtime | 모니터링 카탈로그 활성 55개: Claude Fable 5.1 (v2.22.0) / Fable 5 / Opus 5.5 (v2.27.0) / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 9채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna + GPT 6 Astra·Sol·Luna (Bedrock Mantle 인리전 16 + Global CRIS 6 + US CRIS 3 = 25, v2.27.0; 1P direct 5는 v2.19.1부터 휴면/비노출). GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원 — 2026-09-23 사용자 결정으로 제외. GPT-6 Sol/Luna 단가는 v2.28.0부터 Bedrock agreement offer rate card 기준(비용 화면 "-" 아님, ADR-028 후속) |
 
 #### 주기 잡 / Scheduling
 | 리소스 | 역할 |
@@ -79,8 +79,8 @@ EventBridge Scheduler
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
-| GptBench TaskDef | `python -m gptbench_runner --once` — GPT 12채널(Mantle 인리전 9 + CRIS 3) TTFB/TTFT 벤치 (GPT 5.4/5.5/5.6 Terra + GPT 6 Astra Global, US CRIS, us-west-2 — v2.25.1) |
-| FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×4모델 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
+| GptBench TaskDef | `python -m gptbench_runner --once` — GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 (GPT 5.4/5.5/5.6 Terra + GPT 6 Astra Global, US CRIS, us-west-2 — v2.25.1 + GPT 6 Sol/Luna Global, US CRIS, us-east-1 — v2.28.0). 호출당 wall-clock watchdog(`GPT_BENCH_CALL_TIMEOUT`, 기본 90초) + `max_retries=0`(v2.28.0), 사이클 데드라인 780초(`GPT_BENCH_DEADLINE`, v2.18.0부터) |
+| FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×5모델(Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975셀 = 프로브 813 + 사전판정 162, 약 9분, v2.28.0) 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
 
 #### 네트워크 / Network
 | 리소스 | 역할 |
@@ -114,7 +114,7 @@ EventBridge Scheduler
 
 ### 핵심 설계 결정
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-028 참조 (012/014/015/016은 결번).
+자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-029 참조 (012/014/015/016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -140,8 +140,9 @@ EventBridge Scheduler
 | 024 | RUM 통합 — aws-rum-pipeline + 자체 호스팅 SDK, NEXT_PUBLIC_* 빌드 타임 주입 |
 | 025 | OpenAI GPT-5.6 Global CRIS 채널 3개 추가 + 채널별 가격 분리 |
 | 026 | Claude API Features 검증 매트릭스 — 문서 기대치 vs 실측 드리프트, Mantle `/anthropic` 리전 `us-east-1` 전환 |
-| 027 | OpenAI GPT-6 Astra 채널 3개 — 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us` 신설, Mantle 인리전은 us-west-2만 서빙(us-east-1/2 404), 단가 미확정 → v2.27.0 공식 단가 반영 |
-| 028 | Claude Opus 5.5 3채널 + GPT-6 Sol/Luna 6채널 — CP 점 버전 가드(`_is_point_release_of`), Sol/Luna Mantle 인리전은 us-east-1만(us-east-2/us-west-2 404), Sol/Luna 단가 미확정 |
+| 027 | OpenAI GPT-6 Astra 채널 3개 — 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us` 신설, Mantle 인리전은 us-west-2만(us-east-1/2는 현재 미지원 — 2026-09-23 사용자 결정으로 제외), v2.27.0 공식 단가 반영 |
+| 028 | Claude Opus 5.5 3채널 + GPT-6 Sol/Luna 6채널 — CP 점 버전 가드(`_is_point_release_of`), Sol/Luna Mantle 인리전은 us-east-1만(us-east-2/us-west-2 404), v2.28.0 후속: Sol/Luna 단가(agreement offer rate card), 벤치 18채널, `/claude-features` Opus 5.5 |
+| 029 | 대시보드 모델 카드 지표 등급 — 워크로드 카테고리별 절대 임계치(48시간 p90/p99), 양호 파랑 / 경고 호박 ▲ / 위험 장미 ◆, TPS는 낮은 쪽만, `lib/metricGrade.ts` 단일 출처 |
 
 ### 운영 / Operations
 
@@ -172,13 +173,15 @@ EventBridge Scheduler
    ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 models → RDS
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
-   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 12-channel (9 Mantle in-region + 3 CRIS) TTFB/TTFT bench → RDS
-   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 5 surfaces × 4 models evidence sweep → RDS
+   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 18-channel (11 Mantle in-region + 7 CRIS) TTFB/TTFT bench → RDS
+   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 5 surfaces × 5 models (975 cells) evidence sweep → RDS
 ```
 
 ### Components by Layer
 
 (See the Korean section above — the structure is identical. Layer tables list Edge, Compute, Storage, Agent, Scheduling, Network, Observability resources.)
+
+As of v2.28.0: the GptBench task measures 18 channels (GPT 5.4/5.5/5.6 Terra, GPT-6 Astra — Global, US CRIS, Mantle us-west-2 — and GPT-6 Sol/Luna — Global, US CRIS, Mantle us-east-1) with a per-call wall-clock watchdog (`GPT_BENCH_CALL_TIMEOUT`, default 90 s) and `max_retries=0`; the FeaturesVerify task runs 5 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975 cells = 813 probed + 162 pre-decided, about 9 min). GPT-6 Sol/Luna costs are priced from the Bedrock agreement-offer rate card (no longer "-"), and GPT-6 Astra Mantle us-east-1/us-east-2 are currently unsupported and excluded by the user's 2026-09-23 decision. Dashboard model cards grade their metric values per workload category (ADR-029).
 
 ### CDK Stack Decomposition
 
@@ -188,7 +191,7 @@ The same table from the Korean section applies — the deploy order follows the 
 
 ### Key Design Decisions
 
-See ADR-001 through ADR-028 in [`docs/decisions/`](./decisions/).
+See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/).
 
 ### Operations
 

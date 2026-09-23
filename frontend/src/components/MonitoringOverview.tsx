@@ -15,7 +15,11 @@ export const HEALTH_STYLES: Record<ModelHealth, string> = {
 export function HealthBadge({ health }: { health: ModelHealth }) {
   const t = useT();
   return (
-    <span className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${HEALTH_STYLES[health]}`}>
+    <span
+      // 채널 상태(응답 성공·수집 주기) 배지 — 카드 값 색의 "지표 등급"(양호/경고/위험)과 다른 개념임을 툴팁으로 밝힌다.
+      title={health === "healthy" ? t.monitoring.healthyHint : undefined}
+      className={`inline-flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-full border px-2 py-0.5 text-xs font-medium ${HEALTH_STYLES[health]}`}
+    >
       <span aria-hidden="true">{health === "healthy" ? "✓" : health === "unknown" ? "—" : "!"}</span>
       <span>{t.monitoring.health[health]}</span>
     </span>

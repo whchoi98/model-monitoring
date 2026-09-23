@@ -1,23 +1,43 @@
 /**
  * 토큰 단가 유도(backend/pricing.py 미러) 회귀.
  *
- * v2.27.0: GPT 6 Astra는 AWS 공식 모델 카드 단가 반영(In-Region·Geo CRIS $11/$55, Global $10/$50).
- * GPT 6 Sol/Luna 6채널(Global CRIS, US CRIS, us-east-1 인리전)은 공식 단가 미확정 —
- * PRICE_TABLE에 엔트리가 없어야 하고, prefix fallback이 Astra 등 다른 단가로 조용히 매칭돼서도 안 된다.
+ * v2.27.0: GPT 6 Astra는 AWS 공식 모델 카드 단가 반영(In-Region, Geo CRIS $11/$55, Global $10/$50).
+ * GPT 6 Sol/Luna 6채널(Global CRIS, US CRIS, us-east-1 인리전)은 AWS offer rate card 단가
+ * (2026-09-23 — In-Region, US CRIS Sol $2.20/$11, Luna $0.11/$0.55, Global CRIS Sol $2/$10, Luna $0.10/$0.50).
+ * 채널마다 자기 정확 키로 매칭돼야 하고, prefix fallback이 Astra 단가로 조용히 매칭돼서는 안 된다.
  */
 import { describe, expect, test } from "vitest";
 import { estimateCost, getPricing } from "./pricing";
 
-const GPT6_SOL_LUNA_IDS = ["sol", "luna"].flatMap((fam) => [
-  `openai:global:global.openai.gpt-6-${fam}`,
-  `openai:us:us.openai.gpt-6-${fam}`,
-  `openai:us-east-1:openai.gpt-6-${fam}`,
-]);
+const GPT6_SOL_LUNA_EXPECTED: [string, { input: number; output: number }][] = [
+  ["openai:global:global.openai.gpt-6-sol", { input: 2.0, output: 10.0 }],
+  ["openai:us:us.openai.gpt-6-sol", { input: 2.2, output: 11.0 }],
+  ["openai:us-east-1:openai.gpt-6-sol", { input: 2.2, output: 11.0 }],
+  ["openai:global:global.openai.gpt-6-luna", { input: 0.1, output: 0.5 }],
+  ["openai:us:us.openai.gpt-6-luna", { input: 0.11, output: 0.55 }],
+  ["openai:us-east-1:openai.gpt-6-luna", { input: 0.11, output: 0.55 }],
+];
 
-describe("getPricing — GPT 6 Sol/Luna는 단가 미확정 (v2.27.0)", () => {
-  test.each(GPT6_SOL_LUNA_IDS)("%s → null (prefix fallback 매칭 없음)", (id) => {
-    expect(getPricing(id)).toBeNull();
-    expect(estimateCost(id, 1000, 1000)).toBeNull();
+const GPT6_ASTRA_IDS = [
+  "openai:global:global.openai.gpt-6-astra",
+  "openai:us:us.openai.gpt-6-astra",
+  "openai:us-west-2:openai.gpt-6-astra",
+];
+
+describe("getPricing — GPT 6 Sol/Luna offer rate card 단가 (v2.28.0)", () => {
+  test.each(GPT6_SOL_LUNA_EXPECTED)("%s → 채널 단가", (id, expected) => {
+    expect(getPricing(id)).toEqual(expected);
+  });
+
+  test.each(GPT6_SOL_LUNA_EXPECTED)("%s → Astra 단가로 prefix fallback 되지 않는다", (id) => {
+    const astraPrices = GPT6_ASTRA_IDS.map((a) => getPricing(a));
+    expect(astraPrices.every((p) => p !== null)).toBe(true);
+    for (const astra of astraPrices) expect(getPricing(id)).not.toEqual(astra);
+  });
+
+  test("estimateCost 산술 — Sol us-east-1 1M/1M = $13.20, Luna Global 2M/500K = $0.45", () => {
+    expect(estimateCost("openai:us-east-1:openai.gpt-6-sol", 1_000_000, 1_000_000)).toBeCloseTo(13.2, 9);
+    expect(estimateCost("openai:global:global.openai.gpt-6-luna", 2_000_000, 500_000)).toBeCloseTo(0.45, 9);
   });
 });
 

@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-09
-- **Related**: ADR-019 (Mantle Path 4), ADR-020 (1P direct Path 5), ADR-025 (Global CRIS + 채널별 단가 분리), v2.25.0
+- **Related**: ADR-019 (Mantle Path 4), ADR-020 (1P direct Path 5), ADR-025 (Global CRIS + 채널별 단가 분리), ADR-028 (GPT-6 Sol/Luna), v2.25.0, v2.27.0/v2.28.0 후속
 
 ## Context
 
@@ -50,6 +50,9 @@ Price List API에는 GPT-6 항목이 아직 없다.
 
 - **us-east-1 / us-east-2 Mantle 채널은 등록하지 않는다.** 404가 나는 리전을 스펙에 넣으면
   5분마다 오류 행만 쌓여 신뢰성, 이상 징후 지표를 오염시킨다. Mantle 온보딩 재확인은 후속 과제.
+  → **정정(2026-09-23 사용자 결정)**: 두 리전은 "현재 미지원 — 제외"로 확정한다. 재확인을 기다리는 후속 과제가
+  아니며 정기 재확인 대상도 아니다. AWS가 지원을 발표하면 `_OPENAI_MODEL_SPECS`(와 벤치 `_BENCH_SPECS`) 스펙
+  튜플에 리전만 추가한다. 위 404 실측(2026-09-09)과 2026-09-23 재측정 결과는 판단 근거로 그대로 남긴다.
 
 - **라우팅 env**: 신규 `OPENAI_US_BASE_URL`
   (`https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1`) + 기존 `OPENAI_API_KEY` bearer 재사용.
@@ -101,6 +104,8 @@ Price List API에는 GPT-6 항목이 아직 없다.
   넣으면 비용은 조회 시점 계산이라 소급 재계산된다(ADR-025와 동일 정책).
 - (−) **Mantle us-east-1/us-east-2 공백** — 표에는 "Mantle 미온보딩(404) — 재확인"으로 남는다.
   재확인 후 404가 풀리면 스펙 튜플의 리전 목록에 두 리전을 추가하는 것만으로 편입된다.
+  → v2.28.0 정정: 표기는 "— 미지원(제외, 2026-09-23 사용자 결정)"으로 바뀌었고 정기 재확인은 하지 않는다. 편입
+  경로(AWS 지원 발표 → 스펙 튜플에 리전 추가)는 그대로다.
 - (−) → 해소: v2.25.1에서 `/gpt-on-aws` 벤치에 Astra 3채널(Global, US, us-west-2)이 표시된다.
   남은 (−)는 Astra 단가 미확정으로 이 3채널의 **벤치 비용을 추정할 수 없다**는 점이다.
 - 배포 검증: autoprober 로그/`/api/auto-probe/latest`에서 OpenAI 19행 + 신규 3채널 첫 `success`
@@ -116,3 +121,13 @@ Price List API에는 GPT-6 항목이 아직 없다.
   불가" 항목은 해소됐다. 동시 출시된 GPT-6 Sol/Luna는 카드가 없어 같은 "미기재" 정책을 ADR-028에서 이어받는다.
 - **Mantle us-east-1 / us-east-2 재확인**: 2026-09-23에도 `openai.gpt-6-astra`는 두 리전 모두 404
   `not_found_error` — 스펙 유지(us-west-2 단독). 같은 날 Sol/Luna는 반대로 us-east-1만 200(ADR-028).
+
+## 후속 (v2.28.0, 2026-09-23)
+
+- **Mantle us-east-1 / us-east-2 = 현재 미지원 — 사용자 결정으로 제외.** 2026-09-09, 2026-09-23 두 번의 404
+  `not_found_error`(2026-09-09 확인 기준 모델 액세스는 AUTHORIZED) 이후 사용자가 "현재 미지원 — 제외"로 결정했다. 이 공백은 더 이상
+  "온보딩 대기 / 재확인" 항목이 아니며 정기 재확인 대상도 아니다. AWS가 두 리전의 Mantle 지원을 발표하면
+  `prober._OPENAI_MODEL_SPECS`와 `gptbench._BENCH_SPECS`의 Astra 스펙 튜플에 리전만 추가하면 편입된다(라벨, 단가 키
+  `gpt-6-astra`, 정렬은 기존 규약 그대로). 코드 주석(prober, gptbench, CDK AppServices/Scheduler)과 CLAUDE.md 표도 같은
+  표현으로 바꿨다.
+- 벤치: Astra 3채널은 그대로이고, 같은 릴리스에서 GPT-6 Sol/Luna 6채널이 벤치에 합류했다(12 → 18채널, ADR-028 후속).

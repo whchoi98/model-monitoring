@@ -130,3 +130,73 @@ test("a paused display does not keep an expired running cycle marked active", as
   await page.clock.fastForward(16 * 60_000);
   await expect(status).toContainText("수집 지연");
 });
+
+test("graded card values wrap before the marker instead of overflowing their column at 320px", async ({ page }) => {
+  await page.setViewportSize({ width: 320, height: 800 });
+  const fixture = await mockApi(page);
+  // chat-short 기준: TTFT 12345ms → 위험, 총 12.0s → 위험, TPS 15.0 → 경고 (가장 긴 "15.0 tok/s ▲")
+  const latest = fixture.latest.map((row, index) => index === 0 ? { ...row, ttft_ms: 12_345, total_latency_ms: 12_000, tps: 15 } : row);
+  await page.route("**/api/auto-probe/latest*", (route) => route.fulfill({ json: latest }));
+  await page.goto("/");
+  const models = page.getByRole("region", { name: "모델별 최신 상태" });
+  const values = models.getByRole("article").filter({ hasText: modelCatalog[0].name }).locator("[data-grade]");
+  await expect(values).toHaveCount(3);
+  expect(await values.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["critical", "critical", "warning"]);
+  await expect(values.nth(2)).toHaveText(/^15\.0\s*tok\/s\s*▲$/);
+  const boxes = await values.evaluateAll((nodes) => nodes.map((node) => {
+    const column = node.parentElement!.getBoundingClientRect();
+    const parts = Array.from(node.children).map((child) => child.getBoundingClientRect());
+    return { left: column.left, right: column.right, overflow: node.scrollWidth > node.clientWidth, partsRight: Math.max(...parts.map((part) => part.right)) };
+  }));
+  for (const [index, box] of boxes.entries()) {
+    expect(box.overflow).toBe(false);
+    expect(box.partsRight).toBeLessThanOrEqual(box.right + 0.5);
+    if (index + 1 < boxes.length) expect(box.partsRight).toBeLessThan(boxes[index + 1].left);
+  }
+  const marker = values.nth(2).locator("[data-marker]");
+  await expect(marker).toHaveText("▲");
+  expect(await marker.evaluate((node) => getComputedStyle(node).fontSize)).toBe("12px");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});
+
+test("card metric values are graded per workload category with a non-color cue in both themes", async ({ page }) => {
+  const fixture = await mockApi(page);
+  // chat-short 기준: TTFT 3200ms → 경고(≥3000), 총 12s → 위험(≥10000), TPS 12 → 위험(<15)
+  const latest = fixture.latest.map((row, index) => index === 0 ? { ...row, ttft_ms: 3200, total_latency_ms: 12_000, tps: 12 } : row);
+  await page.route("**/api/auto-probe/latest*", (route) => route.fulfill({ json: latest }));
+  await page.goto("/");
+  const models = page.getByRole("region", { name: "모델별 최신 상태" });
+  const slow = models.getByRole("article").filter({ hasText: modelCatalog[0].name });
+  const values = slow.locator("[data-grade]");
+  await expect(values).toHaveCount(3);
+  expect(await values.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["warning", "critical", "critical"]);
+  await expect(values.first()).toHaveAttribute("title", "경고 — 짧은 대화 기준 TTFT 3초 이상, 위험 8초 이상");
+  await expect(slow.getByRole("button").first()).toHaveAccessibleDescription(/TTFT 3200 ms, 경고 — 짧은 대화 기준.*TPS 12\.0 tok\/s, 위험/);
+  await expect(values.first()).toContainText("▲");
+  await expect(values.nth(1)).toContainText("◆");
+
+  const healthy = models.getByRole("article").filter({ hasText: modelCatalog[3].name }).locator("[data-grade]");
+  expect(await healthy.evaluateAll((nodes) => nodes.map((node) => node.getAttribute("data-grade")))).toEqual(["normal", "normal", "normal"]);
+  // KO 등급 이름 "양호"는 채널 건강 배지 "정상"과 다른 단어 — 한 카드에 "✓ 정상"과 ◆ 위험이 같은 단어로 겹치지 않게.
+  await expect(healthy.first()).toHaveAttribute("title", /^양호 — /);
+  const legend = models.locator("summary").filter({ hasText: "기준값 보기" });
+  await expect(legend.getByText("지표 등급:", { exact: true })).toBeVisible();
+  await expect(legend).toContainText(/지표 등급:.*양호.*경고.*위험.*워크로드 카테고리별 기준/);
+  await expect(legend).not.toContainText("정상");
+  // 양호 값에는 표지가 없으므로 범례도 양호는 모양 없는 색 견본만 — ●처럼 값 표지로 오해할 글자는 없다.
+  await expect(legend.locator('[data-swatch="normal"]')).toBeVisible();
+  await expect(legend).not.toContainText("●");
+  await expect(healthy.first().locator("[data-marker]")).toHaveCount(0);
+  await expect(models.getByRole("article").filter({ hasText: modelCatalog[1].name }).locator("[data-grade]")).toHaveCount(0);
+
+  const colors = async () => [values.first(), values.nth(1), healthy.first()].reduce<Promise<string[]>>(
+    async (acc, locator) => [...await acc, await locator.evaluate((node) => getComputedStyle(node).color)], Promise.resolve([]));
+  expect(await colors()).toEqual(["rgb(252, 211, 77)", "rgb(251, 113, 133)", "rgb(147, 197, 253)"]);
+  await page.evaluate(() => document.documentElement.classList.add("light"));
+  expect(await colors()).toEqual(["rgb(180, 83, 9)", "rgb(190, 18, 60)", "rgb(29, 78, 216)"]);
+
+  await models.getByText("기준값 보기", { exact: true }).click();
+  await expect(models.getByRole("row", { name: /짧은 대화/ })).toContainText("3초");
+  await expect(models.getByRole("row", { name: /카테고리 미지정/ })).toContainText("24초");
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
+});

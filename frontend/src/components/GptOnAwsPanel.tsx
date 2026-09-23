@@ -1,7 +1,8 @@
 "use client";
 
-// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra / 6 Astra 12채널
-// (미국 3리전 + Terra Global CRIS v2.20.1 + Astra Global·US CRIS·us-west-2 v2.25.1)을
+// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna
+// 18채널 = Mantle 인리전 11 + CRIS 7 (미국 3리전 + Terra Global CRIS v2.20.1
+// + Astra Global·US CRIS·us-west-2 v2.25.1 + Sol/Luna Global·US CRIS·us-east-1 v2.28.0)을
 // 15분마다 채널당 10회 정밀 측정(TTFB/TTFT/GAP)한 결과의 스코어 카드 + 시계열.
 // 방법론은 docs/benchmarks (ttft_bench) 계보: TTFB=첫 스트림 이벤트, GAP≈thinking.
 
@@ -12,7 +13,7 @@ import {
 } from "recharts";
 import {
   fetchGptBenchLatest, fetchGptBenchTrend,
-  GptBenchLatest, GptBenchTrend,
+  GptBenchCard, GptBenchLatest, GptBenchTrend,
 } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n-context";
 import { useChartTheme } from "@/lib/chartTheme";
@@ -35,22 +36,52 @@ const RANGE_OPTIONS = [
   { hours: 168, labelKo: "7일", labelEn: "7d" },
 ];
 
-// 이중 인코딩으로 12개 라인 구분: 색 = 리전, 선 패턴 = 모델 family.
+// 이중 인코딩으로 18개 라인 구분: 색 = 리전, 선 패턴 = 모델 family — (리전, family) 쌍이 모두 고유.
 // (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 색 × family 패턴으로 교체)
 const REGION_COLORS: Record<string, string> = {
-  "us-east-1": "#3b82f6", // blue
+  "us-east-1": "#3b82f6", // blue — GPT 6 Sol/Luna의 유일한 Mantle 인리전 (v2.28.0)
   "us-east-2": "#f59e0b", // amber
   "us-west-2": "#10b981", // emerald
-  "Global": "#a855f7",    // violet — Global CRIS (Seoul 라우팅, v2.20.1)
-  "US": "#db2777",        // pink-600 — US CRIS (us-east-1 라우팅, v2.25.1)
+  "Global": "#a855f7",    // violet — Global CRIS (Seoul 라우팅, Terra v2.20.1, Astra v2.25.1, Sol/Luna v2.28.0)
+  "US": "#db2777",        // pink-600 — US CRIS (us-east-1 라우팅, Astra v2.25.1, Sol/Luna v2.28.0)
 };
 
-const FAMILY_DASH: Record<string, string | undefined> = {
-  "GPT 6 Astra": "10 3 2 3",  // 일점쇄선
-  "GPT 5.6 Terra": undefined, // 실선
-  "GPT 5.5": "7 4",           // 파선
-  "GPT 5.4": "2 4",           // 점선
+// family별 선 패턴 6종 — 모두 달라야 한다(GptOnAwsPanel.test.ts가 고정). 범례 스와치(40px)에
+// 한 주기 이상 보이도록 가장 긴 주기(Luna 23px)를 기준으로 맞췄다.
+export const FAMILY_DASH: Record<string, string | undefined> = {
+  "GPT 6 Astra": "10 3 2 3",      // 일점쇄선
+  "GPT 6 Sol": "16 4",            // 긴 파선
+  "GPT 6 Luna": "10 3 2 3 2 3",   // 이점쇄선
+  "GPT 5.6 Terra": undefined,     // 실선
+  "GPT 5.5": "7 4",               // 파선
+  "GPT 5.4": "2 4",               // 점선
 };
+
+// 카드 열 배치 — 세대별 그룹(GPT 6, GPT 5.x), 그룹 안에서는 family 열. 어느 목록에도 없는 family의
+// 카드는 "기타" 열로 보낸다(조용히 사라지지 않게).
+export const FAMILY_GROUPS = [
+  { key: "gpt-6", en: "GPT 6 generation", ko: "GPT 6 세대",
+    families: ["GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"] },
+  { key: "gpt-5", en: "GPT 5.x generation", ko: "GPT 5.x 세대",
+    families: ["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] },
+] as const;
+
+/** 카드를 세대 그룹 → family 열로 나누고, 알 수 없는 family는 other로 모은다 (입력 순서 유지). */
+export function groupCardsByFamily<T extends { family: string }>(channels: readonly T[]): {
+  groups: { key: string; en: string; ko: string; columns: { family: string; cards: T[] }[] }[];
+  other: T[];
+} {
+  const known = new Set<string>(FAMILY_GROUPS.flatMap((group) => group.families));
+  return {
+    groups: FAMILY_GROUPS.map((group) => ({
+      key: group.key, en: group.en, ko: group.ko,
+      columns: group.families.map((family) => ({
+        family, cards: channels.filter((channel) => channel.family === family),
+      })),
+    })),
+    other: channels.filter((channel) => !known.has(channel.family)),
+  };
+}
 
 /** model_name 서픽스 → 리전 키. pseudo-region "(US)"(v2.25.1)는 "(us-west-2)"와 구분된다. */
 export function regionOf(name: string): string {
@@ -58,12 +89,16 @@ export function regionOf(name: string): string {
   return m ? m[1] : "";
 }
 
-/** model_name → family 키. "6 Astra"를 먼저 보지 않으면 5.4로 접힌다(기본값이 5.4). */
+/**
+ * model_name → family 키. "GPT "에 고정한 정규식이라 "GPT 5.6 Sol"이 "6 Sol"로 오인되지 않고,
+ * 뒤는 " (" 또는 끝이어야 해서 "GPT 5.45" 같은 접두 일치도 막는다. 모르는 family는 ""
+ * (예전처럼 GPT 5.4로 접지 않는다 — 선 패턴은 undefined, 즉 실선).
+ */
+const FAMILY_RE = /\bGPT (6 (?:Astra|Sol|Luna)|5\.6 (?:Sol|Terra|Luna)|5\.5|5\.4)(?= \(|$)/;
+
 export function familyOf(name: string): string {
-  if (name.includes("6 Astra")) return "GPT 6 Astra";
-  if (name.includes("5.6 Terra")) return "GPT 5.6 Terra";
-  if (name.includes("5.5")) return "GPT 5.5";
-  return "GPT 5.4";
+  const m = name.match(FAMILY_RE);
+  return m ? `GPT ${m[1]}` : "";
 }
 
 function color(name: string): string {
@@ -94,6 +129,50 @@ function fmtMs(v: number | null | undefined): string {
 }
 
 type ChartRow = { ts: number; [name: string]: number | null };
+
+/**
+ * 스크롤 범례에서 보이는 영역 아래로 밀려난 항목 수 — 항목의 세로 중심이 보이는 영역 하단보다 아래면 숨은 것으로 센다.
+ * top은 스크롤 컨테이너 콘텐츠 기준 오프셋, 한 행에 여러 항목이 있으면 각각 센다.
+ */
+export function legendItemsBelowFold(
+  items: readonly { top: number; height: number }[], scrollTop: number, clientHeight: number,
+): number {
+  const bottom = scrollTop + clientHeight;
+  return items.filter((item) => item.top + item.height / 2 > bottom).length;
+}
+
+/**
+ * 범례 목록의 숨은 항목 수를 스크롤, 크기 변경, 항목 변경 때마다 다시 센다.
+ * callback ref라 목록이 나중에(빈 상태 → 데이터) 마운트돼도 관찰을 시작한다.
+ */
+function useLegendBelowFold(key: string) {
+  const [list, setList] = useState<HTMLUListElement | null>(null);
+  const [below, setBelow] = useState(0);
+  useEffect(() => {
+    if (!list) {
+      setBelow(0);
+      return;
+    }
+    const update = () => {
+      // 콘텐츠 기준 top = 화면 좌표 차이 + 현재 스크롤 (offsetTop은 positioned 조상에 따라 기준이 달라 쓰지 않는다)
+      const origin = list.getBoundingClientRect().top + list.clientTop - list.scrollTop;
+      const items = Array.from(list.children).map((item) => {
+        const box = item.getBoundingClientRect();
+        return { top: box.top - origin, height: box.height };
+      });
+      setBelow(legendItemsBelowFold(items, list.scrollTop, list.clientHeight));
+    };
+    update();
+    list.addEventListener("scroll", update, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(list);
+    return () => {
+      list.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [list, key]);
+  return { ref: setList, below };
+}
 
 /**
  * backend/gptbench.py run_cycle() assigns one cycle_ts to every channel.
@@ -133,6 +212,36 @@ export function toChartData(
     rows.push(cycle);
   }
   return { rows, names };
+}
+
+/** 차트 범례 — 스크롤 상태(숨은 항목 수)를 이 컴포넌트에만 두어, 휴대폰에서 범례를 스크롤해도
+ *  18개 라인의 LineChart 전체가 다시 그려지지 않게 한다. */
+function BenchLegend({ names, resetKey }: { names: string[]; resetKey: string }) {
+  const { lang } = useLang();
+  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  const legend = useLegendBelowFold(resetKey);
+  return (
+    <>
+      {/* 휴대폰 폭에서는 18개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
+          2열 배치는 라벨이 2~3줄로 접혀 보이는 항목 수가 늘지 않아(390px 6개, 320px 4개) 쓰지 않았다. */}
+      <ul ref={legend.ref} aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
+          className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-[11px] text-gray-400">
+        {names.map((name) => (
+          <li key={name} className="flex min-w-0 items-center gap-2">
+            <svg aria-hidden="true" width="40" height="8" viewBox="0 0 40 8" className="shrink-0">
+              <line x1="1" y1="4" x2="39" y2="4" stroke={color(name)} strokeWidth="2" strokeDasharray={dash(name)} />
+            </svg>
+            <span className="break-words">{name}</span>
+          </li>
+        ))}
+      </ul>
+      {legend.below > 0 && (
+        <p aria-hidden="true" data-legend-more className="mt-1 text-[11px] text-gray-500 sm:hidden">
+          ↓ {L(`+${legend.below} more, scroll the legend`, `+${legend.below}개 더 있음, 범례를 스크롤하세요`)}
+        </p>
+      )}
+    </>
+  );
 }
 
 function BenchChart({
@@ -200,17 +309,7 @@ function BenchChart({
               </LineChart>
             </ResponsiveContainer>
           </div>
-          <ul aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
-              className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-[11px] text-gray-400">
-            {names.map((name) => (
-              <li key={name} className="flex min-w-0 items-center gap-2">
-                <svg aria-hidden="true" width="28" height="8" viewBox="0 0 28 8" className="shrink-0">
-                  <line x1="1" y1="4" x2="27" y2="4" stroke={color(name)} strokeWidth="2" strokeDasharray={dash(name)} />
-                </svg>
-                <span className="break-words">{name}</span>
-              </li>
-            ))}
-          </ul>
+          <BenchLegend names={names} resetKey={`${rows.length}|${names.join("|")}`} />
         </>
       )}
     </section>
@@ -250,6 +349,66 @@ export default function GptOnAwsPanel() {
     });
   };
   const clearChannels = () => setSelectedChannels(new Set());
+  const { groups, other } = useMemo(() => groupCardsByFamily(latest?.channels ?? []), [latest]);
+
+  const renderCard = (c: GptBenchCard) => (
+    <button key={c.model_id} type="button"
+         onClick={() => toggleChannel(c.model_name)}
+         aria-label={c.model_name}
+         aria-pressed={selectedChannels.size === 0 || selectedChannels.has(c.model_name)}
+         className={`block w-full min-w-0 text-left rounded-xl border p-4 space-y-2 transition-colors bg-gray-900/50 focus-visible:border-blue-500 ${
+           selectedChannels.has(c.model_name)
+             ? "border-blue-500 ring-1 ring-blue-500/50"
+             : "border-gray-800 hover:border-gray-600"
+         }`}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                style={{ backgroundColor: color(c.model_name) }} />
+          <span className="text-sm font-semibold text-gray-200 truncate">
+            {c.family}
+          </span>
+        </div>
+        <span className="text-[11px] font-mono text-gray-500">{c.region}</span>
+      </div>
+      <div className="grid grid-cols-3 gap-1 text-center">
+        <div>
+          <div className={`text-lg font-bold tabular-nums ${ttfbColor(c.median_ttfb_ms)}`}>
+            {fmtMs(c.median_ttfb_ms)}
+          </div>
+          <div className="text-[11px] text-gray-500">TTFB</div>
+        </div>
+        <div>
+          <div className={`text-lg font-bold tabular-nums ${ttftColor(c.median_ttft_ms)}`}>
+            {fmtMs(c.median_ttft_ms)}
+          </div>
+          <div className="text-[11px] text-gray-500">TTFT</div>
+        </div>
+        <div>
+          <div className="text-lg font-bold tabular-nums text-gray-300">
+            {fmtMs(c.median_gap_ms)}
+          </div>
+          <div className="text-[11px] text-gray-500">GAP</div>
+        </div>
+      </div>
+      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-800/60">
+        <span>
+          {L("ok", "성공")} {c.success}/{c.runs}
+          {c.success < c.runs && <span className="text-rose-400"> ⚠</span>}
+        </span>
+        <span>p95 {fmtMs(c.p95_ttft_ms)}</span>
+        <span>
+          {L("cache", "캐시")}{" "}
+          {c.cache_hit_rate !== null ? `${Math.round(c.cache_hit_rate * 100)}%` : "—"}
+        </span>
+      </div>
+      {c.last_error && (
+        <div className="text-[11px] text-rose-400 break-words">
+          {c.last_error}
+        </div>
+      )}
+    </button>
+  );
 
   return (
     <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
@@ -258,8 +417,8 @@ export default function GptOnAwsPanel() {
           <h1 className="text-2xl font-bold text-gray-100">GPT on AWS</h1>
           <p className="text-sm text-gray-500 mt-1">
             {L(
-              "Precision latency measurements for GPT 5.4, 5.5, 5.6 Terra and 6 Astra on Bedrock Mantle and cross-region channels. Each 15-minute cycle makes 10 sequential calls per channel with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
-              "Bedrock Mantle 및 교차 리전 채널의 GPT 5.4, 5.5, 5.6 Terra, 6 Astra 정밀 레이턴시 측정입니다. 15분마다 채널당 10회 순차 호출하며, 약 55.8k 토큰의 고정 캐시 프롬프트를 사용합니다. TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
+              "Precision latency measurements for GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol and 6 Luna across 18 Bedrock Mantle and cross-region channels. Each 15-minute cycle makes 10 sequential calls per channel with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
+              "Bedrock Mantle 및 교차 리전 18개 채널의 GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna 정밀 레이턴시 측정입니다. 15분마다 채널당 10회 순차 호출하며, 약 55.8k 토큰의 고정 캐시 프롬프트를 사용합니다. TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
             )}
           </p>
         </div>
@@ -317,74 +476,40 @@ export default function GptOnAwsPanel() {
               </p>
             </div>
           )}
-          {/* family별 열 배치: 1열 GPT 6 Astra, 2열 GPT 5.6 Terra, 3열 GPT 5.5, 4열 GPT 5.4
-              (폰은 세로 스택, md 2열, xl 4열) */}
-          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
-            {(["GPT 6 Astra", "GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] as const).map((fam) => (
-              <div key={fam} className="min-w-0 space-y-3">
-                <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-1">
-                  {fam}
-                </h3>
-                {latest.channels.filter((c) => c.family === fam).map((c) => (
-              <button key={c.model_id} type="button"
-                   onClick={() => toggleChannel(c.model_name)}
-                   aria-label={c.model_name}
-                   aria-pressed={selectedChannels.size === 0 || selectedChannels.has(c.model_name)}
-                   className={`block w-full min-w-0 text-left rounded-xl border p-4 space-y-2 transition-colors bg-gray-900/50 focus-visible:border-blue-500 ${
-                     selectedChannels.has(c.model_name)
-                       ? "border-blue-500 ring-1 ring-blue-500/50"
-                       : "border-gray-800 hover:border-gray-600"
-                   }`}>
-                <div className="flex items-center justify-between gap-2">
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                          style={{ backgroundColor: color(c.model_name) }} />
-                    <span className="text-sm font-semibold text-gray-200 truncate">
-                      {c.family}
-                    </span>
-                  </div>
-                  <span className="text-[11px] font-mono text-gray-500">{c.region}</span>
-                </div>
-                <div className="grid grid-cols-3 gap-1 text-center">
-                  <div>
-                    <div className={`text-lg font-bold tabular-nums ${ttfbColor(c.median_ttfb_ms)}`}>
-                      {fmtMs(c.median_ttfb_ms)}
+          {/* 세대별 그룹(GPT 6 → GPT 5.x) 안에서 family별 열 배치 — 폰은 세로 스택, md 2열, lg 3열.
+              알 수 없는 family의 카드는 마지막 "기타" 열로 모은다. */}
+          <div className="space-y-6">
+            {groups.map((group) => (
+              <div key={group.key} role="group" aria-labelledby={`gptbench-group-${group.key}`} className="space-y-3">
+                <h2 id={`gptbench-group-${group.key}`} className="text-sm font-semibold text-gray-300 px-1">
+                  {L(group.en, group.ko)}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {group.columns.map((column) => (
+                    <div key={column.family} className="min-w-0 space-y-3">
+                      <h3 className="text-xs font-semibold uppercase tracking-wider text-gray-500 px-1">
+                        {column.family}
+                      </h3>
+                      {column.cards.length === 0 ? (
+                        <p className="px-1 text-[11px] text-gray-500">
+                          {L("No results in this cycle.", "이번 사이클 결과가 없습니다.")}
+                        </p>
+                      ) : column.cards.map(renderCard)}
                     </div>
-                    <div className="text-[11px] text-gray-500">TTFB</div>
-                  </div>
-                  <div>
-                    <div className={`text-lg font-bold tabular-nums ${ttftColor(c.median_ttft_ms)}`}>
-                      {fmtMs(c.median_ttft_ms)}
-                    </div>
-                    <div className="text-[11px] text-gray-500">TTFT</div>
-                  </div>
-                  <div>
-                    <div className="text-lg font-bold tabular-nums text-gray-300">
-                      {fmtMs(c.median_gap_ms)}
-                    </div>
-                    <div className="text-[11px] text-gray-500">GAP</div>
-                  </div>
+                  ))}
                 </div>
-                <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-800/60">
-                  <span>
-                    {L("ok", "성공")} {c.success}/{c.runs}
-                    {c.success < c.runs && <span className="text-rose-400"> ⚠</span>}
-                  </span>
-                  <span>p95 {fmtMs(c.p95_ttft_ms)}</span>
-                  <span>
-                    {L("cache", "캐시")}{" "}
-                    {c.cache_hit_rate !== null ? `${Math.round(c.cache_hit_rate * 100)}%` : "—"}
-                  </span>
-                </div>
-                {c.last_error && (
-                  <div className="text-[11px] text-rose-400 break-words">
-                    {c.last_error}
-                  </div>
-                )}
-              </button>
-                ))}
               </div>
             ))}
+            {other.length > 0 && (
+              <div role="group" aria-labelledby="gptbench-group-other" className="space-y-3">
+                <h2 id="gptbench-group-other" className="text-sm font-semibold text-gray-300 px-1">
+                  {L("Other", "기타")}
+                </h2>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  <div className="min-w-0 space-y-3">{other.map(renderCard)}</div>
+                </div>
+              </div>
+            )}
           </div>
 
         </>

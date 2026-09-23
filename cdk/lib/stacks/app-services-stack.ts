@@ -181,7 +181,7 @@ export class AppServicesStack extends cdk.Stack {
       // US CRIS(us.openai.*)도 bedrock-mantle 호스트 미지원 — us-east-1 bedrock-runtime
       // OpenAI-compat 엔드포인트로만 호출 가능. GPT-6 Astra US 채널용 (v2.25.0, ADR-027).
       OPENAI_US_BASE_URL: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
-      // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 4모델이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
+      // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 모델(5종, Opus 5.5 포함)이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
       // MCP 커넥터 프로브용 공개 read-only MCP 서버 (서버 장애는 inconclusive로 격리).
       MANTLE_ANTHROPIC_REGION: "us-east-1",
       FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
@@ -191,8 +191,9 @@ export class AppServicesStack extends cdk.Stack {
       BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
       BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
       // GPT-6 Astra — Mantle 인리전 native id. Global/US 프로파일 id(global./us. 접두)는
-      // prober가 이 값에서 파생한다 (별도 env 없음). Mantle us-east-1/us-east-2는
-      // 2026-09-09 실측 404(not_found_error) — 호스트 온보딩 대기, 채널 미등록 (ADR-027).
+      // prober가 이 값에서 파생한다 (별도 env 없음). Mantle us-east-1/us-east-2는 현재 미지원
+      // (404 not_found_error, 2026-09-09·2026-09-23 실측) — 2026-09-23 사용자 결정으로 제외, 채널
+      // 미등록. 정기 재확인 대상 아님, AWS가 지원을 발표하면 prober 스펙 튜플에 리전만 추가 (ADR-027).
       BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID: "openai.gpt-6-astra",
       // GPT-6 Sol/Luna (v2.27.0) — Mantle 인리전은 us-east-1만 서빙(us-east-2/us-west-2 404,
       // 2026-09-23 실측). Global/US 프로파일 id는 Astra와 같이 prober가 접두로 파생 (ADR-028).

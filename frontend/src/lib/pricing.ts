@@ -1,7 +1,9 @@
 // 모델별 토큰 단가 (USD per 1M tokens). Phase 2 Cost Dashboard에서도 재사용.
 //
-// 출처: AWS Bedrock public pricing + Anthropic API pricing.
-// 가격이 변동되면 이 파일만 업데이트하면 됨.
+// 출처: AWS Bedrock public pricing(모델 카드) + Anthropic API pricing.
+// 모델 카드가 아직 없는 신규 출시 모델은 Bedrock ListFoundationModelAgreementOffers의
+// offer rate card를 출처로 쓰고, 카드가 게시되면 재대조한다 (예: GPT 6 Sol/Luna, ADR-028).
+// 가격이 변동되면 이 파일과 backend/pricing.py를 함께 업데이트할 것 (PRICE_TABLE 동일 유지).
 // "anthropic:*" prefix는 Claude Platform on AWS (vendor endpoint) - 동일 단가 가정.
 
 export interface ModelPricing {
@@ -51,8 +53,19 @@ const PRICE_TABLE: Record<string, ModelPricing> = {
   "gpt-6-astra": { input: 11.0, output: 55.0 },
   "gpt-6-astra-us": { input: 11.0, output: 55.0 },
   "gpt-6-astra-global": { input: 10.0, output: 50.0 },
-  // GPT 6 Sol / Luna (v2.27.0): 공식 단가 미확정 — AWS 모델 카드·Price List 모두 없음, 의도적으로 비움.
-  // 확정되면 모델마다 in-region / -global / -us 3키를 함께 추가한다 (ADR-028).
+  // GPT 6 Sol / Luna (v2.27.0 출시) — 출처: AWS Bedrock ListFoundationModelAgreementOffers
+  // rate card (2026-09-23 조회; Sol offer-pycji3sz5gpcc, Luna offer-gmo53nkzc5or6).
+  // input/output_tokens_standard = In-Region, Geo CRIS(US) / *_global_standard = Global CRIS.
+  // 교차 검증: 같은 방식으로 조회한 Astra offer(offer-7epta7rbw5aws, standard 11/55, global 10/50)가
+  // Astra 공식 모델 카드와 정확히 일치하고, 값은 OpenAI 정가(Sol $2/$10, Luna $0.10/$0.50)에
+  // 문서화된 In-Region, Geo +10%를 더한 값과 같다. 모델 카드 미게시 → 게시되면 카드와 재대조 (ADR-028).
+  // 3키는 항상 함께 둔다 — 하나만 있으면 prefix fallback이 나머지 채널을 그 단가로 오매칭한다.
+  "gpt-6-sol": { input: 2.20, output: 11.00 },
+  "gpt-6-sol-us": { input: 2.20, output: 11.00 },
+  "gpt-6-sol-global": { input: 2.00, output: 10.00 },
+  "gpt-6-luna": { input: 0.11, output: 0.55 },
+  "gpt-6-luna-us": { input: 0.11, output: 0.55 },
+  "gpt-6-luna-global": { input: 0.10, output: 0.50 },
 };
 
 /** model_id → ModelPricing. 매칭 실패 시 null. */

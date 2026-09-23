@@ -10,13 +10,23 @@ from claude_features import catalog, engine, probes as P, transports as T, runne
 def test_surfaces_and_models():
     assert catalog.SURFACES == ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse"]
     keys = [m["key"] for m in catalog.MODELS]
-    assert keys == ["fable-5-1", "fable-5", "opus-5", "sonnet-5"]
+    assert keys == ["fable-5-1", "fable-5", "opus-5-5", "opus-5", "sonnet-5"]
+    assert catalog.MODEL_KEYS == keys
     assert catalog.model_id_for("cp", "fable-5-1") == "claude-fable-5-1"
     assert catalog.model_id_for("mantle", "fable-5-1") is None  # US GovCloud only
     assert catalog.model_id_for("mantle", "opus-5") == "anthropic.claude-opus-5"
     assert catalog.model_id_for("bedrock_messages", "sonnet-5") == "global.anthropic.claude-sonnet-5"
     assert catalog.model_id_for("bedrock_invoke", "sonnet-5") == "global.anthropic.claude-sonnet-5"
     assert catalog.model_id_for("bedrock_converse", "sonnet-5") == "global.anthropic.claude-sonnet-5"
+    # Opus 5.5 (2026-09-23) — Mantle /anthropic us-east-1이 서빙(200 실측) → mantle id 있음, Bedrock 3열은 같은 global CRIS 프로파일
+    assert catalog.model_label("opus-5-5") == "Claude Opus 5.5"
+    assert catalog.model_id_for("cp", "opus-5-5") == "claude-opus-5-5"
+    assert catalog.model_id_for("mantle", "opus-5-5") == "anthropic.claude-opus-5-5"
+    for s in ("bedrock_messages", "bedrock_invoke", "bedrock_converse"):
+        assert catalog.model_id_for(s, "opus-5-5") == "global.anthropic.claude-opus-5-5"
+    # 접두 충돌 가드: opus-5 행이 5.5 id로 바뀌지 않았는지
+    assert catalog.model_id_for("cp", "opus-5") == "claude-opus-5"
+    assert catalog.model_id_for("bedrock_converse", "opus-5") == "global.anthropic.claude-opus-5"
 
 
 def test_feature_catalog_shape():
@@ -410,6 +420,34 @@ def test_tool_choice_respects_fable_51():
     assert P._tool_choice("anthropic.claude-opus-5", "echo") == {"type": "tool", "name": "echo"}
 
 
+def test_tool_choice_auto_for_opus_55_all_id_forms():
+    # Opus 5.5는 forced tool_choice(tool/any)를 400으로 거부 → 세 id 형태(cp/mantle/bedrock) 모두 auto + 프롬프트 지시
+    for mid in ("claude-opus-5-5", "anthropic.claude-opus-5-5", "global.anthropic.claude-opus-5-5"):
+        assert P._tool_choice(mid, "echo") == {"type": "auto"}, mid
+    # opus-5는 여전히 강제 (substring 마커 "opus-5-5"가 opus-5 id에 걸리지 않음)
+    for mid in ("claude-opus-5", "anthropic.claude-opus-5", "global.anthropic.claude-opus-5"):
+        assert P._tool_choice(mid, "echo") == {"type": "tool", "name": "echo"}, mid
+
+
+def test_converse_tool_choice_auto_for_opus_55():
+    from claude_features.transports import NormalizedResponse
+    seen = {}
+
+    class _ConvT:
+        surface = "bedrock_converse"
+        routes = frozenset({"converse", "count_tokens"})
+
+        def converse(self, model_id, stream=False, **kw):
+            seen[model_id] = kw["toolConfig"]["toolChoice"]
+            return NormalizedResponse(content=[{"type": "tool_use", "name": "echo", "input": {"text": P.CANARY}}], stop_reason="tool_use")
+
+    for probe in (P.probe_tool_use, P.probe_strict_tool_use):
+        seen.clear()
+        assert probe(_ConvT(), "global.anthropic.claude-opus-5-5", "opus-5-5")[0] is True
+        assert probe(_ConvT(), "global.anthropic.claude-opus-5", "opus-5")[0] is True
+        assert seen == {"global.anthropic.claude-opus-5-5": {"auto": {}}, "global.anthropic.claude-opus-5": {"tool": {"name": "echo"}}}
+
+
 class _FakeT:
     surface = "cp"
     routes = frozenset({"messages", "count_tokens"})
@@ -425,6 +463,44 @@ class _FakeT:
 
     def count_tokens(self, model_id, body, betas=()):
         return {"input_tokens": 42}
+
+
+@pytest.mark.parametrize("surface,expected", [
+    ("cp", "fallback-credit-2026-07-01"),
+    ("mantle", "fallback-credit-2026-06-01"),
+    ("bedrock_messages", "fallback-credit-2026-06-01"),
+    ("bedrock_invoke", "fallback-credit-2026-06-01"),
+    ("bedrock_converse", "fallback-credit-2026-06-01"),
+])
+def test_fallback_credit_beta_name_per_surface(surface, expected):
+    """fallback_credit beta 이름은 CP만 07-01, Bedrock 3경로와 Mantle은 06-01 (v2.28.0).
+
+    Mantle에 CP 이름(07-01)을 보내면 400 "Unexpected value(s) ... for the anthropic-beta header"로
+    모든 모델이 거짓 드리프트가 됐다 — 2026-09-23 라이브: Mantle us-east-1은 06-01에 200(end_turn).
+    """
+    from claude_features.transports import NormalizedResponse
+
+    resp = NormalizedResponse(content=[{"type": "text", "text": "pong"}], stop_reason="end_turn")
+    sent = []
+
+    class _T:
+        routes = frozenset({"messages"})
+
+        def messages(self, model_id, body, betas=(), stream=False):
+            sent.append(list(betas))
+            return resp
+
+        def converse(self, model_id, stream=False, **kw):
+            sent.append(kw["additionalModelRequestFields"]["anthropic_beta"])
+            return resp
+
+    t = _T()
+    t.surface = surface
+    ok, ev = P.probe_fallback_credit(t, "anthropic.claude-opus-5", "opus-5")
+    assert ok is True and ev["verification"] == "acceptance" and ev["stop_reason"] == "end_turn"
+    assert sent == [[expected]]
+    req = ev["request"]["additionalModelRequestFields"] if surface == "bedrock_converse" else ev["request"]
+    assert req["anthropic_beta"] == [expected]  # 증거 모달의 요청 스냅샷도 실제로 보낸 이름을 보여 준다
 
 
 def test_run_probe_classifies_transport_error():
@@ -465,6 +541,12 @@ def test_advisor_pairing():
     assert P._advisor_model("fable-5-1") == "claude-fable-5-1"
     assert P._advisor_model("sonnet-5") == "claude-opus-5"
     assert P._advisor_model("opus-5") == "claude-opus-5"
+    assert P._advisor_model("opus-5-5") == "claude-opus-5-5"  # 자기 페어링 (CP 실측 supported, 2026-09-23)
+
+
+def test_advisor_pairing_covers_every_catalog_model():
+    # 빠진 키는 _advisor_model KeyError → run_probe가 advisor_tool 셀을 broken으로 분류한다 (모델 추가 시 회귀 가드)
+    assert set(P._ADVISOR_FOR) == set(catalog.MODEL_KEYS)
 
 
 def test_http_request_drops_json_content_type_for_multipart(monkeypatch):
@@ -597,11 +679,16 @@ def test_build_jobs_partitions_applicable_and_predecided():
 def test_default_job_count_matches_spec_estimate():
     jobs, decided = R.build_jobs(None, None, None)
     total = len(jobs) + len(decided)
-    assert total == 39 * 5 * 4  # feature × surface × model
-    # pre-decided 137 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 4 models (68)
-    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 4 − 1 overlap = 15)
-    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 4 − 1 overlap = 15)
-    assert (len(jobs), len(decided)) == (643, 137)
+    assert total == 39 * 5 * 5  # feature × surface × model (975, v2.28.0~ — Opus 5.5 추가 전 780)
+    # pre-decided 162 = Mantle Fable 5.1 (39) + Converse-inexpressible 17 features × 5 models (85)
+    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 5 − 1 overlap = 19)
+    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 5 − 1 overlap = 19)
+    assert (len(jobs), len(decided)) == (813, 162)
+    # Opus 5.5 몫 = 39 × 5 = 195셀 (프로브 170 + 사전판정 25) — Mantle에서 서빙되므로 Mantle 열도 프로브 대상
+    o_jobs = [j for j in jobs if j["model_key"] == "opus-5-5"]
+    o_dec = [d for d in decided if d["model_key"] == "opus-5-5"]
+    assert (len(o_jobs), len(o_dec)) == (170, 25)
+    assert sum(1 for j in o_jobs if j["surface"] == "mantle") == 37  # 39 − context_window_1m − data_residency
 
 
 def test_data_residency_is_not_applicable_on_bedrock_by_doc():
@@ -765,6 +852,8 @@ _CLASSIFY_PINS = [
     ("invoke-structured-extra-inputs", "HTTP 400: ValidationException: output_config.format: Extra inputs are not permitted", "unsupported"),
     ("mantle-data-retention", 'HTTP 400: {"type": "error", "request_id": "req_37kb", "error": {"type": "invalid_request_error", '
                               '"message": "data retention mode \'default\' is not available for this model"}}', "unsupported"),
+    # mantle-beta-header: v2.28.0 전 프로브가 Mantle에 CP beta 이름(07-01)을 보냈을 때의 실제 오류. 프로브는 이제
+    # Mantle에 06-01을 보낸다(2026-09-23 라이브 200) — 이 핀은 분류 규칙(beta 헤더 거부 = unsupported) 회귀용으로 남긴다.
     ("mantle-beta-header", 'HTTP 400: {"type": "error", "error": {"type": "invalid_request_error", '
                            '"message": "Unexpected value(s) `fallback-credit-2026-07-01` for the `anthropic-beta` header"}}', "unsupported"),
     ("invoke-tool-type", "HTTP 400: ValidationException: tool type 'advisor_20260301' is not supported for this model", "unsupported"),
