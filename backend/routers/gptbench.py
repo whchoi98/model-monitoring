@@ -2,7 +2,7 @@
 
 gptbench.run_cycle()이 15분마다 저장한 gpt_bench_results를 집계해 제공:
   - /latest : 최신 사이클의 채널별 스코어 카드 (median TTFB/TTFT/GAP, 캐시 히트율, 성공률)
-  - /trend  : 시간 범위 내 사이클×채널 median 시계열 (그래프용)
+  - /trend  : 시간 범위(1~168h) 내 사이클×채널 median 시계열 (그래프용)
 조회 전용·공개 (auto-probe 계열과 동일 정책).
 """
 
@@ -136,36 +136,47 @@ def latest(db: Session = Depends(get_db)):
 
 @router.get("/trend", response_model=TrendResponse)
 def trend(
-    hours: int = Query(24, ge=1, le=720),
+    # 상한 168h = UI 최대 범위(GptOnAwsPanel RANGE_OPTIONS 7일). 공개 엔드포인트라 상한이 곧
+    # 1요청 메모리 상한이다 — 720h(30일)는 18채널에서 ~1 GB RSS까지 올라 1 GiB 태스크 OOM 위험
+    # (2026-09-01 /api/results/stats OOM과 같은 패턴).
+    hours: int = Query(24, ge=1, le=168),
     db: Session = Depends(get_db),
 ):
-    """시간 범위 내 사이클별 median 시계열 — 그래프용. 96사이클/일 × 18채널 규모라 Python 집계로 충분."""
+    """시간 범위 내 사이클별 median 시계열 — 그래프용.
+
+    최대 범위(7일)에서 96사이클/일 × 18채널 × 10행 ≈ 12만 행을 읽는다. ORM 객체 대신 집계에 쓰는
+    7개 컬럼만 튜플로 읽어 행당 메모리를 줄이고(identity map·인스턴스 상태 없음), median은
+    Python에서 계산한다.
+    """
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    query = (db.query(GptBenchResult)
+    query = (db.query(GptBenchResult.model_id, GptBenchResult.model_name,
+                      GptBenchResult.cycle_ts, GptBenchResult.status,
+                      GptBenchResult.ttfb_ms, GptBenchResult.ttft_ms, GptBenchResult.gap_ms)
              .filter(GptBenchResult.cycle_ts >= since))
     # 진행 중 사이클의 부분 median이 그래프 끝점을 왜곡하지 않도록 완료 사이클까지만 포함.
     cutoff = _latest_complete_cycle(db)
     if cutoff is not None:
         query = query.filter(GptBenchResult.cycle_ts <= cutoff)
-    rows = query.order_by(GptBenchResult.cycle_ts.asc()).all()
 
-    grouped: dict[str, dict[datetime, list[GptBenchResult]]] = {}
+    # (model_id → cycle_ts → [(status, ttfb, ttft, gap)])
+    grouped: dict[str, dict[datetime, list[tuple]]] = {}
     names: dict[str, str] = {}
-    for r in rows:
-        grouped.setdefault(r.model_id, {}).setdefault(r.cycle_ts, []).append(r)
-        names[r.model_id] = r.model_name
+    for model_id, model_name, cycle_ts, status, ttfb, ttft, gap in (
+            query.order_by(GptBenchResult.cycle_ts.asc())):
+        grouped.setdefault(model_id, {}).setdefault(cycle_ts, []).append((status, ttfb, ttft, gap))
+        names[model_id] = model_name
 
     series = []
     for model_id, cycles in grouped.items():
         points = []
         for cts in sorted(cycles.keys()):
             grp = cycles[cts]
-            ok = [r for r in grp if r.status == "success"]
+            ok = [r for r in grp if r[0] == "success"]
             points.append(TrendPoint(
                 cycle_ts=cts,
-                median_ttfb_ms=_median([r.ttfb_ms for r in ok]),
-                median_ttft_ms=_median([r.ttft_ms for r in ok]),
-                median_gap_ms=_median([r.gap_ms for r in ok]),
+                median_ttfb_ms=_median([r[1] for r in ok]),
+                median_ttft_ms=_median([r[2] for r in ok]),
+                median_gap_ms=_median([r[3] for r in ok]),
                 errors=len(grp) - len(ok),
             ))
         series.append(TrendSeries(model_id=model_id, model_name=names[model_id], points=points))

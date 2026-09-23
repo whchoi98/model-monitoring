@@ -270,6 +270,89 @@ def test_trend_series_grouped_by_cycle(session_factory, client):
     assert p["median_gap_ms"] == pytest.approx(900.0)
 
 
+def test_trend_hours_capped_at_ui_max(client):
+    """공개 엔드포인트 — hours 상한 168(UI 최대 7일). 720h 전체 ORM 로드는 18채널에서 ~1 GB RSS(OOM 위험)."""
+    assert client.get("/api/gptbench/trend?hours=168").status_code == 200
+    assert client.get("/api/gptbench/trend?hours=169").status_code == 422
+    assert client.get("/api/gptbench/trend?hours=720").status_code == 422
+    assert client.get("/api/gptbench/trend?hours=0").status_code == 422
+
+
+def _seed_mixed_trend(session_factory):
+    """성공/오류 혼합, None 지표, 라벨 변경, 범위 밖·진행 중 사이클을 포함한 trend 시드."""
+    s = session_factory()
+    now = datetime.now(timezone.utc)
+    cycles = [now - timedelta(minutes=m) for m in (20, 35, 50, 65)] + [now - timedelta(hours=30)]
+    in_progress = now - timedelta(minutes=3)
+    for ci, cts in enumerate(cycles + [in_progress]):
+        for ch in range(3):
+            model_id = f"openai:r{ch}:m"
+            # ch0은 오래된 사이클(ci>=2)에서 옛 라벨 — names[]는 cycle_ts 오름차순 마지막(최신) 라벨.
+            name = f"OpenAI GPT 5.4 (r{ch})" if not (ch == 0 and ci >= 2) else "OpenAI GPT 5.4 old (r0)"
+            for run_no in range(1, 5):
+                err = (run_no + ci + ch) % 4 == 0
+                s.add(models.GptBenchResult(
+                    cycle_ts=cts, timestamp=cts, model_id=model_id, model_name=name,
+                    family="GPT 5.4", region=f"r{ch}", run_no=run_no,
+                    status="error" if err else "success",
+                    ttfb_ms=None if err else 700.0 + 13 * run_no + 7 * ci + ch,
+                    ttft_ms=None if (err or (run_no == 2 and ch == 1)) else 1600.0 + 17 * run_no + ci,
+                    gap_ms=None if err else 900.0 + run_no * ch,
+                    error_message="boom" if err else None,
+                ))
+    s.commit()
+    s.close()
+
+
+def _reference_trend(session_factory, hours):
+    """v2.28.0 이전 구현(전체 ORM 행 로드)을 그대로 옮긴 기준 — 컬럼 튜플 조회가 응답을 바꾸지 않음을 고정."""
+    from routers import gptbench as gr
+
+    s = session_factory()
+    try:
+        since = datetime.now(timezone.utc) - timedelta(hours=hours)
+        query = s.query(models.GptBenchResult).filter(models.GptBenchResult.cycle_ts >= since)
+        cutoff = gr._latest_complete_cycle(s)
+        if cutoff is not None:
+            query = query.filter(models.GptBenchResult.cycle_ts <= cutoff)
+        rows = query.order_by(models.GptBenchResult.cycle_ts.asc()).all()
+        grouped, names = {}, {}
+        for r in rows:
+            grouped.setdefault(r.model_id, {}).setdefault(r.cycle_ts, []).append(r)
+            names[r.model_id] = r.model_name
+        series = []
+        for model_id, cyc in grouped.items():
+            points = []
+            for cts in sorted(cyc.keys()):
+                grp = cyc[cts]
+                ok = [r for r in grp if r.status == "success"]
+                points.append(gr.TrendPoint(
+                    cycle_ts=cts,
+                    median_ttfb_ms=gr._median([r.ttfb_ms for r in ok]),
+                    median_ttft_ms=gr._median([r.ttft_ms for r in ok]),
+                    median_gap_ms=gr._median([r.gap_ms for r in ok]),
+                    errors=len(grp) - len(ok),
+                ))
+            series.append(gr.TrendSeries(model_id=model_id, model_name=names[model_id], points=points))
+        series.sort(key=lambda x: x.model_name)
+        return gr.TrendResponse(hours=hours, series=series).model_dump(mode="json")
+    finally:
+        s.close()
+
+
+@pytest.mark.parametrize("hours", [24, 168])
+def test_trend_column_select_matches_orm_reference(session_factory, client, hours):
+    _seed_mixed_trend(session_factory)
+    got = client.get(f"/api/gptbench/trend?hours={hours}").json()
+    assert got == _reference_trend(session_factory, hours)
+    # 시드 형태 확인: 3채널, 24h는 완료 4사이클, 168h는 30시간 전 사이클까지 5사이클 (진행 중 제외)
+    assert len(got["series"]) == 3
+    assert all(len(sr["points"]) == (4 if hours == 24 else 5) for sr in got["series"])
+    assert any(p["errors"] > 0 for sr in got["series"] for p in sr["points"])
+    assert {sr["model_name"] for sr in got["series"]} == {
+        "OpenAI GPT 5.4 (r0)", "OpenAI GPT 5.4 (r1)", "OpenAI GPT 5.4 (r2)"}
+
+
 def test_latest_empty_db(client):
     data = client.get("/api/gptbench/latest").json()
     assert data["cycle_ts"] is None and data["channels"] == []

@@ -301,7 +301,10 @@ previous one is returned, so the payload lags the newest cycle by about 15–30 
 GPT 5.6 Terra, 5.5, 5.4; unknown families last) then region.
 
 ### GET /api/gptbench/trend?hours=24
-Per-cycle median TTFB/TTFT/GAP and error count per channel (`series[].points[]`), `hours` 1–720 (default 24), complete cycles only.
+Per-cycle median TTFB/TTFT/GAP and error count per channel (`series[].points[]`), `hours` 1–168 (default 24; 169+ → 422), complete cycles only.
+The cap matches the UI's largest range (7 d) and is lowered from 720 in v2.28.0: this public endpoint aggregates in Python, and a 720 h
+request at 18 channels loaded every row as an ORM object (~1 GB RSS, OOM risk on the 1 GiB backend task). It now reads only the seven
+columns it aggregates (`model_id`, `model_name`, `cycle_ts`, `status`, `ttfb_ms`, `ttft_ms`, `gap_ms`) with the same response.
 
 ---
 
