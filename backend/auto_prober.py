@@ -6,6 +6,9 @@ v2: EventBridge Scheduler가 별도 Fargate Task(`auto_prober_runner`)를 5분�
 본 모듈은 두 가지 경로에서 재사용되는 `_run_cycle()`만 노출:
   - Fargate one-shot runner (`backend.auto_prober_runner`)
   - 수동 trigger API (`/api/auto-probe/trigger`) — backend 프로세스에서 동기 실행
+
+v2.29.0: 채널별 주기. Claude Platform on AWS 채널(anthropic:*)은 10분(ANTHROPIC_CP_PROBE_INTERVAL_S)
+마다만 프로빙하고 워크로드 카테고리도 채널별로 따로 회전한다(_plan_cycle). 나머지 모델은 매 사이클.
 """
 
 from __future__ import annotations
@@ -21,8 +24,10 @@ from typing import Optional
 
 from sqlalchemy import text
 
+import probe_cadence
 from database import SessionLocal
 from models import ProbeResult, ProbeRun
+from probe_cadence import BASE_INTERVAL_SECONDS, CP_MODEL_PREFIX, is_cp_model
 from prober import (
     AVAILABLE_MODELS,
     PROBE_WALL_CLOCK_S,
@@ -33,7 +38,7 @@ from prober import (
 
 logger = logging.getLogger(__name__)
 
-PROBE_INTERVAL_SECONDS = 300
+PROBE_INTERVAL_SECONDS = BASE_INTERVAL_SECONDS
 OVERDUE_AFTER_SECONDS = PROBE_INTERVAL_SECONDS * 2
 RUNNING_TIMEOUT_SECONDS = PROBE_INTERVAL_SECONDS * 3
 # Serialize only admission, never paid work. PostgreSQL covers separate API /
@@ -50,6 +55,16 @@ PROBE_FUTURE_TIMEOUT_S = max(120.0, PROBE_WALL_CLOCK_S + 30.0)
 # 안전망. RUNNING_TIMEOUT_SECONDS(900s)보다 충분히 작아야 예약이 만료되기 전에 run이 끝난다.
 CYCLE_DEADLINE_SECONDS = float(RUNNING_TIMEOUT_SECONDS - PROBE_INTERVAL_SECONDS)  # 600s
 _CYCLE_POLL_SECONDS = 1.0
+
+# Claude Platform on AWS 채널 주기 판정 (v2.29.0) — 직전 CP 자동 프로브가 속한 run의 시작 시각
+# (ProbeRun.created_at, 사이클 예약 시각)과 이번 run의 시작 시각을 비교한다. 결과 행 timestamp는 기준으로
+# 쓰지 않는다: CP 행은 사이클 안에서 Bedrock 모델 뒤에 쓰여 시작 후 1~2분 늦게 찍히므로(2026-09-23 로그),
+# 행 기준이면 두 사이클 뒤에도 "10분 미만"으로 보여 15분 주기가 된다. 허용 오차는 사이클의 절반(150s) —
+# Fargate 기동 지연 때문에 스케줄 run 간격이 281~312s로 흔들려(같은 로그) 두 사이클 간격이 540s 아래로
+# 내려갈 수 있다. 한 사이클 뒤(≈300s)는 여전히 오차 밖이라 걸러진다.
+CP_DUE_TOLERANCE_SECONDS = PROBE_INTERVAL_SECONDS // 2
+# 직전 CP 행 조회 범위(ix_probe_results_timestamp range). 이보다 오래됐으면 due + 사이클 카테고리로 재시작.
+_CP_HISTORY_MIN_LOOKBACK_SECONDS = 3600
 
 # Phase 3 Workload Preset — round-robin 카테고리.
 # 각 cycle마다 다음 카테고리로 회전 → use case별 latency/cost 분포가 시계열로 누적.
@@ -126,36 +141,114 @@ WORKLOAD_PRESETS: list[dict] = [
 ]
 
 
+def _preset_after(category_id: Optional[str]) -> Optional[dict]:
+    """category_id 다음 preset (round-robin). 모르는 id나 None이면 None."""
+    for i, p in enumerate(WORKLOAD_PRESETS):
+        if p["id"] == category_id:
+            return WORKLOAD_PRESETS[(i + 1) % len(WORKLOAD_PRESETS)]
+    return None
+
+
 def _next_preset() -> dict:
     """직전 ProbeRun의 카테고리 다음 preset을 round-robin으로 반환.
 
-    DB에서 가장 최근 auto run의 prompt(또는 첫 result의 category)를 봐서 다음 index 결정.
-    실패하면 첫 preset.
+    DB에서 가장 최근 auto 결과 행(CP 채널 제외)의 category를 봐서 다음 index 결정. 실패하면 첫 preset.
+    CP 채널(anthropic:*)은 v2.29.0부터 자기 회전을 따로 돌아 같은 run 안에서도 카테고리가 다를 수 있다 —
+    그 행을 읽으면 나머지 모델의 회전이 흔들리므로 제외한다.
     """
     try:
         db = SessionLocal()
         try:
-            from models import ProbeResult
-            # 직전 auto run의 첫 row의 category 조회
             row = (
                 db.query(ProbeResult.category)
                 .join(ProbeRun, ProbeRun.id == ProbeResult.run_id)
-                .filter(ProbeRun.is_auto == 1)
+                .filter(ProbeRun.is_auto == 1, ~ProbeResult.model_id.startswith(CP_MODEL_PREFIX))
                 .order_by(ProbeResult.id.desc())
                 .first()
             )
             last_id = row[0] if row else None
-            if last_id is None:
-                return WORKLOAD_PRESETS[0]
-            for i, p in enumerate(WORKLOAD_PRESETS):
-                if p["id"] == last_id:
-                    return WORKLOAD_PRESETS[(i + 1) % len(WORKLOAD_PRESETS)]
-            return WORKLOAD_PRESETS[0]
+            return _preset_after(last_id) or WORKLOAD_PRESETS[0]
         finally:
             db.close()
     except Exception:
         logger.exception("_next_preset failed - fallback to first preset")
         return WORKLOAD_PRESETS[0]
+
+
+def _as_utc(value: Optional[datetime]) -> Optional[datetime]:
+    """SQLite는 tz 없는 datetime을 돌려준다 — 저장 값은 UTC."""
+    if value is None:
+        return None
+    return value.replace(tzinfo=timezone.utc) if value.tzinfo is None else value.astimezone(timezone.utc)
+
+
+def _cp_history(run_id: int) -> tuple[datetime, dict[str, tuple[Optional[datetime], Optional[str]]]]:
+    """(이번 run 시작 시각, {CP model_id: (직전 CP 자동 프로브 run의 시작 시각, 그 행의 category)}).
+
+    run 상태와 무관하게 모든 자동 run의 행을 센다 — 실패한 run의 행도 실제 API 호출이었다.
+    범위는 timestamp 인덱스로 최근 max(1h, 3 × CP 주기)만 읽는다(CP 9채널 × 6행/h).
+    """
+    db = SessionLocal()
+    try:
+        started = db.query(ProbeRun.created_at).filter(ProbeRun.id == run_id).scalar()
+        now = _as_utc(started) or datetime.now(timezone.utc)
+        lookback = max(_CP_HISTORY_MIN_LOOKBACK_SECONDS, 3 * probe_cadence.ANTHROPIC_CP_PROBE_INTERVAL_S)
+        rows = (
+            db.query(ProbeResult.model_id, ProbeResult.category, ProbeRun.created_at)
+            .join(ProbeRun, ProbeRun.id == ProbeResult.run_id)
+            .filter(
+                ProbeRun.is_auto == 1,
+                ProbeResult.run_id != run_id,
+                ProbeResult.timestamp >= now - timedelta(seconds=lookback),
+                ProbeResult.model_id.startswith(CP_MODEL_PREFIX),
+            )
+            .order_by(ProbeResult.id.desc())
+            .all()
+        )
+        last: dict[str, tuple[Optional[datetime], Optional[str]]] = {}
+        for model_id, category, run_started in rows:
+            last.setdefault(model_id, (_as_utc(run_started), category))
+        return now, last
+    finally:
+        db.close()
+
+
+def _plan_cycle(run_id: int, preset: dict, models: dict[str, str]) -> list[tuple[str, str, dict]]:
+    """이번 사이클에 프로빙할 (model_id, model_name, preset) 목록 (v2.29.0).
+
+    CP 채널이 아닌 모델은 전부 사이클 preset. CP 채널은 직전 CP 자동 프로브 run이 시작된 지
+    (주기 − CP_DUE_TOLERANCE_SECONDS) 이상 지났거나 최근 기록이 없을 때만 프로빙하고, 그 채널의 직전
+    category 다음 preset을 쓴다(없으면 사이클 preset) — 10분 주기에서도 6개 카테고리를 모두 돈다
+    (카테고리당 약 60분). 이력 조회가 실패하면 CP도 사이클 preset으로 프로빙한다(모니터링 우선).
+    """
+    cp_ids = [model_id for model_id in models if is_cp_model(model_id)]
+    history: dict[str, tuple[Optional[datetime], Optional[str]]] = {}
+    now = datetime.now(timezone.utc)
+    if cp_ids:
+        try:
+            now, history = _cp_history(run_id)
+        except Exception:
+            logger.exception("AutoProber: CP cadence lookup failed - probing CP channels this cycle")
+    threshold = probe_cadence.ANTHROPIC_CP_PROBE_INTERVAL_S - CP_DUE_TOLERANCE_SECONDS
+    plan: list[tuple[str, str, dict]] = []
+    skipped: list[str] = []
+    for model_id, model_name in models.items():
+        if not is_cp_model(model_id):
+            plan.append((model_id, model_name, preset))
+            continue
+        last_started, last_category = history.get(model_id, (None, None))
+        if last_started is not None and (now - last_started).total_seconds() < threshold:
+            skipped.append(model_id)
+            continue
+        plan.append((model_id, model_name, _preset_after(last_category) or preset))
+    if cp_ids:
+        due = [(mid, p["id"]) for mid, _, p in plan if is_cp_model(mid)]
+        logger.info(
+            "AutoProber: Claude Platform on AWS %ds cadence - %d due %s, %d not due",
+            probe_cadence.ANTHROPIC_CP_PROBE_INTERVAL_S, len(due),
+            sorted({category for _, category in due}), len(skipped),
+        )
+    return plan
 
 
 # Legacy fallback (in-process trigger 호환). v2에서는 _next_preset이 우선.
@@ -279,9 +372,11 @@ class _ProbeSlot:
     포기와 워커 커밋은 lock 하나로 직렬화한다 — 워커 커밋이 먼저 끝났으면 사이클은 행을 쓰지 않는다.
     """
 
-    def __init__(self, model_id: str, model_name: str):
+    def __init__(self, model_id: str, model_name: str, preset: Optional[dict] = None):
         self.model_id = model_id
         self.model_name = model_name
+        # 이 모델의 워크로드 preset — CP 채널은 사이클 preset과 다를 수 있다 (v2.29.0).
+        self.preset = preset
         self.lock = Lock()
         self.started_at: Optional[float] = None
         self.committed = False
@@ -340,7 +435,12 @@ class _SlotSession:
 
 
 def _record_unfinished_probe(run_id: int, slot: _ProbeSlot, prompt: str, category: str, reason: str) -> bool:
-    """사이클이 포기한 모델의 오류 행 — _probe_single_model 오류 행과 같은 모양. 저장 실패면 False."""
+    """사이클이 포기한 모델의 오류 행 — _probe_single_model 오류 행과 같은 모양. 저장 실패면 False.
+
+    prompt/category는 슬롯의 preset(모델별)이 있으면 그것을 쓴다 — CP 채널의 행은 자기 카테고리로 남는다.
+    """
+    if slot.preset is not None:
+        prompt, category = slot.preset["prompt"], slot.preset["id"]
     started = slot.started_at
     db = SessionLocal()
     try:
@@ -418,6 +518,12 @@ def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     logger.info("AutoProber: starting probe cycle (preset=%s, max_tokens=%d)", cur_category, cur_max_tokens)
 
     event_queue: Queue = Queue()
+    try:
+        plan = _plan_cycle(run_id, preset, dict(AVAILABLE_MODELS))
+    except Exception:
+        auto_prober.current_cycle_running = False
+        _set_run_status(run_id, "failed")
+        raise
 
     # 각 probe는 자신의 DB 세션을 worker 안에서 생성하고 finally에서 즉시 닫는다.
     # 과거 버그(2026-06-09): 모델당 SessionLocal()을 submit 루프에서 미리 만들고 in-order
@@ -429,20 +535,21 @@ def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     def _probe_worker(slot: _ProbeSlot, client) -> None:
         if not slot.begin():
             return  # 시작 전에 사이클이 포기함 — 오류 행은 사이클이 이미 썼다
+        model_preset = slot.preset or preset  # 모델별 preset (CP 채널은 자기 회전, v2.29.0)
         thread_db = SessionLocal()
         try:
             _probe_single_model(
                 client,
                 slot.model_id,
                 slot.model_name,
-                cur_prompt,
+                model_preset["prompt"],
                 0.1,
-                cur_max_tokens,
+                model_preset["max_tokens"],
                 1,
                 event_queue,
                 run_id,
                 _SlotSession(thread_db, slot),
-                cur_category,  # category 전달
+                model_preset["id"],  # category 전달
             )
         finally:
             thread_db.close()
@@ -453,9 +560,9 @@ def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     slots: list[_ProbeSlot] = []
     try:
         pending: dict[Future, _ProbeSlot] = {}
-        for model_id, model_name in list(AVAILABLE_MODELS.items()):
+        for model_id, model_name, model_preset in plan:
             client = _get_bedrock_client(_get_region_for_model(model_id))
-            slot = _ProbeSlot(model_id, model_name)
+            slot = _ProbeSlot(model_id, model_name, model_preset)
             slots.append(slot)
             pending[executor.submit(_probe_worker, slot, client)] = slot
 

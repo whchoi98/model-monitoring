@@ -79,6 +79,8 @@ export interface Translations {
     unverified: string;
     cadence: (minutes: number) => string;
     categoryCadence: (minutes: number) => string;
+    channelCadence: (channel: string, minutes: number) => string;
+    categoryChannelCadence: (channel: string, minutes: number) => string;
     latestResults: string;
     catalog: string;
     catalogRequired: string;
@@ -254,6 +256,8 @@ export const ko: Translations = {
     health: { healthy: "정상", error: "오류", overloaded: "과부하", stale: "수집 지연", unknown: "미수집" },
     collection: "자동 수집", overdue: "수집 지연", failed: "수집 실패", unverified: "상태 확인 필요",
     cadence: (minutes) => `${minutes}분 주기`, categoryCadence: (minutes) => `선택한 워크로드는 약 ${minutes}분마다 수집됩니다.`,
+    channelCadence: (channel, minutes) => `${channel} ${minutes}분 주기`,
+    categoryChannelCadence: (channel, minutes) => `${channel} 채널은 약 ${minutes}분마다 수집됩니다.`,
     latestResults: "최신 모델 상태", catalog: "모델 목록", catalogRequired: "전체 채널 목록 확인 필요",
     unlistedChannels: (count) => `${count}개 채널의 정보를 확인하지 못했습니다. 모델 목록을 다시 불러오세요.`,
     recentFailures: "최근 실패 이력",
@@ -457,6 +461,8 @@ export const en: Translations = {
     health: { healthy: "Healthy", error: "Error", overloaded: "Overloaded", stale: "Stale", unknown: "Unmeasured" },
     collection: "Collection", overdue: "Collection overdue", failed: "Collection failed", unverified: "Status unverified",
     cadence: (minutes) => `Every ${minutes} min`, categoryCadence: (minutes) => `This workload is collected about every ${minutes} minutes.`,
+    channelCadence: (channel, minutes) => `${channel} every ${minutes} min`,
+    categoryChannelCadence: (channel, minutes) => `${channel} channels are collected about every ${minutes} minutes.`,
     latestResults: "latest model status", catalog: "model catalog", catalogRequired: "Full channel coverage is unknown",
     unlistedChannels: (count) => `${count} channels could not be identified. Retry loading the model catalog.`,
     recentFailures: "recent failures",

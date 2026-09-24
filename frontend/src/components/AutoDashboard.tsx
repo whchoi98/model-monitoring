@@ -14,7 +14,7 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { isExcludedModel, sortResults } from "@/lib/sortModels";
 import { defaultTrendSelection, parseTrendQuery } from "@/lib/trendSelection";
-import { buildMonitoringRows, filterMonitoringRows, getFreshness, type HealthFilter, type ModelSort } from "@/lib/monitoring";
+import { buildMonitoringRows, cadenceResolver, filterMonitoringRows, getFreshness, type HealthFilter, type ModelSort } from "@/lib/monitoring";
 import { formatAge, formatDateTime, parseTimestamp } from "@/lib/format";
 import ModelStatusGrid from "./ModelStatusGrid";
 import MonitoringOverview from "./MonitoringOverview";
@@ -26,6 +26,15 @@ import { DataEmpty, DataError, DataLoading } from "./DataState";
 const TREND_RANGE_HOURS = [1 / 12, 1 / 6, 0.25, 0.5, 1, 3, 6, 12, 24, 72, 120, 168];
 const HEALTH_FILTERS: HealthFilter[] = ["all", "healthy", "attention", "error", "stale"];
 const MODEL_SORTS: ModelSort[] = ["family", "attention", "ttft"];
+// /status channel_intervals keys (model_id prefix) → display name. Product names are not translated.
+const CHANNEL_LABELS: Record<string, string> = { anthropic: "Claude Platform on AWS" };
+
+/** Named channels whose cadence differs from the base one, for the cadence text (v2.29.0). */
+function channelCadenceNotes(overrides: Record<string, number> | undefined, baseSeconds: number): [string, number][] {
+  return Object.entries(overrides ?? {})
+    .filter(([key, seconds]) => CHANNEL_LABELS[key] && Number.isFinite(seconds) && seconds > 0 && seconds !== baseSeconds)
+    .map(([key, seconds]) => [CHANNEL_LABELS[key], seconds / 60]);
+}
 
 /** Next's history adapter copies its internal state and notifies useSearchParams. */
 function updateQuery(updates: Record<string, string | null>) {
@@ -76,10 +85,20 @@ export default function AutoDashboard() {
   const refreshing = status.refreshing || latest.refreshing || trend.refreshing || anomalies.refreshing;
   const interval = status.data?.interval_seconds ?? 300;
   const cadence = category ? status.data?.category_interval_seconds ?? interval * (workloads.data?.length || 6) : interval;
+  // Per-channel cadence (v2.29.0): Claude Platform on AWS is collected every 10 minutes (60 per workload).
+  // Serialized so a status refresh with the same values keeps the resolver (and the memoized charts) stable.
+  // /status가 아직 없거나 실패하면 CP 기본 주기(10분, 워크로드별 60분)를 가정한다 — 첫 렌더에서 CP 카드 9장이
+  // 5분 기준으로 '수집 지연' 판정되는 깜빡임을 막는다. /status가 오면 그 값이 우선한다.
+  const channelCadenceJson = JSON.stringify((category ? status.data?.channel_category_intervals : status.data?.channel_intervals)
+    ?? (category ? { anthropic: 3600 } : { anthropic: 600 }));
+  const channelCadence = useMemo(() => JSON.parse(channelCadenceJson) as Record<string, number>, [channelCadenceJson]);
+  const cadenceFor = useMemo(() => cadenceResolver(cadence, channelCadence), [cadence, channelCadence]);
+  const cycleNotes = channelCadenceNotes(status.data?.channel_intervals, interval);
+  const categoryNotes = channelCadenceNotes(status.data?.channel_category_intervals, cadence);
   const nowMinute = Math.floor(now / 60_000) * 60_000;
   const rows = useMemo(
-    () => buildMonitoringRows(catalog.data, latest.data ?? [], cadence, nowMinute),
-    [catalog.data, latest.data, cadence, nowMinute],
+    () => buildMonitoringRows(catalog.data, latest.data ?? [], cadenceFor, nowMinute),
+    [catalog.data, latest.data, cadenceFor, nowMinute],
   );
   const visibleRows = useMemo(() => filterMonitoringRows(rows, search, healthFilter, sort), [rows, search, healthFilter, sort]);
   const chartData = useMemo(() => (trend.data ?? []).filter((point) => !isExcludedModel(point.model_name)), [trend.data]);
@@ -169,6 +188,7 @@ export default function AutoDashboard() {
             <span className="font-semibold text-gray-300">{m.collection}</span>
             <span className={`whitespace-nowrap rounded-full border px-2.5 py-1 font-medium ${cycleState === "waiting" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : cycleState === "running" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-amber-500/30 bg-amber-500/10 text-amber-300"}`}>{cycleLabel}</span>
             <span className="text-gray-500">{m.cadence(interval / 60)}</span>
+            {cycleNotes.map(([label, minutes]) => <span key={label} className="text-gray-500">{m.channelCadence(label, minutes)}</span>)}
             <span className="text-gray-500" title={formatDateTime(lastRun, lang)}>{t.lastProbe}: <span className="text-gray-300">{formatAge(lastRun, lang, now)}</span></span>
             <span className="text-gray-500">{t.nextProbe}: <span className="tabular-nums text-gray-300">{nextLabel}</span></span>
           </div>
@@ -193,7 +213,11 @@ export default function AutoDashboard() {
               className={category === workload.id ? "ui-button-primary" : "ui-button"}>{lang === "en" ? workload.label_en : workload.label_ko}</button>
           ))}
         </div>
-        {category && <p className="mt-2 text-xs text-gray-500">{m.categoryCadence(cadence / 60)}</p>}
+        {category && (
+          <p className="mt-2 text-xs text-gray-500">
+            {[m.categoryCadence(cadence / 60), ...categoryNotes.map(([label, minutes]) => m.categoryChannelCadence(label, minutes))].join(" ")}
+          </p>
+        )}
       </section>
       <DataError error={workloads.error} resource={t.workloadLabel} onRetry={workloads.refresh} hasData={!!workloads.data} />
 
@@ -290,9 +314,9 @@ export default function AutoDashboard() {
         <DataError error={trend.error} resource={m.trends} onRetry={trend.refresh} hasData={trend.data !== null} />
         {trend.loading ? <DataLoading /> : trend.data !== null && chartData.length === 0 ? <DataEmpty title={m.noTrend} description={m.noTrendHint} /> : chartData.length > 0 && (
           <div className="space-y-4" aria-busy={trend.refreshing}>
-            <TrendChart data={chartData} metric="ttft_ms" title={t.ttftTrend} selectedModels={selectedModels} onToggleModel={toggleModel} cadenceSeconds={hours > 24 ? 3600 : cadence} />
-            <TrendChart data={chartData} metric="total_latency_ms" title={t.latencyTrend} selectedModels={selectedModels} onToggleModel={toggleModel} cadenceSeconds={hours > 24 ? 3600 : cadence} />
-            <TrendChart data={chartData} metric="tps" title={t.tpsTrend} selectedModels={selectedModels} onToggleModel={toggleModel} cadenceSeconds={hours > 24 ? 3600 : cadence} />
+            <TrendChart data={chartData} metric="ttft_ms" title={t.ttftTrend} selectedModels={selectedModels} onToggleModel={toggleModel} cadenceSeconds={hours > 24 ? 3600 : cadenceFor} />
+            <TrendChart data={chartData} metric="total_latency_ms" title={t.latencyTrend} selectedModels={selectedModels} onToggleModel={toggleModel} cadenceSeconds={hours > 24 ? 3600 : cadenceFor} />
+            <TrendChart data={chartData} metric="tps" title={t.tpsTrend} selectedModels={selectedModels} onToggleModel={toggleModel} cadenceSeconds={hours > 24 ? 3600 : cadenceFor} />
           </div>
         )}
       </section>

@@ -12,7 +12,7 @@
 
 ### 시스템 개요
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다. 대시보드 모델 카드의 TTFT·총 응답시간·TPS 값은 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박)/위험(장미) 등급을 표시합니다(v2.28.0, 프런트엔드 `lib/metricGrade.ts` 순수 함수 — 백엔드 변경 없음, ADR-029).
+Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로(Claude Platform on AWS 9채널은 10분 주기, v2.29.0) 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다. 대시보드 모델 카드의 TTFT·총 응답시간·TPS 값은 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박)/위험(장미) 등급을 표시합니다(v2.28.0, 프런트엔드 `lib/metricGrade.ts` 순수 함수 — 백엔드 변경 없음, ADR-029).
 
 ### 데이터 흐름 (Critical Path)
 
@@ -26,11 +26,11 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (대화 컨텍스트)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 모델 프로빙 → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 모델 프로빙 → RDS (CP 채널 anthropic:*는 두 사이클에 한 번, v2.29.0)
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
    ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 → RDS
-   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39행×5 surface×5모델(975셀) 실행-증거 스윕 → RDS
+   └─ cron(30 17 * * ? *) UTC → ECS RunTask "features" → Claude API Features 39행×5 surface×5모델(975셀) 실행-증거 스윕 → RDS (매일 17:30 UTC = 02:30 KST, v2.29.0)
 ```
 
 ### 컴포넌트 (Layer별)
@@ -71,11 +71,11 @@ EventBridge Scheduler
 #### 주기 잡 / Scheduling
 | 리소스 | 역할 |
 |--------|------|
-| EventBridge Scheduler `AutoProberSchedule` | rate(5 min) → AutoProber TaskDef |
+| EventBridge Scheduler `AutoProberSchedule` | rate(5 min) → AutoProber TaskDef (스케줄은 그대로 5분. Claude Platform on AWS 채널만 `_plan_cycle`이 10분 주기로 고르고 카테고리도 따로 회전, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`, v2.29.0) |
 | EventBridge Scheduler `InsightsSchedule` | rate(5 min) → Insights TaskDef |
 | EventBridge Scheduler `ParityRunSchedule` | rate(12 hours) → ParityRun TaskDef (v2.12.0에서 일 1회→12h) |
 | EventBridge Scheduler `GptBenchSchedule` | rate(15 min) → GptBench TaskDef (v2.18.0) |
-| EventBridge Scheduler `FeaturesVerifySchedule` | rate(24 hours) → FeaturesVerify TaskDef (v2.23.0) |
+| EventBridge Scheduler `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC → FeaturesVerify TaskDef, 매일 17:30 UTC(02:30 KST) 1회 (v2.23.0, v2.29.0에서 rate(24 hours) → 고정 cron) |
 | AutoProber TaskDef | `python -m auto_prober_runner --once` |
 | Insights TaskDef | `python -m insights_runner --window 6h` |
 | ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
@@ -98,6 +98,8 @@ EventBridge Scheduler
 | CloudWatch Dashboard `BedrockMonitor-v2` | 5 widgets + alarm status grid |
 | SNS Topic `bedrock-monitor-alarms` | 알람 fan-out |
 | RUM (aws-rum-pipeline, v2.16.5) | 프론트 실사용자 모니터링 — 페이지뷰·체류시간·Web Vitals·JS 에러, `NEXT_PUBLIC_RUM_*` 빌드 타임 주입 |
+
+v2.29.0 기준: AutoProber 스케줄은 그대로 `rate(5 minutes)`이고, `_plan_cycle`이 Claude Platform on AWS 채널(`anthropic:*`, Anthropic 1P API)만 10분마다(`ANTHROPIC_CP_PROBE_INTERVAL_S=600`, run 시작 시각 기준) 자체 워크로드 회전으로 프로빙한다. 2026-09-23 월간 사용량 상한 429 장애 이후의 사용자 결정이며, 그 429는 더 이상 재시도하지 않는다. `/api/auto-probe/latest`는 모델별로 자기 주기 범위 안의 최신 행을 돌려주고, `/status`의 `channel_intervals`로 대시보드가 채널별 신선도를 판정한다. FeaturesVerify는 매일 17:30 UTC 고정 1회(`cron(30 17 * * ? *)`, Etc/UTC)다.
 
 ### CDK 스택 구성
 
@@ -156,7 +158,7 @@ EventBridge Scheduler
 
 ### System Overview
 
-Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 55-channel active catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes, runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
+Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 55-channel active catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes (the 9 Claude Platform on AWS channels every 10 minutes, v2.29.0), runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
 
 ### Critical Path
 
@@ -170,11 +172,11 @@ Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, htt
                     └─ AgentCore Memory (chat context)
 
 EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 models → RDS
+   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 models → RDS (CP channels anthropic:* every other cycle, v2.29.0)
    ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
    ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
    ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 18-channel (11 Mantle in-region + 7 CRIS) TTFB/TTFT bench → RDS
-   └─ rate(24 hours)     → ECS RunTask "features"   → Claude API Features 39-row × 5 surfaces × 5 models (975 cells) evidence sweep → RDS
+   └─ cron(30 17 * * ? *) UTC → ECS RunTask "features" → Claude API Features 39-row × 5 surfaces × 5 models (975 cells) evidence sweep → RDS (daily 17:30 UTC = 02:30 KST, v2.29.0)
 ```
 
 ### Components by Layer
@@ -182,6 +184,8 @@ EventBridge Scheduler
 (See the Korean section above — the structure is identical. Layer tables list Edge, Compute, Storage, Agent, Scheduling, Network, Observability resources.)
 
 As of v2.28.0: the GptBench task measures 18 channels (GPT 5.4/5.5/5.6 Terra, GPT-6 Astra — Global, US CRIS, Mantle us-west-2 — and GPT-6 Sol/Luna — Global, US CRIS, Mantle us-east-1) with a per-call wall-clock watchdog (`GPT_BENCH_CALL_TIMEOUT`, default 90 s) and `max_retries=0`; the FeaturesVerify task runs 5 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975 cells = 813 probed + 162 pre-decided, about 9 min). GPT-6 Sol/Luna costs are priced from the Bedrock agreement-offer rate card (no longer "-"), and GPT-6 Astra Mantle us-east-1/us-east-2 are currently unsupported and excluded by the user's 2026-09-23 decision. Dashboard model cards grade their metric values per workload category (ADR-029).
+
+As of v2.29.0: the AutoProber schedule stays `rate(5 minutes)`, but `_plan_cycle` probes the Claude Platform on AWS channels (`anthropic:*`, the Anthropic first-party API) only every 10 minutes (`ANTHROPIC_CP_PROBE_INTERVAL_S=600`, judged from run start times) with their own workload rotation, after the 2026-09-23 monthly usage-cap 429 incident; that 429 is no longer retried. `/api/auto-probe/latest` returns each model's latest row within its own cadence window, and `/status` exposes `channel_intervals` for the dashboard. FeaturesVerify runs once a day at a fixed 17:30 UTC (`cron(30 17 * * ? *)`, Etc/UTC).
 
 ### CDK Stack Decomposition
 

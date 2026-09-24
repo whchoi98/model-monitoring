@@ -14,6 +14,29 @@ export interface MonitoringRow {
   health: ModelHealth;
 }
 
+/** Collection cadence (seconds) of one channel, by model_id. */
+export type CadenceFor = (modelId: string) => number;
+
+/** The /status channel_intervals key of a model: its model_id prefix before the first ":". */
+export function channelKey(modelId: string): string | null {
+  const index = modelId.indexOf(":");
+  return index > 0 ? modelId.slice(0, index) : null;
+}
+
+/**
+ * Per-channel cadence from /api/auto-probe/status (v2.29.0). Claude Platform on AWS ("anthropic:<id>") is
+ * collected every 10 minutes while every other channel keeps the base 5-minute cadence; channels without an
+ * override (or an invalid one) use `baseSeconds`.
+ */
+export function cadenceResolver(baseSeconds: number, overrides?: Record<string, number> | null): CadenceFor {
+  const map = new Map(Object.entries(overrides ?? {}).filter(([, seconds]) => Number.isFinite(seconds) && seconds > 0));
+  if (map.size === 0) return () => baseSeconds;
+  return (modelId) => {
+    const key = channelKey(modelId);
+    return (key !== null ? map.get(key) : undefined) ?? baseSeconds;
+  };
+}
+
 export function getFreshness(
   timestamp: string | null | undefined,
   cadenceSeconds = 300,
@@ -30,9 +53,10 @@ export function getFreshness(
 export function buildMonitoringRows(
   catalog: ModelInfo[] | null,
   results: ProbeResult[],
-  cadenceSeconds = 300,
+  cadenceSeconds: number | CadenceFor = 300,
   now = Date.now(),
 ): MonitoringRow[] {
+  const cadenceFor: CadenceFor = typeof cadenceSeconds === "function" ? cadenceSeconds : () => cadenceSeconds;
   const latest = new Map<string, ProbeResult>();
   for (const result of results) {
     if (isExcludedModel(result.model_name)) continue;
@@ -46,7 +70,7 @@ export function buildMonitoringRows(
     ...model, model_name: model.name,
   }))).map(({ id, name }) => {
     const result = latest.get(id) ?? null;
-    const freshness = getFreshness(result?.timestamp, cadenceSeconds, now);
+    const freshness = getFreshness(result?.timestamp, cadenceFor(id), now);
     const health: ModelHealth = result?.status === "error" ? "error"
       : result?.status === "overloaded" ? "overloaded"
         : freshness === "stale" ? "stale"

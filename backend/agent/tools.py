@@ -9,7 +9,6 @@ from __future__ import annotations
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
 from models import ProbeResult, ProbeRun
@@ -19,21 +18,15 @@ from visibility import visible_only
 def get_latest_results(db: Session, model_id: Optional[str] = None) -> Dict[str, Any]:
     """모델별 최신 자동 프로브 결과 1건씩 반환.
 
-    model_id 지정 시 해당 모델만, 미지정 시 가장 최근 완료된 auto run의 전 모델.
+    model_id 지정 시 해당 모델만. run_id/run_created_at은 가장 최근 완료된 auto run이다. v2.29.0부터
+    Claude Platform on AWS 채널은 10분 주기라 그 run에 없을 수 있어, 모델마다 최근 범위 안의 최신 행을
+    돌려준다(latest_results.latest_auto_rows) — 행별 timestamp로 측정 시각을 구분한다.
     """
-    latest_run = (
-        db.query(ProbeRun)
-        .filter(ProbeRun.is_auto == 1, ProbeRun.status == "completed")
-        .order_by(desc(ProbeRun.created_at))
-        .first()
-    )
-    if not latest_run:
-        return {"run_id": None, "results": []}
+    from latest_results import latest_auto_rows
 
-    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(ProbeResult.run_id == latest_run.id)
-    if model_id:
-        q = q.filter(ProbeResult.model_id == model_id)
-    rows = q.order_by(ProbeResult.model_name).all()
+    latest_run, rows = latest_auto_rows(db, model_id=model_id)
+    if latest_run is None:
+        return {"run_id": None, "results": []}
 
     return {
         "run_id": latest_run.id,
@@ -42,6 +35,7 @@ def get_latest_results(db: Session, model_id: Optional[str] = None) -> Dict[str,
             {
                 "model_id": r.model_id,
                 "model_name": r.model_name,
+                "timestamp": r.timestamp.isoformat() if r.timestamp else None,
                 "status": r.status,
                 "ttft_ms": r.ttft_ms,
                 "total_latency_ms": r.total_latency_ms,

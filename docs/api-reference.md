@@ -61,6 +61,8 @@ include a UTC offset.
   "expected_model_count": 55,
   "category_count": 6,
   "category_interval_seconds": 1800,
+  "channel_intervals": { "anthropic": 600 },
+  "channel_category_intervals": { "anthropic": 3600 },
   "overdue_after_seconds": 600,
   "running_timeout_seconds": 900
 }
@@ -72,10 +74,27 @@ it does not assert that the schedule is enabled. A reservation older than
 15 minutes no longer counts as active. `last_completed_time` is the latest
 visible result timestamp in the last completed run.
 
+`channel_intervals` / `channel_category_intervals` (v2.29.0) give the collection
+cadence of channels that do not follow `interval_seconds` /
+`category_interval_seconds`. Keys are the `model_id` prefix before the first
+`:` — `anthropic` is Claude Platform on AWS (`anthropic:<id>`, labels
+`Anthropic Claude … (US)`), probed every 600 s (every other 5-minute cycle,
+`ANTHROPIC_CP_PROBE_INTERVAL_S`) with its own workload rotation, so each
+workload comes round about every 3600 s. A model whose prefix is absent uses the
+base fields. The value is the backend process's configuration (same default as
+the AutoProber task); it is not read back from the Scheduler.
+
 ### GET /api/auto-probe/latest?category=code-gen
-Returns all visible results from the most recent completed automatic run.
-The optional category selects the last completed run for that workload. A
-catalog model absent from the result is unmeasured, not a successful channel.
+Returns each model's latest visible result from completed automatic runs
+(v2.29.0: per model, not the rows of one run). The window is anchored at the
+start of the most recent completed automatic run and sized by the model's own
+cadence: 3 collection intervals without a category (15 min for 5-minute
+channels, 30 min for Claude Platform on AWS, which skips every other cycle),
+and 2 workload rotations with a category (60 min and 120 min). Rows of running
+or failed runs are not published. The response keeps the `ProbeResultResponse`
+array shape, sorted by `model_name`; rows can carry different `run_id` and
+`category` values, so use `timestamp` for freshness. A catalog model absent
+from the result is unmeasured, not a successful channel.
 
 ### GET /api/auto-probe/trend?hours=24
 Returns automatic-run samples by result timestamp. `hours` is a positive number

@@ -2,6 +2,53 @@
 
 증상별 확인과 조치. 배포 절차는 [deploy.md](deploy.md), 되돌리기는 [rollback.md](rollback.md)를 본다.
 
+## Claude Platform on AWS 채널 전부 429 — 월간 사용량 상한 (2026-09-23, v2.29.0에서 재시도 제거)
+
+**배경**: 2026-09-23 19:52 UTC부터 CP on AWS 호출이 전부 429로 거부됐다. 조직이 API 등급(tier)에 따라 정해진 월간
+사용량 상한을 넘겼기 때문이며, 상한은 2026-10-01 00:00 UTC에 풀린다. v2.28.2까지는 이 429를 일시 rate limit으로 보고
+prober 루프(4회 시도)와 anthropic SDK(시도마다 2회 더)가 재시도해 프로브 하나가 최대 12요청이 됐고, `/ecs/autoprober`에
+시간당 1,600~1,700줄이 쌓였다. v2.29.0부터는 재시도 없이 프로브당 요청 1회, 오류 행 1개로 끝나고, CP 채널은 10분 주기라
+호출 수도 절반이다.
+
+### 증상
+
+- 대시보드 CP 카드 9장(`Anthropic Claude … (US)`)이 모두 "오류", 이상 징후 박스에 CP 채널이 나란히 뜬다. Bedrock Claude
+  (`Bedrock Claude …`)와 OpenAI 채널은 정상이다.
+- 오류 행 `error_message`(서명):
+  `Unexpected: Error code: 429 - {'type': 'error', 'error': {'type': 'rate_limit_error', 'message': "You have reached your API usage limits: your organization has crossed its monthly API usage threshold, set based on your organization's API tier. You will regain access on 2026-10-01 at 00:00 UTC.", 'details': {'error_code': 'enforced_spend_limit_reached'}}, …}`
+- v2.29.0 이후 로그: CP 프로브마다 `Probe error for anthropic:<id> (iter 1): usage cap reached, not retried: …` 경고 한 줄.
+  v2.28.2 이하 이미지는 프로브마다 `Retryable error for anthropic:<id> (attempt 1/4 … 3/4)` 세 줄 + `Probe error` traceback.
+- 일시 rate limit(메시지에 "rate limit", 예: "per-minute rate limit")은 이 항목이 아니다 — 계속 2/4/8초 backoff로 재시도된다.
+
+### 확인
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 상한 429 서명과 재시도 흔적 (최근 1시간)
+aws logs filter-log-events --region $REGION --log-group-name /ecs/autoprober \
+  --start-time $(( ($(date +%s) - 3600) * 1000 )) --filter-pattern '"usage cap reached"' --query 'length(events)'
+aws logs filter-log-events --region $REGION --log-group-name /ecs/autoprober \
+  --start-time $(( ($(date +%s) - 3600) * 1000 )) --filter-pattern '"Retryable error for anthropic:"' --query 'length(events)'
+# 기댓값(v2.29.0): 첫 번째 ≈ 54(9채널 × 6회/시간), 두 번째 0
+
+# 2. 대시보드에 보이는 마지막 오류 — "regain access on <날짜>"가 상한 해제 시각
+curl -s "https://$CF_DOMAIN/api/auto-probe/anomalies?hours=1" \
+  | jq '.models[] | select(.model_name|startswith("Anthropic")) | {model_name, failures, total, last_error}'
+```
+
+### 조치
+
+- 모니터 쪽에서 할 일은 없다. 상한 해제 시각(메시지의 "regain access on …", 이번에는 2026-10-01 00:00 UTC)까지 CP 카드는
+  오류로 남는 것이 정상이며, 해제 뒤 첫 CP 사이클(최대 10분)에 자동으로 정상으로 돌아온다.
+- 더 빨리 복구하려면 Anthropic Console에서 조직의 API 등급 또는 사용량 한도를 올린다(조직 관리자 권한). 키 교체나 재배포는
+  필요 없다.
+- CP 채널을 끄지 않는다 — 오류 행이 상한 기간을 기록하는 증거이고, 10분 주기에서는 호출이 시간당 54회뿐이다. 주기를 더 늘려야
+  하면 AutoProber task env `ANTHROPIC_CP_PROBE_INTERVAL_S`(초, 5분 단위로 반올림)를 CDK에서 바꾸고 backend 서비스에도 같은 값을
+  넣는다(`/api/auto-probe/status` `channel_intervals` 표시용).
+- 로그에 `usage cap reached` 대신 `Retryable error for anthropic:`가 계속 보이면 상한 메시지 문구가 바뀐 것이다 —
+  `backend/prober.py` `_USAGE_CAP_MARKERS`에 새 문구를 추가한다.
+
 ## 대시보드 동결 / "skipping overlapping cycle" (2026-09-23 장애, v2.28.2에서 수정)
 
 **배경**: 모델 하나의 스트림이 200 뒤 멈추거나 드문드문 흐르면(2026-09-23 Mantle us-east-1 GPT-5.6 Sol)

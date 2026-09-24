@@ -10,9 +10,11 @@ from sqlalchemy import desc, func
 from sqlalchemy.orm import Session
 
 import auto_prober as prober_service
+import probe_cadence
 from auth import get_current_user
 from auto_prober import auto_prober
 from database import get_db
+from latest_results import latest_auto_rows
 from models import ProbeRun, ProbeResult
 from visibility import hidden_patterns, visible_only
 from schemas import ProbeResultResponse
@@ -139,6 +141,9 @@ def get_status(db: Session = Depends(get_db)):
         for name in prober_service.AVAILABLE_MODELS.values()
     )
     category_count = len(prober_service.WORKLOAD_PRESETS)
+    # 채널별 주기 (v2.29.0) — 키는 model_id의 첫 ':' 앞 접두("anthropic" = Claude Platform on AWS).
+    # 여기 없는 채널은 interval_seconds / category_interval_seconds를 따른다.
+    channel_intervals = probe_cadence.channel_intervals()
     return {
         "cycle_state": state,
         "is_running": state in {"running", "completed"},
@@ -153,12 +158,16 @@ def get_status(db: Session = Depends(get_db)):
         "expected_model_count": expected_models,
         "category_count": category_count,
         "category_interval_seconds": interval * category_count,
+        "channel_intervals": channel_intervals,
+        "channel_category_intervals": {
+            channel: seconds * category_count for channel, seconds in channel_intervals.items()
+        },
         "overdue_after_seconds": prober_service.OVERDUE_AFTER_SECONDS,
         "running_timeout_seconds": prober_service.RUNNING_TIMEOUT_SECONDS,
     }
 
 
-# CloudFront 전용 단기 캐시 (max-age=0 → 브라우저 캐시 없음). 데이터는 5분 주기 갱신이므로
+# CloudFront 전용 단기 캐시 (max-age=0 → 브라우저 캐시 없음). 데이터는 5분 주기 갱신이므로(CP 채널 10분)
 # s-maxage=30으로 다중 사용자·30초 자동새로고침의 중복 DB 조회를 edge에서 흡수.
 # CloudFront가 이 헤더를 존중하려면 edge-stack의 /api/auto-probe/* behavior 필요.
 _CACHE_CONTROL = "public, max-age=0, s-maxage=30"
@@ -170,53 +179,18 @@ def get_latest(
     category: str | None = Query(default=None),
     db: Session = Depends(get_db),
 ):
-    """Return the latest auto-probe results.
+    """Return each model's latest auto-probe result (v2.29.0: per model, not per run).
 
-    category 지정 시: 그 카테고리의 가장 최근 cycle의 결과만 반환.
-                     (각 모델별로 가장 최근 1개 row → 카테고리 라운드로빈 후에도 카드 표시 안정).
-    category 미지정: 가장 최근 auto run의 모든 결과.
+    category 미지정: 모델별로 자기 주기 3회 범위 안의 최신 행 — 기본 채널은 최신 완료 run의 행이고,
+                     10분 주기 CP 채널은 CP를 건너뛴 사이클에도 직전 run의 행이 남는다.
+    category 지정: 그 카테고리의 모델별 최신 행 — 카테고리 회전 2바퀴 범위(기본 60분, CP 120분).
+    기준 시각은 최신 완료 자동 run의 시작 시각 (latest_results 모듈 docstring).
     """
     response.headers["Cache-Control"] = _CACHE_CONTROL
-    if category:
-        # 카테고리별 가장 최근 cycle의 결과들
-        latest_run = (
-            db.query(ProbeRun)
-            .join(ProbeResult, ProbeResult.run_id == ProbeRun.id)
-            .filter(
-                ProbeRun.is_auto == 1,
-                ProbeRun.status == "completed",
-                ProbeResult.category == category,
-            )
-            .order_by(desc(ProbeRun.created_at))
-            .first()
-        )
-        if not latest_run:
-            return []
-        results = (
-            visible_only(db.query(ProbeResult), ProbeResult.model_name)
-            .filter(ProbeResult.run_id == latest_run.id)
-            .order_by(ProbeResult.model_name)
-            .all()
-        )
-        return [_result_response(r) for r in results]
-
-    # category 미지정 — 가장 최근 auto run의 모든 결과
-    latest_run = (
-        db.query(ProbeRun)
-        .filter(ProbeRun.is_auto == 1, ProbeRun.status == "completed")
-        .order_by(desc(ProbeRun.created_at))
-        .first()
+    _, rows = latest_auto_rows(
+        db, category=category or None, category_count=len(prober_service.WORKLOAD_PRESETS),
     )
-    if not latest_run:
-        return []
-
-    results = (
-        visible_only(db.query(ProbeResult), ProbeResult.model_name)
-        .filter(ProbeResult.run_id == latest_run.id)
-        .order_by(ProbeResult.model_name)
-        .all()
-    )
-    return [_result_response(r) for r in results]
+    return [_result_response(r) for r in rows]
 
 
 @router.get("/trend")

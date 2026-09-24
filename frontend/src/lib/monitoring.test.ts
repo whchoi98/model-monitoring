@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { buildMonitoringRows, filterMonitoringRows, getFreshness, summarizeMonitoring } from "./monitoring";
+import { buildMonitoringRows, cadenceResolver, channelKey, filterMonitoringRows, getFreshness, summarizeMonitoring } from "./monitoring";
 import type { ProbeResult } from "./types";
 
 const NOW = Date.parse("2026-09-22T12:00:00Z");
@@ -104,5 +104,70 @@ describe("monitoring coverage", () => {
     const filtered = filterMonitoringRows(rows, "", "all", "attention");
     expect(filtered[0].health).toBe("error");
     expect(filtered.at(-1)?.health).toBe("healthy");
+  });
+});
+
+describe("per-channel cadence (v2.29.0)", () => {
+  const cpId = "anthropic:claude-sonnet-5";
+  const bedrockId = "global.anthropic.claude-sonnet-5";
+  const catalog = [
+    { id: cpId, name: "Anthropic Claude Sonnet 5 (US)" },
+    { id: bedrockId, name: "Bedrock Claude Sonnet 5 (Global)" },
+    { id: "us.anthropic.claude-haiku-4-5-20251001-v1:0", name: "Bedrock Claude Haiku 4.5 (US)" },
+    { id: "openai:us-east-1:openai.gpt-5.4", name: "OpenAI GPT 5.4 (us-east-1)" },
+  ];
+  const row = (model: { id: string; name: string }, timestamp: string): ProbeResult => ({
+    model_id: model.id, model_name: model.name, timestamp, status: "success", ttft_ms: 500, total_latency_ms: 1800,
+    server_latency_ms: null, input_tokens: 20, output_tokens: 80, tps: 60, iteration: 1,
+  });
+
+  test("the resolver keys channels by the model_id prefix and falls back to the base cadence", () => {
+    const cadence = cadenceResolver(300, { anthropic: 600 });
+    expect(cadence(cpId)).toBe(600);
+    expect(cadence(bedrockId)).toBe(300);
+    expect(cadence("us.anthropic.claude-haiku-4-5-20251001-v1:0")).toBe(300); // ":0" suffix is not a channel key
+    expect(cadence("openai:us-east-1:openai.gpt-5.4")).toBe(300);
+    expect(channelKey("anthropic:claude-opus-5")).toBe("anthropic");
+    expect(channelKey("global.anthropic.claude-opus-5")).toBeNull();
+  });
+
+  test("a missing or invalid status field keeps every channel on the base cadence", () => {
+    for (const overrides of [undefined, null, {}, { anthropic: 0 }, { anthropic: Number.NaN }, { anthropic: -600 }]) {
+      expect(cadenceResolver(300, overrides as Record<string, number> | undefined)(cpId)).toBe(300);
+    }
+  });
+
+  test("a Claude Platform card stays fresh through the cycle that skips it, others keep the 5-minute rule", () => {
+    const cadence = cadenceResolver(300, { anthropic: 600 });
+    // 12 minutes old: CP is inside 600 s + 300 s grace; a 5-minute channel is past 300 s + 300 s.
+    const rows = buildMonitoringRows(catalog.slice(0, 2), [
+      row(catalog[0], "2026-09-22T11:48:00Z"), row(catalog[1], "2026-09-22T11:48:00Z"),
+    ], cadence, NOW);
+    const byId = Object.fromEntries(rows.map((r) => [r.model.id, [r.freshness, r.health]]));
+    expect(byId[cpId]).toEqual(["fresh", "healthy"]);
+    expect(byId[bedrockId]).toEqual(["stale", "stale"]);
+  });
+
+  test("a Claude Platform card still goes stale after its own cadence plus grace", () => {
+    const cadence = cadenceResolver(300, { anthropic: 600 });
+    const [cp] = buildMonitoringRows([catalog[0]], [row(catalog[0], "2026-09-22T11:44:59Z")], cadence, NOW);
+    expect([cp.freshness, cp.health]).toEqual(["stale", "stale"]);
+    const [justFresh] = buildMonitoringRows([catalog[0]], [row(catalog[0], "2026-09-22T11:45:00Z")], cadence, NOW);
+    expect(justFresh.freshness).toBe("fresh");
+  });
+
+  test("workload view uses the per-channel category cadence (CP 60 min, others 30 min)", () => {
+    const cadence = cadenceResolver(1800, { anthropic: 3600 });
+    const rows = buildMonitoringRows(catalog.slice(0, 2), [
+      row(catalog[0], "2026-09-22T11:00:00Z"), row(catalog[1], "2026-09-22T11:00:00Z"),
+    ], cadence, NOW);
+    expect(rows.map((r) => r.freshness)).toEqual(["fresh", "stale"]);
+  });
+
+  test("a numeric cadence still applies to every channel", () => {
+    const rows = buildMonitoringRows(catalog.slice(0, 2), [
+      row(catalog[0], "2026-09-22T11:48:00Z"), row(catalog[1], "2026-09-22T11:48:00Z"),
+    ], 300, NOW);
+    expect(rows.map((r) => r.freshness)).toEqual(["stale", "stale"]);
   });
 });
