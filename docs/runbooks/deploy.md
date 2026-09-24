@@ -73,11 +73,11 @@ aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
 # 스케줄 태스크 5개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
-# AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once
+# AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once (CP 채널은 10분, env ANTHROPIC_CP_PROBE_INTERVAL_S — v2.29.0)
 # Insights:       family BedrockMonitorSchedulerInsightsTaskDef*,       schedule rate(5 minutes),  CLI insights_runner --window 6h
 # ParityRun:      family BedrockMonitorSchedulerParityRunTaskDef*,      schedule rate(12 hours),   CLI parity_runner --once (v2.11.0)
 # GptBench:       family BedrockMonitorSchedulerGptBenchTaskDef*,       schedule rate(15 minutes), CLI gptbench_runner --once (v2.18.0)
-# FeaturesVerify: family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule rate(24 hours),   CLI features_runner --once (v2.23.0)
+# FeaturesVerify: family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule cron(30 17 * * ? *) Etc/UTC, CLI features_runner --once (v2.23.0, 고정 cron v2.29.0)
 # 정확한 family 이름: aws ecs list-task-definition-families --family-prefix BedrockMonitorScheduler --status ACTIVE --region $REGION
 aws ecs describe-task-definition --task-definition BedrockMonitorSchedulerAutoProberTaskDef* \
   --region $REGION > /tmp/td-ap.json
@@ -274,6 +274,45 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.ca
 **비용 화면**: `/cost`에서 GPT-6 Sol/Luna 6채널에 금액이 나오는지(위 §5 주석) 확인.
 
 **운영 후속 (코드 없음)**: 패리티 구 라벨 확인은 릴리스 12시간 뒤(다음 패리티 런 이후)로 예약돼 있다.
+
+### 5-2. v2.29.0 배포 경로와 확인 (CP 10분 주기, FeaturesVerify 고정 cron)
+
+**배포 경로**: CDK 변경이 있다(FeaturesVerify 스케줄 `rate(24 hours)` → `cron(30 17 * * ? *)` Etc/UTC, AutoProber task def
+env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`). 이미지-only 경로(§2-1, §6) 금지 — env가 복사되지 않는다(코드 기본값도 600이라
+동작은 같지만 설정이 보이지 않는다). **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를
+배포한다(§3 경고). IAM 변경 없음, DB 마이그레이션 없음.
+
+```bash
+REGION=ap-northeast-2
+# 1. FeaturesVerify 스케줄 — cron + Etc/UTC, rate(1 day)가 남아 있지 않아야 한다
+N=$(aws scheduler list-schedules --region $REGION --query 'Schedules[].Name' --output text | tr '\t' '\n' | grep FeaturesVerify)
+aws scheduler get-schedule --name "$N" --region $REGION --query '{e:ScheduleExpression,tz:ScheduleExpressionTimezone,d:Description}'
+# 기댓값: {"e": "cron(30 17 * * ? *)", "tz": "Etc/UTC", "d": "… daily at 17:30 UTC"}
+
+# 2. AutoProber task def env
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerAutoProberTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+aws ecs describe-task-definition --task-definition "$FAM" --region $REGION \
+  --query 'taskDefinition.containerDefinitions[0].environment[?name==`ANTHROPIC_CP_PROBE_INTERVAL_S`]'
+
+# 3. CP 채널이 두 사이클에 한 번만 프로빙되는지 — 사이클마다 한 줄, "9 due"와 "0 due … 9 not due"가 번갈아 나온다
+aws logs tail /ecs/autoprober --since 30m --region $REGION | grep "Claude Platform on AWS 600s cadence"
+# 예: … 600s cadence - 9 due ['code-gen'], 0 not due   /   … 600s cadence - 0 due [], 9 not due
+
+# 4. CP를 건너뛴 사이클에도 /latest에 CP 9행이 남는다(직전 run의 행, run_id가 다름)
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id|startswith("anthropic:")) | {model_name, run_id, category, timestamp}]'
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, channel_intervals, channel_category_intervals}'
+# 기댓값: channel_intervals {"anthropic": 600}, channel_category_intervals {"anthropic": 3600}
+```
+
+- 대시보드 수집 상태 줄에 "5분 주기"와 "Claude Platform on AWS 10분 주기"가 함께 보인다. CP 카드는 10분 + 5분 유예
+  안에서는 "수집 지연"으로 바뀌지 않는다. 추세 차트의 CP 선은 10분 간격 점을 끊김 없이 잇는다.
+- CP 카테고리는 채널별로 따로 돈다 — 같은 run 안에서 CP 행의 `category`가 다른 모델과 다른 것이 정상이다. 워크로드 필터에서
+  CP 채널은 약 60분마다 갱신된다(다른 채널은 30분).
+- **2026-10-01 00:00 UTC 전까지 CP 행은 전부 오류가 정상이다**(조직 월간 사용량 상한 429 — `troubleshooting.md` 참고).
+  확인할 것은 재시도가 없어졌는지다: `/ecs/autoprober`에 CP 프로브마다 `usage cap reached, not retried` 경고 한 줄,
+  `Retryable error for anthropic:` 0건. 시간당 CP 오류 행은 9채널 × 6회 = 54개 안팎이어야 한다(이전 108개).
+- FeaturesVerify 첫 스케줄 런은 배포 뒤 첫 17:30 UTC다. 그 전에 확인하려면 §5-1의 수동 1회 절차를 쓴다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 

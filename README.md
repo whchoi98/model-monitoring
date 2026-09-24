@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.28.2-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.29.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -27,11 +27,11 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 ## Features
 
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
-- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 55 monitored channels.
+- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 55 monitored channels. The 9 Claude Platform on AWS channels are probed every 10 minutes with their own rotation of the same six categories (v2.29.0).
 - **Ten analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (18-channel TTFB/TTFT bench over Bedrock Mantle in-region and cross-region profiles — GPT 5.4/5.5/5.6 Terra and GPT-6 Astra/Sol/Luna, 15-min cycles), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
 - **Graded model-card metrics** — on the dashboard, each card's TTFT, total latency and TPS value turns blue (normal), amber ▲ (warning) or rose ◆ (critical) against per-workload-category thresholds derived from 48 h of production p90/p99 (TPS is graded only on the low side); a legend expands into the full threshold table, and values carry a `data-grade` attribute and screen-reader descriptions (v2.28.0, ADR-029).
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 19 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
-- **Daily Claude API Features sweep** — a scheduled Fargate task runs the 39-row catalog (= 33 documented features + 4 core Messages + Models API 1 + strict_tool_use split 1) against Claude Platform on AWS, Bedrock Mantle `/anthropic`, and Bedrock runtime (Messages API + InvokeModel + Converse) for 5 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975 cells per run, v2.28.0), surfacing a documentation-drift banner when observed behavior disagrees with the documented availability.
+- **Daily Claude API Features sweep** — a scheduled Fargate task (daily at 17:30 UTC, v2.29.0) runs the 39-row catalog (= 33 documented features + 4 core Messages + Models API 1 + strict_tool_use split 1) against Claude Platform on AWS, Bedrock Mantle `/anthropic`, and Bedrock runtime (Messages API + InvokeModel + Converse) for 5 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975 cells per run, v2.28.0), surfacing a documentation-drift banner when observed behavior disagrees with the documented availability.
 - **Multi-channel comparison** — Same model family invoked through Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), and OpenAI GPT via Bedrock Mantle (Path 4) in parallel for true apples-to-apples evaluation.
 - **AI chatbot with tools** — Claude Sonnet 4.6 chatbot answers natural-language questions over the time-series store using four custom Bedrock tools; dynamic follow-up suggestions generated per turn.
 - **Mobile-responsive UI** — one shared header with a hamburger menu on narrow screens; the same URLs adapt purely by viewport width (v2.16.0).
@@ -261,11 +261,11 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일, Anthropic
 ## 주요 기능
 
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
-- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 55개 모니터링 채널에 호출합니다.
+- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 55개 모니터링 채널에 호출합니다. Claude Platform on AWS 9채널은 10분마다 같은 6개 카테고리를 따로 순환합니다 (v2.29.0).
 - **10개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle 인리전과 교차 리전 프로파일 18채널 TTFB/TTFT 벤치 — GPT 5.4/5.5/5.6 Terra, GPT-6 Astra/Sol/Luna, 15분 주기), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
 - **모델 카드 지표 등급** — 대시보드 카드의 TTFT, 총 응답시간, TPS 값을 운영 48시간 p90/p99로 정한 워크로드 카테고리별 기준에 따라 파랑(양호), 호박 ▲(경고), 장미 ◆(위험)으로 표시합니다(TPS는 낮은 쪽만 판정). 범례를 펼치면 전체 기준표가 나오고, 값마다 `data-grade` 속성과 스크린 리더 설명이 붙습니다 (v2.28.0, ADR-029).
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 19 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
-- **일일 Claude API 기능 검증 스윕** — 스케줄된 Fargate 태스크가 39행 카탈로그(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)를 Claude Platform on AWS · Bedrock Mantle `/anthropic` · Bedrock runtime(Messages API + InvokeModel + Converse)에서 대표 모델 5종(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 런당 975셀, v2.28.0)으로 실행하고, 실측이 문서상 가용성과 어긋나면 문서 드리프트 배너로 표시합니다.
+- **일일 Claude API 기능 검증 스윕** — 스케줄된 Fargate 태스크(매일 17:30 UTC, 02:30 KST, v2.29.0)가 39행 카탈로그(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)를 Claude Platform on AWS · Bedrock Mantle `/anthropic` · Bedrock runtime(Messages API + InvokeModel + Converse)에서 대표 모델 5종(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 런당 975셀, v2.28.0)으로 실행하고, 실측이 문서상 가용성과 어긋나면 문서 드리프트 배너로 표시합니다.
 - **다중 채널 비교** — 동일 모델 family를 Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), OpenAI GPT via Bedrock Mantle (Path 4) 네 채널로 병렬 호출하여 정확한 동일 조건 비교를 제공합니다.
 - **AI 챗봇 + 도구** — Claude Sonnet 4.6 챗봇이 4개의 Bedrock 커스텀 도구를 사용해 시계열 데이터에 대한 자연어 질의에 응답하며, 매 턴마다 동적 후속 질문을 생성합니다.
 - **모바일 반응형 UI** — 공용 헤더 + 좁은 화면 햄버거 메뉴, 같은 URL이 뷰포트 폭만으로 적응 (v2.16.0).

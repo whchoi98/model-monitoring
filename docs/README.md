@@ -5,7 +5,7 @@
 - [API reference](api-reference.md)
 - [Deployment](runbooks/deploy.md)
 - [Rollback](runbooks/rollback.md)
-- [Troubleshooting](runbooks/troubleshooting.md) (dashboard frozen / skipping overlapping cycle)
+- [Troubleshooting](runbooks/troubleshooting.md) (Claude Platform on AWS monthly usage-cap 429 / dashboard frozen, skipping overlapping cycle)
 - [Monitoring UX review and test evidence](reviews/2026-09-22-monitoring-ux.md)
 - [Release history](../CHANGELOG.md)
 - [Project guidance](../CLAUDE.md)
