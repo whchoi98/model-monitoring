@@ -157,3 +157,39 @@ describe("min–max 밴드 (withRange)", () => {
     expect(chartData[0]["Model A__range"]).toBeUndefined();
   });
 });
+
+describe("per-model cadence gaps (v2.29.0)", () => {
+  const cp = (ts: string, ttft: number): TrendPoint => ({
+    ...point("Anthropic Claude Sonnet 5 (US)", ts, ttft), model_id: "anthropic:claude-sonnet-5",
+  });
+  const bedrock = (ts: string, ttft: number): TrendPoint => ({
+    ...point("Bedrock Claude Sonnet 5 (Global)", ts, ttft), model_id: "global.anthropic.claude-sonnet-5",
+  });
+  const cadence = (modelId: string) => (modelId.startsWith("anthropic:") ? 600 : 300);
+
+  test("10-minute Claude Platform samples draw one line while a 10-minute hole in a 5-minute series still breaks", () => {
+    const data = [
+      cp("2026-09-24T01:01:30Z", 100), cp("2026-09-24T01:11:40Z", 110), cp("2026-09-24T01:21:20Z", 120),
+      bedrock("2026-09-24T01:00:10Z", 200), bedrock("2026-09-24T01:05:10Z", 210), bedrock("2026-09-24T01:15:40Z", 220),
+    ];
+    const { seriesData } = pivotTrend(data, "ttft_ms", undefined, { cadenceSeconds: cadence });
+    expect(seriesData["Anthropic Claude Sonnet 5 (US)"].map((row) => row["Anthropic Claude Sonnet 5 (US)"]))
+      .toEqual([100, 110, 120]);
+    expect(seriesData["Bedrock Claude Sonnet 5 (Global)"].map((row) => row["Bedrock Claude Sonnet 5 (Global)"]))
+      .toEqual([200, 210, null, 220]);
+  });
+
+  test("with the old single 5-minute cadence the same CP samples would be cut after every point", () => {
+    const data = [cp("2026-09-24T01:01:30Z", 100), cp("2026-09-24T01:11:40Z", 110)];
+    const { seriesData } = pivotTrend(data, "ttft_ms", undefined, { cadenceSeconds: 300 });
+    expect(seriesData["Anthropic Claude Sonnet 5 (US)"].map((row) => row["Anthropic Claude Sonnet 5 (US)"]))
+      .toEqual([100, null, 110]);
+  });
+
+  test("a Claude Platform outage longer than its own cadence plus grace still breaks the line", () => {
+    const data = [cp("2026-09-24T01:00:00Z", 100), cp("2026-09-24T01:15:01Z", 110)];
+    const { seriesData } = pivotTrend(data, "ttft_ms", undefined, { cadenceSeconds: cadence });
+    expect(seriesData["Anthropic Claude Sonnet 5 (US)"].map((row) => row["Anthropic Claude Sonnet 5 (US)"]))
+      .toEqual([100, null, 110]);
+  });
+});

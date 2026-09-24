@@ -28,7 +28,8 @@ interface Props {
   selectedModels?: Set<string>;
   /** 범례 클릭으로 모델 라인을 토글 (v2.7.1). */
   onToggleModel?: (modelName: string) => void;
-  cadenceSeconds?: number;
+  /** Number, or per-model_id cadence (v2.29.0) — keep the function reference stable (useMemo). */
+  cadenceSeconds?: number | ((modelId: string) => number);
 }
 
 // Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.

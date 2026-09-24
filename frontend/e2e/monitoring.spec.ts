@@ -200,3 +200,34 @@ test("card metric values are graded per workload category with a non-color cue i
   await expect(models.getByRole("row", { name: /카테고리 미지정/ })).toContainText("24초");
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
+
+test("Claude Platform on AWS channels keep their 10-minute cadence without being flagged stale", async ({ page }) => {
+  const fixture = await mockApi(page);
+  const now = Date.now();
+  const catalog = [
+    { id: "anthropic:claude-sonnet-5", name: "Anthropic Claude Sonnet 5 (US)" },
+    { id: "global.anthropic.claude-sonnet-5", name: "Bedrock Claude Sonnet 5 (Global)" },
+  ];
+  // Both last measured 12 minutes ago: inside CP's 10 min + grace, past the 5-minute channel's 5 min + grace.
+  const latest = catalog.map((model, index) => ({
+    ...fixture.latest[0], id: index + 1, model_id: model.id, model_name: model.name,
+    timestamp: new Date(now - 12 * 60_000).toISOString(),
+  }));
+  await page.route("**/api/models", (route) => route.fulfill({ json: catalog }));
+  await page.route("**/api/auto-probe/latest*", (route) => route.fulfill({ json: latest }));
+  await page.route("**/api/auto-probe/status", (route) => route.fulfill({
+    json: { ...fixture.status, expected_model_count: 2, category_interval_seconds: 1800,
+      channel_intervals: { anthropic: 600 }, channel_category_intervals: { anthropic: 3600 } },
+  }));
+  await page.goto("/");
+  const status = page.getByRole("region", { name: "자동 프로빙 상태" });
+  await expect(status).toContainText("5분 주기");
+  await expect(status).toContainText("Claude Platform on AWS 10분 주기");
+  const models = page.getByRole("region", { name: "모델별 최신 상태" });
+  await expect(models.getByRole("article").filter({ hasText: catalog[0].name }).getByText("정상", { exact: true })).toBeVisible();
+  await expect(models.getByRole("article").filter({ hasText: catalog[1].name }).getByText("수집 지연", { exact: true })).toBeVisible();
+
+  await page.goto("/?category=reasoning");
+  await expect(page.getByRole("region", { name: "워크로드" })).toContainText(
+    "선택한 워크로드는 약 30분마다 수집됩니다. Claude Platform on AWS 채널은 약 60분마다 수집됩니다.");
+});

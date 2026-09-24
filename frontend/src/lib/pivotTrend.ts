@@ -19,7 +19,9 @@ export interface TrendRow {
 export interface PivotOptions {
   /** true면 집계 행의 [min,max]를 `<모델명>__range` 컬럼으로 추가 (Recharts range Area용). */
   withRange?: boolean;
-  cadenceSeconds?: number;
+  /** Expected spacing of one series; a longer silence breaks its line. A function gets the series' model_id
+   *  (v2.29.0: Claude Platform on AWS is sampled every 10 minutes, other channels every 5). */
+  cadenceSeconds?: number | ((modelId: string) => number);
 }
 
 /** Isolated successes need dots even when dense charts omit ordinary markers. */
@@ -52,6 +54,7 @@ export function pivotTrend(
   const modelSet = new Set<string>();
   const rows = new Map<number, TrendRow>();
   const series = new Map<string, Map<number, TrendRow>>();
+  const seriesModelId = new Map<string, string>();
 
   for (const d of data) {
     if (hasSelection && !selectedModels!.has(d.model_name)) continue;
@@ -64,7 +67,10 @@ export function pivotTrend(
       rows.set(time, row);
     }
     row[d.model_name] = d.status === "success" && d[metric] != null && Number.isFinite(d[metric]) ? d[metric] : null;
-    if (!series.has(d.model_name)) series.set(d.model_name, new Map());
+    if (!series.has(d.model_name)) {
+      series.set(d.model_name, new Map());
+      seriesModelId.set(d.model_name, d.model_id);
+    }
     series.get(d.model_name)!.set(time, row);
     if (options?.withRange && d.status === "success") {
       const lo = d[`${metric}_min` as keyof TrendPoint] as number | null | undefined;
@@ -87,7 +93,8 @@ export function pivotTrend(
   const seriesData: Record<string, TrendRow[]> = Object.create(null);
   for (const name of modelNames) {
     const points = Array.from(series.get(name)!.values()).sort((a, b) => a.time - b.time);
-    const cadence = options?.cadenceSeconds;
+    const option = options?.cadenceSeconds;
+    const cadence = typeof option === "function" ? option(seriesModelId.get(name) ?? name) : option;
     const withGaps: TrendRow[] = [];
     for (const point of points) {
       const previous = withGaps[withGaps.length - 1];
