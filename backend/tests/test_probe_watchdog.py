@@ -383,7 +383,8 @@ class _AnthropicStream:
 def test_hanging_anthropic_stream_is_aborted_and_recorded_as_error_row(monkeypatch, db):
     stream = _AnthropicStream()
     fake = types.SimpleNamespace(messages=types.SimpleNamespace(stream=lambda **kw: stream))
-    monkeypatch.setattr(prober, "_get_anthropic_client", lambda: fake)
+    # 대시보드 프로브는 SDK 재시도 0인 프로브 전용 CP 클라이언트를 쓴다 (v2.29.0).
+    monkeypatch.setattr(prober, "_get_anthropic_probe_client", lambda: fake)
 
     rows, _, elapsed = _probe(db, "anthropic:claude-sonnet-5", "Anthropic Claude Sonnet 5 (US)")
 

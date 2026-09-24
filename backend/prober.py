@@ -244,10 +244,15 @@ _REGION_MAP: dict[str, str] = {
 
 _client_cache: dict[str, object] = {}
 _anthropic_client_cache: object | None = None
+_anthropic_probe_client_cache: object | None = None
 
 
 def _get_anthropic_client():
-    """Lazy-init Anthropic SDK client (singleton). CP on AWS base_url + workspace 헤더."""
+    """Lazy-init Anthropic SDK client (singleton). CP on AWS base_url + workspace 헤더.
+
+    SDK 기본값(max_retries=2) 그대로 — Comparison Lab과 패리티 런(`messages` surface)이 쓴다. 둘 다
+    재시도 루프가 없어 일시 오류 재시도를 SDK에 맡긴다. 대시보드 프로브는 _get_anthropic_probe_client.
+    """
     global _anthropic_client_cache
     if _anthropic_client_cache is None:
         from anthropic import Anthropic
@@ -257,6 +262,27 @@ def _get_anthropic_client():
             default_headers=_anthropic_default_headers(),
         )
     return _anthropic_client_cache
+
+
+def _get_anthropic_probe_client():
+    """프로브 전용 CP 클라이언트 (v2.29.0) — 엔드포인트·헤더는 같고 SDK 재시도만 끈다(max_retries=0).
+
+    대시보드 사이클과 /api/probes/run(_probe_single_model)이 쓴다. SDK 기본 재시도 2회가 prober 루프
+    재시도(최대 4회 시도)와 곱해져 프로브 하나가 최대 12요청이 됐다 — 2026-09-23 월간 사용량 상한 429
+    동안 /ecs/autoprober에 시간당 1,600~1,700줄. 재시도는 루프 하나만 두고, SDK가 재시도하던 일시
+    오류(408/409/429/5xx, 연결 오류, timeout)는 _should_retry_probe가 대신 맡는다. timeout은 SDK
+    기본값 그대로다(스트림 전체 상한은 PROBE_WALL_CLOCK_S watchdog).
+    """
+    global _anthropic_probe_client_cache
+    if _anthropic_probe_client_cache is None:
+        from anthropic import Anthropic
+        _anthropic_probe_client_cache = Anthropic(
+            api_key=os.environ["ANTHROPIC_API_KEY"],
+            base_url=_anthropic_base_url(),
+            default_headers=_anthropic_default_headers(),
+            max_retries=0,
+        )
+    return _anthropic_probe_client_cache
 
 
 def _is_anthropic_direct(model_id: str) -> bool:
@@ -543,7 +569,7 @@ def _get_bedrock_client(region_name: str = "us-east-1"):
 
 
 # Retry — Anthropic 529 overloaded_error / Bedrock ThrottlingException 등 vendor 일시 부하.
-# 2s, 4s, 8s exponential backoff. 최대 2회 재시도 (총 3 attempts).
+# 2s, 4s, 8s exponential backoff. 최대 3회 재시도 (총 4 attempts), wall-clock 예산 안에서만.
 _RETRYABLE_PATTERNS: tuple[str, ...] = (
     "Overloaded",
     "overloaded_error",
@@ -563,6 +589,50 @@ _RETRY_BACKOFFS: tuple[int, ...] = (2, 4, 8)
 
 def _is_retryable_error(err_msg: str) -> bool:
     return any(p in err_msg for p in _RETRYABLE_PATTERNS)
+
+
+# 월간 사용량 상한 429 (v2.29.0) — 재시도해도 풀리지 않는 조직 단위 상한이라 재시도하지 않는다.
+# 2026-09-23 19:52 UTC부터 CP 호출이 전부 429 rate_limit_error로 거부됐다: "You have reached your API
+# usage limits: your organization has crossed its monthly API usage threshold, set based on your
+# organization's API tier. You will regain access on 2026-10-01 at 00:00 UTC." (details.error_code
+# enforced_spend_limit_reached). 예외 타입(RateLimitError)과 오류 타입(rate_limit_error)이 일시 429와
+# 같아 _RETRYABLE_PATTERNS가 재시도했다. 메시지로만 구분된다 — 일시 429("rate limit" 문구)는 그대로
+# 재시도한다. 소문자로 비교한다.
+_USAGE_CAP_MARKERS: tuple[str, ...] = (
+    "usage limits",
+    "usage threshold",
+    "enforced_spend_limit_reached",
+)
+
+
+def _is_usage_cap_error(err_msg: str) -> bool:
+    """조직·워크스페이스 사용량 상한 도달 429인지 (재시도 무의미)."""
+    lowered = err_msg.lower()
+    return any(marker in lowered for marker in _USAGE_CAP_MARKERS)
+
+
+# CP 프로브 클라이언트는 SDK 재시도를 끈다(_get_anthropic_probe_client, v2.29.0). SDK 기본값이 재시도하던
+# 일시 오류 — HTTP 408/409/429/5xx와 연결 오류·timeout — 는 이 루프가 같은 backoff로 대신 재시도한다.
+# 상태 코드는 SDK APIStatusError.status_code, 연결 오류는 예외 클래스 이름으로 본다(SDK 버전과 무관).
+_CP_RETRYABLE_STATUS: frozenset[int] = frozenset({408, 409, 429})
+_CP_RETRYABLE_EXCEPTIONS: frozenset[str] = frozenset({"APIConnectionError", "APITimeoutError"})
+
+
+def _is_cp_transient_error(exc: BaseException) -> bool:
+    """anthropic SDK가 기본 설정에서 재시도하던 일시 오류인지."""
+    status = getattr(exc, "status_code", None)
+    if isinstance(status, int) and (status in _CP_RETRYABLE_STATUS or status >= 500):
+        return True
+    return any(cls.__name__ in _CP_RETRYABLE_EXCEPTIONS for cls in type(exc).__mro__)
+
+
+def _should_retry_probe(model_id: str, exc: BaseException, retry_key: str) -> bool:
+    """prober 루프의 재시도 판정. 사용량 상한 429는 어떤 경로든 재시도하지 않는다 (v2.29.0)."""
+    if _is_usage_cap_error(retry_key):
+        return False
+    if _is_retryable_error(retry_key):
+        return True
+    return _is_anthropic_direct(model_id) and _is_cp_transient_error(exc)
 
 
 def _is_overload_error(err_msg: str) -> bool:
@@ -602,10 +672,10 @@ def _probe_single_model(
     server_latency_ms: float | None = None
     stop_reason: str | None = None
 
-    # Retry loop - vendor 일시 부하(529 overloaded / Throttle) 시 2/4/8s backoff 최대 2회.
-    # Streaming setup 실패만 retry — 중간 token 수신 도중 실패는 retry하지 않음(이미 partial yield).
+    # Retry loop - vendor 일시 부하(529 overloaded / Throttle) 시 2/4/8s backoff 최대 3회.
+    # 월간 사용량 상한 429는 재시도하지 않는다(_should_retry_probe, v2.29.0).
     last_exception: Exception | None = None
-    for attempt in range(len(_RETRY_BACKOFFS) + 1):  # 3 attempts: 0, 1, 2
+    for attempt in range(len(_RETRY_BACKOFFS) + 1):  # 4 attempts: 0, 1, 2, 3
         # 재시도 시 state 리셋 (partial token이 client에 이미 도착했다면 자연스러운 reset로 인식).
         if attempt > 0:
             start_time = time.monotonic()
@@ -621,7 +691,7 @@ def _probe_single_model(
             with guard:
                 if _is_anthropic_direct(model_id):
                     actual_id = _anthropic_actual_id(model_id)
-                    anthropic_client = _get_anthropic_client()
+                    anthropic_client = _get_anthropic_probe_client()  # SDK 재시도 0 (v2.29.0)
                     with anthropic_client.messages.stream(
                         model=actual_id,
                         max_tokens=max_tokens,
@@ -755,10 +825,11 @@ def _probe_single_model(
                 break
             msg = str(exc)
             # 예외 타입명도 함께 본다 — OpenAI SDK의 429는 str()이 "Error code: 429 - …"뿐이라
-            # _RETRYABLE_PATTERNS의 "RateLimitError"가 타입명으로만 매칭된다. v2.28.2부터 OpenAI
-            # 클라이언트가 max_retries=0이므로 SDK가 대신 해 주던 429 재시도를 이 루프가 맡는다.
+            # _RETRYABLE_PATTERNS의 "RateLimitError"가 타입명으로만 매칭된다. v2.28.2부터 OpenAI,
+            # v2.29.0부터 CP 프로브 클라이언트가 max_retries=0이므로 SDK가 대신 해 주던 재시도를 이
+            # 루프가 맡는다. 월간 사용량 상한 429는 제외 — 오류 행 1개로 끝낸다.
             retry_key = f"{type(exc).__name__}: {msg}"
-            if attempt < len(_RETRY_BACKOFFS) and _is_retryable_error(retry_key):
+            if attempt < len(_RETRY_BACKOFFS) and _should_retry_probe(model_id, exc, retry_key):
                 backoff = _RETRY_BACKOFFS[attempt]
                 if time.monotonic() + backoff >= wall_deadline:
                     # backoff 후에는 wall-clock 예산이 남지 않는다 — 이 오류를 그대로 기록한다.
@@ -893,6 +964,15 @@ def _probe_single_model(
             full_error = str(exc)
             status_value = "error"
             logger.warning("Probe error for %s (iter %d): %s", model_id, iteration, full_error)
+        elif _is_usage_cap_error(f"{type(exc).__name__}: {exc}"):
+            # 월간 사용량 상한 429 (v2.29.0) — 행 형식은 다른 SDK 오류와 같게 두고, 상한이 풀릴 때까지
+            # 사이클마다 반복되므로 traceback 없이 한 줄만 남긴다.
+            full_error = f"Unexpected: {str(exc)}"
+            status_value = "error"
+            logger.warning(
+                "Probe error for %s (iter %d): usage cap reached, not retried: %s",
+                model_id, iteration, str(exc)[:300],
+            )
         else:
             full_error = f"Unexpected: {str(exc)}"
             status_value = "overloaded" if _is_overload_error(full_error) else "error"
