@@ -2,11 +2,14 @@
 //
 // 책임:
 //   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
+//     (v2.29.0: Claude Platform on AWS 채널만 10분 주기 — 사이클마다 auto_prober가 고른다,
+//      ANTHROPIC_CP_PROBE_INTERVAL_S. 스케줄 자체는 5분 그대로)
 //   - rate(5 minutes) → Insights   Fargate Task (insights_runner --window 6h)
 //     (사용자 요청: 새로고침이 없을 때도 인사이트가 최근 데이터를 반영하도록 5분 주기로 단축)
 //   - rate(12 hours) → ParityRun Fargate Task (parity_runner --once)
 //   - rate(15 minutes) → GptBench Fargate Task (gptbench_runner --once)
-//   - rate(24 hours) → FeaturesVerify Fargate Task (features_runner --once)
+//   - cron(30 17 * * ? *) Etc/UTC → FeaturesVerify Fargate Task (features_runner --once)
+//     (v2.29.0: 매일 17:30 UTC = 02:30 KST 고정 1회. 이전 rate(24 hours)는 스케줄 생성 시각 기준이라 시각이 고정되지 않았다)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
 //   - 모든 task는 RDS:5432 egress + Bedrock/Mantle 액세스 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
 import * as cdk from "aws-cdk-lib";
@@ -173,6 +176,7 @@ export class SchedulerStack extends cdk.Stack {
       taskRole: iam.IRole,
       command: string[],
       logGroupName: string,
+      extraEnvironment: Record<string, string> = {},
     ): ecs.FargateTaskDefinition => {
       const td = new ecs.FargateTaskDefinition(this, id, {
         cpu: 512,
@@ -237,6 +241,7 @@ export class SchedulerStack extends cdk.Stack {
             OPENAI_1P_GPT_56_TERRA_MODEL_ID: "gpt-5.6-terra",
             OPENAI_1P_GPT_56_LUNA_MODEL_ID: "gpt-5.6-luna",
           } : {}),
+          ...extraEnvironment,
         },
         secrets: {
           DB_USER: ecs.Secret.fromSecretsManager(props.dbSecret, "username"),
@@ -266,6 +271,12 @@ export class SchedulerStack extends cdk.Stack {
       autoProberTaskRole,
       ["python", "-m", "auto_prober_runner", "--once"],
       "/ecs/autoprober",
+      {
+        // Claude Platform on AWS 채널(anthropic:*) 수집 주기(초) — v2.29.0, 사용자 결정 2026-09-23
+        // (API 스로틀링, 1P만 해당). 5분 사이클 단위로 반올림(600 = 두 사이클에 한 번), 300 이하 = 매 사이클.
+        // 코드 기본값도 600 — 바꿀 때는 backend 서비스(/api/auto-probe/status 표시)에도 같은 값을 주입할 것.
+        ANTHROPIC_CP_PROBE_INTERVAL_S: "600",
+      },
     );
 
     const insightsTaskDef = buildTaskDef(
@@ -356,7 +367,7 @@ export class SchedulerStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     this.autoProberSchedule = new scheduler.Schedule(this, "AutoProberSchedule", {
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
-      description: "5분 주기로 Bedrock 모니터링 프로빙",
+      description: "5분 주기로 Bedrock 모니터링 프로빙",  // CP 채널은 사이클 두 번에 한 번 (v2.29.0, ANTHROPIC_CP_PROBE_INTERVAL_S)
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: autoProberTaskDef,
         vpcSubnets: props.appSubnets,
@@ -400,8 +411,10 @@ export class SchedulerStack extends cdk.Stack {
       // 일 1회 (사용자 결정 2026-09-05) — 1런 = 813 프로브 + 162 사전판정 = 975셀 (v2.28.0, Opus 5.5 편입)
       //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 5 모델,
       //   캐싱·부정 제어 포함 API 호출 수와 토큰 비용은 4모델 시절(≈ 800 호출, $5~7, Fable 지배)보다 프로브 수에 비례해 증가
-      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(24)),
-      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 5 models, daily",
+      // v2.29.0 (사용자 요청 2026-09-23 "1일 한번 턴"): 매일 17:30 UTC(= 02:30 KST) 고정 cron. rate(24 hours)도 하루
+      //   한 번이었지만(스케줄 생성 시각 기준, 약 17:28 UTC) 시각이 명시되지 않아 수동 트리거 런과 겹치면 하루 두 번처럼 보였다.
+      schedule: scheduler.ScheduleExpression.cron({ minute: "30", hour: "17", timeZone: cdk.TimeZone.ETC_UTC }),
+      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 5 models, daily at 17:30 UTC",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: featuresTaskDef,
         vpcSubnets: props.appSubnets,

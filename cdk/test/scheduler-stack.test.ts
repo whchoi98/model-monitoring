@@ -152,8 +152,17 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("FeaturesVerify는 rate(1 day) 스케줄 + features_runner --once CMD (v2.23.0)", () => {
-    template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({ ScheduleExpression: "rate(1 day)" }));
+  it("FeaturesVerify는 매일 17:30 UTC 고정 cron 스케줄 + features_runner --once CMD (v2.29.0)", () => {
+    template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({
+      ScheduleExpression: "cron(30 17 * * ? *)",
+      ScheduleExpressionTimezone: "Etc/UTC",
+      Description: Match.stringLikeRegexp("daily at 17:30 UTC"),
+    }));
+    // 일 1회 스케줄은 이 cron 하나뿐 — 이전 rate(1 day)가 남아 하루 두 번 돌지 않는다.
+    const expressions = Object.values(template.findResources("AWS::Scheduler::Schedule"))
+      .map((resource) => resource.Properties.ScheduleExpression);
+    expect(expressions).not.toContain("rate(1 day)");
+    expect(expressions.filter((expression: string) => expression.startsWith("cron("))).toEqual(["cron(30 17 * * ? *)"]);
     template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
       ContainerDefinitions: Match.arrayWith([Match.objectLike({
         Command: ["python", "-m", "features_runner", "--once"],
@@ -171,6 +180,28 @@ describe("SchedulerStack", () => {
           Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", Value: "openai.gpt-6-astra" }),
         ]),
       })]),
+    }));
+  });
+
+  it("autoprober task def만 Claude Platform on AWS 수집 주기 env를 명시한다 (v2.29.0)", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({
+        Command: ["python", "-m", "auto_prober_runner", "--once"],
+        Environment: Match.arrayWith([Match.objectLike({ Name: "ANTHROPIC_CP_PROBE_INTERVAL_S", Value: "600" })]),
+      })]),
+    }));
+    const withInterval = Object.values(template.findResources("AWS::ECS::TaskDefinition"))
+      .flatMap((resource) => resource.Properties.ContainerDefinitions)
+      .filter((container: { Environment?: { Name: string }[] }) =>
+        (container.Environment ?? []).some((env) => env.Name === "ANTHROPIC_CP_PROBE_INTERVAL_S"))
+      .map((container: { Command: string[] }) => container.Command.join(" "));
+    expect(withInterval).toEqual(["python -m auto_prober_runner --once"]);
+  });
+
+  it("AutoProber 스케줄은 5분 그대로다 — CP 10분 주기는 사이클 안에서 고른다 (v2.29.0)", () => {
+    template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({
+      ScheduleExpression: "rate(5 minutes)",
+      Description: Match.stringLikeRegexp("Bedrock 모니터링"),
     }));
   });
 
