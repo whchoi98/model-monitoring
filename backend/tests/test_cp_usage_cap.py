@@ -18,6 +18,7 @@ from queue import Queue
 
 import anthropic
 import httpx
+
 import pytest
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -26,6 +27,22 @@ from sqlalchemy.pool import StaticPool
 import models
 import prober
 from parity import runner as parity_runner
+
+
+def _sdk_http_module():
+    """anthropic SDK가 실제로 쓰는 HTTP 라이브러리 — 0.x는 httpx, 1.x(운영 이미지 1.8, CI 최신)는 httpx2.
+
+    SDK는 자기 라이브러리의 Client만 http_client로 받으므로(httpx.Client를 넘기면 1.x는 TypeError), 목
+    transport·응답·예외 타입도 같은 라이브러리에서 만든다. 판별은 설치된 anthropic 패키지 메타데이터 기준.
+    """
+    from importlib.metadata import requires
+    if any(r.split(";")[0].strip().startswith("httpx2") for r in (requires("anthropic") or [])):
+        import httpx2
+        return httpx2
+    return httpx
+
+
+HTTP = _sdk_http_module()
 
 CP_ID = "anthropic:claude-sonnet-5"
 CP_NAME = "Anthropic Claude Sonnet 5 (US)"
@@ -90,19 +107,19 @@ def _cp_client(monkeypatch, responses, *, max_retries=0):
     """Real SDK client over a scripted transport; returns the list of requests it received."""
     requests = []
 
-    def handler(request: httpx.Request) -> httpx.Response:
+    def handler(request: HTTP.Request) -> httpx.Response:
         requests.append(request)
         item = responses.pop(0) if len(responses) > 1 else responses[0]
         if isinstance(item, Exception):
             raise item
         status, body = item
         if status == 200:
-            return httpx.Response(200, headers={"content-type": "text/event-stream"}, text=body)
-        return httpx.Response(status, json=body)
+            return HTTP.Response(200, headers={"content-type": "text/event-stream"}, text=body)
+        return HTTP.Response(status, json=body)
 
     client = anthropic.Anthropic(
         api_key="sk-ant-test", base_url="https://cp.test", max_retries=max_retries,
-        http_client=httpx.Client(transport=httpx.MockTransport(handler)),
+        http_client=HTTP.Client(transport=HTTP.MockTransport(handler)),
     )
     monkeypatch.setattr(prober, "_get_anthropic_probe_client", lambda: client)
     return requests
@@ -167,7 +184,7 @@ def test_cp_transient_errors_are_still_retried_by_the_probe_loop(monkeypatch, db
 
 
 def test_cp_connection_error_is_retried_by_the_probe_loop(monkeypatch, db):
-    requests = _cp_client(monkeypatch, [httpx.ConnectError("connection refused"), (200, SSE_OK)])
+    requests = _cp_client(monkeypatch, [HTTP.ConnectError("connection refused"), (200, SSE_OK)])
 
     [row] = _probe(db)
 
