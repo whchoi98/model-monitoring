@@ -24,6 +24,7 @@ export function useNavItems(currentKey: string): NavItem[] {
     { key: "models", label: L("Models", "모델 탐색"), href: "/models" },
     { key: "parity", label: L("Parity Run", "패리티 런"), href: "/parity" },
     { key: "cost", label: L("Cost", "비용"), href: "/cost" },
+    { key: "pricing", label: L("Unit Prices", "비용 단가"), href: "/pricing" },
     { key: "reliability", label: L("Reliability", "신뢰성"), href: "/reliability" },
     { key: "efficiency", label: L("Efficiency", "효율성"), href: "/efficiency" },
     { key: "analysis", label: L("Analysis", "분석"), href: "/analysis" },
