@@ -67,7 +67,7 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 [^7]: Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
 [^8]: Amazon Bedrock 요금, https://aws.amazon.com/bedrock/pricing/
 [^9]: Amazon Bedrock 모델 카드, OpenAI GPT 5.4, https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html
-[^10]: 수동 메모: 프로모션 단가, 최소 2026-11-21까지
+[^10]: GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)
 
 > 이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.
 """
@@ -124,7 +124,7 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 [^7]: Amazon Bedrock agreement offer rate card, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
 [^8]: Amazon Bedrock pricing, https://aws.amazon.com/bedrock/pricing/
 [^9]: Amazon Bedrock model card, OpenAI GPT 5.4, https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html
-[^10]: Manual note: Promotional price, at least until 2026-11-21
+[^10]: GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)
 
 > This price list is compiled automatically from public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing pages.
 """
@@ -153,7 +153,7 @@ reference_n,reference_id,kind,title,url,as_of
 7,offer:offer-5l5a5izq5fbec,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
 8,official:bedrock-pricing,official_page,Amazon Bedrock 요금,https://aws.amazon.com/bedrock/pricing/,
 9,official:model-card-openai-gpt-54,official_page,"Amazon Bedrock 모델 카드, OpenAI GPT 5.4",https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html,
-10,note:gpt-5.6-sol,manual_note,"프로모션 단가, 최소 2026-11-21까지",,
+10,note:gpt-5.6-sol,manual_note,"GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)",,
 """
 
 

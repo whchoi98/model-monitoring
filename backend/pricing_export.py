@@ -38,7 +38,6 @@ _TEXT = {
         "official": "최종 가격은 공식 요금 페이지에서 확인한다",
         "references": "참고 자료",
         "checked": "확인일",
-        "manual": "수동 메모",
         "fixed_notes": [
             "단가는 USD, 1M 토큰당, Standard 등급 입력과 출력 기준이다.",
             "Global 채널 단가는 같은 모델의 US, In-Region 채널과 다를 수 있다.",
@@ -60,7 +59,6 @@ _TEXT = {
         "official": "Confirm final prices on the official pricing pages",
         "references": "References",
         "checked": "checked",
-        "manual": "Manual note",
         "fixed_notes": [
             "Prices are in USD per 1M tokens, Standard tier input and output.",
             "Global channel prices can differ from the US and In-Region channels of the same model.",
@@ -145,7 +143,7 @@ def to_markdown(payload: dict, lang: str) -> str:
 
     lines += ["", f"## {t['references']}", ""]
     for ref in payload["references"]:
-        parts = [ref[title_key] if ref["kind"] != "manual_note" else f"{t['manual']}: {ref[title_key]}"]
+        parts = [ref[title_key]]  # a manual note's title already says "(manual note, …)"
         if ref["url"]:
             parts.append(ref["url"])
         if ref["as_of"]:

@@ -52,8 +52,12 @@ SOL_NOTE = {
     "prior_price": {"in_region": {"input": 5.5, "output": 33}, "global": {"input": 5, "output": 30}},
     "text_ko": "프로모션 단가, 최소 2026-11-21까지",
     "text_en": "Promotional price, at least until 2026-11-21",
+    "basis_ko": "2026-09-23 AWS 모델 카드 기준",
+    "basis_en": "2026-09-23 AWS model card",
     "source": "manual_note",
 }
+# families[].notes leaves out the fields that only build the reference title
+SOL_NOTE_PAYLOAD = {k: v for k, v in SOL_NOTE.items() if k not in ("basis_ko", "basis_en")}
 
 
 def active():
@@ -153,7 +157,7 @@ EXPECTED_PAYLOAD = {
                               pending={"id": 6, "input": 9, "output": 45, "observed_at": R2}),
                 in_region=[_cell(4.4, 22, ["openai:us-east-1:openai.gpt-5.6-sol"], [SOL], [4], "seed_only", None,
                                  regions=["us-east-1"])],
-                notes=[SOL_NOTE]),
+                notes=[SOL_NOTE_PAYLOAD]),
         _family("gpt-5.6-terra", "GPT 5.6 Terra", "openai",
                 global_=_cell(2, 12, ["openai:global:global.openai.gpt-5.6-terra"], [TERRA], [5], "verified", R2),
                 in_region=[
@@ -215,8 +219,9 @@ EXPECTED_PAYLOAD = {
         _ref(9, "official:model-card-openai-gpt-54", "official_page", "Amazon Bedrock model card, OpenAI GPT 5.4",
              "Amazon Bedrock 모델 카드, OpenAI GPT 5.4",
              "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html", None),
-        _ref(10, "note:gpt-5.6-sol", "manual_note", "Promotional price, at least until 2026-11-21",
-             "프로모션 단가, 최소 2026-11-21까지", None, None),
+        # title = the family's FAMILY_ORDER name + kind + basis (not the note text)
+        _ref(10, "note:gpt-5.6-sol", "manual_note", "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)",
+             "GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)", None, None),
     ],
     "disclaimer": {
         "en": "This price list is compiled automatically from public sources for reference only and is not an "

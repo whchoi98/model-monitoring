@@ -137,9 +137,11 @@ def verification_of(row: Optional[PriceHistory], last_run: Optional[PriceSyncRun
     """Per-cell calculation state (not the row's status column).
 
     none      : no effective price row
-    seed_only : the seed row was never confirmed by an official source (observed_at NULL)
-    verified  : observed at or after the start of the latest finished run
-    stale     : anything else (a source kept failing, or no run finished since the last observation)
+    seed_only : a seed row never confirmed by an official source (status 'seed', observed_at NULL)
+    verified  : observed_at at or after started_at of the latest finished run (whatever that run's status)
+    stale     : everything else: observed_at before the latest finished run started (that run did not confirm the
+                channel, e.g. its source failed or it was skipped), observed_at set but no run has finished yet, or
+                a non-seed row with observed_at NULL
     """
     if row is None:
         return "none"

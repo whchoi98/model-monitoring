@@ -6,7 +6,8 @@ The backend decides every order and number; the frontend and the three export fo
   tier with equal values (price, verification, pending value) form one element; in_region elements are
   ordered by region name.
 - footnotes: walking the cells in display order, each source_id gets the next number the first time it is
-  cited; the fixed official pages follow, and manual notes come last.
+  cited; the fixed official pages follow, and manual notes come last, titled "<family> <kind> (manual note,
+  <basis>)" with the family's FAMILY_ORDER name.
 """
 
 from datetime import datetime
@@ -30,6 +31,10 @@ ANTHROPIC_TITLE_KO = "Anthropic API 요금 (Claude Platform on AWS는 표준 요
 
 SINGLE_TIERS = ("cp", "global", "us")
 _VERIFICATION_RANK = {"verified": 0, "stale": 1, "seed_only": 2, "none": 3}
+
+NOTE_KIND_TITLES = {"promo": {"en": "promotion", "ko": "프로모션"}}
+# Note fields that only build the reference title; families[].notes carries the rest (frontend PricingNote).
+_NOTE_TITLE_FIELDS = ("basis_en", "basis_ko")
 
 
 def price_number(v: float):
@@ -85,6 +90,17 @@ def _source_reference(source_id: str, families: list[str]) -> dict:
     return {"kind": "official_page", "title_en": source_id, "title_ko": source_id, "url": None}
 
 
+def _note_reference(note: Mapping, family: str) -> dict:
+    """A manual note's reference titles. `family` is the note's family as priced (its PriceIdentity.family)."""
+    kind = NOTE_KIND_TITLES.get(note["kind"], {"en": note["kind"], "ko": note["kind"]})
+    return {
+        "kind": "manual_note",
+        "title_en": f"{family} {kind['en']} (manual note, {note['basis_en']})",
+        "title_ko": f"{family} {kind['ko']} (수동 메모, {note['basis_ko']})",
+        "url": None,
+    }
+
+
 def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, now: datetime) -> dict:
     """The exact /api/pricing body for the active channel set (model_id -> PriceIdentity)."""
     now = as_utc(now)
@@ -93,7 +109,9 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
     pending = pending_rows(db, ids)
     last_run = last_finished_run(db)
     pending_count = 0
-    if ids:  # channels waiting for review (distinct model_ids, as price_sync_runs.pending), not rows
+    # Every active channel with any pending_review row (distinct model_ids, not rows). price_sync_runs.pending only
+    # counts the channels one run classified as pending, so it can be lower.
+    if ids:
         pending_count = (
             db.query(func.count(PriceHistory.model_id.distinct()))
             .filter(PriceHistory.model_id.in_(ids), PriceHistory.status == "pending_review")
@@ -164,6 +182,7 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
         }
 
     families = []
+    shown_notes: list[tuple[Mapping, str]] = []  # (note, family) in display order, for the manual_note references
     for family_key in sorted(by_family, key=family_order):
         mids = by_family[family_key]
         ident = active[mids[0]]
@@ -184,14 +203,15 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
             {"regions": [region_of(active[m].channel) for m in g], **cell(g, ident.family)}
             for g in groups(regional)
         ]
-        notes = [dict(note) for note in pricing_sources.PRICE_NOTES
+        notes = [note for note in pricing_sources.PRICE_NOTES
                  if note["family_key"] == family_key and not _note_resolved(note, mids, active, current)]
+        shown_notes.extend((note, ident.family) for note in notes)
         families.append({
             "family_key": family_key,
             "family": ident.family,
             "provider": ident.provider,
             "tiers": tiers,
-            "notes": notes,
+            "notes": [{k: v for k, v in note.items() if k not in _NOTE_TITLE_FIELDS} for note in notes],
         })
 
     references = []
@@ -204,12 +224,11 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
             "n": len(references) + 1, "id": official_source_id(page["slug"]), "kind": "official_page",
             "title_en": page["title_en"], "title_ko": page["title_ko"], "url": page["url"], "as_of": None,
         })
-    for fam in families:
-        for note in fam["notes"]:
-            references.append({
-                "n": len(references) + 1, "id": note_source_id(note["family_key"]), "kind": "manual_note",
-                "title_en": note["text_en"], "title_ko": note["text_ko"], "url": None, "as_of": None,
-            })
+    for note, family in shown_notes:
+        references.append({
+            "n": len(references) + 1, "id": note_source_id(note["family_key"]), **_note_reference(note, family),
+            "as_of": None,
+        })
 
     return {
         "currency": "USD",

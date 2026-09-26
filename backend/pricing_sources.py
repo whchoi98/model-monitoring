@@ -188,6 +188,7 @@ OFFICIAL_PAGES: list[dict] = [
 ]
 
 # 수동 메모(manual_note, 공식 출처 아님) — 근거: 2026-09-23 AWS 모델 카드 기재(현재 미게재), CHANGELOG v2.28.1
+# basis_en/basis_ko는 참고 자료 제목에만 쓴다(pricing_payload가 제목 앞에 패밀리 이름을 붙이고 families[].notes에서는 뺀다).
 PRICE_NOTES: list[dict] = [{
     "family_key": "gpt-5.6-sol",
     "kind": "promo",
@@ -197,5 +198,7 @@ PRICE_NOTES: list[dict] = [{
                "지금은 공식 출처에 표시가 없어 수동 메모로 관리한다(CHANGELOG v2.28.1).",
     "text_en": "Promotional price. The AWS model card stated on 2026-09-23 that it applies at least through "
                "2026-11-21; no official source shows it now, so it is kept as a manual note (CHANGELOG v2.28.1).",
+    "basis_ko": "2026-09-23 AWS 모델 카드 기준",
+    "basis_en": "2026-09-23 AWS model card",
     "source": "manual_note",
 }]

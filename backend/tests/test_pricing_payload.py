@@ -69,6 +69,16 @@ def test_promo_note_drops_once_the_prior_price_is_observed(db):
     assert [r["kind"] for r in payload["references"]].count("manual_note") == 0
 
 
+def test_manual_note_title_names_the_family_it_is_listed_under(db, monkeypatch):
+    note = {**ds.SOL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
+    monkeypatch.setattr(pricing_sources, "PRICE_NOTES", [note])
+    payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
+    ref = next(r for r in payload["references"] if r["kind"] == "manual_note")
+    assert (ref["id"], ref["title_en"], ref["title_ko"]) == (
+        "note:gpt-5.4", "GPT 5.4 promotion (manual note, 2026-09-23 AWS model card)",
+        "GPT 5.4 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)")
+
+
 def test_price_rows_effective_after_now_are_not_current_yet(db):
     ds.add_price(db, "us.anthropic.claude-opus-5-5", 5.0, 25.0, effective_from=ds.NOW + timedelta(hours=1),
                  status="verified", observed_at=ds.NOW, source_id=OPUS)
@@ -96,3 +106,9 @@ def test_production_official_pages_and_note_are_listed_after_the_cited_sources(d
     }
     note = next(r for r in payload["references"] if r["kind"] == "manual_note")
     assert note["id"] == "note:gpt-5.6-sol" and note["url"] is None
+    assert (note["title_en"], note["title_ko"]) == (
+        "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)",
+        "GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)")
+    sol = next(f for f in payload["families"] if f["family_key"] == "gpt-5.6-sol")
+    assert [set(n) for n in sol["notes"]] == [
+        {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source"}]

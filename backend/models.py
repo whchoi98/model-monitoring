@@ -288,7 +288,9 @@ class PriceSyncRun(Base):
     status = Column(Text, nullable=False)  # running | completed | partial | failed
     summary = Column(JSON, nullable=True)
     changes = Column(Integer, nullable=False, default=0)  # 적용한 새 행 수 (verified)
-    pending = Column(Integer, nullable=False, default=0)  # 런 뒤 검토 대기 채널 수 (pending, no_baseline, 재관측 포함)
+    # 이 런이 검토 대기로 분류한 채널 수 = 결과 pending 또는 no_baseline(새 pending_review 행, 또는 같은 값 대기 행 재관측).
+    # /api/pricing pending_review(대기 행이 있는 활성 채널 전부)와 달리 이 런이 다시 관측하지 않은 대기 채널은 빠져 더 작을 수 있다.
+    pending = Column(Integer, nullable=False, default=0)
 
 
 def ensure_performance_indexes(engine) -> None:

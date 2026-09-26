@@ -205,8 +205,10 @@ def test_official_pages_and_price_notes():
     assert all(set(p) == {"slug", "title_en", "title_ko", "url"} and "·" not in p["title_ko"] for p in ps.OFFICIAL_PAGES)
     assert len({p["slug"] for p in ps.OFFICIAL_PAGES}) == 9
     (note,) = ps.PRICE_NOTES
-    assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source"}
+    assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "basis_ko", "basis_en",
+                         "source"}
     assert (note["family_key"], note["kind"], note["min_until"], note["source"]) == (
         "gpt-5.6-sol", "promo", "2026-11-21", "manual_note")
     assert note["prior_price"] == {"in_region": {"input": 5.5, "output": 33}, "global": {"input": 5, "output": 30}}
     assert "2026-11-21" in note["text_ko"] and "·" not in note["text_ko"]
+    assert (note["basis_ko"], note["basis_en"]) == ("2026-09-23 AWS 모델 카드 기준", "2026-09-23 AWS model card")
