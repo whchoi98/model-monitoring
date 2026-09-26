@@ -236,7 +236,6 @@ export async function mockApi(page: Page) {
       "/api/auto-probe/categories": categories,
       "/api/insights/latest": null,
       "/api/pricing": pricingFixture,
-
     };
     const body = values[url.pathname];
     await route.fulfill({

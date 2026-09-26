@@ -235,8 +235,10 @@ export default function CostDashboardPanel() {
         )}
         <p className="text-[11px] text-gray-500 mt-2">
           {lang === "en"
-            ? "Cost based on public Bedrock + Anthropic pricing. Excludes failed/overloaded calls."
-            : "비용은 Bedrock + Anthropic 공개 단가 기반. 실패/과부하 호출은 제외."}
+            ? "Cost uses unit prices from official sources, refreshed every 12 hours, see "
+            : "비용은 공식 출처에서 12시간마다 갱신되는 단가 기반, 단가는 "}
+          <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
+          {lang === "en" ? ". Excludes failed/overloaded calls." : " 메뉴 참고. 실패/과부하 호출은 제외."}
         </p>
       </section>
 

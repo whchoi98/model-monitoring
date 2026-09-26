@@ -219,9 +219,13 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
             L("No automatic check has run yet, initial values are shown.", "자동 확인 기록이 아직 없어 초기값을 표시합니다.")
           )}
           {data.pending_review > 0 && (
-            <span data-pending-count className="ml-3 rounded border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
-              {L(`${data.pending_review} pending review`, `검토 대기 ${data.pending_review}건`)}
-            </span>
+            <>
+              {" "}
+              <span className="sr-only">, </span>
+              <span data-pending-count className="ml-3 rounded border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
+                {L(`${data.pending_review} pending review`, `검토 대기 ${data.pending_review}건`)}
+              </span>
+            </>
           )}
         </p>
         <div role="group" aria-label={L("Download price list", "가격표 내려받기")} className="flex flex-wrap items-center gap-2">

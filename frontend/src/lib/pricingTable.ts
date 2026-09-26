@@ -54,12 +54,13 @@ export function tierBadges(tier: PricingTier, notes: PricingNote[], lang: "ko" |
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const badges: PricingBadge[] = [];
   if (tier.verification === "stale" || tier.verification === "seed_only") {
-    const checked = tier.verification === "stale" ? utcDate(tier.observed_at) : null;
-    badges.push({
-      kind: "unverified",
-      label: L("Not auto-verified", "자동 확인 안 됨"),
-      title: checked ? L(`Last verified ${checked}`, `마지막 확인 ${checked}`) : L("Initial value", "초기값"),
-    });
+    let title = L("Initial value", "초기값");
+    if (tier.verification === "stale") {
+      // A stale tier was verified once; without observed_at it has no date, but it is not an initial value either.
+      const checked = utcDate(tier.observed_at);
+      title = checked ? L(`Last verified ${checked}`, `마지막 확인 ${checked}`) : L("No confirmation date", "마지막 확인일 없음");
+    }
+    badges.push({ kind: "unverified", label: L("Not auto-verified", "자동 확인 안 됨"), title });
   }
   if (tier.pending) {
     const next = formatPricePair(tier.pending);

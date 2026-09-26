@@ -71,6 +71,14 @@ describe("tierBadges", () => {
     ]);
   });
 
+  test("observed_at이 없는 stale → 초기값이 아니라 마지막 확인일 없음", () => {
+    const stale = tier({ verification: "stale", observed_at: null });
+    expect(tierBadges(stale, [], "ko", SEPT_26)).toEqual([
+      { kind: "unverified", label: "자동 확인 안 됨", title: "마지막 확인일 없음" },
+    ]);
+    expect(tierBadges(stale, [], "en", SEPT_26)[0].title).toBe("No confirmation date");
+  });
+
   test("seed_only → 자동 확인 안 됨, 툴팁은 초기값", () => {
     const seed = tier({ verification: "seed_only", observed_at: null });
     expect(tierBadges(seed, [], "ko", SEPT_26)).toEqual([{ kind: "unverified", label: "자동 확인 안 됨", title: "초기값" }]);
