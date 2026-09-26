@@ -1,88 +1,77 @@
-"""OpenAI pricing normalization + cost estimation."""
-import pricing
+"""OpenAI channel price identity + seed prices + cost channel split.
+
+v2.30.0 (ADR-030): backend/pricing.py (PRICE_TABLE, _normalize_key prefix fallback, estimate_cost_usd) is gone.
+Prices are stored per model_id in price_history, so every channel needs its own classification
+(pricing_sources.price_identity) and its own seed row (pricing_seed.SEED). Per-row cost math is covered by
+test_price_history.py and test_cost_time_effective.py.
+"""
+import pytest
+
+import pricing_seed
+from pricing_sources import active_channels, price_identity
 from routers.cost import _channel
 
 
-def test_normalize_openai_key():
-    assert pricing._normalize_key("openai:us-east-1:openai.gpt-5.4") == "gpt-5.4"
-    assert pricing._normalize_key("openai:us-east-2:openai.gpt-5.5") == "gpt-5.5"
+def _seed(model_id):
+    return pytest.approx(pricing_seed.SEED[model_id][:2])
 
 
-def test_normalize_openai_global_key():
-    # Bedrock global CRIS는 in-region과 단가가 달라 "-global" suffix 키로 분리 (v2.20.0).
-    assert pricing._normalize_key("openai:global:global.openai.gpt-5.6-sol") == "gpt-5.6-sol-global"
-    assert pricing._normalize_key("openai:us-east-1:openai.gpt-5.6-sol") == "gpt-5.6-sol"
-    # Claude의 global. 프로파일은 종전대로 base 키로 collapse (suffix 미부여).
-    assert pricing._normalize_key("global.anthropic.claude-opus-5") == "claude-opus-5"
+def test_openai_channels_classify_per_channel():
+    assert price_identity("openai:us-east-1:openai.gpt-5.4").channel == "inregion:us-east-1"
+    assert price_identity("openai:us-east-2:openai.gpt-5.5").channel == "inregion:us-east-2"
+    assert price_identity("openai:global:global.openai.gpt-5.6-sol").channel == "global"
+    assert price_identity("openai:us:us.openai.gpt-6-astra").channel == "us"
+    assert price_identity("openai:us-west-2:openai.gpt-6-astra").channel == "inregion:us-west-2"
+    # Global/US CRIS and in-region share one family (one table row), never a "-global" key.
+    assert {price_identity(m).family_key for m in (
+        "openai:global:global.openai.gpt-5.6-sol", "openai:us-east-1:openai.gpt-5.6-sol",
+    )} == {"gpt-5.6-sol"}
+    assert price_identity("openai:global:global.openai.gpt-5.6-sol").source_ref == "openai.gpt-5.6-sol"
 
 
-def test_normalize_openai_us_cris_key():
-    # US CRIS(pseudo-region "us")도 채널 단가 분리 대상 — "-us" suffix (v2.25.0).
-    assert pricing._normalize_key("openai:us:us.openai.gpt-6-astra") == "gpt-6-astra-us"
-    assert pricing._normalize_key("openai:global:global.openai.gpt-6-astra") == "gpt-6-astra-global"
-    assert pricing._normalize_key("openai:us-west-2:openai.gpt-6-astra") == "gpt-6-astra"
-    # in-region, 1P 키는 suffix 없음 — 회귀 방지.
-    assert pricing._normalize_key("openai:us-east-1:openai.gpt-5.6-sol") == "gpt-5.6-sol"
-    assert pricing._normalize_key("openai:1p:gpt-5.4") == "gpt-5.4"
+def test_dormant_1p_channel_is_not_priced():
+    # 1P direct is hidden and dormant (v2.19.1); it must not borrow the in-region price any more.
+    assert "openai:1p:gpt-5.4" not in pricing_seed.SEED
+    assert active_channels({"openai:1p:gpt-5.4": "OpenAI GPT 5.4 (1P)"}, ["(1P)"]) == {}
 
 
 def test_gpt6_astra_official_pricing_per_channel():
-    """GPT 6 Astra — v2.25.0 미확정(None) → v2.27.0 AWS 공식 모델 카드 단가 (Standard, ≤272K).
-
-    In-Region·Geo CRIS(US)는 OpenAI 정가 +10%($11/$55), Global CRIS는 정가($10/$50).
-    """
-    assert pricing.get_pricing("openai:us-west-2:openai.gpt-6-astra") == {"input": 11.0, "output": 55.0}
-    assert pricing.get_pricing("openai:us:us.openai.gpt-6-astra") == {"input": 11.0, "output": 55.0}
-    assert pricing.get_pricing("openai:global:global.openai.gpt-6-astra") == {"input": 10.0, "output": 50.0}
-    # 1M in + 1M out = $11 + $55
-    assert pricing.estimate_cost_usd("openai:us-west-2:openai.gpt-6-astra", 1_000_000, 1_000_000) == 66.0
+    """In-Region, Geo CRIS(US) = OpenAI list +10% ($11/$55), Global CRIS = list ($10/$50)."""
+    assert _seed("openai:us-west-2:openai.gpt-6-astra") == (11.0, 55.0)
+    assert _seed("openai:us:us.openai.gpt-6-astra") == (11.0, 55.0)
+    assert _seed("openai:global:global.openai.gpt-6-astra") == (10.0, 50.0)
 
 
-def test_normalize_gpt6_sol_luna_keys():
-    # GPT 6 Sol/Luna도 Astra와 같은 3키 규칙 — Global/US CRIS는 suffix, Mantle 인리전은 base 키.
+def test_gpt6_sol_luna_seed_per_channel():
     for fam in ("sol", "luna"):
-        assert pricing._normalize_key(f"openai:us-east-1:openai.gpt-6-{fam}") == f"gpt-6-{fam}"
-        assert pricing._normalize_key(f"openai:us:us.openai.gpt-6-{fam}") == f"gpt-6-{fam}-us"
-        assert pricing._normalize_key(f"openai:global:global.openai.gpt-6-{fam}") == f"gpt-6-{fam}-global"
-        # 정규화된 키가 PRICE_TABLE에 정확히 존재해야 prefix fallback을 타지 않는다.
-        for suffix in ("", "-us", "-global"):
-            assert f"gpt-6-{fam}{suffix}" in pricing.PRICE_TABLE
+        for mid in (f"openai:us-east-1:openai.gpt-6-{fam}", f"openai:us:us.openai.gpt-6-{fam}",
+                    f"openai:global:global.openai.gpt-6-{fam}"):
+            assert price_identity(mid).family_key == f"gpt-6-{fam}", mid
+            assert mid in pricing_seed.SEED, mid
 
 
-def test_estimate_cost_gpt6_sol_luna():
-    # Sol us-east-1: 1M in @2.20 + 1M out @11.00 = 13.20
-    assert abs(pricing.estimate_cost_usd("openai:us-east-1:openai.gpt-6-sol", 1_000_000, 1_000_000) - 13.20) < 1e-9
-    # Luna Global: 2M in @0.10 + 500K out @0.50 = 0.20 + 0.25 = 0.45
-    assert abs(pricing.estimate_cost_usd("openai:global:global.openai.gpt-6-luna", 2_000_000, 500_000) - 0.45) < 1e-9
+def test_seed_openai_gpt54_gpt55():
+    assert _seed("openai:us-east-1:openai.gpt-5.4") == (2.75, 16.5)
+    assert _seed("openai:us-east-2:openai.gpt-5.5") == (5.5, 33.0)
 
 
-def test_get_pricing_openai():
-    assert pricing.get_pricing("openai:us-east-1:openai.gpt-5.4") == {"input": 2.75, "output": 16.5}
-    assert pricing.get_pricing("openai:us-east-2:openai.gpt-5.5") == {"input": 5.5, "output": 33.0}
+def test_seed_gpt56_global_vs_in_region():
+    # Global CRIS is cheaper than in-region; GPT-5.6 Sol carries the promotional price (v2.28.1).
+    assert _seed("openai:global:global.openai.gpt-5.6-sol") == (4.0, 20.0)
+    assert _seed("openai:us-east-1:openai.gpt-5.6-sol") == (4.4, 22.0)
+    assert _seed("openai:global:global.openai.gpt-5.6-terra") == (2.0, 12.0)
+    assert _seed("openai:us-east-2:openai.gpt-5.6-terra") == (2.2, 13.2)
+    assert _seed("openai:global:global.openai.gpt-5.6-luna") == (0.2, 1.2)
+    assert _seed("openai:us-west-2:openai.gpt-5.6-luna") == (0.22, 1.32)
 
 
-def test_get_pricing_gpt56_global_vs_in_region():
-    # 공식 모델 카드 (Standard tier, short context) — global CRIS가 in-region보다 저렴.
-    # in-region은 2026-07-30 인하 반영 (Luna -80%, Terra -20%, Sol 불변).
-    # v2.28.1: GPT-5.6 Sol 프로모션 단가 (AWS 카드 + agreement offers, 최소 2026-11-21까지)
-    assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-sol") == {"input": 4.0, "output": 20.0}
-    assert pricing.get_pricing("openai:us-east-1:openai.gpt-5.6-sol") == {"input": 4.4, "output": 22.0}
-    assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-terra") == {"input": 2.0, "output": 12.0}
-    assert pricing.get_pricing("openai:us-east-2:openai.gpt-5.6-terra") == {"input": 2.2, "output": 13.2}
-    assert pricing.get_pricing("openai:global:global.openai.gpt-5.6-luna") == {"input": 0.2, "output": 1.2}
-    assert pricing.get_pricing("openai:us-west-2:openai.gpt-5.6-luna") == {"input": 0.22, "output": 1.32}
-
-
-def test_estimate_cost_openai():
-    # 1M input @2.75 + 1M output @16.5 = 19.25
-    assert pricing.estimate_cost_usd("openai:us-east-1:openai.gpt-5.4", 1_000_000, 1_000_000) == 19.25
-
-
-def test_existing_pricing_unbroken():
-    assert pricing.get_pricing("us.anthropic.claude-fable-5") == {"input": 10.0, "output": 50.0}
-    # Opus 4.8은 $5/$25 — 2026-07-24 공식 가격 확인 (기존 $15/$75는 Opus 4.1 단가로 오기재였음)
-    assert pricing.get_pricing("anthropic:claude-opus-4-8") == {"input": 5.0, "output": 25.0}
-    assert pricing.get_pricing("global.anthropic.claude-opus-5") == {"input": 5.0, "output": 25.0}
+def test_existing_claude_seed_unbroken():
+    # Bedrock US is Global x1.1 since v2.30.0 (the old table collapsed us. onto global.).
+    assert _seed("us.anthropic.claude-fable-5") == (11.0, 55.0)
+    assert _seed("global.anthropic.claude-opus-5") == (5.0, 25.0)
+    # Opus 4.8 is $5/$25 (2026-07-24 official check; $15/$75 was the Opus 4.1 price).
+    assert pricing_seed.CP_SEED["claude-opus-4-8"][:2] == pytest.approx((5.0, 25.0))
+    assert price_identity("anthropic:claude-opus-4-8").family_key == "claude-opus-4-8"
 
 
 def test_channel_openai():
