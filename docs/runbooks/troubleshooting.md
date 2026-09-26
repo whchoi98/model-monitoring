@@ -29,8 +29,11 @@ curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync, pending_review, not_v
   | select(.verification != "verified") | {family: $f, model_ids, verification, observed_at, pending}]}'
 
 # 2. 최근 런 로그 (런 요약 한 줄 = 상태, 채널별 결과 수 — unchanged, changed, pending, no_baseline, rejected, skipped:<reason> — 와 오류 수.
-#    출처 호출이 재시도되면 "pricing sync: … retry n/3" 경고가 먼저 찍힌다)
+#    요약 앞에는 런 오류마다 "pricing sync: <출처> …" WARNING 한 줄이 찍힌다(호출 실패, 파서 오류, 표에 없는 모델, 5분 상한 초과).
+#    같은 문구가 런 행 price_sync_runs.summary.errors(앞 50개)에도 저장되지만, 그 값을 보여 주는 API는 없으니 이 로그로 본다.
+#    출처 호출이 재시도되면 "pricing sync: … retry n/3" 경고도 찍힌다)
 aws logs tail /ecs/pricingsync --since 13h --region $REGION
+aws logs tail /ecs/pricingsync --since 13h --region $REGION --filter-pattern WARNING   # 오류와 재시도 경고만
 
 # 3. 최근 태스크 종료 사유 — 컨테이너 이름은 pricingsynctaskdef (containers[0]은 GuardDuty 사이드카일 수 있다)
 FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerPricingSyncTaskDef --status ACTIVE \
@@ -46,10 +49,10 @@ done
 |------|------|------|
 | 스케줄이 태스크를 실행하지 못함 | `last_sync.started_at`이 12시간보다 오래됨, `/ecs/pricingsync`에 새 로그 없음 | Scheduler 역할의 `RunTaskFamilyWildcard`에 PricingSync family `:*`, `PassTaskRoles`에 `PricingSyncTaskRole`이 있는지 확인(ADR-011). 없으면 digest 고정 CDK로 Scheduler 스택을 다시 배포 |
 | 출처 권한 거부 | 로그에 `AccessDeniedException` (`ListFoundationModelAgreementOffers` 또는 `GetProducts`) | `PricingSyncTaskRole` 인라인 정책의 두 액션 확인. 다른 권한은 필요 없다(모델 호출 권한은 의도적으로 없음) |
-| Anthropic 문서 형식 변경 | CP 9셀만 `stale`, 채널 결과 `skipped:parse_failed`, 로그에 파싱 실패(표나 헤더 "Model", "Base input tokens", "Output tokens"를 찾지 못함). 파서 예외는 종류와 상관없이 그 출처 채널만 건너뛰고, 다른 출처가 성공했으면 런은 `partial`로 끝난다 | 문서를 열어 표 구조를 확인하고 `backend/pricing_parsers.py` `parse_anthropic_pricing_md`와 fixture를 고친다. 모델명이 바뀌었으면 `pricing_sources.ANTHROPIC_DOC_NAMES`도 고친다 |
+| Anthropic 문서 형식 변경 | CP 9셀만 `stale`, 채널 결과 `skipped:parse_failed`, 로그에 `pricing sync: anthropic_doc: <파서 메시지>` 경고 한 줄. 메시지는 `'## Model pricing' heading not found`, `no pricing table under '## Model pricing'`, `pricing table headers not recognised: [...]`(헤더 "Model", "Base input tokens", "Output tokens" 중 하나가 없음), `pricing table has no parseable rows`, 그 밖의 예외면 `<예외 타입>: <문구>`다. 파서 예외는 종류와 상관없이 그 출처 채널만 건너뛰고, 다른 출처가 성공했으면 런은 `partial`로 끝난다. 표는 읽혔는데 모델명만 없으면 그 채널만 `skipped:not_found`이고 경고는 `pricing sync: anthropic_doc: model '<이름>' not in the table`이다 | 문서를 열어 표 구조를 확인하고 `backend/pricing_parsers.py` `parse_anthropic_pricing_md`와 fixture를 고친다. 모델명이 바뀌었으면(`not in the table`) `pricing_sources.ANTHROPIC_DOC_NAMES`도 고친다 |
 | 오퍼 형식 변경 | 특정 모델 채널만 `skipped:<reason>`(오퍼 수 ≠ 1, 필수 차원 없음) | `aws bedrock list-foundation-model-agreement-offers --model-id <FM id> --offer-type PUBLIC --region us-east-1 --query 'offers[].termDetails.usageBasedPricingTerm.rateCard[].[dimension, price, unit]' --output table`로 차원 이름을 보고 `pricing_parsers.DIMENSION_RE`와 선택 순서를 고친다(출력에 `offerToken`과 `legalTerm.url`이 나오지 않도록 `--query`를 유지한다) |
 | Price List 단위 변경 | Nova 1셀만 `stale` | `unit`이 `1K tokens`가 아니면 파서가 변경 없음으로 둔다. 새 단위를 확인하고 `parse_pricelist`를 고친다 |
-| 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline` | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 반복되면 로그의 재시도 경고(`retry n/3`)로 느린 출처를 찾는다 |
+| 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`)를 확인한다 |
 | 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_advisory_lock(917350004)`로 수동 실행과 스케줄 실행을 직렬화). 앞 런이 끝난 뒤 다시 실행한다 |
 | CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial` | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
 

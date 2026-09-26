@@ -441,7 +441,7 @@ NETCFG=$(aws scheduler get-schedule --name "$SCHED" --region $REGION \
   | jq -c '{awsvpcConfiguration: {subnets: .Subnets, securityGroups: .SecurityGroups, assignPublicIp: .AssignPublicIp}}')
 aws ecs run-task --cluster bedrock-monitor --task-definition "$FAM" --launch-type FARGATE --region $REGION \
   --network-configuration "$NETCFG" --query 'tasks[0].taskArn' --output text
-# 약 1분 뒤 로그 (런 요약 한 줄: run_id, status, 채널별 결과 수, 오류 수)
+# 약 1분 뒤 로그 (런 요약 한 줄: run_id, status, 채널별 결과 수, 오류 수. 오류가 있으면 그 앞에 오류마다 "pricing sync: …" WARNING 한 줄)
 aws logs tail /ecs/pricingsync --since 15m --region $REGION
 
 # 3. 그 런이 completed이고 55채널이 verified인지

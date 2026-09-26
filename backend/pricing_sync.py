@@ -230,18 +230,23 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
     channels: dict[str, str] = {}
     sources = {s: {"calls": 0, "ok": 0, "failed": 0} for s in SOURCES}
     errors: list[str] = []
+
+    def error(message: str) -> None:  # every summary error is also a log line — the run summary is not in the logs
+        logger.warning("pricing sync: %s", message)
+        errors.append(message)
+
     groups: dict[str, dict[str, list[tuple[str, PriceIdentity]]]] = {s: defaultdict(list) for s in SOURCES}
     for model_id in sorted(active):
         ident = active[model_id]
         source = _SOURCE_OF_KIND.get(ident.source_kind)
         if source is None:
             channels[model_id] = "skipped:unmapped"
-            errors.append(f"{model_id}: unknown source kind {ident.source_kind!r}")
+            error(f"{model_id}: unknown source kind {ident.source_kind!r}")
             continue
         groups[source][ident.source_ref].append((model_id, ident))
     for source in SOURCES:
         if not groups[source]:
-            errors.append(f"{source}: no active channels")
+            error(f"{source}: no active channels")
 
     deadline = {"hit": False}
 
@@ -249,16 +254,14 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
         if (clock() - started_at).total_seconds() > deadline_s:
             if not deadline["hit"]:
                 deadline["hit"] = True
-                errors.append(f"deadline: {deadline_s:g}s exceeded before {source} {what}")
+                error(f"deadline: {deadline_s:g}s exceeded before {source} {what}")
             return None, "deadline"
         sources[source]["calls"] += 1
         try:
             value = call()
         except Exception as exc:  # noqa: BLE001 — a source failure only skips its channels
             sources[source]["failed"] += 1
-            message = f"{source} {what}: {_short(exc)}"
-            logger.warning("pricing sync: %s", message)
-            errors.append(message)
+            error(f"{source} {what}: {_short(exc)}")
             return None, "fetch_failed"
         sources[source]["ok"] += 1
         return value, None
@@ -280,11 +283,11 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
                 table = {name: _quantized(p) for name, p in parse_anthropic_pricing_md(text).items()}
             except Exception as exc:  # noqa: BLE001 — any parser error only skips the CP channels
                 reason = "parse_failed"
-                errors.append(f"anthropic_doc: {_parse_message(exc)}")
+                error(f"anthropic_doc: {_parse_message(exc)}")
         for doc_name in sorted(doc_groups):
             price = table.get(doc_name)
             if reason is None and price is None:
-                errors.append(f"anthropic_doc: model {doc_name!r} not in the table")
+                error(f"anthropic_doc: model {doc_name!r} not in the table")
             settle(doc_groups[doc_name], price, reason or "not_found", ANTHROPIC_SOURCE_ID)
 
     # 2) AWS Price List — Nova
@@ -292,7 +295,7 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
         members = groups["pricelist"][family_key]
         usagetypes = NOVA_USAGETYPES.get(family_key)
         if usagetypes is None:
-            errors.append(f"pricelist: no usagetypes for {family_key}")
+            error(f"pricelist: no usagetypes for {family_key}")
             settle(members, None, "unmapped", None)
             continue
         items, reason = fetch("pricelist", family_key, lambda ut=usagetypes: fetchers.pricelist(ut[0], ut[1]))
@@ -302,7 +305,7 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
                 price = _quantized(parse_pricelist(items, usagetypes[0], usagetypes[1]))
             except Exception as exc:  # noqa: BLE001 — any parser error only skips this family's channels
                 reason = "parse_failed"
-                errors.append(f"pricelist {family_key}: {_parse_message(exc)}")
+                error(f"pricelist {family_key}: {_parse_message(exc)}")
         settle(members, price, reason, pricelist_source_id(usagetypes[0]))
 
     # 3) Bedrock agreement offers — Bedrock Claude + OpenAI (one call per FM id)
@@ -319,14 +322,14 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
             except Exception as exc:  # noqa: BLE001 — any parser error only skips this FM's channels
                 offers_list = response.get("offers") if isinstance(response, dict) else None
                 reason = "offer_count" if isinstance(offers_list, list) and len(offers_list) != 1 else "parse_failed"
-                errors.append(f"offers {fm_id}: {_parse_message(exc)}")
+                error(f"offers {fm_id}: {_parse_message(exc)}")
         if reason is not None:
             settle(members, None, reason, None)
             continue
         for model_id, ident in members:
             price = prices[model_id]
             if price is None:
-                errors.append(f"offers {fm_id}: no standard price for channel {ident.channel}")
+                error(f"offers {fm_id}: no standard price for channel {ident.channel}")
                 channels[model_id] = "skipped:not_found"
             else:
                 observed[model_id] = _Observed(price, offer_source_id(offer_id))

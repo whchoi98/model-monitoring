@@ -329,8 +329,9 @@ def test_no_claude_platform_on_aws_channels_makes_the_run_partial(Session):
     assert "anthropic_doc: no active channels" in run.summary["errors"] and CP_HAIKU not in run.summary["channels"]
 
 
-def test_the_deadline_skips_the_remaining_channels(Session):
+def test_the_deadline_skips_the_remaining_channels(Session, caplog):
     _seed(Session)
+    caplog.set_level(logging.INFO, logger="pricing_sync")
     clock, calls = {"t": T0}, []
 
     def slow(_name):  # every fetch takes 200 s on the fake clock
@@ -343,7 +344,20 @@ def test_the_deadline_skips_the_remaining_channels(Session):
     assert all(run.summary["channels"][m] == "skipped:deadline" for m in (OPUS_G, OPUS_US, SOL_G, SOL_E1))
     assert run.summary["sources"]["offers"] == {"calls": 0, "ok": 0, "failed": 0}
     assert any(e.startswith("deadline: 300s exceeded") for e in run.summary["errors"])
+    assert "pricing sync: deadline: 300s exceeded before offers anthropic.claude-opus-5-5" in caplog.messages
     assert _utc(run.finished_at) == T0 + timedelta(seconds=400) and _rows(Session, OPUS_US)[0].observed_at is None
+
+
+def test_every_summary_error_is_also_a_warning_log_line(Session, caplog):
+    _seed(Session)
+    caplog.set_level(logging.INFO, logger="pricing_sync")
+    fetchers = _fetchers(sol_offers=2, pricelist_items=_malformed_nova_items("product-not-an-object"))
+    fetchers.anthropic_doc = lambda: "# Pricing\n\nNo tables here.\n"
+    run = _run(Session, run_sync(Session, _active(*ALL), fetchers, now=lambda: T0))
+    assert run.status == "partial" and len(run.summary["errors"]) == 3   # CP doc, Nova and Sol all failed to parse
+    warnings = [r.getMessage() for r in caplog.records if r.levelno == logging.WARNING]
+    assert warnings == [f"pricing sync: {e}" for e in run.summary["errors"]]
+    assert "pricing sync: anthropic_doc: '## Model pricing' heading not found" in warnings
 
 
 def test_all_sources_failing_marks_the_run_failed(Session):

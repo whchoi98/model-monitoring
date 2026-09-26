@@ -113,6 +113,8 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
 3. 출처별로 한 번씩, Anthropic 문서 → Price List → offers 순서로 가져온다(느린 offers가 싼 출처를 `skipped:deadline`으로 밀어내지
    않게). offers는 FM 18개를 중복 없이 순차 호출하고, 각 호출은 `ThrottlingException` 계열, 5xx, HTTP 429, 연결 오류에 1초, 2초,
    4초 간격으로 최대 3회 재시도한다(botocore 자체 재시도는 끈다). 300초 상한은 호출 직전에만 검사하고 진행 중인 호출은 끊지 않는다. 오퍼 응답의 `offerToken`과 `legalTerm.url`(presigned URL)은 저장하거나 로그에 남기지 않는다.
+   호출 실패, 파서 오류, 상한 초과 같은 런 오류는 문구마다 `pricing sync: …` 경고 로그로 남기고 런 요약 `summary.errors`(앞 50개)에도
+   저장한다. 요약을 보여 주는 API가 없어서 운영 진단은 로그로 한다.
 4. 오퍼 차원 이름은 허용 목록 정규식에 **완전 일치**할 때만 후보다.
    `^(?:(?P<rc>APN2|USE1|USE2|USW2)_)?(?:(?P<io>input|output)_tokens(?P<g>_global)?_standard|(?P<IO>Input|Output)TokenCount(?P<G>_Global)?)$`
    그래서 batch, flex, priority, long-context, cache, reserved, GovCloud, 그 밖의 리전 접두는 후보가 되지 않는다. 오퍼가 정확히
