@@ -11,11 +11,13 @@
 
 ## System Overview
 
-Bedrock LLM Monitor v2 measures a 55-channel active catalog across Amazon Bedrock, Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, including the 9 Claude Platform on AWS channels (v2.29.1 reverted the v2.29.0 10-minute CP cadence; `ANTHROPIC_CP_PROBE_INTERVAL_S=600` brings it back as an operational lever). Four more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, and a daily Claude API Features evidence sweep. A chatbot answers natural-language questions over the stored time series.
+Bedrock LLM Monitor v2 measures a 55-channel active catalog across Amazon Bedrock, Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, including the 9 Claude Platform on AWS channels (v2.29.1 reverted the v2.29.0 10-minute CP cadence; `ANTHROPIC_CP_PROBE_INTERVAL_S=600` brings it back as an operational lever). Five more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, a daily Claude API Features evidence sweep, and a 12-hourly sync of official unit prices (v2.30.0). A chatbot answers natural-language questions over the stored time series.
 
 Traffic enters through CloudFront at `llm-monitor.whchoi.net` (the default `d36s7ml54xwemr.cloudfront.net` name also works), reaches an internal ALB through a VPC Origin, and is routed to two ECS Fargate services: `frontend` (Next.js standalone) and `backend` (FastAPI). All data lands in a single RDS PostgreSQL instance. Viewers connect over HTTPS. The VPC Origin currently reaches the ALB over HTTP port 80 inside the VPC, a temporary setting in `edge-stack.ts` until the origin switches to `HTTPS_ONLY`; the ALB is internal, sits in private subnets, and its security group admits only the VPC CIDR.
 
 Dashboard model cards grade TTFT, total latency, and TPS values against per-workload-category thresholds (normal blue, warning amber, critical rose). The grading is a pure frontend function in `frontend/src/lib/metricGrade.ts` with no backend involvement (v2.28.0, ADR-029).
+
+Unit prices have one source, the backend `price_history` table (v2.30.0, ADR-030). The PricingSync task reads the Standard input and output price of every active channel from three official sources every 12 hours: the Bedrock agreement-offer rate cards (Bedrock Claude and OpenAI), the AWS Price List API (Nova 2.0 Lite) and Anthropic's `pricing.md` (Claude Platform on AWS). A change above 50% on input or output waits for admin approval. `/api/cost/*` and `/api/efficiency/score` price each probe row at the unit price in effect at its timestamp, and the `/pricing` page, its CSV, Markdown and JSON downloads, Model Explorer and Comparison Lab read `/api/pricing`.
 
 ## Full Architecture
 
@@ -34,7 +36,7 @@ flowchart TB
   end
 
   subgraph apilayer[API Layer]
-    be["backend service: FastAPI, 17 routers, port 8000"]
+    be["backend service: FastAPI, 18 routers, port 8000"]
   end
 
   subgraph ingestion[Scheduled Ingestion Layer]
@@ -44,6 +46,7 @@ flowchart TB
     par["ParityRun task: 12 h"]
     gpt["GptBench task: 15 min"]
     feat["FeaturesVerify task: daily 17:30 UTC"]
+    prc["PricingSync task: 12 h"]
   end
 
   subgraph storage[Storage Layer]
@@ -60,6 +63,12 @@ flowchart TB
     ses["Amazon SES us-east-1"]
   end
 
+  subgraph pricesrc[Official Price Sources]
+    offers["Bedrock agreement offers, us-east-1"]
+    plist["AWS Price List API, us-east-1"]
+    adoc["Anthropic pricing.md, platform.claude.com"]
+  end
+
   subgraph obs[Observability Layer]
     cw["CloudWatch Logs, Alarms, Dashboard"]
     sns[SNS alarm topic]
@@ -69,15 +78,17 @@ flowchart TB
   user --> cf --> vpco --> alb
   alb -->|"/*"| fe
   alb -->|"/api/*"| be
-  sched --> ap & ins & par & gpt & feat
+  sched --> ap & ins & par & gpt & feat & prc
   ap & par & feat --> providers
+  prc --> offers & plist & adoc
+  prc -.->|"CP model list"| cp
   gpt --> br & mantle
   ins --> br
   be --> br
   be --> opt
   be --> ses
   be --> mem
-  be & ap & ins & par & gpt & feat --> rds
+  be & ap & ins & par & gpt & feat & prc --> rds
   sec -.->|"secrets at task start"| be
   be & fe & ap --> cw
   cw --> sns
@@ -98,6 +109,13 @@ User request path:
 ```mermaid
 flowchart LR
   A([Browser]) --> B[CloudFront] --> C[VPC Origin] --> D[Internal ALB] --> E[backend FastAPI] --> F[(RDS PostgreSQL)]
+```
+
+Unit price path (v2.30.0, ADR-030):
+
+```mermaid
+flowchart LR
+  A([EventBridge Scheduler]) --> B[PricingSync task] --> C["Agreement offers, Price List, Anthropic pricing.md"] --> D[(price_history in RDS)] --> E["backend /api/pricing, /api/cost/*"] --> F["frontend /pricing, /cost"] --> G([Browser])
 ```
 
 `/api/auto-probe/status` and `/api/auto-probe/latest` read the latest `ProbeRun(is_auto=1)` rows from the database, not in-process state, because the prober runs in a separate Fargate task. `/latest` returns each model's latest row within its own cadence window (3 intervals: 15 minutes for every channel at the default cadence, 30 minutes for CP when `ANTHROPIC_CP_PROBE_INTERVAL_S=600`), and `/status` exposes `channel_intervals` so the dashboard judges freshness per channel.
@@ -122,14 +140,14 @@ flowchart LR
 | S3 (ALB logs) | ALB access logs, 90-day retention |
 | ECS cluster `bedrock-monitor` | Container Insights enabled |
 | ECR `bedrock-monitor-backend-v2`, `bedrock-monitor-frontend` | `bedrock-monitor-backend-v2` is created outside CDK with IMMUTABLE tags (ADR-018); the CDK-managed `bedrock-monitor-frontend` (and the legacy `bedrock-monitor-backend`) are MUTABLE, so releases rely on unique `v<epoch>` tags plus digest-pinned task definitions (`pinned-image.ts`) |
-| frontend Fargate service | Next.js standalone on port 3000, 0.5 vCPU / 1 GB, CPU autoscaling 1 to 3; pages `/`, `/models`, `/parity`, `/cost`, `/reliability`, `/efficiency`, `/analysis`, `/gpt-on-aws`, `/claude-features`, `/prompts`, `/chat` |
-| backend Fargate service | FastAPI on port 8000, 0.5 vCPU / 1 GB, CPU autoscaling 1 to 3, health-check grace 300 s for startup migrations; 17 routers under `backend/routers/` |
+| frontend Fargate service | Next.js standalone on port 3000, 0.5 vCPU / 1 GB, CPU autoscaling 1 to 3; pages `/`, `/models`, `/parity`, `/cost`, `/pricing`, `/reliability`, `/efficiency`, `/analysis`, `/gpt-on-aws`, `/claude-features`, `/prompts`, `/chat` |
+| backend Fargate service | FastAPI on port 8000, 0.5 vCPU / 1 GB, CPU autoscaling 1 to 3, health-check grace 300 s for startup migrations; 18 router modules under `backend/routers/`; `/api/pricing` keeps a 60 s in-process cache per task |
 
 ### Storage
 
 | Resource | Role |
 |----------|------|
-| RDS PostgreSQL 16.8 (t4g.micro) | 20 GB gp3, Single-AZ, 7-day backups, encrypted; raw `probe_results` older than `RETENTION_DAYS` (60) move to `probe_results_hourly` |
+| RDS PostgreSQL 16.8 (t4g.micro) | 20 GB gp3, Single-AZ, 7-day backups, encrypted; raw `probe_results` older than `RETENTION_DAYS` (60) move to `probe_results_hourly`; `price_history` (unit prices per `model_id` with `effective_from`) and `price_sync_runs` (one row per PricingSync run) since v2.30.0 |
 | Secrets Manager `bedrock-monitor/db` | Generated RDS credentials |
 | SSM `/bedrock-monitor/jwt-secret-key` | JWT signing key |
 | SSM `/bedrock-monitor/agentcore-memory-id` | AgentCore Memory ID |
@@ -148,6 +166,7 @@ flowchart LR
 | AgentCore Memory `BedrockMonitorChatMemory` | Chat context, 30-day retention; IAM managed policy attached to the backend task role |
 | Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize` in `BEDROCK_OPTIMIZE_REGION` (default us-east-1) |
 | Amazon SES (us-east-1) | Registration approval email to the admin address |
+| Official price sources | Bedrock `ListFoundationModelAgreementOffers` (us-east-1, 18 foundation models), AWS Price List `GetProducts` (us-east-1, Nova 2.0 Lite) and `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude Platform on AWS); read only by the PricingSync task (ADR-030) |
 
 ### Scheduled Ingestion
 
@@ -158,15 +177,16 @@ flowchart LR
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | Model × 6 surfaces × 19 features evidence cells |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 18 GPT channels (Mantle in-region 11 + CRIS 7) × 10 sequential calls; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s, cycle deadline `GPT_BENCH_DEADLINE` 780 s |
 | `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39 rows × 5 surfaces × 5 models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975 cells (813 probed + 162 pre-decided), about 9 minutes, daily at 17:30 UTC (02:30 KST) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel, an unchanged observation, a new `verified` price (change of 50% or less) or a `pending_review` row; run cap 300 s, serialized by `pg_advisory_lock(917350004)` (v2.30.0, ADR-030) |
 
-Every scheduled task uses the backend image with a command override, 0.5 vCPU / 1 GB, and a task definition family `:*` wildcard in the scheduler role's `ecs:RunTask` policy (ADR-011).
+Every scheduled task uses the backend image with a command override, 0.5 vCPU / 1 GB, and a task definition family `:*` wildcard in the scheduler role's `ecs:RunTask` policy (ADR-011). PricingSync runs with its own task role that allows only `bedrock:ListFoundationModelAgreementOffers` and `pricing:GetProducts`, with no model invocation.
 
 ### Network
 
 | Resource | Role |
 |----------|------|
 | VPC 10.20.0.0/16 (or an existing VPC) | 2 AZs with Public, App, and Data subnets |
-| NAT gateway × 1 | Egress for App subnets to endpoints without PrivateLink coverage (Claude Platform on AWS, Mantle, OpenAI CRIS in us-east-1) |
+| NAT gateway × 1 | Egress for App subnets to endpoints without PrivateLink coverage (Claude Platform on AWS, Mantle, OpenAI CRIS in us-east-1, and for PricingSync the Bedrock control plane and Price List API in us-east-1 plus `platform.claude.com`) |
 | Interface VPC endpoints × 9 | ECR API, ECR Docker, CloudWatch Logs, SSM, SSM Messages, Secrets Manager, KMS, Bedrock Runtime, Bedrock AgentCore |
 | Gateway VPC endpoint × 1 | S3 |
 
@@ -174,7 +194,7 @@ Every scheduled task uses the backend image with a command override, 0.5 vCPU / 
 
 | Resource | Role |
 |----------|------|
-| CloudWatch log groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features}`, 14-day retention |
+| CloudWatch log groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features,pricingsync}`, 14-day retention |
 | CloudWatch alarms × 7 | ALB 5xx ratio, ALB latency, backend and frontend running task count, RDS CPU, storage, connections |
 | CloudWatch dashboard `BedrockMonitor-v2` | 4 graph widgets plus an alarm status widget |
 | SNS topic `bedrock-monitor-alarms` | Alarm fan-out |
@@ -200,14 +220,14 @@ Every scheduled task uses the backend image with a command override, 0.5 vCPU / 
 | AgentCore | none | AgentCore Memory and IAM policy |
 | AppServices | Network, Data, Cluster, AgentCore | frontend and backend Fargate services, internal ALB, ALB logs |
 | Edge | AppServices | CloudFront, alias certificate, cache policies, CloudFront logs |
-| Scheduler | Network, Data, Cluster, AgentCore | 5 EventBridge schedules and 5 task definitions |
+| Scheduler | Network, Data, Cluster, AgentCore | 6 EventBridge schedules and 6 task definitions |
 | Observability | AppServices, Cluster, Data | Alarms, dashboard, SNS topic |
 
 Reusable constructs live in `cdk/lib/constructs/`: `fargate-service.ts` (service, target group, autoscaling, log group) and `pinned-image.ts` (digest-pinned image URIs from `-c backendImage=` and `-c frontendImage=`).
 
 ## Key Design Decisions
 
-See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/) (012, 014, 015, and 016 are unused numbers).
+See ADR-001 through ADR-030 in [`docs/decisions/`](./decisions/) (012, 014, 015, and 016 are unused numbers).
 
 | ADR | Decision |
 |-----|----------|
@@ -236,6 +256,7 @@ See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/) (012, 014, 015,
 | 027 | GPT-6 Astra: inference-profile-only OpenAI model, US CRIS pseudo-region `us`, Mantle in-region us-west-2 only |
 | 028 | Claude Opus 5.5 and GPT-6 Sol, Luna: CP point-release guard `_is_point_release_of`, Sol and Luna Mantle in-region us-east-1 only, agreement-offer pricing |
 | 029 | Dashboard metric grades: per-category absolute thresholds from 48 h p90/p99, TPS graded on the low side only, `lib/metricGrade.ts` as the single source |
+| 030 | Official unit prices synced every 12 hours into a per-`model_id` price history, costs at the price in effect at each probe, 50% guard with admin approval (supersedes the ADR-025 retroactive re-pricing rule) |
 
 ## Operations
 
@@ -252,11 +273,13 @@ See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/) (012, 014, 015,
 
 ## 시스템 개요
 
-Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 55개 채널을 측정합니다. 스케줄된 AutoProber 태스크가 Claude Platform on AWS 9채널을 포함한 모든 채널을 5분마다 프로빙합니다(v2.29.1에서 v2.29.0의 CP 10분 주기를 되돌렸고, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 운영 레버로 써서 다시 켤 수 있습니다). 나머지 스케줄 태스크 4개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕을 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
+Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 55개 채널을 측정합니다. 스케줄된 AutoProber 태스크가 Claude Platform on AWS 9채널을 포함한 모든 채널을 5분마다 프로빙합니다(v2.29.1에서 v2.29.0의 CP 10분 주기를 되돌렸고, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 운영 레버로 써서 다시 켤 수 있습니다). 나머지 스케줄 태스크 5개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕, 12시간 주기 공식 단가 동기화(v2.30.0)를 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
 
 트래픽은 `llm-monitor.whchoi.net`(기본 이름 `d36s7ml54xwemr.cloudfront.net`도 동작)의 CloudFront로 들어와 VPC Origin을 거쳐 내부 ALB에 도달하고, ECS Fargate 서비스 2개인 `frontend`(Next.js standalone)와 `backend`(FastAPI)로 라우팅됩니다. 모든 데이터는 RDS PostgreSQL 인스턴스 하나에 저장됩니다. 뷰어 구간은 HTTPS입니다. VPC Origin은 현재 VPC 내부에서 HTTP 포트 80으로 ALB에 연결하며, 이는 origin을 `HTTPS_ONLY`로 바꾸기 전까지의 임시 설정입니다(`edge-stack.ts`). ALB는 internal scheme이고 프라이빗 서브넷에 있으며 보안 그룹은 VPC CIDR만 허용합니다.
 
 대시보드 모델 카드는 TTFT, 총 응답시간, TPS 값을 워크로드 카테고리별 임계치로 등급 표시합니다(양호 파랑, 경고 호박, 위험 장미). 등급 판정은 `frontend/src/lib/metricGrade.ts`의 순수 프런트엔드 함수이며 백엔드는 관여하지 않습니다(v2.28.0, ADR-029).
+
+단가의 출처는 backend `price_history` 테이블 하나입니다(v2.30.0, ADR-030). PricingSync 태스크가 12시간마다 공식 출처 3개에서 활성 채널의 Standard 입력, 출력 단가를 읽습니다. Bedrock agreement offer rate card(Bedrock Claude, OpenAI), AWS Price List API(Nova 2.0 Lite), Anthropic `pricing.md`(Claude Platform on AWS)입니다. 입력이나 출력이 50%를 넘게 바뀌면 관리자 승인을 기다립니다. `/api/cost/*`와 `/api/efficiency/score`는 프로브 행마다 그 시각에 유효했던 단가로 비용을 계산하고, `/pricing` 페이지와 CSV, Markdown, JSON 다운로드, 모델 탐색, Comparison Lab은 `/api/pricing`을 읽습니다.
 
 ## 전체 아키텍처
 
@@ -275,7 +298,7 @@ flowchart TB
   end
 
   subgraph apilayer[API Layer]
-    be["backend service: FastAPI, 17 routers, port 8000"]
+    be["backend service: FastAPI, 18 routers, port 8000"]
   end
 
   subgraph ingestion[Scheduled Ingestion Layer]
@@ -285,6 +308,7 @@ flowchart TB
     par["ParityRun task: 12 h"]
     gpt["GptBench task: 15 min"]
     feat["FeaturesVerify task: daily 17:30 UTC"]
+    prc["PricingSync task: 12 h"]
   end
 
   subgraph storage[Storage Layer]
@@ -301,6 +325,12 @@ flowchart TB
     ses["Amazon SES us-east-1"]
   end
 
+  subgraph pricesrc[Official Price Sources]
+    offers["Bedrock agreement offers, us-east-1"]
+    plist["AWS Price List API, us-east-1"]
+    adoc["Anthropic pricing.md, platform.claude.com"]
+  end
+
   subgraph obs[Observability Layer]
     cw["CloudWatch Logs, Alarms, Dashboard"]
     sns[SNS alarm topic]
@@ -310,15 +340,17 @@ flowchart TB
   user --> cf --> vpco --> alb
   alb -->|"/*"| fe
   alb -->|"/api/*"| be
-  sched --> ap & ins & par & gpt & feat
+  sched --> ap & ins & par & gpt & feat & prc
   ap & par & feat --> providers
+  prc --> offers & plist & adoc
+  prc -.->|"CP model list"| cp
   gpt --> br & mantle
   ins --> br
   be --> br
   be --> opt
   be --> ses
   be --> mem
-  be & ap & ins & par & gpt & feat --> rds
+  be & ap & ins & par & gpt & feat & prc --> rds
   sec -.->|"secrets at task start"| be
   be & fe & ap --> cw
   cw --> sns
@@ -339,6 +371,13 @@ flowchart LR
 ```mermaid
 flowchart LR
   A([Browser]) --> B[CloudFront] --> C[VPC Origin] --> D[Internal ALB] --> E[backend FastAPI] --> F[(RDS PostgreSQL)]
+```
+
+단가 경로(v2.30.0, ADR-030):
+
+```mermaid
+flowchart LR
+  A([EventBridge Scheduler]) --> B[PricingSync task] --> C["Agreement offers, Price List, Anthropic pricing.md"] --> D[(price_history in RDS)] --> E["backend /api/pricing, /api/cost/*"] --> F["frontend /pricing, /cost"] --> G([Browser])
 ```
 
 프로버가 별도 Fargate 태스크에서 돌기 때문에 `/api/auto-probe/status`와 `/api/auto-probe/latest`는 프로세스 내부 상태가 아니라 DB의 최신 `ProbeRun(is_auto=1)` 행을 읽습니다. `/latest`는 모델마다 자기 주기 범위 안의 최신 행을 돌려주고(주기 3회: 기본 주기에서는 모든 채널 15분, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`이면 CP는 30분), `/status`는 `channel_intervals`를 내보내 대시보드가 채널별로 신선도를 판정합니다.
@@ -363,14 +402,14 @@ flowchart LR
 | S3 (ALB logs) | ALB 액세스 로그, 90일 보존 |
 | ECS cluster `bedrock-monitor` | Container Insights 활성 |
 | ECR `bedrock-monitor-backend-v2`, `bedrock-monitor-frontend` | `bedrock-monitor-backend-v2`는 CDK 밖에서 IMMUTABLE 태그로 만든 저장소(ADR-018), CDK가 관리하는 `bedrock-monitor-frontend`(와 옛 `bedrock-monitor-backend`)는 MUTABLE이라 릴리스는 고유 `v<epoch>` 태그와 digest 고정 태스크 정의(`pinned-image.ts`)에 의존 |
-| frontend Fargate service | Next.js standalone 포트 3000, 0.5 vCPU / 1 GB, CPU 오토스케일 1~3, 페이지 `/`, `/models`, `/parity`, `/cost`, `/reliability`, `/efficiency`, `/analysis`, `/gpt-on-aws`, `/claude-features`, `/prompts`, `/chat` |
-| backend Fargate service | FastAPI 포트 8000, 0.5 vCPU / 1 GB, CPU 오토스케일 1~3, 기동 마이그레이션용 헬스체크 유예 300초, `backend/routers/` 라우터 17개 |
+| frontend Fargate service | Next.js standalone 포트 3000, 0.5 vCPU / 1 GB, CPU 오토스케일 1~3, 페이지 `/`, `/models`, `/parity`, `/cost`, `/pricing`, `/reliability`, `/efficiency`, `/analysis`, `/gpt-on-aws`, `/claude-features`, `/prompts`, `/chat` |
+| backend Fargate service | FastAPI 포트 8000, 0.5 vCPU / 1 GB, CPU 오토스케일 1~3, 기동 마이그레이션용 헬스체크 유예 300초, `backend/routers/` 라우터 모듈 18개, `/api/pricing`은 태스크마다 60초 인메모리 캐시 |
 
 ### Storage
 
 | 리소스 | 역할 |
 |--------|------|
-| RDS PostgreSQL 16.8 (t4g.micro) | 20 GB gp3, Single-AZ, 7일 백업, 암호화, `RETENTION_DAYS`(60)를 넘은 원본 `probe_results`는 `probe_results_hourly`로 이관 |
+| RDS PostgreSQL 16.8 (t4g.micro) | 20 GB gp3, Single-AZ, 7일 백업, 암호화, `RETENTION_DAYS`(60)를 넘은 원본 `probe_results`는 `probe_results_hourly`로 이관, v2.30.0부터 `price_history`(`model_id`별 단가와 `effective_from`)와 `price_sync_runs`(PricingSync 런마다 1행) |
 | Secrets Manager `bedrock-monitor/db` | 자동 생성 RDS 자격 증명 |
 | SSM `/bedrock-monitor/jwt-secret-key` | JWT 서명 키 |
 | SSM `/bedrock-monitor/agentcore-memory-id` | AgentCore Memory ID |
@@ -389,6 +428,7 @@ flowchart LR
 | AgentCore Memory `BedrockMonitorChatMemory` | 대화 컨텍스트 30일 보존, IAM 관리형 정책을 backend 태스크 역할에 연결 |
 | Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize`, `BEDROCK_OPTIMIZE_REGION`(기본 us-east-1) |
 | Amazon SES (us-east-1) | 가입 승인 메일을 관리자 주소로 발송 |
+| 공식 단가 출처 | Bedrock `ListFoundationModelAgreementOffers`(us-east-1, 파운데이션 모델 18개), AWS Price List `GetProducts`(us-east-1, Nova 2.0 Lite), `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS), PricingSync 태스크만 읽음 (ADR-030) |
 
 ### 스케줄 수집
 
@@ -399,15 +439,16 @@ flowchart LR
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | 모델 × surface 6개 × 피처 19개 실행 증거 셀 |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 18채널(Mantle 인리전 11 + CRIS 7) × 순차 10회, 호출당 watchdog `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초 |
 | `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39행 × surface 5개 × 모델 5개(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975셀(프로브 813 + 사전판정 162), 약 9분, 매일 17:30 UTC(02:30 KST) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널마다 변경 없음 관측, 새 `verified` 단가(변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_advisory_lock(917350004)`로 직렬화 (v2.30.0, ADR-030) |
 
-모든 스케줄 태스크는 backend 이미지를 command override로 쓰고 0.5 vCPU / 1 GB이며, 스케줄러 역할의 `ecs:RunTask` 정책은 태스크 정의 family `:*` 와일드카드를 씁니다(ADR-011).
+모든 스케줄 태스크는 backend 이미지를 command override로 쓰고 0.5 vCPU / 1 GB이며, 스케줄러 역할의 `ecs:RunTask` 정책은 태스크 정의 family `:*` 와일드카드를 씁니다(ADR-011). PricingSync는 `bedrock:ListFoundationModelAgreementOffers`와 `pricing:GetProducts`만 허용하는 전용 태스크 역할로 돌며 모델 호출 권한이 없습니다.
 
 ### Network
 
 | 리소스 | 역할 |
 |--------|------|
 | VPC 10.20.0.0/16 (또는 기존 VPC) | 2 AZ, Public, App, Data 서브넷 |
-| NAT gateway × 1 | PrivateLink가 없는 엔드포인트(Claude Platform on AWS, Mantle, us-east-1 OpenAI CRIS)로 가는 App 서브넷 egress |
+| NAT gateway × 1 | PrivateLink가 없는 엔드포인트(Claude Platform on AWS, Mantle, us-east-1 OpenAI CRIS, PricingSync가 쓰는 us-east-1 Bedrock control plane과 Price List API, `platform.claude.com`)로 가는 App 서브넷 egress |
 | Interface VPC endpoints × 9 | ECR API, ECR Docker, CloudWatch Logs, SSM, SSM Messages, Secrets Manager, KMS, Bedrock Runtime, Bedrock AgentCore |
 | Gateway VPC endpoint × 1 | S3 |
 
@@ -415,7 +456,7 @@ flowchart LR
 
 | 리소스 | 역할 |
 |--------|------|
-| CloudWatch log groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features}`, 14일 보존 |
+| CloudWatch log groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features,pricingsync}`, 14일 보존 |
 | CloudWatch alarms × 7 | ALB 5xx 비율, ALB 지연, backend, frontend 실행 태스크 수, RDS CPU, 스토리지, 연결 수 |
 | CloudWatch dashboard `BedrockMonitor-v2` | 그래프 위젯 4개 + 알람 상태 위젯 1개 |
 | SNS topic `bedrock-monitor-alarms` | 알람 fan-out |
@@ -441,14 +482,14 @@ flowchart LR
 | AgentCore | 없음 | AgentCore Memory, IAM 정책 |
 | AppServices | Network, Data, Cluster, AgentCore | frontend, backend Fargate 서비스, 내부 ALB, ALB 로그 |
 | Edge | AppServices | CloudFront, alias 인증서, 캐시 정책, CloudFront 로그 |
-| Scheduler | Network, Data, Cluster, AgentCore | EventBridge 스케줄 5개, 태스크 정의 5개 |
+| Scheduler | Network, Data, Cluster, AgentCore | EventBridge 스케줄 6개, 태스크 정의 6개 |
 | Observability | AppServices, Cluster, Data | 알람, 대시보드, SNS 토픽 |
 
 재사용 construct는 `cdk/lib/constructs/`에 있습니다. `fargate-service.ts`(서비스, 타깃 그룹, 오토스케일, 로그 그룹)와 `pinned-image.ts`(`-c backendImage=`, `-c frontendImage=`로 받은 digest 고정 이미지 URI)입니다.
 
 ## 핵심 설계 결정
 
-[`docs/decisions/`](./decisions/)의 ADR-001~ADR-029를 참조합니다(012, 014, 015, 016은 결번).
+[`docs/decisions/`](./decisions/)의 ADR-001~ADR-030을 참조합니다(012, 014, 015, 016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -477,6 +518,7 @@ flowchart LR
 | 027 | GPT-6 Astra: 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us`, Mantle 인리전은 us-west-2만 |
 | 028 | Claude Opus 5.5와 GPT-6 Sol, Luna: CP 점 버전 가드 `_is_point_release_of`, Sol, Luna Mantle 인리전은 us-east-1만, agreement offer 단가 |
 | 029 | 대시보드 지표 등급: 48시간 p90/p99 기반 카테고리별 절대 임계치, TPS는 낮은 쪽만 판정, `lib/metricGrade.ts` 단일 출처 |
+| 030 | 공식 단가 12시간 자동 동기화와 `model_id` 단위 단가 이력, 프로브 시각 기준 단가로 비용 계산, 50% 안전장치와 관리자 승인 (ADR-025의 소급 재계산 규칙 대체) |
 
 ## 운영
 

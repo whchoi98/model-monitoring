@@ -2,6 +2,134 @@
 
 증상별 확인과 조치. 배포 절차는 [deploy.md](deploy.md), 되돌리기는 [rollback.md](rollback.md)를 본다.
 
+## 비용 단가 동기화 실패 — "자동 확인 안 됨" 배지 (v2.30.0, ADR-030)
+
+**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 3개에서 활성 55채널의 단가를
+읽는다. Bedrock agreement offer rate card(Bedrock Claude 20 + OpenAI 25, FM 18개를 순차 호출), AWS Price List API(Nova 2.0 Lite),
+Anthropic `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS 9)다. 공식 값을 구하지 못한 채널은
+기존 단가를 그대로 두고(`skipped:<reason>`) 화면에 "자동 확인 안 됨"으로 드러난다. 비용 계산은 멈추지 않는다 — 마지막 유효 단가를
+계속 쓴다.
+
+### 증상
+
+- `/pricing` 셀에 "자동 확인 안 됨" 배지. `verification`이 `stale`(마지막 확인이 가장 최근에 끝난 런보다 이전, 툴팁 "마지막 확인
+  <날짜>", `observed_at`이 없으면 "마지막 확인일 없음") 또는 `seed_only`(한 번도 확인되지 않음, 툴팁 "초기값")다.
+- 한 출처만 실패하면 그 출처의 채널만 `stale`이 된다. 예: Anthropic 문서가 실패한 `partial` 런 뒤에는 Claude Platform on AWS 열 9셀만
+  배지가 붙는다.
+- "마지막 자동 확인" 시각이 12시간보다 오래됐으면 태스크가 돌지 않은 것이다.
+
+### 확인
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 마지막 런과 확인되지 않은 셀
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync, pending_review, not_verified: [.families[] | .family as $f
+  | ([(.tiers.cp, .tiers.global, .tiers.us) // empty] + .tiers.in_region)[]
+  | select(.verification != "verified") | {family: $f, model_ids, verification, observed_at, pending}]}'
+
+# 2. 최근 런 로그 (런 요약 한 줄 = 상태, 채널별 결과 수 — unchanged, changed, pending, no_baseline, rejected, skipped:<reason> — 와 오류 수.
+#    출처 호출이 재시도되면 "pricing sync: … retry n/3" 경고가 먼저 찍힌다)
+aws logs tail /ecs/pricingsync --since 13h --region $REGION
+
+# 3. 최근 태스크 종료 사유 — 컨테이너 이름은 pricingsynctaskdef (containers[0]은 GuardDuty 사이드카일 수 있다)
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerPricingSyncTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+for T in $(aws ecs list-tasks --cluster bedrock-monitor --family "$FAM" --desired-status STOPPED \
+    --region $REGION --query 'taskArns[]' --output text); do
+  aws ecs describe-tasks --cluster bedrock-monitor --tasks "$T" --region $REGION \
+    --query "tasks[].[createdAt,stoppedReason,containers[?name=='pricingsynctaskdef'].exitCode|[0]]" --output text
+done
+```
+
+| 원인 | 표지 | 조치 |
+|------|------|------|
+| 스케줄이 태스크를 실행하지 못함 | `last_sync.started_at`이 12시간보다 오래됨, `/ecs/pricingsync`에 새 로그 없음 | Scheduler 역할의 `RunTaskFamilyWildcard`에 PricingSync family `:*`, `PassTaskRoles`에 `PricingSyncTaskRole`이 있는지 확인(ADR-011). 없으면 digest 고정 CDK로 Scheduler 스택을 다시 배포 |
+| 출처 권한 거부 | 로그에 `AccessDeniedException` (`ListFoundationModelAgreementOffers` 또는 `GetProducts`) | `PricingSyncTaskRole` 인라인 정책의 두 액션 확인. 다른 권한은 필요 없다(모델 호출 권한은 의도적으로 없음) |
+| Anthropic 문서 형식 변경 | CP 9셀만 `stale`, 채널 결과 `skipped:parse_failed`, 로그에 파싱 실패(표나 헤더 "Model", "Base input tokens", "Output tokens"를 찾지 못함). 파서 예외는 종류와 상관없이 그 출처 채널만 건너뛰고, 다른 출처가 성공했으면 런은 `partial`로 끝난다 | 문서를 열어 표 구조를 확인하고 `backend/pricing_parsers.py` `parse_anthropic_pricing_md`와 fixture를 고친다. 모델명이 바뀌었으면 `pricing_sources.ANTHROPIC_DOC_NAMES`도 고친다 |
+| 오퍼 형식 변경 | 특정 모델 채널만 `skipped:<reason>`(오퍼 수 ≠ 1, 필수 차원 없음) | `aws bedrock list-foundation-model-agreement-offers --model-id <FM id> --offer-type PUBLIC --region us-east-1 --query 'offers[].termDetails.usageBasedPricingTerm.rateCard[].[dimension, price, unit]' --output table`로 차원 이름을 보고 `pricing_parsers.DIMENSION_RE`와 선택 순서를 고친다(출력에 `offerToken`과 `legalTerm.url`이 나오지 않도록 `--query`를 유지한다) |
+| Price List 단위 변경 | Nova 1셀만 `stale` | `unit`이 `1K tokens`가 아니면 파서가 변경 없음으로 둔다. 새 단위를 확인하고 `parse_pricelist`를 고친다 |
+| 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline` | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 반복되면 로그의 재시도 경고(`retry n/3`)로 느린 출처를 찾는다 |
+| 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_advisory_lock(917350004)`로 수동 실행과 스케줄 실행을 직렬화). 앞 런이 끝난 뒤 다시 실행한다 |
+| CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial` | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
+
+### 조치
+
+- 원인을 고친 뒤 `deploy.md` §5-4의 2번(수동 `run-task`)으로 한 번 더 돌리고 1번으로 `verified`가 돌아왔는지 본다.
+- DB를 직접 고치지 않는다. 단가를 바꿔야 하면 동기화가 새 값을 관측하게 하거나, 검토 대기 행을 아래 절차로 승인한다.
+- 동기화가 실패해도 비용 화면은 마지막 유효 단가로 계속 계산된다. 공식 값이 실제로 바뀌었는데 동기화가 못 읽는 동안에는 그 차이가
+  비용에 반영되지 않는다.
+
+## 검토 대기 단가 승인 — "검토 대기" 배지 (v2.30.0, ADR-030)
+
+**배경**: 동기화가 관측한 새 공식 값이 현재 유효 단가보다 입력이나 출력 어느 쪽이든 50%를 넘게 다르면(정확히 50%는 자동 적용)
+자동으로 적용하지 않고 `pending_review` 행으로 남긴다. 단위 오류(1000배)나 파서 오류가 비용에 그대로 들어가는 것을 막는 안전장치다.
+seed에도 없는 새 model_id(`no_baseline`)도 같은 대기열에 들어간다. 승인 전까지 비용은 기존 단가로 계산된다.
+
+### 확인
+
+```bash
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '.pending_review'
+TOKEN=$(curl -sX POST "https://$CF_DOMAIN/api/auth/login" -H 'Content-Type: application/json' \
+  -d '{"username":"admin","password":"<SEED_ADMIN_PASSWORD>"}' | jq -r .access_token)
+# 행마다 현재 유효 값, 새 값, 입력과 출력 변화율, 출처, 사유(changed 또는 no_baseline)
+curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer $TOKEN" | jq .
+```
+
+### 판단과 조치
+
+1. 새 값을 공식 페이지에서 직접 확인한다. Bedrock 채널은 `/pricing` 참고 자료의 모델 카드나 Amazon Bedrock 요금 페이지, Claude
+   Platform on AWS는 Anthropic 요금 문서, Nova는 Amazon Bedrock 요금 페이지다.
+2. 공식 값이 맞으면 승인한다. 승인한 단가는 그 값을 처음 관측한 런의 시작 시각부터 적용되고, `no_baseline`이면 과거 전체에 적용된다.
+   응답의 `warnings`는 단가 조회 순서 `(effective_from, id)`에서 뒤에 오는 verified 단가(더 늦게 시작하거나, 같은 시각에 시작한 더 큰
+   id의 행)가 이미 있다는 뜻이다 — 그 구간은 뒤의 단가가 계속 우선한다.
+
+   ```bash
+   curl -s -X POST "https://$CF_DOMAIN/api/admin/pricing/pending/<id>/approve" -H "Authorization: Bearer $TOKEN" | jq .
+   ```
+
+3. 오류 값이면 거부한다. 거부한 값은 공식 값이 다시 바뀔 때까지 대기열에 올라오지 않는다. 파서 오류가 원인이면 위 "비용 단가 동기화
+   실패"의 표대로 코드를 고친다.
+
+   ```bash
+   curl -s -X POST "https://$CF_DOMAIN/api/admin/pricing/pending/<id>/reject" -H "Authorization: Bearer $TOKEN" | jq .
+   ```
+
+- 승인이나 거부를 처리한 backend 태스크는 `/api/pricing` 캐시를 바로 비우지만, 다른 backend 태스크(오토스케일 1~3개)는 최대 60초
+  동안 이전 표를 줄 수 있다. 60초 뒤 다시 조회해서 확인한다.
+- `401`은 토큰 없음이나 만료, `403`은 admin이 아닌 계정, `404`는 없는 id(`단가 행 <id>을(를) 찾을 수 없습니다`), `409`는 이미
+  승인이나 거부로 처리된 행(`단가 행 <id>는 검토 대기 상태가 아닙니다 (현재: <status>)`)이다. `pending_review` 숫자는 검토 대기
+  행이 있는 채널 수라, 한 채널에 대기 행이 여러 개면 관리자 목록의 행 수가 더 많다.
+
+## GPT-5.6 Sol 프로모션 종료 확인 — 2026-11-21 이후 (v2.30.0)
+
+**배경**: GPT-5.6 Sol 단가 In-Region, Geo $4.40 / $22, Global $4 / $20은 프로모션 단가다(v2.28.1). 2026-09-23 AWS 모델 카드에는 "최소
+2026-11-21까지"가 있었지만 지금 공식 출처 어디에도 종료일이 없어서, 이 정보는 `pricing_sources.PRICE_NOTES` 수동 메모로만
+관리한다. `/pricing`의 Sol 셀에는 "프로모션(최소 2026-11-21까지, 수동 메모)" 배지가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인
+필요"로 바뀐다.
+
+### 확인
+
+```bash
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '[.families[] | select(.family_key == "gpt-5.6-sol")
+  | {global: (.tiers.global | {input, output, verification, pending}),
+     in_region: [.tiers.in_region[] | {regions, input, output, verification, pending}], notes}]'
+# 공식 오퍼 값 직접 조회 (offerToken, legalTerm.url은 출력하지 않는다)
+aws bedrock list-foundation-model-agreement-offers --model-id openai.gpt-5.6-sol --offer-type PUBLIC --region us-east-1 \
+  --query "offers[].termDetails.usageBasedPricingTerm.rateCard[?dimension=='input_tokens_standard' || dimension=='output_tokens_standard' || dimension=='input_tokens_global_standard' || dimension=='output_tokens_global_standard'][].[dimension, price]" \
+  --output table
+```
+
+### 해석과 조치
+
+- 오퍼가 여전히 4.4 / 22, 4 / 20이면 프로모션이 계속되는 것이다. 모델 카드에서 새 종료일을 확인하고, 있으면
+  `pricing_sources.PRICE_NOTES`의 `min_until`을 고쳐 다음 릴리스로 배포한다.
+- 프로모션이 끝나 이전 단가(In-Region, Geo $5.50 / $33, Global $5 / $30)로 돌아가면 입력 +25%, 출력 +50%라 경계 포함 규칙으로 **자동
+  적용**된다(`verified`, 관측한 런의 시작 시각부터). 동기화가 `prior_price`와 같은 값을 관측하면 수동 메모는 응답에서 빠진다.
+- 이전 단가가 아닌 다른 값으로 바뀌어 50%를 넘으면 검토 대기로 간다. 위 "검토 대기 단가 승인"을 따른다.
+
 ## Claude Platform on AWS 채널 전부 429 — 월간 사용량 상한 (2026-09-23, v2.29.0에서 재시도 제거)
 
 **배경**: 2026-09-23 19:52 UTC부터 CP on AWS 호출이 전부 429로 거부됐다. 조직이 API 등급(tier)에 따라 정해진 월간

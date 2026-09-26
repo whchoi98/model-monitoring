@@ -67,7 +67,7 @@ aws ecs update-service --cluster bedrock-monitor --service backend --region $REG
 
 이 경로는 CDK 상태와 어긋나므로 다음 CDK 배포가 context 이미지로 덮어쓴다. 스케줄 태스크만 되돌려야 하면
 [deploy.md §2-1](./deploy.md)의 절차(image 교체 revision 등록 → `get-schedule` → `TaskDefinitionArn` 교체 → `update-schedule`)를
-직전 image로 5개 스케줄에 적용한다.
+직전 image로 6개 스케줄에 적용한다(v2.30.0 PricingSync 포함).
 
 **ECS circuit breaker**(`circuitBreaker: { rollback: true }`)는 새 task가 기동이나 헬스체크에 계속 실패할 때만 직전 안정
 배포로 자동 복귀한다. task가 정상 기동하는 코드 회귀(기능 버그, 잘못된 값)는 위 절차로 직접 되돌린다.
