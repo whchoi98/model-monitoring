@@ -7,6 +7,7 @@
  */
 import { describe, expect, test } from "vitest";
 import { pivotTrend } from "./pivotTrend";
+import { cadenceResolver } from "./monitoring";
 import type { TrendPoint } from "./types";
 
 function point(model: string, ts: string, ttft: number | null): TrendPoint {
@@ -165,7 +166,23 @@ describe("per-model cadence gaps (v2.29.0)", () => {
   const bedrock = (ts: string, ttft: number): TrendPoint => ({
     ...point("Bedrock Claude Sonnet 5 (Global)", ts, ttft), model_id: "global.anthropic.claude-sonnet-5",
   });
-  const cadence = (modelId: string) => (modelId.startsWith("anthropic:") ? 600 : 300);
+  // Same resolver path as the dashboard (AutoDashboard → cadenceResolver(cadence, /status channel_intervals)).
+  // The 600 s knob (v2.29.0 mode); the v2.29.1 default /status gives {anthropic: 300}.
+  const cadence = cadenceResolver(300, { anthropic: 600 });
+
+  test("at the default cadence (/status anthropic 300) a 10-minute hole breaks CP and Bedrock lines alike", () => {
+    const data = [
+      cp("2026-09-24T01:00:00Z", 100), cp("2026-09-24T01:05:00Z", 105), cp("2026-09-24T01:15:30Z", 110),
+      bedrock("2026-09-24T01:00:10Z", 200), bedrock("2026-09-24T01:05:10Z", 210), bedrock("2026-09-24T01:15:40Z", 220),
+    ];
+    const { seriesData } = pivotTrend(data, "ttft_ms", undefined, {
+      cadenceSeconds: cadenceResolver(300, { anthropic: 300 }),
+    });
+    expect(seriesData["Anthropic Claude Sonnet 5 (US)"].map((row) => row["Anthropic Claude Sonnet 5 (US)"]))
+      .toEqual([100, 105, null, 110]);
+    expect(seriesData["Bedrock Claude Sonnet 5 (Global)"].map((row) => row["Bedrock Claude Sonnet 5 (Global)"]))
+      .toEqual([200, 210, null, 220]);
+  });
 
   test("10-minute Claude Platform samples draw one line while a 10-minute hole in a 5-minute series still breaks", () => {
     const data = [
@@ -179,7 +196,7 @@ describe("per-model cadence gaps (v2.29.0)", () => {
       .toEqual([200, 210, null, 220]);
   });
 
-  test("with the old single 5-minute cadence the same CP samples would be cut after every point", () => {
+  test("with a flat 5-minute cadence (no per-channel override) 10-minute CP samples are cut after every point", () => {
     const data = [cp("2026-09-24T01:01:30Z", 100), cp("2026-09-24T01:11:40Z", 110)];
     const { seriesData } = pivotTrend(data, "ttft_ms", undefined, { cadenceSeconds: 300 });
     expect(seriesData["Anthropic Claude Sonnet 5 (US)"].map((row) => row["Anthropic Claude Sonnet 5 (US)"]))

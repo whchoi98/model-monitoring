@@ -1,4 +1,4 @@
-import { test, expect } from "@playwright/test";
+import { test, expect, type Page } from "@playwright/test";
 import { mockApi, modelCatalog } from "./fixtures";
 
 test("monitoring distinguishes current failures, stale success and an unmeasured model", async ({ page }) => {
@@ -201,20 +201,79 @@ test("card metric values are graded per workload category with a non-color cue i
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
 });
 
-test("Claude Platform on AWS channels keep their 10-minute cadence without being flagged stale", async ({ page }) => {
+const cadenceCatalog = [
+  { id: "anthropic:claude-sonnet-5", name: "Anthropic Claude Sonnet 5 (US)" },
+  { id: "global.anthropic.claude-sonnet-5", name: "Bedrock Claude Sonnet 5 (Global)" },
+];
+
+/** Both channels last measured 12 minutes ago: past a 5-minute channel's 5 min + grace, inside 10 min + grace. */
+async function mockCadenceCards(page: Page) {
   const fixture = await mockApi(page);
   const now = Date.now();
-  const catalog = [
-    { id: "anthropic:claude-sonnet-5", name: "Anthropic Claude Sonnet 5 (US)" },
-    { id: "global.anthropic.claude-sonnet-5", name: "Bedrock Claude Sonnet 5 (Global)" },
-  ];
-  // Both last measured 12 minutes ago: inside CP's 10 min + grace, past the 5-minute channel's 5 min + grace.
-  const latest = catalog.map((model, index) => ({
+  const latest = cadenceCatalog.map((model, index) => ({
     ...fixture.latest[0], id: index + 1, model_id: model.id, model_name: model.name,
     timestamp: new Date(now - 12 * 60_000).toISOString(),
   }));
-  await page.route("**/api/models", (route) => route.fulfill({ json: catalog }));
+  await page.route("**/api/models", (route) => route.fulfill({ json: cadenceCatalog }));
   await page.route("**/api/auto-probe/latest*", (route) => route.fulfill({ json: latest }));
+  return fixture;
+}
+
+function cardBadge(page: Page, index: number, badge: string) {
+  return page.getByRole("region", { name: "모델별 최신 상태" }).getByRole("article")
+    .filter({ hasText: cadenceCatalog[index].name }).getByText(badge, { exact: true });
+}
+
+/**
+ * Navigate and wait until the dashboard has rendered /status. The cadence text, the stale badges and the
+ * workload interval all have fallbacks that hold without /status, so a negative assertion made before this
+ * would pass even if a note were shown once /status lands. The last-probe age comes only from /status ("—" before).
+ */
+async function gotoWithStatus(page: Page, url: string) {
+  const statusResponse = page.waitForResponse("**/api/auto-probe/status");
+  await page.goto(url);
+  await statusResponse;
+  await expect(page.getByRole("region", { name: "자동 프로빙 상태" })).toContainText(/마지막 프로빙: \d+분 전/);
+}
+
+test("by default Claude Platform on AWS follows the base 5-minute cadence and gets no separate note (v2.29.1)", async ({ page }) => {
+  const fixture = await mockCadenceCards(page);
+  await page.route("**/api/auto-probe/status", (route) => route.fulfill({
+    json: { ...fixture.status, expected_model_count: 2, category_interval_seconds: 1800,
+      channel_intervals: { anthropic: 300 }, channel_category_intervals: { anthropic: 1800 } },
+  }));
+  await gotoWithStatus(page, "/");
+  const status = page.getByRole("region", { name: "자동 프로빙 상태" });
+  await expect(status).toContainText("5분 주기");
+  await expect(cardBadge(page, 0, "수집 지연")).toBeVisible();
+  await expect(cardBadge(page, 1, "수집 지연")).toBeVisible();
+  await expect(status).not.toContainText("Claude Platform on AWS");
+
+  await gotoWithStatus(page, "/?category=reasoning");
+  await expect(page.getByRole("region", { name: "워크로드" })).toContainText("선택한 워크로드는 약 30분마다 수집됩니다.");
+  await expect(page.getByRole("region", { name: "워크로드" })).not.toContainText("Claude Platform on AWS");
+});
+
+test("until /status answers every channel uses the base cadence, then /status overrides take effect", async ({ page }) => {
+  const fixture = await mockCadenceCards(page);
+  let releaseStatus = () => {};
+  const statusHeld = new Promise<void>((resolve) => { releaseStatus = resolve; });
+  await page.route("**/api/auto-probe/status", async (route) => {
+    await statusHeld;
+    await route.fulfill({ json: { ...fixture.status, expected_model_count: 2,
+      channel_intervals: { anthropic: 600 }, channel_category_intervals: { anthropic: 3600 } } });
+  });
+  await page.goto("/");
+  // No CP override is assumed before /status (v2.29.1): the 12-minute-old CP card is stale like Bedrock.
+  await expect(cardBadge(page, 0, "수집 지연")).toBeVisible();
+  await expect(cardBadge(page, 1, "수집 지연")).toBeVisible();
+  releaseStatus();
+  await expect(cardBadge(page, 0, "정상")).toBeVisible();
+  await expect(cardBadge(page, 1, "수집 지연")).toBeVisible();
+});
+
+test("with the 10-minute knob (/status anthropic 600) Claude Platform on AWS is not flagged stale", async ({ page }) => {
+  const fixture = await mockCadenceCards(page);
   await page.route("**/api/auto-probe/status", (route) => route.fulfill({
     json: { ...fixture.status, expected_model_count: 2, category_interval_seconds: 1800,
       channel_intervals: { anthropic: 600 }, channel_category_intervals: { anthropic: 3600 } },
@@ -223,9 +282,8 @@ test("Claude Platform on AWS channels keep their 10-minute cadence without being
   const status = page.getByRole("region", { name: "자동 프로빙 상태" });
   await expect(status).toContainText("5분 주기");
   await expect(status).toContainText("Claude Platform on AWS 10분 주기");
-  const models = page.getByRole("region", { name: "모델별 최신 상태" });
-  await expect(models.getByRole("article").filter({ hasText: catalog[0].name }).getByText("정상", { exact: true })).toBeVisible();
-  await expect(models.getByRole("article").filter({ hasText: catalog[1].name }).getByText("수집 지연", { exact: true })).toBeVisible();
+  await expect(cardBadge(page, 0, "정상")).toBeVisible();
+  await expect(cardBadge(page, 1, "수집 지연")).toBeVisible();
 
   await page.goto("/?category=reasoning");
   await expect(page.getByRole("region", { name: "워크로드" })).toContainText(

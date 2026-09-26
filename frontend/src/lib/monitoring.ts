@@ -24,9 +24,10 @@ export function channelKey(modelId: string): string | null {
 }
 
 /**
- * Per-channel cadence from /api/auto-probe/status (v2.29.0). Claude Platform on AWS ("anthropic:<id>") is
- * collected every 10 minutes while every other channel keeps the base 5-minute cadence; channels without an
- * override (or an invalid one) use `baseSeconds`.
+ * Per-channel cadence from /api/auto-probe/status (v2.29.0). Only Claude Platform on AWS ("anthropic:<id>")
+ * can differ: every 5 minutes like every other channel by default (v2.29.1), every 10 minutes when the
+ * backend's ANTHROPIC_CP_PROBE_INTERVAL_S knob is set to 600. Channels without an override (or an invalid
+ * one) use `baseSeconds`.
  */
 export function cadenceResolver(baseSeconds: number, overrides?: Record<string, number> | null): CadenceFor {
   const map = new Map(Object.entries(overrides ?? {}).filter(([, seconds]) => Number.isFinite(seconds) && seconds > 0));

@@ -137,7 +137,17 @@ describe("per-channel cadence (v2.29.0)", () => {
     }
   });
 
-  test("a Claude Platform card stays fresh through the cycle that skips it, others keep the 5-minute rule", () => {
+  test("the v2.29.1 default status (anthropic 300 / 1800) keeps Claude Platform on the base cadence", () => {
+    const cycle = cadenceResolver(300, { anthropic: 300 });
+    const rows = buildMonitoringRows(catalog.slice(0, 2), [
+      row(catalog[0], "2026-09-22T11:48:00Z"), row(catalog[1], "2026-09-22T11:48:00Z"),
+    ], cycle, NOW);
+    expect(rows.map((r) => [r.freshness, r.health])).toEqual([["stale", "stale"], ["stale", "stale"]]);
+    const workload = cadenceResolver(1800, { anthropic: 1800 });
+    expect([workload(cpId), workload(bedrockId)]).toEqual([1800, 1800]);
+  });
+
+  test("a Claude Platform card stays fresh through the cycle that skips it at 600 s, others keep the 5-minute rule", () => {
     const cadence = cadenceResolver(300, { anthropic: 600 });
     // 12 minutes old: CP is inside 600 s + 300 s grace; a 5-minute channel is past 300 s + 300 s.
     const rows = buildMonitoringRows(catalog.slice(0, 2), [
@@ -156,7 +166,7 @@ describe("per-channel cadence (v2.29.0)", () => {
     expect(justFresh.freshness).toBe("fresh");
   });
 
-  test("workload view uses the per-channel category cadence (CP 60 min, others 30 min)", () => {
+  test("workload view uses the per-channel category cadence (CP 60 min at 600 s, others 30 min)", () => {
     const cadence = cadenceResolver(1800, { anthropic: 3600 });
     const rows = buildMonitoringRows(catalog.slice(0, 2), [
       row(catalog[0], "2026-09-22T11:00:00Z"), row(catalog[1], "2026-09-22T11:00:00Z"),

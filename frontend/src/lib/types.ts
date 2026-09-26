@@ -83,10 +83,12 @@ export interface AutoProbeStatus {
   current_cycle_running: boolean;
   last_completed_time?: string | null;
   category_interval_seconds?: number;
-  /** v2.29.0 — cadence of channels that differ from interval_seconds, keyed by the model_id prefix before
-   *  the first ":" ("anthropic" = Claude Platform on AWS, 600). Absent channels use interval_seconds. */
+  /** v2.29.0 — per-channel cadence keyed by the model_id prefix before the first ":" ("anthropic" = Claude
+   *  Platform on AWS: 300 by default since v2.29.1, 600 with the backend knob raised). Absent channels use
+   *  interval_seconds. */
   channel_intervals?: Record<string, number>;
-  /** v2.29.0 — the same per workload category (category_interval_seconds counterpart, "anthropic" 3600). */
+  /** v2.29.0 — the same per workload category (category_interval_seconds counterpart, "anthropic" 1800 by
+   *  default, 3600 at 600 s). */
   channel_category_intervals?: Record<string, number>;
   expected_model_count?: number;
   cycle_state?: "running" | "waiting" | "completed" | "overdue" | "failed" | "unknown" | "never_run";
