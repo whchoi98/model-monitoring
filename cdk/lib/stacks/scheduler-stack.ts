@@ -466,7 +466,8 @@ export class SchedulerStack extends cdk.Stack {
 
     const pricingSyncSchedule = new scheduler.Schedule(this, "PricingSyncSchedule", {
       // 12시간 주기 (v2.30.0, 사용자 결정 2026-09-26) — offers FM 18개 순차 약 25초 + Price List 1회 + Anthropic 문서 1회.
-      //   런 전체 상한 300초(SYNC_DEADLINE_S), pg_advisory_lock(917350004)로 수동 실행과 겹치지 않는다.
+      //   런 전체 상한 300초(SYNC_DEADLINE_S), pg_try_advisory_lock(917350004)로 수동 실행과 겹치지 않는다
+      //   (기다리지 않는 잠금 — 겹치면 두 번째 런은 즉시 exit 1, 런 행 없음).
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(12)),
       description: "Official unit-price sync (Bedrock agreement offers, AWS Price List, Anthropic pricing doc) every 12 hours",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {

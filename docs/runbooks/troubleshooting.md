@@ -53,7 +53,7 @@ done
 | 오퍼 형식 변경 | 특정 모델 채널만 `skipped:<reason>`(오퍼 수 ≠ 1, 필수 차원 없음) | `aws bedrock list-foundation-model-agreement-offers --model-id <FM id> --offer-type PUBLIC --region us-east-1 --query 'offers[].termDetails.usageBasedPricingTerm.rateCard[].[dimension, price, unit]' --output table`로 차원 이름을 보고 `pricing_parsers.DIMENSION_RE`와 선택 순서를 고친다(출력에 `offerToken`과 `legalTerm.url`이 나오지 않도록 `--query`를 유지한다) |
 | Price List 단위 변경 | Nova 1셀만 `stale` | `unit`이 `1K tokens`가 아니면 파서가 변경 없음으로 둔다. 새 단위를 확인하고 `parse_pricelist`를 고친다 |
 | 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`)를 확인한다 |
-| 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_advisory_lock(917350004)`로 수동 실행과 스케줄 실행을 직렬화). 앞 런이 끝난 뒤 다시 실행한다 |
+| 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_try_advisory_lock(917350004)`로 수동 실행과 스케줄 실행이 겹치지 않게 한다. 기다리지 않는 잠금이라 두 번째 런은 즉시 끝난다). 앞 런이 끝난 뒤 다시 실행한다 |
 | CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial` | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
 
 ### 조치

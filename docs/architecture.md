@@ -177,7 +177,7 @@ flowchart LR
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | Model × 6 surfaces × 19 features evidence cells |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 18 GPT channels (Mantle in-region 11 + CRIS 7) × 10 sequential calls; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s, cycle deadline `GPT_BENCH_DEADLINE` 780 s |
 | `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39 rows × 5 surfaces × 5 models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975 cells (813 probed + 162 pre-decided), about 9 minutes, daily at 17:30 UTC (02:30 KST) |
-| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel, an unchanged observation, a new `verified` price (change of 50% or less) or a `pending_review` row; run cap 300 s, serialized by `pg_advisory_lock(917350004)` (v2.30.0, ADR-030) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel, an unchanged observation, a new `verified` price (change of 50% or less) or a `pending_review` row; run cap 300 s; `pg_try_advisory_lock(917350004)` keeps runs from overlapping — a second run exits at once (exit 1, no run row) (v2.30.0, ADR-030) |
 
 Every scheduled task uses the backend image with a command override, 0.5 vCPU / 1 GB, and a task definition family `:*` wildcard in the scheduler role's `ecs:RunTask` policy (ADR-011). PricingSync runs with its own task role that allows only `bedrock:ListFoundationModelAgreementOffers` and `pricing:GetProducts`, with no model invocation.
 
@@ -439,7 +439,7 @@ flowchart LR
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | 모델 × surface 6개 × 피처 19개 실행 증거 셀 |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 18채널(Mantle 인리전 11 + CRIS 7) × 순차 10회, 호출당 watchdog `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초 |
 | `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39행 × surface 5개 × 모델 5개(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975셀(프로브 813 + 사전판정 162), 약 9분, 매일 17:30 UTC(02:30 KST) |
-| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널마다 변경 없음 관측, 새 `verified` 단가(변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_advisory_lock(917350004)`로 직렬화 (v2.30.0, ADR-030) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널마다 변경 없음 관측, 새 `verified` 단가(변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_try_advisory_lock(917350004)`로 런이 겹치지 않게 한다 — 겹치면 두 번째 런은 즉시 exit 1로 끝난다(런 행 없음) (v2.30.0, ADR-030) |
 
 모든 스케줄 태스크는 backend 이미지를 command override로 쓰고 0.5 vCPU / 1 GB이며, 스케줄러 역할의 `ecs:RunTask` 정책은 태스크 정의 family `:*` 와일드카드를 씁니다(ADR-011). PricingSync는 `bedrock:ListFoundationModelAgreementOffers`와 `pricing:GetProducts`만 허용하는 전용 태스크 역할로 돌며 모델 호출 권한이 없습니다.
 

@@ -107,7 +107,7 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
 1. 러너는 `create_tables()` → `prober._discover_anthropic_models()`, `prober._register_openai_models()`(AutoProber와 같은 env,
    secret) → `ensure_seed` 순서로 준비한다. 활성 채널은 `AVAILABLE_MODELS`에서 숨김 라벨(`HIDDEN_MODEL_PATTERNS`, 기본 `(1P)`)을
    빼고 `price_identity`로 분류한 것이다. CP 디스커버리가 실패하면 CP 9채널은 변경 없음, 런은 `partial`이다.
-2. 런 전체를 `pg_advisory_lock(917350004)`로 직렬화한다. 잠금을 못 잡으면 경고 로그를 남기고 exit 1로 끝낸다(런 행 없음). `ensure_seed`가
+2. 런 전체 동안 `pg_try_advisory_lock(917350004)`를 쥐어 런이 겹치지 않게 한다. 기다리지 않는 잠금이라, 잠금을 못 잡으면 경고 로그를 남기고 즉시 exit 1로 끝낸다(런 행 없음). `ensure_seed`가
    실패해도 동기화하지 않고 exit 1이다 — seed 없이 돌면 `no_baseline` 행이 생기고, model_id 단위 멱등 규칙 때문에 그 채널의 seed가
    영구히 빠진다.
 3. 출처별로 한 번씩, Anthropic 문서 → Price List → offers 순서로 가져온다(느린 offers가 싼 출처를 `skipped:deadline`으로 밀어내지

@@ -78,7 +78,7 @@ model-monitoring/
 │   ├── pricing_seed.py      # 활성 55채널 공식 단가 seed(SEED, CP는 CP_SEED family_key 단위) + ensure_seed(model_id 단위 멱등, SET LOCAL statement_timeout 30초와 lock_timeout 5초 뒤 pg_advisory_xact_lock(917350003))
 │   ├── pricing_parsers.py   # 출처별 순수 파서 — offers rateCard(DIMENSION_RE 허용 목록), Price List(1K → 1M), Anthropic markdown(헤더 이름, <sup> 제거, 정확 일치)
 │   ├── pricing_sync.py      # 12시간 동기화 — 가져오기, 관측 값 소수 6자리 정규화, 비교(CHANGE_THRESHOLD 0.5 경계 포함), pending_review, price_sync_runs 기록, 상한 300초. 파서 예외는 종류와 상관없이 그 출처 채널만 skipped:parse_failed
-│   ├── pricing_sync_runner.py # CLI entry: `python -m pricing_sync_runner --once` (PricingSync Fargate task) — create_tables → CP/OpenAI 등록 → ensure_seed → run_sync(pg_advisory_lock(917350004)) → os._exit
+│   ├── pricing_sync_runner.py # CLI entry: `python -m pricing_sync_runner --once` (PricingSync Fargate task) — create_tables → CP/OpenAI 등록 → ensure_seed → run_sync(pg_try_advisory_lock(917350004) — 점유 중이면 즉시 exit 1) → os._exit
 │   ├── price_history.py     # 유효 단가 조회, 행 단위 비용 서브쿼리(with_row_cost — /api/cost/*, /api/efficiency/score), verification(seed_only/verified/stale)
 │   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, 각주 번호, 참고 자료) + 숫자 직렬화
 │   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄), Markdown, JSON 내보내기 순수 함수
@@ -376,7 +376,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 - 모든 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
 - 예: `probe_results.stop_reason TEXT`
 - 기동 마이그레이션이 ~130s 걸릴 수 있어 backend 헬스체크 유예는 300s (`app-services-stack.ts` `healthCheckGracePeriod`, 2026-09-06 서킷 브레이커 롤백 실사고)
-- 새 테이블(`price_history`, `price_sync_runs`, v2.30.0)은 `models.py` ORM + `create_all`로 만든다 — lifespan ALTER 블록에 넣지 않는다. seed(`pricing_seed.ensure_seed`)는 마이그레이션 트랜잭션과 분리된 자체 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `lock_timeout = '5000'`을 건 뒤 `pg_advisory_xact_lock(917350003)`, 동기화 런은 `pg_advisory_lock(917350004)`. 모든 시각은 timezone-aware datetime 바인드 파라미터로 넣는다(SQLite는 DateTime을 문자열로 비교하므로 raw 시각 리터럴 금지)
+- 새 테이블(`price_history`, `price_sync_runs`, v2.30.0)은 `models.py` ORM + `create_all`로 만든다 — lifespan ALTER 블록에 넣지 않는다. seed(`pricing_seed.ensure_seed`)는 마이그레이션 트랜잭션과 분리된 자체 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `lock_timeout = '5000'`을 건 뒤 `pg_advisory_xact_lock(917350003)`, 동기화 런은 `pg_try_advisory_lock(917350004)`(기다리지 않음 — 점유 중이면 즉시 exit 1, 런 행 없음). 모든 시각은 timezone-aware datetime 바인드 파라미터로 넣는다(SQLite는 DateTime을 문자열로 비교하므로 raw 시각 리터럴 금지)
 
 ### Auto-Prober는 daemon thread 아님
 - v1: backend 프로세스 안의 thread. v2: **별도 Fargate Task** (EventBridge Scheduler가 5분마다 RunTask). backend의 `auto_prober.py`는 `run_cycle()` 함수만 export, daemon 로직 없음. `auto_prober_runner.py`가 CLI entrypoint.
