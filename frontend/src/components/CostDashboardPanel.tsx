@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   fetchCostSummary,
   fetchChannelCompare,
@@ -252,18 +253,22 @@ export default function CostDashboardPanel() {
             cost = input_tokens × input_price/1M + output_tokens × output_price/1M
           </code>
         </p>
-        <p>
+        <p data-cost-methodology>
           {lang === "en"
-            ? "Token counts come from each model's response usage object (per-call). Public unit prices are stored in `pricing.py` (backend) and `lib/pricing.ts` (frontend) and must be updated together when AWS/Anthropic publishes new tiers."
-            : "토큰 수는 모델 응답의 usage 객체에서 호출별로 수집합니다. 공개 단가는 `pricing.py`(backend) + `lib/pricing.ts`(frontend)에 정의되어 있고 AWS/Anthropic의 단가 변경 시 함께 업데이트해야 합니다."}
+            ? "Token counts come from each model's response usage object (per call). Unit prices are refreshed from official sources every 12 hours, and each probe is costed at the price in effect at its time. See "
+            : "토큰 수는 모델 응답의 usage 객체에서 호출별로 수집합니다. 단가는 공식 출처에서 12시간마다 자동 갱신되며 각 프로브 시각의 단가로 계산합니다. 모델별 단가와 출처는 "}
+          <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
+          {lang === "en" ? " for per-model prices and sources." : " 메뉴를 참고하세요."}
         </p>
         <p>
           <span className="text-gray-300 font-semibold">
             {lang === "en" ? "Channel comparison" : "채널 비교"}:
           </span>{" "}
           {lang === "en"
-            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). Unit prices may differ slightly across channels — this dashboard reports the actual numbers, not assumptions."
-            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 채널별 단가가 다를 수 있으며 본 대시보드는 실측 수치 그대로를 보여줍니다."}
+            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). Unit prices are refreshed from official sources every 12 hours and each probe is costed at the price in effect at its time, see "
+            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 단가는 공식 출처에서 12시간마다 자동 갱신되며 각 프로브 시각의 단가로 계산합니다. 채널별 단가는 "}
+          <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
+          {lang === "en" ? "." : " 메뉴를 참고하세요."}
         </p>
         <p>
           <span className="text-gray-300 font-semibold">

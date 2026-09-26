@@ -1,11 +1,12 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ModelInfo, AuthUser } from "@/lib/types";
-import { compareStream, CompareResult, fetchModels } from "@/lib/api";
+import { ModelInfo, AuthUser, PricingModelPrice } from "@/lib/types";
+import { compareStream, CompareResult, fetchModels, fetchPricing } from "@/lib/api";
 import { useLang } from "@/lib/i18n-context";
 import { groupByFamily, sortResults } from "@/lib/sortModels";
-import { estimateCost, formatCost } from "@/lib/pricing";
+import { formatCost } from "@/lib/pricing";
+import { costFromPrices } from "@/lib/pricingTable";
 import MessageMarkdown from "./chat/MessageMarkdown";
 
 interface Props {
@@ -120,13 +121,47 @@ const SUGGESTED_COMPARE_PROMPTS_EN: { label: string; prompt: string }[] = [
   },
 ];
 
-interface RunningState {
+export interface RunningState {
   model_id: string;
   model_name: string;
   text: string;
   ttft_ms?: number | null;
   result?: CompareResult;
   error?: string;
+}
+
+/**
+ * 비교 매트릭스 — 성공한 모델만, 최단 TTFT / 최단 latency / 최고 TPS / 최저 비용.
+ * 비용은 /api/pricing `models`의 현재 단가(v2.30.0). 단가가 없는 모델은 비용 null("—")이고
+ * 최저 비용 강조 후보에서 빠진다.
+ */
+export function compareMatrix(runs: RunningState[], prices: Record<string, PricingModelPrice> | null) {
+  const list = runs
+    .filter((r) => r.result?.status === "success")
+    .map((r) => ({
+      ...r,
+      cost: costFromPrices(prices, r.model_id, r.result!.input_tokens, r.result!.output_tokens),
+    }));
+  if (list.length === 0) return null;
+  const min = (sel: (x: (typeof list)[0]) => number | null): number | null =>
+    list.reduce<number | null>((acc, x) => {
+      const v = sel(x);
+      if (v === null) return acc;
+      return acc === null || v < acc ? v : acc;
+    }, null);
+  const max = (sel: (x: (typeof list)[0]) => number | null): number | null =>
+    list.reduce<number | null>((acc, x) => {
+      const v = sel(x);
+      if (v === null) return acc;
+      return acc === null || v > acc ? v : acc;
+    }, null);
+  return {
+    list,
+    bestTtft: min((x) => x.result!.ttft_ms),
+    bestLatency: min((x) => x.result!.total_latency_ms),
+    bestTps: max((x) => x.result!.tps),
+    bestCost: min((x) => x.cost),
+  };
 }
 
 export default function ComparePanel({ user, onLoginClick }: Props) {
@@ -141,9 +176,12 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
   const [runs, setRuns] = useState<Map<string, RunningState>>(new Map());
   const [error, setError] = useState<string | null>(null);
   const [controller, setController] = useState<AbortController | null>(null);
+  const [prices, setPrices] = useState<Record<string, PricingModelPrice> | null>(null);
 
   useEffect(() => {
     fetchModels().then(setModels).catch((e) => console.error(e));
+    // 단가를 못 받으면 비용 열만 "—"로 두고 비교는 계속한다.
+    fetchPricing().then((pricing) => setPrices(pricing.models)).catch((e) => console.error(e));
   }, []);
 
   const sortedModels = useMemo(
@@ -239,34 +277,7 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
   const runArray = Array.from(runs.values()).sort((a, b) => a.model_name.localeCompare(b.model_name));
 
   // 비교 매트릭스 - 최단 TTFT / 최단 latency / 최고 TPS / 최저 비용 강조.
-  const matrix = useMemo(() => {
-    const list = runArray
-      .filter((r) => r.result?.status === "success")
-      .map((r) => {
-        const cost = estimateCost(r.model_id, r.result!.input_tokens, r.result!.output_tokens);
-        return { ...r, cost };
-      });
-    if (list.length === 0) return null;
-    const min = (sel: (x: (typeof list)[0]) => number | null): number | null =>
-      list.reduce<number | null>((acc, x) => {
-        const v = sel(x);
-        if (v === null) return acc;
-        return acc === null || v < acc ? v : acc;
-      }, null);
-    const max = (sel: (x: (typeof list)[0]) => number | null): number | null =>
-      list.reduce<number | null>((acc, x) => {
-        const v = sel(x);
-        if (v === null) return acc;
-        return acc === null || v > acc ? v : acc;
-      }, null);
-    return {
-      list,
-      bestTtft: min((x) => x.result!.ttft_ms),
-      bestLatency: min((x) => x.result!.total_latency_ms),
-      bestTps: max((x) => x.result!.tps),
-      bestCost: min((x) => x.cost),
-    };
-  }, [runArray]);
+  const matrix = useMemo(() => compareMatrix(runArray, prices), [runArray, prices]);
 
   return (
     <div className="p-6 space-y-6 max-w-7xl mx-auto">
@@ -465,8 +476,8 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
           </table>
           <p className="text-[10px] text-gray-600 mt-2">
             {lang === "en"
-              ? "Best value per column shown in green. Cost is estimated from public Bedrock/Anthropic pricing."
-              : "각 컬럼의 최적 값을 녹색으로 강조. 비용은 Bedrock/Anthropic 공개 단가 기반 추정치입니다."}
+              ? "Best value per column shown in green. Cost is estimated from the current prices on the Unit Prices page."
+              : "각 컬럼의 최적 값을 녹색으로 강조. 비용은 비용 단가 메뉴의 현재 단가로 계산한 추정치입니다."}
           </p>
         </div>
       )}

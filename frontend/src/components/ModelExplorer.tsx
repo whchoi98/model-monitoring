@@ -3,12 +3,13 @@
 // Model Explorer (v2.9.0) — 모니터링 중인 전체 모델 카드 그리드 + 상세 모달.
 // 참조 UX: aws-samples Bedrock Central의 Explore Models (검색/필터 + 카드 + 상세).
 // 데이터는 /api/models(공개)에서 — 모델 추가 시 자동 반영, 하드코딩 없음.
+// 단가는 /api/pricing `models`를 페이지에서 한 번 받아 카드와 상세에 내려준다 (v2.30.0).
 
 import { useId, useMemo, useRef, useState } from "react";
-import { ModelInfo } from "@/lib/types";
-import { fetchModels } from "@/lib/api";
+import { ModelInfo, PricingModelPrice, PricingResponse } from "@/lib/types";
+import { fetchModels, fetchPricing } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n-context";
-import { getPricing } from "@/lib/pricing";
+import { formatUnitPrice, formatPricePair } from "@/lib/pricingTable";
 import { sortResults, isExcludedModel } from "@/lib/sortModels";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { DataEmpty, DataError, DataLoading } from "@/components/DataState";
@@ -73,10 +74,13 @@ function CopyButton({ text, label }: { text: string; label: string }) {
   );
 }
 
-function DetailModal({ model, onClose }: { model: ModelInfo; onClose: () => void }) {
+function DetailModal({ model, price, onClose }: {
+  model: ModelInfo;
+  price: PricingModelPrice | null;
+  onClose: () => void;
+}) {
   const { lang } = useLang();
   const ch = channelOf(model.id);
-  const price = getPricing(model.id);
   const examples = codeExamples(model.id, lang === "en" ? "en" : "ko");
   const links = modelLinks(model.id, model.name, lang === "en" ? "en" : "ko");
   const [tab, setTab] = useState(0);
@@ -112,8 +116,8 @@ function DetailModal({ model, onClose }: { model: ModelInfo; onClose: () => void
             <div className="text-gray-500">{lang === "en" ? "Pricing (per 1M tokens)" : "토큰 단가 (1M 기준)"}</div>
             {price ? (
               <div className="text-gray-200 tabular-nums">
-                Input <span className="font-semibold">${price.input}</span> / Output{" "}
-                <span className="font-semibold">${price.output}</span>
+                {lang === "en" ? "Input" : "입력"} <span className="font-semibold">{formatUnitPrice(price.input)}</span>
+                {" / "}{lang === "en" ? "Output" : "출력"} <span className="font-semibold">{formatUnitPrice(price.output)}</span>
               </div>
             ) : (
               <div className="text-gray-500">{lang === "en" ? "Pricing unavailable" : "단가 정보 없음"}</div>
@@ -194,6 +198,10 @@ export default function ModelExplorer() {
   const { lang } = useLang();
   const t = useT();
   const resource = useAsyncResource<ModelInfo[]>("model-catalog", fetchModels);
+  const pricing = useAsyncResource<PricingResponse>("pricing", fetchPricing);
+  const prices = pricing.data?.models ?? null;
+  const priceOf = (id: string): PricingModelPrice | null =>
+    prices && Object.prototype.hasOwnProperty.call(prices, id) ? prices[id] : null;
   const [search, setSearch] = useState("");
   const [channel, setChannel] = useState<ChannelType | "all">("all");
   const [selected, setSelected] = useState<ModelInfo | null>(null);
@@ -226,7 +234,11 @@ export default function ModelExplorer() {
               : "모델을 선택하면 호출 ID·코드 예제·연결 링크를 볼 수 있습니다."}
           </p>
         </div>
-        <RefreshControls refreshing={resource.refreshing} onRefresh={resource.refresh} updatedAt={resource.updatedAt} />
+        <RefreshControls
+          refreshing={resource.refreshing || pricing.refreshing}
+          onRefresh={() => { void resource.refresh(); void pricing.refresh(); }}
+          updatedAt={resource.updatedAt}
+        />
       </div>
 
       {/* 검색 + 채널 필터 */}
@@ -266,6 +278,8 @@ export default function ModelExplorer() {
 
       <DataError error={resource.error} resource={lang === "en" ? "model catalog" : "모델 카탈로그"}
                  onRetry={resource.refresh} hasData={models.length > 0} />
+      <DataError error={pricing.error} resource={lang === "en" ? "unit prices" : "비용 단가"}
+                 onRetry={pricing.refresh} hasData={prices !== null} />
       {resource.loading && <DataLoading />}
       {!resource.error && resource.data !== null && models.length === 0 && (
         <DataEmpty title={lang === "en" ? "No models available." : "등록된 모델이 없습니다."}
@@ -280,7 +294,7 @@ export default function ModelExplorer() {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {filtered.map((m) => {
           const ch = channelOf(m.id);
-          const price = getPricing(m.id);
+          const price = priceOf(m.id);
           return (
             <button
               key={m.id}
@@ -301,14 +315,17 @@ export default function ModelExplorer() {
               </div>
               <code className="block text-[11px] text-gray-500 break-all mt-1.5">{m.id}</code>
               <div className="text-[11px] text-gray-500 mt-2 tabular-nums">
-                {price ? `$${price.input} / $${price.output} (1M in/out)` : (lang === "en" ? "Pricing unavailable" : "단가 정보 없음")}
+                {price
+                  ? `${formatPricePair(price)} ${lang === "en" ? "(per 1M tokens, in/out)" : "(1M 토큰당 입력/출력)"}`
+                  : pricing.loading ? (lang === "en" ? "Loading prices…" : "단가 불러오는 중…")
+                    : (lang === "en" ? "Pricing unavailable" : "단가 정보 없음")}
               </div>
             </button>
           );
         })}
       </div>
 
-      {selected && <DetailModal key={selected.id} model={selected} onClose={() => setSelected(null)} />}
+      {selected && <DetailModal key={selected.id} model={selected} price={priceOf(selected.id)} onClose={() => setSelected(null)} />}
     </div>
   );
 }
