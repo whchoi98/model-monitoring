@@ -289,7 +289,8 @@ def test_a_malformed_price_list_item_skips_only_nova(Session, kind):
 @pytest.mark.parametrize("response", [
     {"modelId": "openai.gpt-5.6-sol", "offers": "none"},
     _sol_offer("1e999999999", "22", "4", "20"),  # finite, but not representable at 6 decimals (InvalidOperation)
-], ids=["offers-not-a-list", "unquantizable-price"])
+    _sol_offer("0.0000004", "22", "4", "20"),    # positive, but 0 at 6 decimals (never store a zero price)
+], ids=["offers-not-a-list", "unquantizable-price", "rounds-to-zero"])
 def test_a_malformed_offers_response_skips_only_that_models_channels(Session, response):
     _seed(Session)
     run = _sync(Session, sol_response=response)

@@ -175,8 +175,12 @@ def _dec(v: float) -> Decimal:
 
 
 def _quantized(price: UnitPrice) -> UnitPrice:
-    """Both sides at 6 decimals. A value that cannot be quantized raises decimal.InvalidOperation (parse failure)."""
-    return UnitPrice(input=price.input.quantize(PRICE_QUANTUM), output=price.output.quantize(PRICE_QUANTUM))
+    """Both sides at 6 decimals. A value that cannot be quantized raises decimal.InvalidOperation, and a positive
+    value that rounds to 0 raises PriceParseError (both are parse failures: a zero price is never stored)."""
+    quantized = UnitPrice(input=price.input.quantize(PRICE_QUANTUM), output=price.output.quantize(PRICE_QUANTUM))
+    if quantized.input <= 0 or quantized.output <= 0:
+        raise PriceParseError(f"price rounds to 0 at 6 decimals: {price.input}/{price.output}")
+    return quantized
 
 
 def _parse_message(exc: Exception) -> str:
