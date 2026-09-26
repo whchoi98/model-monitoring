@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.29.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.29.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -12,7 +12,7 @@
 - **Frontend**: Next.js 16 standalone + React + Tailwind + Recharts + react-markdown + FloatingChat + PWA(iPhone/iPad 홈 화면 설치 — manifest.ts·앱 아이콘·safe-area, v2.21.0)
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
 - **Edge**: CloudFront VPC Origin → Internal ALB → ECS Fargate × 2 (backend, frontend). VPC Origin → ALB는 현재 VPC 내부 HTTP:80(`edge-stack.ts` `HTTP_ONLY`, 운영 cert 정착 전 임시 — ALB는 internal + private subnet + VPC CIDR SG), ALB에는 HTTPS:443 리스너도 있음
-- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, AutoProber 안에서 Claude Platform on AWS 채널만 10분 주기 — v2.29.0) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
+- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
 - **AI**: Claude Sonnet 4.6 챗봇 (4 tools) + Haiku 4.5 dynamic followups + Sonnet 4.6 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth
 
 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/) (v2.0.0 당시 설계 기록 — 9개 모델, 인사이트 30분 주기 기준이라 현행과 다름).
@@ -42,7 +42,7 @@ Internal ALB
 
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 55 models × 1 workload preset (round-robin 6 categories);
-  │                              Claude Platform on AWS 9채널(anthropic:*)은 10분 주기(두 사이클에 한 번) + 자체 카테고리 회전 (v2.29.0)
+  │                              Claude Platform on AWS 9채널(anthropic:*)도 매 사이클 같은 카테고리 (v2.29.1 복귀; ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 두 사이클에 한 번 + 자체 회전)
   ├── Insights Fargate Task    → Sonnet 4.6 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0)
   ├── GptBench Fargate Task    → 15분 주기 GPT 18채널(Mantle 인리전 11 + Global/US CRIS 7) × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1, GPT-6 Sol/Luna 6채널 v2.28.0)
@@ -62,8 +62,8 @@ Backend ↔ Bedrock (Seoul region inference profiles us.*, global.*) + Anthropic
 model-monitoring/
 ├── backend/
 │   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout + lock_timeout)
-│   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon); 멈춘 모델은 오류 행 + run completed (v2.28.2); _plan_cycle = CP 10분 주기 + 자체 회전 (v2.29.0)
-│   ├── probe_cadence.py     # 채널별 수집 주기 — ANTHROPIC_CP_PROBE_INTERVAL_S, interval_for(), channel_intervals() (v2.29.0)
+│   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon); 멈춘 모델은 오류 행 + run completed (v2.28.2); _plan_cycle = CP 주기 노브(기본 매 사이클, 600이면 두 사이클에 한 번 + 자체 회전 — v2.29.0, 기본값 v2.29.1)
+│   ├── probe_cadence.py     # 채널별 수집 주기 — ANTHROPIC_CP_PROBE_INTERVAL_S(기본 300 = 매 사이클, v2.29.1), interval_for(), channel_intervals() (v2.29.0)
 │   ├── latest_results.py    # /latest와 챗봇 공용, 모델별 최신 자동 행 (모델 주기 기준 bounded 범위, v2.29.0)
 │   ├── auto_prober_runner.py # CLI entry: `python -m auto_prober_runner --once`
 │   ├── insights_runner.py   # CLI entry: `python -m insights_runner --window 6h` (Insights Fargate task)
@@ -261,7 +261,7 @@ curl -X POST "https://d36s7ml54xwemr.cloudfront.net/api/admin/users/<username>/a
 ## Workload Preset (6 categories, round-robin) / 워크로드 프리셋
 
 매 cycle마다 다음 카테고리 하나를 선택 — 같은 카테고리는 30분(5분 × 6)마다 회전. `probe_results.category` 컬럼으로 필터링.
-Claude Platform on AWS 채널(anthropic:*)은 v2.29.0부터 10분 주기라 채널마다 자기 직전 카테고리의 다음 것을 쓴다 — 같은 카테고리는 약 60분마다, 한 run 안에서 다른 모델과 카테고리가 다를 수 있다(나머지 모델의 회전은 CP 행을 제외하고 읽어 기존과 같다).
+Claude Platform on AWS 채널(anthropic:*)도 기본값에서는 매 사이클 같은 카테고리를 쓴다(v2.29.1 — v2.29.0의 10분 주기를 되돌림). `ANTHROPIC_CP_PROBE_INTERVAL_S`를 600으로 올리면 CP만 두 사이클에 한 번이 되고 채널마다 자기 직전 카테고리의 다음 것을 쓴다 — 그때는 같은 카테고리가 약 60분마다 돌아오고, 한 run 안에서 다른 모델과 카테고리가 다를 수 있다(나머지 모델의 회전은 CP 행을 제외하고 읽으므로 어느 모드든 같다).
 
 | id | label_ko | 용도 |
 |----|----------|------|
@@ -364,7 +364,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 
 ### Auto-Prober는 daemon thread 아님
 - v1: backend 프로세스 안의 thread. v2: **별도 Fargate Task** (EventBridge Scheduler가 5분마다 RunTask). backend의 `auto_prober.py`는 `run_cycle()` 함수만 export, daemon 로직 없음. `auto_prober_runner.py`가 CLI entrypoint.
-- **Claude Platform on AWS 10분 주기 (v2.29.0)**: 사용자 결정 2026-09-23("API 스로틀링 이슈, 1P만 해당"). `_plan_cycle`이 CP 채널을 직전 CP 자동 프로브 **run의 시작 시각**(`ProbeRun.created_at`) 기준 `ANTHROPIC_CP_PROBE_INTERVAL_S − 150`초가 지났을 때만 프로빙한다 — 결과 행 timestamp로 바꾸지 말 것(CP 행은 사이클 1~2분 뒤에 찍혀 15분 주기가 된다). Bedrock Claude, Nova, OpenAI는 매 사이클. `/api/auto-probe/latest`는 run 단위가 아니라 모델별 최신 행이고(`latest_results.py`), `/status`의 `channel_intervals`로 프런트엔드가 카드 신선도와 추세 끊김을 채널별 주기로 판정한다.
+- **Claude Platform on AWS 주기 노브 (v2.29.0 도입, v2.29.1에서 매 사이클로 복귀)**: v2.29.0은 사용자 결정 2026-09-23("API 스로틀링 이슈, 1P만 해당")으로 CP 채널을 10분 주기로 늘렸고, v2.29.1은 사용자 결정 2026-09-26("원래대로 복귀")으로 기본값을 되돌렸다. 이제 기본 `ANTHROPIC_CP_PROBE_INTERVAL_S=300`에서는 CP도 매 사이클, 사이클 카테고리로 프로빙하고 `_plan_cycle`은 CP 이력 조회를 하지 않는다(시간당 CP 호출 108회). 월간 사용량 상한이 다시 걸리면 AutoProber task env를 600으로 올리는 것이 운영 레버다(backend 서비스에도 같은 값 — `/status` 표시용). 기본 주기(300)보다 클 때만 적용되는 규칙: `_plan_cycle`이 CP 채널을 직전 CP 자동 프로브 **run의 시작 시각**(`ProbeRun.created_at`) 기준 `ANTHROPIC_CP_PROBE_INTERVAL_S − 150`초가 지났을 때만 프로빙하고 채널마다 카테고리를 따로 회전한다 — 결과 행 timestamp로 바꾸지 말 것(CP 행은 사이클 1~2분 뒤에 찍혀 600 설정이 실제로는 15분 주기가 된다). Bedrock Claude, Nova, OpenAI는 항상 매 사이클. `/api/auto-probe/latest`는 run 단위가 아니라 모델별 최신 행이고(`latest_results.py`), `/status`의 `channel_intervals`로 프런트엔드가 카드 신선도와 추세 끊김을 채널별 주기로 판정한다.
 - **월간 사용량 상한 429는 재시도하지 않는다 (v2.29.0)**: 메시지 "usage limits" / "usage threshold" / `enforced_spend_limit_reached`(`prober._is_usage_cap_error`) — 프로브당 요청 1회, 오류 행 1개, 경고 한 줄. CP 프로브 클라이언트(`_get_anthropic_probe_client`)는 `max_retries=0`이고 SDK가 하던 일시 오류 재시도(408/409/429/5xx, 연결 오류)는 prober 루프가 맡는다. Comparison Lab과 패리티 런은 SDK 기본값 클라이언트(`_get_anthropic_client`) 그대로.
 - **Probe wall-clock watchdog (v2.28.2)**: 프로브 스트림은 `PROBE_WALL_CLOCK_S`(기본 90초, `backend/stream_watchdog.py`) 상한 — 만료 모델은 오류 행 `WallClockTimeout: …`, 모델별 사이클 타임아웃(max(120, 상한 + 30)초) 초과 모델은 `… (cycle timeout)` 오류 행이고 run은 **completed**로 끝난다. executor `shutdown(wait=False)` + 러너 `os._exit` — `with ThreadPoolExecutor`/`sys.exit`로 되돌리지 말 것 (2026-09-23 대시보드 동결, [`docs/runbooks/troubleshooting.md`](./docs/runbooks/troubleshooting.md)).
 
@@ -384,7 +384,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `ANTHROPIC_AWS_REGION` | `us-east-2` | CP on AWS endpoint region |
 | `NEXT_PUBLIC_RUM_ENDPOINT` / `_API_KEY` | (선택) | RUM 수집 — **빌드 타임 주입** (frontend docker build `--build-arg`), 미설정 시 수집 비활성 (v2.16.5) |
 | `RETENTION_DAYS` | `60` | 원본 probe_results 보존 일수 (초과분은 probe_results_hourly 집계 이관, 0 이하=비활성) |
-| `ANTHROPIC_CP_PROBE_INTERVAL_S` | `600` (AutoProber task CDK 주입, 코드 기본값도 600) | Claude Platform on AWS 채널(anthropic:*) 수집 주기(초) — 5분 사이클 단위로 반올림(600 = 두 사이클에 한 번), 300 미만은 300(매 사이클). backend 서비스는 미주입(코드 기본값으로 `/status` `channel_intervals` 표시) — 값을 바꿀 때는 backend에도 같은 값 주입 (v2.29.0) |
+| `ANTHROPIC_CP_PROBE_INTERVAL_S` | `300` (AutoProber task CDK 주입, 코드 기본값도 300 — v2.29.1) | Claude Platform on AWS 채널(anthropic:*) 수집 주기(초) — 읽을 때 5분 사이클 단위로 반올림(동률 내림, due 판정과 같은 결과 — 400은 300, 700은 600), 300(기본)과 300 미만은 매 사이클(다른 채널과 같은 카테고리), 600 = 두 사이클에 한 번 + CP 자체 카테고리 회전(v2.29.0 동작, 사용량 상한 대응 레버). backend 서비스는 미주입(코드 기본값으로 `/status` `channel_intervals` 표시) — 값을 바꿀 때는 backend에도 같은 값 주입 (v2.29.0 도입, 기본값 v2.29.1) |
 | `PROBE_WALL_CLOCK_S` | `90` (선택, 미주입) | 프로브 1회(재시도 포함) wall-clock 상한 — 만료 시 그 모델만 `WallClockTimeout` 오류 행, 모델별 사이클 타임아웃은 max(120, 값 + 30)초로 따라감 (v2.28.2) |
 | `MANTLE_ANTHROPIC_REGION` | `us-east-1` (CDK 주입) | Claude API Features + 패리티 런 `messages_mantle` 공용 Mantle `/anthropic` surface 리전. ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측) → 대표 모델이 서빙되는 us-east-1로 전환(사용자 결정, v2.23.0). env 미주입 시 코드 기본값은 패리티 ap-northeast-1(`parity/runner.py`), Claude API Features us-east-1(`claude_features/catalog.py`) |
 | `FEATURES_MCP_SERVER_URL` | (선택) | Claude API Features MCP connector 프로브용 공개 MCP 서버 URL (v2.23.0, 장애 시 inconclusive로 격리) |

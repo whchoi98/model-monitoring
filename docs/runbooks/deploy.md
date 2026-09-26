@@ -104,7 +104,7 @@ aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
 # 스케줄 태스크 5개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
-# AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once (CP 채널은 10분, env ANTHROPIC_CP_PROBE_INTERVAL_S — v2.29.0)
+# AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once (env ANTHROPIC_CP_PROBE_INTERVAL_S=300 = CP도 매 사이클 — v2.29.1, 600이면 CP만 두 사이클에 한 번)
 # Insights:       family BedrockMonitorSchedulerInsightsTaskDef*,       schedule rate(5 minutes),  CLI insights_runner --window 6h
 # ParityRun:      family BedrockMonitorSchedulerParityRunTaskDef*,      schedule rate(12 hours),   CLI parity_runner --once (v2.11.0)
 # GptBench:       family BedrockMonitorSchedulerGptBenchTaskDef*,       schedule rate(15 minutes), CLI gptbench_runner --once (v2.18.0)
@@ -330,9 +330,13 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.ca
 
 ### 5-2. v2.29.0 배포 경로와 확인 (CP 10분 주기, FeaturesVerify 고정 cron)
 
+> v2.29.1부터 CP 기본 주기는 다시 매 사이클이다(§5-3). 아래 CP 확인(2~4번과 대시보드, 카테고리 항목, 사용량 상한 항목의
+> 시간당 54개)은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
+> 그대로 유효하다.
+
 **배포 경로**: CDK 변경이 있다(FeaturesVerify 스케줄 `rate(24 hours)` → `cron(30 17 * * ? *)` Etc/UTC, AutoProber task def
-env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`). 이미지-only 경로(§2-1) 금지 — env가 복사되지 않는다(코드 기본값도 600이라
-동작은 같지만 설정이 보이지 않는다). **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를
+env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`). 이미지-only 경로(§2-1) 금지 — env가 복사되지 않는다(v2.29.0 당시에는 코드 기본값도 600이라
+동작은 같았지만, v2.29.1부터 코드 기본값은 300이므로 600 모드는 env가 있어야만 동작한다). **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를
 배포한다(§3 경고). IAM 변경 없음, DB 마이그레이션 없음.
 
 ```bash
@@ -360,12 +364,52 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, chan
 
 - 대시보드 수집 상태 줄에 "5분 주기"와 "Claude Platform on AWS 10분 주기"가 함께 보인다. CP 카드는 10분 + 5분 유예
   안에서는 "수집 지연"으로 바뀌지 않는다. 추세 차트의 CP 선은 10분 간격 점을 끊김 없이 잇는다.
+  단, v2.29.1 대시보드는 `/status`를 받기 전에는 600을 가정하지 않는다. 그래서 600 모드에서는 첫 렌더 중에(첫 `/status`
+  요청이 실패하면 다음 새로고침에서 성공할 때까지) 마지막 CP 행이 10분(5분 + 유예 5분)을 넘긴 카드가 잠시 "수집 지연"으로
+  보일 수 있다. `/status`가 오면 `channel_intervals` 600이 적용되어 "정상"으로 돌아오므로 이상이 아니다.
 - CP 카테고리는 채널별로 따로 돈다 — 같은 run 안에서 CP 행의 `category`가 다른 모델과 다른 것이 정상이다. 워크로드 필터에서
   CP 채널은 약 60분마다 갱신된다(다른 채널은 30분).
 - **2026-10-01 00:00 UTC 전까지 CP 행은 전부 오류가 정상이다**(조직 월간 사용량 상한 429 — `troubleshooting.md` 참고).
   확인할 것은 재시도가 없어졌는지다: `/ecs/autoprober`에 CP 프로브마다 `usage cap reached, not retried` 경고 한 줄,
   `Retryable error for anthropic:` 0건. 시간당 CP 오류 행은 9채널 × 6회 = 54개 안팎이어야 한다(이전 108개).
 - FeaturesVerify 첫 스케줄 런은 배포 뒤 첫 17:30 UTC다. 그 전에 확인하려면 §5-1의 수동 1회 절차를 쓴다.
+
+### 5-3. v2.29.1 배포 경로와 확인 (CP 매 사이클 복귀)
+
+**배포 경로**: CDK 변경이 있다(AutoProber task def env `ANTHROPIC_CP_PROBE_INTERVAL_S` 600 → 300). 이미지-only 경로(§2-1)
+금지 — 기존 task def의 `600`이 그대로 복사되고 env가 코드 기본값(300)보다 우선하므로 CP가 계속 두 사이클에 한 번 돈다.
+**digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 backend, frontend 이미지 모두로 배포한다
+(§3 경고). backend 서비스에는 이 env를 넣지 않는다(코드 기본값 300으로 `/status`가 맞는다). IAM 변경 없음, DB 마이그레이션 없음.
+
+```bash
+REGION=ap-northeast-2
+# 1. AutoProber task def env — 300
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerAutoProberTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+aws ecs describe-task-definition --task-definition "$FAM" --region $REGION \
+  --query 'taskDefinition.containerDefinitions[0].environment[?name==`ANTHROPIC_CP_PROBE_INTERVAL_S`]'
+# 기댓값: [{"name": "ANTHROPIC_CP_PROBE_INTERVAL_S", "value": "300"}]
+
+# 2. 기본 주기에서는 _plan_cycle이 CP 이력을 조회하지 않으므로 cadence 로그 줄이 없다
+aws logs tail /ecs/autoprober --since 15m --region $REGION | grep -c "Claude Platform on AWS .*s cadence"
+# 기댓값: 0 (배포 뒤 첫 사이클 이후 기준 — 그 전 사이클의 "600s cadence" 줄이 범위에 들어가면 1 이상)
+
+# 3. CP 행이 다른 모델과 같은 run, 같은 category
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
+  | jq 'group_by(.model_id|startswith("anthropic:")) | map({cp: (.[0].model_id|startswith("anthropic:")), n: length, run_ids: ([.[].run_id]|unique), categories: ([.[].category]|unique)})'
+# 기댓값: cp false 46행, cp true 9행, 둘 다 같은 run_id 하나와 같은 category 하나
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, channel_intervals, channel_category_intervals}'
+# 기댓값: interval_seconds 300, channel_intervals {"anthropic": 300}, channel_category_intervals {"anthropic": 1800}
+```
+
+- 대시보드 수집 상태 줄에는 "5분 주기"만 보이고 "Claude Platform on AWS 10분 주기"는 사라진다(값이 기본 주기와 같은 채널
+  안내는 숨긴다). `/status`를 불러오기 전에도 10분을 가정하지 않으므로, CP 카드의 신선도와 추세 끊김도 다른 채널과 같은 기준이다.
+- 배포 뒤 첫 사이클부터 CP가 사이클 카테고리에 합류한다(직전 CP 행의 자체 회전 카테고리를 읽지 않는다). 워크로드 필터에서
+  CP 채널도 다른 채널처럼 30분마다 갱신된다.
+- CP 호출은 시간당 54회에서 108회(9채널 × 12회)로 두 배가 된다. 월간 사용량 상한이 다시 걸려도 429는 재시도하지 않으므로
+  프로브당 요청 1회이고, 그 기간 시간당 CP 오류 행은 108개 안팎이다(`troubleshooting.md`). 호출을 줄여야 하면
+  `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 AutoProber task와 backend 서비스에 넣고 같은 경로로 배포한 뒤 §5-2의 2~4번으로 확인한다.
+- FeaturesVerify는 바뀌지 않는다(`cron(30 17 * * ? *)` Etc/UTC).
 
 ## 6. 후속 배포 (코드만 변경 시)
 

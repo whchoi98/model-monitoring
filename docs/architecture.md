@@ -11,7 +11,7 @@
 
 ## System Overview
 
-Bedrock LLM Monitor v2 measures a 55-channel active catalog across Amazon Bedrock, Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, except the 9 Claude Platform on AWS channels, which are probed every 10 minutes with their own workload rotation (v2.29.0). Four more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, and a daily Claude API Features evidence sweep. A chatbot answers natural-language questions over the stored time series.
+Bedrock LLM Monitor v2 measures a 55-channel active catalog across Amazon Bedrock, Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, including the 9 Claude Platform on AWS channels (v2.29.1 reverted the v2.29.0 10-minute CP cadence; `ANTHROPIC_CP_PROBE_INTERVAL_S=600` brings it back as an operational lever). Four more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, and a daily Claude API Features evidence sweep. A chatbot answers natural-language questions over the stored time series.
 
 Traffic enters through CloudFront at `llm-monitor.whchoi.net` (the default `d36s7ml54xwemr.cloudfront.net` name also works), reaches an internal ALB through a VPC Origin, and is routed to two ECS Fargate services: `frontend` (Next.js standalone) and `backend` (FastAPI). All data lands in a single RDS PostgreSQL instance. Viewers connect over HTTPS. The VPC Origin currently reaches the ALB over HTTP port 80 inside the VPC, a temporary setting in `edge-stack.ts` until the origin switches to `HTTPS_ONLY`; the ALB is internal, sits in private subnets, and its security group admits only the VPC CIDR.
 
@@ -39,7 +39,7 @@ flowchart TB
 
   subgraph ingestion[Scheduled Ingestion Layer]
     sched[EventBridge Scheduler]
-    ap["AutoProber task: 5 min, CP 10 min"]
+    ap["AutoProber task: 5 min"]
     ins["Insights task: 5 min"]
     par["ParityRun task: 12 h"]
     gpt["GptBench task: 15 min"]
@@ -100,7 +100,7 @@ flowchart LR
   A([Browser]) --> B[CloudFront] --> C[VPC Origin] --> D[Internal ALB] --> E[backend FastAPI] --> F[(RDS PostgreSQL)]
 ```
 
-`/api/auto-probe/status` and `/api/auto-probe/latest` read the latest `ProbeRun(is_auto=1)` rows from the database, not in-process state, because the prober runs in a separate Fargate task. `/latest` returns each model's latest row within its own cadence window (3 intervals: 15 minutes, 30 minutes for CP), and `/status` exposes `channel_intervals` so the dashboard judges freshness per channel.
+`/api/auto-probe/status` and `/api/auto-probe/latest` read the latest `ProbeRun(is_auto=1)` rows from the database, not in-process state, because the prober runs in a separate Fargate task. `/latest` returns each model's latest row within its own cadence window (3 intervals: 15 minutes for every channel at the default cadence, 30 minutes for CP when `ANTHROPIC_CP_PROBE_INTERVAL_S=600`), and `/status` exposes `channel_intervals` so the dashboard judges freshness per channel.
 
 ## Components by Layer
 
@@ -153,7 +153,7 @@ flowchart LR
 
 | Schedule | Expression | Task command | Output |
 |----------|------------|--------------|--------|
-| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | One `ProbeRun` plus 46 or 55 `probe_results` rows per cycle (CP channels are due every other cycle); `_plan_cycle` picks CP channels every 10 minutes (`ANTHROPIC_CP_PROBE_INTERVAL_S=600`) with their own category rotation |
+| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | One `ProbeRun` plus 55 `probe_results` rows per cycle, all with the cycle's category (default `ANTHROPIC_CP_PROBE_INTERVAL_S=300`, v2.29.1); with `600`, `_plan_cycle` probes CP channels every other cycle with their own category rotation (46 or 55 rows per cycle) |
 | `InsightsSchedule` | `rate(5 minutes)` | `python -m insights_runner --window 6h` | `Insight` rows (KO and EN) |
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | Model × 6 surfaces × 19 features evidence cells |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 18 GPT channels (Mantle in-region 11 + CRIS 7) × 10 sequential calls; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s, cycle deadline `GPT_BENCH_DEADLINE` 780 s |
@@ -252,7 +252,7 @@ See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/) (012, 014, 015,
 
 ## 시스템 개요
 
-Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 55개 채널을 측정합니다. 스케줄된 AutoProber 태스크가 5분마다 모든 채널을 프로빙하며, Claude Platform on AWS 9채널만 10분마다 자체 워크로드 순환으로 프로빙합니다(v2.29.0). 나머지 스케줄 태스크 4개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕을 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
+Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 55개 채널을 측정합니다. 스케줄된 AutoProber 태스크가 Claude Platform on AWS 9채널을 포함한 모든 채널을 5분마다 프로빙합니다(v2.29.1에서 v2.29.0의 CP 10분 주기를 되돌렸고, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 운영 레버로 써서 다시 켤 수 있습니다). 나머지 스케줄 태스크 4개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕을 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
 
 트래픽은 `llm-monitor.whchoi.net`(기본 이름 `d36s7ml54xwemr.cloudfront.net`도 동작)의 CloudFront로 들어와 VPC Origin을 거쳐 내부 ALB에 도달하고, ECS Fargate 서비스 2개인 `frontend`(Next.js standalone)와 `backend`(FastAPI)로 라우팅됩니다. 모든 데이터는 RDS PostgreSQL 인스턴스 하나에 저장됩니다. 뷰어 구간은 HTTPS입니다. VPC Origin은 현재 VPC 내부에서 HTTP 포트 80으로 ALB에 연결하며, 이는 origin을 `HTTPS_ONLY`로 바꾸기 전까지의 임시 설정입니다(`edge-stack.ts`). ALB는 internal scheme이고 프라이빗 서브넷에 있으며 보안 그룹은 VPC CIDR만 허용합니다.
 
@@ -280,7 +280,7 @@ flowchart TB
 
   subgraph ingestion[Scheduled Ingestion Layer]
     sched[EventBridge Scheduler]
-    ap["AutoProber task: 5 min, CP 10 min"]
+    ap["AutoProber task: 5 min"]
     ins["Insights task: 5 min"]
     par["ParityRun task: 12 h"]
     gpt["GptBench task: 15 min"]
@@ -341,7 +341,7 @@ flowchart LR
   A([Browser]) --> B[CloudFront] --> C[VPC Origin] --> D[Internal ALB] --> E[backend FastAPI] --> F[(RDS PostgreSQL)]
 ```
 
-프로버가 별도 Fargate 태스크에서 돌기 때문에 `/api/auto-probe/status`와 `/api/auto-probe/latest`는 프로세스 내부 상태가 아니라 DB의 최신 `ProbeRun(is_auto=1)` 행을 읽습니다. `/latest`는 모델마다 자기 주기 범위 안의 최신 행을 돌려주고(주기 3회: 15분, CP는 30분), `/status`는 `channel_intervals`를 내보내 대시보드가 채널별로 신선도를 판정합니다.
+프로버가 별도 Fargate 태스크에서 돌기 때문에 `/api/auto-probe/status`와 `/api/auto-probe/latest`는 프로세스 내부 상태가 아니라 DB의 최신 `ProbeRun(is_auto=1)` 행을 읽습니다. `/latest`는 모델마다 자기 주기 범위 안의 최신 행을 돌려주고(주기 3회: 기본 주기에서는 모든 채널 15분, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`이면 CP는 30분), `/status`는 `channel_intervals`를 내보내 대시보드가 채널별로 신선도를 판정합니다.
 
 ## 레이어별 컴포넌트
 
@@ -394,7 +394,7 @@ flowchart LR
 
 | 스케줄 | 표현식 | 태스크 명령 | 산출물 |
 |--------|--------|-------------|--------|
-| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | 사이클마다 `ProbeRun` 1개 + `probe_results` 46행 또는 55행(CP 채널은 두 사이클에 한 번), `_plan_cycle`이 CP 채널을 10분마다(`ANTHROPIC_CP_PROBE_INTERVAL_S=600`) 자체 카테고리 순환으로 선택 |
+| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | 사이클마다 `ProbeRun` 1개 + `probe_results` 55행, 모두 사이클 카테고리(기본 `ANTHROPIC_CP_PROBE_INTERVAL_S=300`, v2.29.1). `600`이면 `_plan_cycle`이 CP 채널을 두 사이클에 한 번 자체 카테고리 순환으로 선택(사이클마다 46행 또는 55행) |
 | `InsightsSchedule` | `rate(5 minutes)` | `python -m insights_runner --window 6h` | `Insight` 행(KO, EN) |
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | 모델 × surface 6개 × 피처 19개 실행 증거 셀 |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 18채널(Mantle 인리전 11 + CRIS 7) × 순차 10회, 호출당 watchdog `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초 |

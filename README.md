@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.29.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.29.1-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -27,7 +27,7 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 ## Features
 
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
-- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 55 monitored channels. The 9 Claude Platform on AWS channels are probed every 10 minutes with their own rotation of the same six categories (v2.29.0).
+- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 55 monitored channels. The 9 Claude Platform on AWS channels are probed every cycle with the same category as every other channel (v2.29.1 reverted the v2.29.0 10-minute cadence); setting `ANTHROPIC_CP_PROBE_INTERVAL_S=600` switches them to every other cycle with their own category rotation, an operational lever if the monthly usage cap returns.
 - **Ten analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (18-channel TTFB/TTFT bench over Bedrock Mantle in-region and cross-region profiles — GPT 5.4/5.5/5.6 Terra and GPT-6 Astra/Sol/Luna, 15-min cycles), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
 - **Graded model-card metrics** — on the dashboard, each card's TTFT, total latency and TPS value turns blue (normal), amber ▲ (warning) or rose ◆ (critical) against per-workload-category thresholds derived from 48 h of production p90/p99 (TPS is graded only on the low side); a legend expands into the full threshold table, and values carry a `data-grade` attribute and screen-reader descriptions (v2.28.0, ADR-029).
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 19 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
@@ -49,7 +49,7 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 | **Reliability** |  |
 | ![Per-family success rate and latency across channels](docs/images/ui/reliability-en.png) |  |
 
-Captured from production on 2026-09-26 (v2.29.0, dark theme, 1440x900). The Claude Platform on AWS column in Claude API Features and Reliability still reflects the monthly usage-cap 429 period that v2.29.0 stopped retrying. Korean UI captures use the `-ko.png` suffix in the same directory.
+Captured from production on 2026-09-26 (v2.29.0, dark theme, 1440x900). The Claude Platform on AWS column in Claude API Features and Reliability still reflects the monthly usage-cap 429 period that v2.29.0 stopped retrying, and the dashboard collection line still shows "Claude Platform on AWS every 10 min", which v2.29.1 removed with the return to every-cycle probing. Korean UI captures use the `-ko.png` suffix in the same directory.
 
 ## Prerequisites
 
@@ -210,7 +210,7 @@ A service worker is deliberately **not** used: offline caching would show stale 
 | `ANTHROPIC_API_KEY` | Anthropic CP on AWS envelope key (AEAAQ…) | (required, from SSM) |
 | `ANTHROPIC_WORKSPACE_ID` | Anthropic CP workspace ID header | (required, from SSM) |
 | `ANTHROPIC_AWS_REGION` | CP on AWS endpoint region | `us-east-2` |
-| `ANTHROPIC_CP_PROBE_INTERVAL_S` | Collection interval in seconds for the Claude Platform on AWS channels (`anthropic:*`), applied in 5-minute cycle steps (`600` = every other cycle, below `300` = every cycle). CDK injects it into the AutoProber task only; when changing it, inject the same value into the backend service, which reports it as `channel_intervals` in `/api/auto-probe/status` | `600` |
+| `ANTHROPIC_CP_PROBE_INTERVAL_S` | Collection interval in seconds for the Claude Platform on AWS channels (`anthropic:*`), applied in 5-minute cycle steps (`300` or below = every cycle with the cycle's category, `600` = every other cycle with CP's own category rotation). CDK injects it into the AutoProber task only; when changing it, inject the same value into the backend service, which reports it as `channel_intervals` in `/api/auto-probe/status` | `300` |
 | `OPENAI_API_KEY` | Amazon Bedrock long-term API key (bearer) for the OpenAI GPT channels. When unset, every OpenAI channel is skipped | (required, from SSM) |
 | `OPENAI_US_EAST_1_BASE_URL` / `OPENAI_US_EAST_2_BASE_URL` / `OPENAI_US_WEST_2_BASE_URL` | Bedrock Mantle OpenAI-compatible endpoint per region (`https://bedrock-mantle.<region>.api.aws/openai/v1`). An unset one skips that region's channels | (CDK-injected) |
 | `OPENAI_GLOBAL_BASE_URL` / `OPENAI_US_BASE_URL` | `bedrock-runtime` OpenAI-compatible endpoints for the Global (`global.openai.*`) and US (`us.openai.*`) cross-region profiles, which `bedrock-mantle` does not serve. An unset one skips those channels | `https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1` / `https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1` (CDK-injected) |
@@ -350,7 +350,7 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 ## 주요 기능
 
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
-- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 55개 모니터링 채널에 호출합니다. Claude Platform on AWS 9채널은 10분마다 같은 6개 카테고리를 따로 순환합니다 (v2.29.0).
+- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 55개 모니터링 채널에 호출합니다. Claude Platform on AWS 9채널도 매 사이클 다른 채널과 같은 카테고리로 호출합니다(v2.29.1에서 v2.29.0의 10분 주기를 되돌렸습니다). `ANTHROPIC_CP_PROBE_INTERVAL_S=600`으로 설정하면 이 채널만 두 사이클에 한 번, 카테고리를 따로 순환하며 호출하므로 월간 사용 한도가 다시 걸릴 때 운영 레버로 쓸 수 있습니다.
 - **10개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle 인리전과 교차 리전 프로파일 18채널 TTFB/TTFT 벤치 — GPT 5.4/5.5/5.6 Terra, GPT-6 Astra/Sol/Luna, 15분 주기), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
 - **모델 카드 지표 등급** — 대시보드 카드의 TTFT, 총 응답시간, TPS 값을 운영 48시간 p90/p99로 정한 워크로드 카테고리별 기준에 따라 파랑(양호), 호박 ▲(경고), 장미 ◆(위험)으로 표시합니다(TPS는 낮은 쪽만 판정). 범례를 펼치면 전체 기준표가 나오고, 값마다 `data-grade` 속성과 스크린 리더 설명이 붙습니다 (v2.28.0, ADR-029).
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 19 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
@@ -372,7 +372,7 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 | **신뢰성** |  |
 | ![family별 채널 성공률과 지연 비교](docs/images/ui/reliability-ko.png) |  |
 
-2026-09-26 운영 환경에서 캡처했습니다(v2.29.0, 다크 테마, 1440x900). Claude API 기능과 신뢰성 화면의 Claude Platform on AWS 열은 v2.29.0에서 재시도를 멈춘 월간 사용 한도 429 기간의 결과가 남아 있습니다. 영문 UI 캡처는 같은 디렉터리의 `-en.png` 파일입니다.
+2026-09-26 운영 환경에서 캡처했습니다(v2.29.0, 다크 테마, 1440x900). Claude API 기능과 신뢰성 화면의 Claude Platform on AWS 열은 v2.29.0에서 재시도를 멈춘 월간 사용 한도 429 기간의 결과가 남아 있고, 대시보드 수집 상태 줄의 "Claude Platform on AWS 10분 주기" 표시는 v2.29.1에서 매 사이클 수집으로 돌아가며 사라졌습니다. 영문 UI 캡처는 같은 디렉터리의 `-en.png` 파일입니다.
 
 ## 사전 요구 사항
 
@@ -533,7 +533,7 @@ curl -N -H "Authorization: Bearer $TOKEN" \
 | `ANTHROPIC_API_KEY` | Anthropic CP on AWS envelope key (AEAAQ…) | (필수, SSM 주입) |
 | `ANTHROPIC_WORKSPACE_ID` | Anthropic CP workspace ID 헤더 | (필수, SSM 주입) |
 | `ANTHROPIC_AWS_REGION` | CP on AWS endpoint 리전 | `us-east-2` |
-| `ANTHROPIC_CP_PROBE_INTERVAL_S` | Claude Platform on AWS 채널(`anthropic:*`) 수집 주기(초). 5분 사이클 단위로 적용합니다(`600` = 두 사이클에 한 번, `300` 미만 = 매 사이클). CDK는 AutoProber 태스크에만 주입하므로, 값을 바꿀 때는 `/api/auto-probe/status`의 `channel_intervals`로 이 값을 표시하는 backend 서비스에도 같은 값을 주입합니다 | `600` |
+| `ANTHROPIC_CP_PROBE_INTERVAL_S` | Claude Platform on AWS 채널(`anthropic:*`) 수집 주기(초). 5분 사이클 단위로 적용합니다(`300` 이하는 매 사이클에 사이클 카테고리로, `600`은 두 사이클에 한 번 CP 자체 카테고리 순환으로 호출). CDK는 AutoProber 태스크에만 주입하므로, 값을 바꿀 때는 `/api/auto-probe/status`의 `channel_intervals`로 이 값을 표시하는 backend 서비스에도 같은 값을 주입합니다 | `300` |
 | `OPENAI_API_KEY` | OpenAI GPT 채널용 Amazon Bedrock 장기 API key (bearer). 미설정 시 OpenAI 채널 전체를 건너뜁니다 | (필수, SSM 주입) |
 | `OPENAI_US_EAST_1_BASE_URL` / `OPENAI_US_EAST_2_BASE_URL` / `OPENAI_US_WEST_2_BASE_URL` | 리전별 Bedrock Mantle OpenAI 호환 엔드포인트(`https://bedrock-mantle.<region>.api.aws/openai/v1`). 빠진 리전의 채널은 건너뜁니다 | (CDK 주입) |
 | `OPENAI_GLOBAL_BASE_URL` / `OPENAI_US_BASE_URL` | `bedrock-mantle`이 서빙하지 않는 Global(`global.openai.*`), US(`us.openai.*`) cross-region 프로파일용 `bedrock-runtime` OpenAI 호환 엔드포인트. 빠지면 해당 채널을 건너뜁니다 | `https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1` / `https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1` (CDK 주입) |

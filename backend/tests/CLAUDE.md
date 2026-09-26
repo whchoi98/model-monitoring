@@ -1,7 +1,7 @@
 # Backend Tests — Offline pytest suite
 
 ## Role
-29 `test_*.py` modules (412 tests) covering probe logic, cadence, watchdogs, catalogs, routers and migrations.
+29 `test_*.py` modules (430 tests) covering probe logic, cadence, watchdogs, catalogs, routers and migrations.
 No network, no AWS credentials, no PostgreSQL. CI runs the same suite on Python 3.11 (`.github/workflows/ci.yml`).
 
 ## Key Files
@@ -9,7 +9,7 @@ No network, no AWS credentials, no PostgreSQL. CI runs the same suite on Python 
 - DB-backed tests build their own SQLite engine (`sqlite://` + `StaticPool`, e.g. `test_auto_probe_latest.py`, `test_agent_tools.py`) and monkeypatch `SessionLocal` / `get_db`; `test_auto_prober_timeout.py` uses a file-backed SQLite in `tmp_path` because worker threads need separate connections
 - Router tests use FastAPI `TestClient` (`test_auto_probe_*`, `test_gptbench.py`, `test_visibility.py`); async helpers use `@pytest.mark.asyncio` (`test_streaming.py`)
 - Incident pins — read the module docstring before changing the code it guards:
-  - `test_cp_cadence.py` / `test_auto_probe_latest.py` — CP 10-minute cadence decided from the run start (`ProbeRun.created_at`), per-model latest rows (v2.29.0)
+  - `test_cp_cadence.py` / `test_auto_probe_latest.py` — CP cadence knob: every cycle at the default 300 s (v2.29.1), and at 600 s every other cycle decided from the run start (`ProbeRun.created_at`); per-model latest rows (v2.29.0)
   - `test_cp_usage_cap.py` — monthly usage-cap 429 is never retried, ordinary transient errors still are; `_sdk_http_module()` builds mocks with the SDK's own HTTP library (anthropic 0.x → `httpx`, 1.x → `httpx2`; passing an `httpx.Client` to 1.x is a TypeError)
   - `test_auto_prober_timeout.py`, `test_auto_prober_runner.py`, `test_probe_watchdog.py`, `test_stream_watchdog.py` — one hung model yields an error row, the run completes, the runner exits via `os._exit` (2026-09-23)
   - `test_auto_prober_pool.py`, `test_database_config.py` — DB pool exhaustion incidents (2026-06-09, 2026-07-08)
