@@ -183,11 +183,11 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("autoprober task def만 Claude Platform on AWS 수집 주기 env를 명시한다 (v2.29.0)", () => {
+  it("autoprober task def만 Claude Platform on AWS 수집 주기 env를 명시한다 — v2.29.1 매 사이클(300)", () => {
     template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
       ContainerDefinitions: Match.arrayWith([Match.objectLike({
         Command: ["python", "-m", "auto_prober_runner", "--once"],
-        Environment: Match.arrayWith([Match.objectLike({ Name: "ANTHROPIC_CP_PROBE_INTERVAL_S", Value: "600" })]),
+        Environment: Match.arrayWith([Match.objectLike({ Name: "ANTHROPIC_CP_PROBE_INTERVAL_S", Value: "300" })]),
       })]),
     }));
     const withInterval = Object.values(template.findResources("AWS::ECS::TaskDefinition"))
@@ -198,7 +198,7 @@ describe("SchedulerStack", () => {
     expect(withInterval).toEqual(["python -m auto_prober_runner --once"]);
   });
 
-  it("AutoProber 스케줄은 5분 그대로다 — CP 10분 주기는 사이클 안에서 고른다 (v2.29.0)", () => {
+  it("AutoProber 스케줄은 5분 그대로다 — CP 주기(노브)는 사이클 안에서 고른다 (v2.29.0)", () => {
     template.hasResourceProperties("AWS::Scheduler::Schedule", Match.objectLike({
       ScheduleExpression: "rate(5 minutes)",
       Description: Match.stringLikeRegexp("Bedrock 모니터링"),
