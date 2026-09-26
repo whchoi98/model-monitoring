@@ -13,4 +13,5 @@ yarn-error.log
 coverage
 test-results
 playwright-report
-e2e
+# e2e/ stays in the build context: unit tests under src/ import e2e/fixtures.ts (pricingFixture) and
+# `next build` type-checks them. Only the standalone output reaches the runtime stage.
