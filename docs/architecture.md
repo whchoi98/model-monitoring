@@ -1,204 +1,486 @@
-# Bedrock LLM Monitor v2 — Architecture
+# Bedrock LLM Monitor v2 Architecture
 
-<p align="center">
-  <kbd><a href="#한국어">🇰🇷 한국어</a></kbd>
-  &nbsp;|&nbsp;
-  <kbd><a href="#english">🇺🇸 English</a></kbd>
-</p>
+<a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
+<a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
 
 ---
 
-## 한국어
+<a id="english"></a>
 
-### 시스템 개요
+# English
 
-Bedrock LLM Monitor v2는 AWS Bedrock·Anthropic CP on AWS·OpenAI(Mantle/1P) 채널의 LLM 모델 성능(활성 55개 카탈로그)을 5분 주기로(Claude Platform on AWS 9채널은 10분 주기, v2.29.0) 자동 측정하고, 12시간 주기 모델×API surface×피처 패리티 런(v2.11.0, v2.12.0부터 12h)을 수행하며, 챗봇 인터페이스로 자연어 질의를 제공하는 풀스택 모니터링 도구입니다. CloudFront VPC Origin → 내부 ALB → ECS Fargate(frontend/backend) → RDS PostgreSQL 구조이며 모든 외부 인입은 HTTPS만 허용합니다. 대시보드 모델 카드의 TTFT·총 응답시간·TPS 값은 워크로드 카테고리별 절대 임계치로 양호(파랑)/경고(호박)/위험(장미) 등급을 표시합니다(v2.28.0, 프런트엔드 `lib/metricGrade.ts` 순수 함수 — 백엔드 변경 없음, ADR-029).
+## System Overview
 
-### 데이터 흐름 (Critical Path)
+Bedrock LLM Monitor v2 measures a 55-channel active catalog across Amazon Bedrock, Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, except the 9 Claude Platform on AWS channels, which are probed every 10 minutes with their own workload rotation (v2.29.0). Four more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, and a daily Claude API Features evidence sweep. A chatbot answers natural-language questions over the stored time series.
 
+Traffic enters through CloudFront at `llm-monitor.whchoi.net` (the default `d36s7ml54xwemr.cloudfront.net` name also works), reaches an internal ALB through a VPC Origin, and is routed to two ECS Fargate services: `frontend` (Next.js standalone) and `backend` (FastAPI). All data lands in a single RDS PostgreSQL instance. Viewers connect over HTTPS. The VPC Origin currently reaches the ALB over HTTP port 80 inside the VPC, a temporary setting in `edge-stack.ts` until the origin switches to `HTTPS_ONLY`; the ALB is internal, sits in private subnets, and its security group admits only the VPC CIDR.
+
+Dashboard model cards grade TTFT, total latency, and TPS values against per-workload-category thresholds (normal blue, warning amber, critical rose). The grading is a pure frontend function in `frontend/src/lib/metricGrade.ts` with no backend involvement (v2.28.0, ADR-029).
+
+## Full Architecture
+
+```mermaid
+flowchart TB
+  user([Browser or iOS PWA])
+
+  subgraph edgeLayer[Edge Layer]
+    cf[CloudFront]
+    vpco[VPC Origin]
+  end
+
+  subgraph presentation[Presentation Layer]
+    alb["Internal ALB: HTTP 80, HTTPS 443"]
+    fe["frontend service: Next.js 16, port 3000"]
+  end
+
+  subgraph apilayer[API Layer]
+    be["backend service: FastAPI, 17 routers, port 8000"]
+  end
+
+  subgraph ingestion[Scheduled Ingestion Layer]
+    sched[EventBridge Scheduler]
+    ap["AutoProber task: 5 min, CP 10 min"]
+    ins["Insights task: 5 min"]
+    par["ParityRun task: 12 h"]
+    gpt["GptBench task: 15 min"]
+    feat["FeaturesVerify task: daily 17:30 UTC"]
+  end
+
+  subgraph storage[Storage Layer]
+    rds[(RDS PostgreSQL 16)]
+    mem[(AgentCore Memory)]
+    sec[(Secrets Manager + SSM)]
+  end
+
+  subgraph providers[Model Provider Layer]
+    br["Bedrock Runtime: Claude, Nova, OpenAI CRIS"]
+    mantle["Bedrock Mantle: OpenAI in-region, /anthropic"]
+    cp[Claude Platform on AWS]
+    opt["Bedrock Agent Runtime: OptimizePrompt"]
+    ses["Amazon SES us-east-1"]
+  end
+
+  subgraph obs[Observability Layer]
+    cw["CloudWatch Logs, Alarms, Dashboard"]
+    sns[SNS alarm topic]
+    rum[RUM pipeline]
+  end
+
+  user --> cf --> vpco --> alb
+  alb -->|"/*"| fe
+  alb -->|"/api/*"| be
+  sched --> ap & ins & par & gpt & feat
+  ap & par & feat --> providers
+  gpt --> br & mantle
+  ins --> br
+  be --> br
+  be --> opt
+  be --> ses
+  be --> mem
+  be & ap & ins & par & gpt & feat --> rds
+  sec -.->|"secrets at task start"| be
+  be & fe & ap --> cw
+  cw --> sns
+  user -.->|"page views, web vitals"| rum
 ```
-Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, https-only──▶ Internal ALB(HTTPS:443) ──▶
-   ├─ "/"      → ECS Fargate "frontend" (Next.js standalone)
-   └─ "/api/*" → ECS Fargate "backend"  (FastAPI)
-                    │
-                    ├─ RDS PostgreSQL t4g.micro :5432
-                    ├─ Bedrock Runtime (Claude Sonnet 4.6, etc.)
-                    └─ AgentCore Memory (대화 컨텍스트)
 
-EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 모델 프로빙 → RDS (CP 채널 anthropic:*는 두 사이클에 한 번, v2.29.0)
-   ├─ rate(5 minutes)  → ECS RunTask "insights"    → 최근 6h 요약 → RDS
-   ├─ rate(12 hours)     → ECS RunTask "parityrun"  → 모델×surface×피처 실행-증거 스윕 → RDS
-   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 → RDS
-   └─ cron(30 17 * * ? *) UTC → ECS RunTask "features" → Claude API Features 39행×5 surface×5모델(975셀) 실행-증거 스윕 → RDS (매일 17:30 UTC = 02:30 KST, v2.29.0)
+## Data Flow Summary
+
+Probe data path (the path every dashboard number takes):
+
+```mermaid
+flowchart LR
+  A([EventBridge Scheduler]) --> B[AutoProber task] --> C["Streaming call to Bedrock, Mantle or CP"] --> D[(probe_results in RDS)] --> E["backend /api/auto-probe/latest"] --> F[frontend dashboard] --> G([Browser])
 ```
 
-### 컴포넌트 (Layer별)
+User request path:
 
-#### 진입 / Edge
-| 리소스 | 역할 |
-|--------|------|
-| CloudFront Distribution | 단일 진입점, `*.cloudfront.net` 기본 cert, TLS 1.2_2021 |
-| WAFv2 (CLOUDFRONT scope) | Common rules + KnownBadInputs |
-| VPC Origin | CloudFront ENI in private subnets → ALB |
-| S3 (CF logs) | CloudFront access logs (KMS, 90일) |
+```mermaid
+flowchart LR
+  A([Browser]) --> B[CloudFront] --> C[VPC Origin] --> D[Internal ALB] --> E[backend FastAPI] --> F[(RDS PostgreSQL)]
+```
 
-#### 컴퓨트 / Application
-| 리소스 | 역할 |
-|--------|------|
-| Internal ALB | HTTPS:443만, ACM Private CA cert, `/api/*` → backend / 기본 → frontend |
-| S3 (ALB logs) | ALB access logs (90일) |
-| ECS Cluster `bedrock-monitor` | Container Insights ON |
-| ECR `bedrock-monitor-backend-v2` / `-frontend` | IMMUTABLE tag, scan-on-push, 10개 유지 (ADR-018) |
-| Backend Fargate Service | FastAPI :8000, 0.5 vCPU / 1 GB, AS 1~3 |
-| Frontend Fargate Service | Next.js standalone :3000, AS 1~3 |
+`/api/auto-probe/status` and `/api/auto-probe/latest` read the latest `ProbeRun(is_auto=1)` rows from the database, not in-process state, because the prober runs in a separate Fargate task. `/latest` returns each model's latest row within its own cadence window (3 intervals: 15 minutes, 30 minutes for CP), and `/status` exposes `channel_intervals` so the dashboard judges freshness per channel.
 
-#### 데이터 / Storage
-| 리소스 | 역할 |
-|--------|------|
-| RDS PostgreSQL 16.3 (t4g.micro) | 20GB gp3, Single-AZ, 7d backup, encrypted |
-| Secrets Manager `bedrock-monitor/db` | RDS credentials 자동 생성 |
+## Components by Layer
+
+### Edge
+
+| Resource | Role |
+|----------|------|
+| CloudFront distribution | Single entry point, alias `llm-monitor.whchoi.net` with a CDK-owned ACM `*.whchoi.net` certificate in us-east-1 (override with `-c monitorDomain` and `-c monitorCertArn`), TLS 1.2_2021 |
+| Cache behaviors | `/api/auto-probe/*` honors origin `Cache-Control` (`s-maxage=30`, max TTL 60 s) with gzip and Brotli, query strings in the cache key; other `/api/*` and HTML are not cached (`compress` off on `/api/*` to protect SSE) |
+| WAFv2 | Not attached: the CLOUDFRONT scope must be created in us-east-1, so `edge-stack.ts` defers it to a separate stack |
+| VPC Origin | CloudFront ENIs in private subnets that reach the internal ALB |
+| S3 (CloudFront logs) | Access logs, KMS encrypted, 90-day retention |
+
+### Presentation and API
+
+| Resource | Role |
+|----------|------|
+| Internal ALB | HTTP 80 listener (what the VPC Origin uses today) and HTTPS 443 listener (`TLS13_RES`, certificate from `albCertificateArn`, ADR-005); both send `/api/*` to backend and everything else to frontend |
+| S3 (ALB logs) | ALB access logs, 90-day retention |
+| ECS cluster `bedrock-monitor` | Container Insights enabled |
+| ECR `bedrock-monitor-backend-v2`, `bedrock-monitor-frontend` | `bedrock-monitor-backend-v2` is created outside CDK with IMMUTABLE tags (ADR-018); the CDK-managed `bedrock-monitor-frontend` (and the legacy `bedrock-monitor-backend`) are MUTABLE, so releases rely on unique `v<epoch>` tags plus digest-pinned task definitions (`pinned-image.ts`) |
+| frontend Fargate service | Next.js standalone on port 3000, 0.5 vCPU / 1 GB, CPU autoscaling 1 to 3; pages `/`, `/models`, `/parity`, `/cost`, `/reliability`, `/efficiency`, `/analysis`, `/gpt-on-aws`, `/claude-features`, `/prompts`, `/chat` |
+| backend Fargate service | FastAPI on port 8000, 0.5 vCPU / 1 GB, CPU autoscaling 1 to 3, health-check grace 300 s for startup migrations; 17 routers under `backend/routers/` |
+
+### Storage
+
+| Resource | Role |
+|----------|------|
+| RDS PostgreSQL 16.8 (t4g.micro) | 20 GB gp3, Single-AZ, 7-day backups, encrypted; raw `probe_results` older than `RETENTION_DAYS` (60) move to `probe_results_hourly` |
+| Secrets Manager `bedrock-monitor/db` | Generated RDS credentials |
 | SSM `/bedrock-monitor/jwt-secret-key` | JWT signing key |
 | SSM `/bedrock-monitor/agentcore-memory-id` | AgentCore Memory ID |
+| SSM `/bedrock-monitor/{seed-admin-password,anthropic-api-key,anthropic-workspace-id,openai-api-key}` | Pre-created SecureStrings read by AppServices and Scheduler; `openai-1p-api-key` only when `ENABLE_OPENAI_1P=true` |
 
-#### 에이전트 / AI
-| 리소스 | 역할 |
-|--------|------|
-| AgentCore Memory `BedrockMonitorChatMemory` | 사용자 대화 30일 보존 |
-| AgentCore IAM Managed Policy | backend Task Role에 attach |
-| Bedrock Runtime | 모니터링 카탈로그 활성 55개: Claude Fable 5.1 (v2.22.0) / Fable 5 / Opus 5.5 (v2.27.0) / Opus 5 / Opus 4.6~4.8 / Sonnet 4.6·5 / Haiku 4.5 (Global·US 프로파일), Nova 2.0 Lite + Anthropic CP on AWS 9채널 + OpenAI GPT 5.4/5.5/5.6 Sol·Terra·Luna + GPT 6 Astra·Sol·Luna (Bedrock Mantle 인리전 16 + Global CRIS 6 + US CRIS 3 = 25, v2.27.0; 1P direct 5는 v2.19.1부터 휴면/비노출). GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원 — 2026-09-23 사용자 결정으로 제외. GPT-6 Sol/Luna 단가는 v2.28.0부터 Bedrock agreement offer rate card 기준(비용 화면 "-" 아님, ADR-028 후속) |
+### AI and Model Providers
 
-#### 주기 잡 / Scheduling
-| 리소스 | 역할 |
-|--------|------|
-| EventBridge Scheduler `AutoProberSchedule` | rate(5 min) → AutoProber TaskDef (스케줄은 그대로 5분. Claude Platform on AWS 채널만 `_plan_cycle`이 10분 주기로 고르고 카테고리도 따로 회전, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`, v2.29.0) |
-| EventBridge Scheduler `InsightsSchedule` | rate(5 min) → Insights TaskDef |
-| EventBridge Scheduler `ParityRunSchedule` | rate(12 hours) → ParityRun TaskDef (v2.12.0에서 일 1회→12h) |
-| EventBridge Scheduler `GptBenchSchedule` | rate(15 min) → GptBench TaskDef (v2.18.0) |
-| EventBridge Scheduler `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC → FeaturesVerify TaskDef, 매일 17:30 UTC(02:30 KST) 1회 (v2.23.0, v2.29.0에서 rate(24 hours) → 고정 cron) |
-| AutoProber TaskDef | `python -m auto_prober_runner --once` |
-| Insights TaskDef | `python -m insights_runner --window 6h` |
-| ParityRun TaskDef | `python -m parity_runner --once` — 실행-증거 패리티 스윕 |
-| GptBench TaskDef | `python -m gptbench_runner --once` — GPT 18채널(Mantle 인리전 11 + CRIS 7) TTFB/TTFT 벤치 (GPT 5.4/5.5/5.6 Terra + GPT 6 Astra Global, US CRIS, us-west-2 — v2.25.1 + GPT 6 Sol/Luna Global, US CRIS, us-east-1 — v2.28.0). 호출당 wall-clock watchdog(`GPT_BENCH_CALL_TIMEOUT`, 기본 90초) + `max_retries=0`(v2.28.0), 사이클 데드라인 780초(`GPT_BENCH_DEADLINE`, v2.18.0부터) |
-| FeaturesVerify TaskDef | `python -m features_runner --once` — Claude API Features 39행×5 surface×5모델(Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975셀 = 프로브 813 + 사전판정 162, 약 9분, v2.28.0) 실행-증거 스윕(5 surface = CP on AWS · Mantle `/anthropic` · Bedrock runtime Messages API/InvokeModel/Converse). Mantle `/anthropic` surface 리전은 `MANTLE_ANTHROPIC_REGION=us-east-1`(CDK 주입, ADR-026) — 패리티 런 `messages_mantle`도 같은 env 공유 |
+| Resource | Role |
+|----------|------|
+| Bedrock Runtime | Bedrock Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, Haiku 4.5 (Global and US profiles) and Nova 2.0 Lite US: 21 channels. OpenAI Global and US CRIS profiles go through the Bedrock Runtime OpenAI-compatible endpoints in Seoul and us-east-1 |
+| Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna and GPT 6 Astra, Sol, Luna in-region (16 channels); `/anthropic` surface for the parity run and Claude API Features in `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
+| Claude Platform on AWS | 9 Anthropic channels at `aws-external-anthropic.us-east-2.api.aws` with a workspace ID header |
+| OpenAI channel total | 25 = Mantle in-region 16 + Global CRIS 6 + US CRIS 3; the OpenAI 1P direct path (5 channels) is dormant and hidden since v2.19.1 |
+| Chatbot | Claude Sonnet 4.6 (`CHAT_MODEL_ID` in `backend/agent/bedrock.py`) with 4 tools; follow-up questions from Claude Haiku 4.5 (`backend/routers/chat.py`) |
+| Insights | Claude Sonnet 4.6 (`INSIGHTS_MODEL_ID`) writes KO and EN summaries of the last 6 hours |
+| AgentCore Memory `BedrockMonitorChatMemory` | Chat context, 30-day retention; IAM managed policy attached to the backend task role |
+| Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize` in `BEDROCK_OPTIMIZE_REGION` (default us-east-1) |
+| Amazon SES (us-east-1) | Registration approval email to the admin address |
 
-#### 네트워크 / Network
-| 리소스 | 역할 |
-|--------|------|
-| VPC 10.20.0.0/16 (또는 기존 VPC) | 2 AZ, Public + App + Data 서브넷 |
-| NAT GW × 1 | App 서브넷의 외부 egress (PrivateLink 미커버 영역) |
-| Interface VPC Endpoints × 9 | ECR(api+dkr), Logs, SSM(+messages), Secrets, KMS, Bedrock Runtime, AgentCore |
-| Gateway VPC Endpoint × 1 | S3 |
+### Scheduled Ingestion
 
-#### 관측 / Observability
-| 리소스 | 역할 |
-|--------|------|
-| CloudWatch Log Groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features}` (14d) |
-| CloudWatch Alarms × 7 | ALB 5xx ratio, ALB latency, ECS task 수 ×2, RDS CPU/Storage/Connections |
-| CloudWatch Dashboard `BedrockMonitor-v2` | 5 widgets + alarm status grid |
-| SNS Topic `bedrock-monitor-alarms` | 알람 fan-out |
-| RUM (aws-rum-pipeline, v2.16.5) | 프론트 실사용자 모니터링 — 페이지뷰·체류시간·Web Vitals·JS 에러, `NEXT_PUBLIC_RUM_*` 빌드 타임 주입 |
+| Schedule | Expression | Task command | Output |
+|----------|------------|--------------|--------|
+| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | One `ProbeRun` plus 46 or 55 `probe_results` rows per cycle (CP channels are due every other cycle); `_plan_cycle` picks CP channels every 10 minutes (`ANTHROPIC_CP_PROBE_INTERVAL_S=600`) with their own category rotation |
+| `InsightsSchedule` | `rate(5 minutes)` | `python -m insights_runner --window 6h` | `Insight` rows (KO and EN) |
+| `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | Model × 6 surfaces × 19 features evidence cells |
+| `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 18 GPT channels (Mantle in-region 11 + CRIS 7) × 10 sequential calls; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s, cycle deadline `GPT_BENCH_DEADLINE` 780 s |
+| `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39 rows × 5 surfaces × 5 models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975 cells (813 probed + 162 pre-decided), about 9 minutes, daily at 17:30 UTC (02:30 KST) |
 
-v2.29.0 기준: AutoProber 스케줄은 그대로 `rate(5 minutes)`이고, `_plan_cycle`이 Claude Platform on AWS 채널(`anthropic:*`, Anthropic 1P API)만 10분마다(`ANTHROPIC_CP_PROBE_INTERVAL_S=600`, run 시작 시각 기준) 자체 워크로드 회전으로 프로빙한다. 2026-09-23 월간 사용량 상한 429 장애 이후의 사용자 결정이며, 그 429는 더 이상 재시도하지 않는다. `/api/auto-probe/latest`는 모델별로 자기 주기 범위 안의 최신 행을 돌려주고, `/status`의 `channel_intervals`로 대시보드가 채널별 신선도를 판정한다. FeaturesVerify는 매일 17:30 UTC 고정 1회(`cron(30 17 * * ? *)`, Etc/UTC)다.
+Every scheduled task uses the backend image with a command override, 0.5 vCPU / 1 GB, and a task definition family `:*` wildcard in the scheduler role's `ecs:RunTask` policy (ADR-011).
 
-### CDK 스택 구성
+### Network
 
-| 스택 | 의존 | 책임 |
-|------|------|------|
-| Network | - | VPC, NAT GW, PrivateLink endpoints |
-| Data | Network | RDS, Secrets, SSM |
-| Cluster | Network | ECS Cluster, ECR, 공유 KMS |
-| AgentCore | - | AgentCore Memory + IAM |
-| AppServices | Network·Data·Cluster·AgentCore | Fargate ×2, ALB, ALB logs |
-| Edge | AppServices | CloudFront, WAF, CF logs |
-| Scheduler | Network·Data·Cluster·AgentCore | EventBridge ×5, TaskDef ×5 |
-| Observability | AppServices·Cluster·Data | Alarms, Dashboard, SNS |
+| Resource | Role |
+|----------|------|
+| VPC 10.20.0.0/16 (or an existing VPC) | 2 AZs with Public, App, and Data subnets |
+| NAT gateway × 1 | Egress for App subnets to endpoints without PrivateLink coverage (Claude Platform on AWS, Mantle, OpenAI CRIS in us-east-1) |
+| Interface VPC endpoints × 9 | ECR API, ECR Docker, CloudWatch Logs, SSM, SSM Messages, Secrets Manager, KMS, Bedrock Runtime, Bedrock AgentCore |
+| Gateway VPC endpoint × 1 | S3 |
 
-### 핵심 설계 결정
+### Observability
 
-자세한 사유는 [`docs/decisions/`](./decisions/)의 ADR-001 ~ ADR-029 참조 (012/014/015/016은 결번).
+| Resource | Role |
+|----------|------|
+| CloudWatch log groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features}`, 14-day retention |
+| CloudWatch alarms × 7 | ALB 5xx ratio, ALB latency, backend and frontend running task count, RDS CPU, storage, connections |
+| CloudWatch dashboard `BedrockMonitor-v2` | 4 graph widgets plus an alarm status widget |
+| SNS topic `bedrock-monitor-alarms` | Alarm fan-out |
+| RUM (aws-rum-pipeline) | Page views, dwell time, Web Vitals, JS errors; `NEXT_PUBLIC_RUM_*` injected at frontend build time (ADR-024) |
 
-| ADR | 결정 |
-|-----|------|
-| 001 | CloudFront VPC Origin (internet-facing ALB 회피) |
-| 002 | RDS t4g.micro Single-AZ (시계열 데이터 손실 허용) |
-| 003 | Auto-prober EventBridge + Fargate Task로 분리 |
-| 004 | ALB→ECS는 HTTP (intra-VPC, SG로 격리) |
-| 005 | ACM Private CA cert (외부에서 cert ARN 주입) |
-| 006 | AgentCore Memory만 사용, Runtime 이연 |
-| 007 | SSE 패턴: VIEWER_REQUEST only + simulateStreaming |
-| 008 | CDK TypeScript (VPC Origin 등 신기능 L2 우선) |
-| 009 | FloatingChat 듀얼 모드 (popup/iframe) |
-| 010 | ECR immutable tag 정책 (production `:latest` 금지) |
-| 011 | Scheduler IAM `ecs:RunTask` Resource를 task def family `:*` wildcard로 |
-| 013 | Output Analysis (stop_reason 분포 + output 길이) |
-| 017 | 모델 catalogue 축소 (13 → 12) |
-| 018 | ECR repository 교체 (`-v2`, Fargate image cache silent bug 우회) |
-| 019 | OpenAI/Bedrock-Mantle provider path 추가 (gpt-5.4, gpt-5.5, 4 channels) |
-| 020 | OpenAI 1P direct (api.openai.com) provider path 추가 (gpt-5.4/5.5, 2 channels) |
-| 021 | 패리티 런 엔진 — 실행-증거 프로브 매트릭스 (HTTP 200 불충분, 12시간 주기 Fargate 스윕) |
-| 022 | Mantle /anthropic surface — SigV4 파생 bearer + IAM 액션 체인 |
-| 023 | 패리티 피처 19종 확장 — 적용 맵(skipped≠unsupported)·정직한 제외·요청 스냅샷 |
-| 024 | RUM 통합 — aws-rum-pipeline + 자체 호스팅 SDK, NEXT_PUBLIC_* 빌드 타임 주입 |
-| 025 | OpenAI GPT-5.6 Global CRIS 채널 3개 추가 + 채널별 가격 분리 |
-| 026 | Claude API Features 검증 매트릭스 — 문서 기대치 vs 실측 드리프트, Mantle `/anthropic` 리전 `us-east-1` 전환 |
-| 027 | OpenAI GPT-6 Astra 채널 3개 — 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us` 신설, Mantle 인리전은 us-west-2만(us-east-1/2는 현재 미지원 — 2026-09-23 사용자 결정으로 제외), v2.27.0 공식 단가 반영 |
-| 028 | Claude Opus 5.5 3채널 + GPT-6 Sol/Luna 6채널 — CP 점 버전 가드(`_is_point_release_of`), Sol/Luna Mantle 인리전은 us-east-1만(us-east-2/us-west-2는 현재 미지원, 2026-09-23 사용자 결정으로 제외), v2.28.0 후속: Sol/Luna 단가(agreement offer rate card), 벤치 18채널, `/claude-features` Opus 5.5 |
-| 029 | 대시보드 모델 카드 지표 등급 — 워크로드 카테고리별 절대 임계치(48시간 p90/p99), 양호 파랑 / 경고 호박 ▲ / 위험 장미 ◆, TPS는 낮은 쪽만, `lib/metricGrade.ts` 단일 출처 |
+### Security
 
-### 운영 / Operations
+| Control | Where |
+|---------|-------|
+| Transport | Viewer to CloudFront over HTTPS (TLS 1.2_2021); CloudFront to ALB over HTTP 80 through the VPC Origin, private to the VPC, until `edge-stack.ts` switches the origin to `HTTPS_ONLY` |
+| WAF | Not attached yet (see Edge) |
+| Authentication | JWT bearer (24 h) with bcrypt passwords; register requires an email username and admin approval; `/api/admin/*` is admin only |
+| Secrets | Secrets Manager (DB), SSM SecureString (JWT key, Anthropic key and workspace, OpenAI bearer) injected as ECS secrets |
+| Private networking | ALB, RDS, and tasks in private subnets; AWS API traffic over interface endpoints |
 
-- **배포**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
-- **롤백**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
-- **검증**: `make verify` — CDK lint/typecheck/tests/synth + ruff + pytest + frontend tsc/vitest.
+## CDK Stacks
 
----
+| Stack | Depends on | Responsibility |
+|-------|------------|----------------|
+| Network | none | VPC, NAT gateway, VPC endpoints |
+| Data | Network | RDS, Secrets Manager, SSM parameters |
+| Cluster | Network | ECS cluster, ECR repositories, shared KMS key |
+| AgentCore | none | AgentCore Memory and IAM policy |
+| AppServices | Network, Data, Cluster, AgentCore | frontend and backend Fargate services, internal ALB, ALB logs |
+| Edge | AppServices | CloudFront, alias certificate, cache policies, CloudFront logs |
+| Scheduler | Network, Data, Cluster, AgentCore | 5 EventBridge schedules and 5 task definitions |
+| Observability | AppServices, Cluster, Data | Alarms, dashboard, SNS topic |
 
-## English
+Reusable constructs live in `cdk/lib/constructs/`: `fargate-service.ts` (service, target group, autoscaling, log group) and `pinned-image.ts` (digest-pinned image URIs from `-c backendImage=` and `-c frontendImage=`).
 
-### System Overview
+## Key Design Decisions
 
-Bedrock LLM Monitor v2 is a full-stack monitoring tool that auto-probes a 55-channel active catalog across AWS Bedrock, Anthropic CP on AWS, and OpenAI (Mantle/1P) channels every 5 minutes (the 9 Claude Platform on AWS channels every 10 minutes, v2.29.0), runs a model × API-surface × feature parity sweep every 12 hours (v2.11.0, 12h since v2.12.0), and exposes a Korean-language chatbot for natural-language queries. The topology is CloudFront VPC Origin → internal ALB → ECS Fargate (frontend/backend) → RDS PostgreSQL, with HTTPS-only ingress at every hop.
+See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/) (012, 014, 015, and 016 are unused numbers).
 
-### Critical Path
+| ADR | Decision |
+|-----|----------|
+| 001 | CloudFront VPC Origin instead of an internet-facing ALB |
+| 002 | RDS t4g.micro Single-AZ (time-series loss is acceptable) |
+| 003 | AutoProber split into an EventBridge-driven Fargate task |
+| 004 | ALB to ECS over HTTP inside the VPC, isolated by security groups |
+| 005 | ACM Private CA certificate injected by ARN |
+| 006 | AgentCore Memory only, Runtime deferred |
+| 007 | SSE through CloudFront: VIEWER_REQUEST only plus simulated streaming |
+| 008 | CDK in TypeScript, preferring L2 constructs for new features such as VPC Origin |
+| 009 | FloatingChat dual mode (popup and iframe) |
+| 010 | Immutable ECR tags, no `:latest` in production |
+| 011 | Scheduler IAM `ecs:RunTask` on task definition family `:*` |
+| 013 | Output analysis: stop-reason distribution and output length |
+| 017 | Model catalog reduction (13 to 12) |
+| 018 | New ECR repository `-v2` to work around the Fargate image cache bug |
+| 019 | OpenAI on Bedrock Mantle provider path |
+| 020 | OpenAI 1P direct provider path (dormant since v2.19.1) |
+| 021 | Parity run engine: execution-evidence probe matrix, HTTP 200 is not enough |
+| 022 | Mantle `/anthropic` surface: SigV4-derived bearer and IAM action chain |
+| 023 | Parity features expanded to 19: applicability map, honest exclusions, request snapshots |
+| 024 | RUM integration with a self-hosted SDK and build-time `NEXT_PUBLIC_*` values |
+| 025 | GPT-5.6 Global CRIS channels and per-channel pricing |
+| 026 | Claude API Features matrix: documented vs observed drift, Mantle `/anthropic` in us-east-1 |
+| 027 | GPT-6 Astra: inference-profile-only OpenAI model, US CRIS pseudo-region `us`, Mantle in-region us-west-2 only |
+| 028 | Claude Opus 5.5 and GPT-6 Sol, Luna: CP point-release guard `_is_point_release_of`, Sol and Luna Mantle in-region us-east-1 only, agreement-offer pricing |
+| 029 | Dashboard metric grades: per-category absolute thresholds from 48 h p90/p99, TPS graded on the low side only, `lib/metricGrade.ts` as the single source |
 
-```
-Browser ──HTTPS──▶ CloudFront(WAF, default cert) ──VPC Origin, https-only──▶ Internal ALB(HTTPS:443) ──▶
-   ├─ "/"      → ECS Fargate "frontend" (Next.js standalone)
-   └─ "/api/*" → ECS Fargate "backend"  (FastAPI)
-                    │
-                    ├─ RDS PostgreSQL t4g.micro :5432
-                    ├─ Bedrock Runtime (Claude Sonnet 4.6 etc.)
-                    └─ AgentCore Memory (chat context)
-
-EventBridge Scheduler
-   ├─ rate(5 minutes)  → ECS RunTask "auto-prober" → 55 models → RDS (CP channels anthropic:* every other cycle, v2.29.0)
-   ├─ rate(5 minutes)  → ECS RunTask "insights"    → 6h summary → RDS
-   ├─ rate(12 hours)     → ECS RunTask "parityrun"  → model × surface × feature evidence sweep → RDS
-   ├─ rate(15 minutes)   → ECS RunTask "gptbench"   → GPT 18-channel (11 Mantle in-region + 7 CRIS) TTFB/TTFT bench → RDS
-   └─ cron(30 17 * * ? *) UTC → ECS RunTask "features" → Claude API Features 39-row × 5 surfaces × 5 models (975 cells) evidence sweep → RDS (daily 17:30 UTC = 02:30 KST, v2.29.0)
-```
-
-### Components by Layer
-
-(See the Korean section above — the structure is identical. Layer tables list Edge, Compute, Storage, Agent, Scheduling, Network, Observability resources.)
-
-As of v2.28.0: the GptBench task measures 18 channels (GPT 5.4/5.5/5.6 Terra, GPT-6 Astra — Global, US CRIS, Mantle us-west-2 — and GPT-6 Sol/Luna — Global, US CRIS, Mantle us-east-1) with a per-call wall-clock watchdog (`GPT_BENCH_CALL_TIMEOUT`, default 90 s) and `max_retries=0`; the FeaturesVerify task runs 5 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975 cells = 813 probed + 162 pre-decided, about 9 min). GPT-6 Sol/Luna costs are priced from the Bedrock agreement-offer rate card (no longer "-"), and GPT-6 Astra Mantle us-east-1/us-east-2 are currently unsupported and excluded by the user's 2026-09-23 decision. Dashboard model cards grade their metric values per workload category (ADR-029).
-
-As of v2.29.0: the AutoProber schedule stays `rate(5 minutes)`, but `_plan_cycle` probes the Claude Platform on AWS channels (`anthropic:*`, the Anthropic first-party API) only every 10 minutes (`ANTHROPIC_CP_PROBE_INTERVAL_S=600`, judged from run start times) with their own workload rotation, after the 2026-09-23 monthly usage-cap 429 incident; that 429 is no longer retried. `/api/auto-probe/latest` returns each model's latest row within its own cadence window, and `/status` exposes `channel_intervals` for the dashboard. FeaturesVerify runs once a day at a fixed 17:30 UTC (`cron(30 17 * * ? *)`, Etc/UTC).
-
-### CDK Stack Decomposition
-
-Network → Data → Cluster → AgentCore → AppServices → Edge → Scheduler → Observability.
-
-The same table from the Korean section applies — the deploy order follows the dependency arrows.
-
-### Key Design Decisions
-
-See ADR-001 through ADR-029 in [`docs/decisions/`](./decisions/).
-
-### Operations
+## Operations
 
 - **Deploy**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
 - **Rollback**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
-- **Verify**: `make verify` — CDK lint/typecheck/tests/synth + ruff + pytest + frontend tsc/vitest.
+- **Troubleshooting**: [`docs/runbooks/troubleshooting.md`](./runbooks/troubleshooting.md)
+- **Verify**: `make verify` runs CDK lint, typecheck, tests, and synth, then ruff, pytest, and frontend tsc and vitest.
+
+---
+
+<a id="korean"></a>
+
+# 한국어
+
+## 시스템 개요
+
+Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 55개 채널을 측정합니다. 스케줄된 AutoProber 태스크가 5분마다 모든 채널을 프로빙하며, Claude Platform on AWS 9채널만 10분마다 자체 워크로드 순환으로 프로빙합니다(v2.29.0). 나머지 스케줄 태스크 4개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕을 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
+
+트래픽은 `llm-monitor.whchoi.net`(기본 이름 `d36s7ml54xwemr.cloudfront.net`도 동작)의 CloudFront로 들어와 VPC Origin을 거쳐 내부 ALB에 도달하고, ECS Fargate 서비스 2개인 `frontend`(Next.js standalone)와 `backend`(FastAPI)로 라우팅됩니다. 모든 데이터는 RDS PostgreSQL 인스턴스 하나에 저장됩니다. 뷰어 구간은 HTTPS입니다. VPC Origin은 현재 VPC 내부에서 HTTP 포트 80으로 ALB에 연결하며, 이는 origin을 `HTTPS_ONLY`로 바꾸기 전까지의 임시 설정입니다(`edge-stack.ts`). ALB는 internal scheme이고 프라이빗 서브넷에 있으며 보안 그룹은 VPC CIDR만 허용합니다.
+
+대시보드 모델 카드는 TTFT, 총 응답시간, TPS 값을 워크로드 카테고리별 임계치로 등급 표시합니다(양호 파랑, 경고 호박, 위험 장미). 등급 판정은 `frontend/src/lib/metricGrade.ts`의 순수 프런트엔드 함수이며 백엔드는 관여하지 않습니다(v2.28.0, ADR-029).
+
+## 전체 아키텍처
+
+```mermaid
+flowchart TB
+  user([Browser or iOS PWA])
+
+  subgraph edgeLayer[Edge Layer]
+    cf[CloudFront]
+    vpco[VPC Origin]
+  end
+
+  subgraph presentation[Presentation Layer]
+    alb["Internal ALB: HTTP 80, HTTPS 443"]
+    fe["frontend service: Next.js 16, port 3000"]
+  end
+
+  subgraph apilayer[API Layer]
+    be["backend service: FastAPI, 17 routers, port 8000"]
+  end
+
+  subgraph ingestion[Scheduled Ingestion Layer]
+    sched[EventBridge Scheduler]
+    ap["AutoProber task: 5 min, CP 10 min"]
+    ins["Insights task: 5 min"]
+    par["ParityRun task: 12 h"]
+    gpt["GptBench task: 15 min"]
+    feat["FeaturesVerify task: daily 17:30 UTC"]
+  end
+
+  subgraph storage[Storage Layer]
+    rds[(RDS PostgreSQL 16)]
+    mem[(AgentCore Memory)]
+    sec[(Secrets Manager + SSM)]
+  end
+
+  subgraph providers[Model Provider Layer]
+    br["Bedrock Runtime: Claude, Nova, OpenAI CRIS"]
+    mantle["Bedrock Mantle: OpenAI in-region, /anthropic"]
+    cp[Claude Platform on AWS]
+    opt["Bedrock Agent Runtime: OptimizePrompt"]
+    ses["Amazon SES us-east-1"]
+  end
+
+  subgraph obs[Observability Layer]
+    cw["CloudWatch Logs, Alarms, Dashboard"]
+    sns[SNS alarm topic]
+    rum[RUM pipeline]
+  end
+
+  user --> cf --> vpco --> alb
+  alb -->|"/*"| fe
+  alb -->|"/api/*"| be
+  sched --> ap & ins & par & gpt & feat
+  ap & par & feat --> providers
+  gpt --> br & mantle
+  ins --> br
+  be --> br
+  be --> opt
+  be --> ses
+  be --> mem
+  be & ap & ins & par & gpt & feat --> rds
+  sec -.->|"secrets at task start"| be
+  be & fe & ap --> cw
+  cw --> sns
+  user -.->|"page views, web vitals"| rum
+```
+
+## 데이터 흐름 요약
+
+프로브 데이터 경로(대시보드의 모든 수치가 지나는 경로):
+
+```mermaid
+flowchart LR
+  A([EventBridge Scheduler]) --> B[AutoProber task] --> C["Streaming call to Bedrock, Mantle or CP"] --> D[(probe_results in RDS)] --> E["backend /api/auto-probe/latest"] --> F[frontend dashboard] --> G([Browser])
+```
+
+사용자 요청 경로:
+
+```mermaid
+flowchart LR
+  A([Browser]) --> B[CloudFront] --> C[VPC Origin] --> D[Internal ALB] --> E[backend FastAPI] --> F[(RDS PostgreSQL)]
+```
+
+프로버가 별도 Fargate 태스크에서 돌기 때문에 `/api/auto-probe/status`와 `/api/auto-probe/latest`는 프로세스 내부 상태가 아니라 DB의 최신 `ProbeRun(is_auto=1)` 행을 읽습니다. `/latest`는 모델마다 자기 주기 범위 안의 최신 행을 돌려주고(주기 3회: 15분, CP는 30분), `/status`는 `channel_intervals`를 내보내 대시보드가 채널별로 신선도를 판정합니다.
+
+## 레이어별 컴포넌트
+
+### Edge
+
+| 리소스 | 역할 |
+|--------|------|
+| CloudFront distribution | 단일 진입점, alias `llm-monitor.whchoi.net` + CDK가 소유하는 us-east-1 ACM `*.whchoi.net` 인증서(`-c monitorDomain`, `-c monitorCertArn`로 교체), TLS 1.2_2021 |
+| Cache behaviors | `/api/auto-probe/*`는 원본 `Cache-Control`(`s-maxage=30`, 최대 TTL 60초)을 따르고 gzip, Brotli 압축, 쿼리스트링을 캐시 키에 포함, 나머지 `/api/*`와 HTML은 캐시하지 않음(SSE 보호를 위해 `/api/*`는 `compress` 끔) |
+| WAFv2 | 미연결: CLOUDFRONT scope는 us-east-1에 만들어야 해서 `edge-stack.ts`가 별도 스택으로 미룸 |
+| VPC Origin | 프라이빗 서브넷의 CloudFront ENI가 내부 ALB에 연결 |
+| S3 (CloudFront logs) | 액세스 로그, KMS 암호화, 90일 보존 |
+
+### Presentation, API
+
+| 리소스 | 역할 |
+|--------|------|
+| Internal ALB | HTTP 80 리스너(현재 VPC Origin이 사용)와 HTTPS 443 리스너(`TLS13_RES`, `albCertificateArn` 인증서, ADR-005), 둘 다 `/api/*`는 backend, 나머지는 frontend |
+| S3 (ALB logs) | ALB 액세스 로그, 90일 보존 |
+| ECS cluster `bedrock-monitor` | Container Insights 활성 |
+| ECR `bedrock-monitor-backend-v2`, `bedrock-monitor-frontend` | `bedrock-monitor-backend-v2`는 CDK 밖에서 IMMUTABLE 태그로 만든 저장소(ADR-018), CDK가 관리하는 `bedrock-monitor-frontend`(와 옛 `bedrock-monitor-backend`)는 MUTABLE이라 릴리스는 고유 `v<epoch>` 태그와 digest 고정 태스크 정의(`pinned-image.ts`)에 의존 |
+| frontend Fargate service | Next.js standalone 포트 3000, 0.5 vCPU / 1 GB, CPU 오토스케일 1~3, 페이지 `/`, `/models`, `/parity`, `/cost`, `/reliability`, `/efficiency`, `/analysis`, `/gpt-on-aws`, `/claude-features`, `/prompts`, `/chat` |
+| backend Fargate service | FastAPI 포트 8000, 0.5 vCPU / 1 GB, CPU 오토스케일 1~3, 기동 마이그레이션용 헬스체크 유예 300초, `backend/routers/` 라우터 17개 |
+
+### Storage
+
+| 리소스 | 역할 |
+|--------|------|
+| RDS PostgreSQL 16.8 (t4g.micro) | 20 GB gp3, Single-AZ, 7일 백업, 암호화, `RETENTION_DAYS`(60)를 넘은 원본 `probe_results`는 `probe_results_hourly`로 이관 |
+| Secrets Manager `bedrock-monitor/db` | 자동 생성 RDS 자격 증명 |
+| SSM `/bedrock-monitor/jwt-secret-key` | JWT 서명 키 |
+| SSM `/bedrock-monitor/agentcore-memory-id` | AgentCore Memory ID |
+| SSM `/bedrock-monitor/{seed-admin-password,anthropic-api-key,anthropic-workspace-id,openai-api-key}` | AppServices, Scheduler가 읽는 사전 생성 SecureString, `openai-1p-api-key`는 `ENABLE_OPENAI_1P=true`일 때만 |
+
+### AI, 모델 프로바이더
+
+| 리소스 | 역할 |
+|--------|------|
+| Bedrock Runtime | Bedrock Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, Haiku 4.5(Global, US 프로파일)와 Nova 2.0 Lite US, 21채널. OpenAI Global, US CRIS 프로파일은 서울, us-east-1 Bedrock Runtime OpenAI 호환 엔드포인트로 호출 |
+| Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna와 GPT 6 Astra, Sol, Luna 인리전(16채널), 패리티 런과 Claude API Features용 `/anthropic` surface는 `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
+| Claude Platform on AWS | `aws-external-anthropic.us-east-2.api.aws` + workspace ID 헤더로 호출하는 Anthropic 9채널 |
+| OpenAI 채널 합계 | 25 = Mantle 인리전 16 + Global CRIS 6 + US CRIS 3, OpenAI 1P direct 경로(5채널)는 v2.19.1부터 휴면, 비노출 |
+| 챗봇 | Claude Sonnet 4.6(`backend/agent/bedrock.py` `CHAT_MODEL_ID`) + 도구 4개, 후속 질문은 Claude Haiku 4.5(`backend/routers/chat.py`) |
+| 인사이트 | Claude Sonnet 4.6(`INSIGHTS_MODEL_ID`)이 최근 6시간 KO, EN 요약 작성 |
+| AgentCore Memory `BedrockMonitorChatMemory` | 대화 컨텍스트 30일 보존, IAM 관리형 정책을 backend 태스크 역할에 연결 |
+| Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize`, `BEDROCK_OPTIMIZE_REGION`(기본 us-east-1) |
+| Amazon SES (us-east-1) | 가입 승인 메일을 관리자 주소로 발송 |
+
+### 스케줄 수집
+
+| 스케줄 | 표현식 | 태스크 명령 | 산출물 |
+|--------|--------|-------------|--------|
+| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | 사이클마다 `ProbeRun` 1개 + `probe_results` 46행 또는 55행(CP 채널은 두 사이클에 한 번), `_plan_cycle`이 CP 채널을 10분마다(`ANTHROPIC_CP_PROBE_INTERVAL_S=600`) 자체 카테고리 순환으로 선택 |
+| `InsightsSchedule` | `rate(5 minutes)` | `python -m insights_runner --window 6h` | `Insight` 행(KO, EN) |
+| `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | 모델 × surface 6개 × 피처 19개 실행 증거 셀 |
+| `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 18채널(Mantle 인리전 11 + CRIS 7) × 순차 10회, 호출당 watchdog `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초 |
+| `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39행 × surface 5개 × 모델 5개(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975셀(프로브 813 + 사전판정 162), 약 9분, 매일 17:30 UTC(02:30 KST) |
+
+모든 스케줄 태스크는 backend 이미지를 command override로 쓰고 0.5 vCPU / 1 GB이며, 스케줄러 역할의 `ecs:RunTask` 정책은 태스크 정의 family `:*` 와일드카드를 씁니다(ADR-011).
+
+### Network
+
+| 리소스 | 역할 |
+|--------|------|
+| VPC 10.20.0.0/16 (또는 기존 VPC) | 2 AZ, Public, App, Data 서브넷 |
+| NAT gateway × 1 | PrivateLink가 없는 엔드포인트(Claude Platform on AWS, Mantle, us-east-1 OpenAI CRIS)로 가는 App 서브넷 egress |
+| Interface VPC endpoints × 9 | ECR API, ECR Docker, CloudWatch Logs, SSM, SSM Messages, Secrets Manager, KMS, Bedrock Runtime, Bedrock AgentCore |
+| Gateway VPC endpoint × 1 | S3 |
+
+### Observability
+
+| 리소스 | 역할 |
+|--------|------|
+| CloudWatch log groups | `/ecs/{backend,frontend,autoprober,insights,parityrun,gptbench,features}`, 14일 보존 |
+| CloudWatch alarms × 7 | ALB 5xx 비율, ALB 지연, backend, frontend 실행 태스크 수, RDS CPU, 스토리지, 연결 수 |
+| CloudWatch dashboard `BedrockMonitor-v2` | 그래프 위젯 4개 + 알람 상태 위젯 1개 |
+| SNS topic `bedrock-monitor-alarms` | 알람 fan-out |
+| RUM (aws-rum-pipeline) | 페이지뷰, 체류 시간, Web Vitals, JS 에러, `NEXT_PUBLIC_RUM_*`는 frontend 빌드 타임 주입 (ADR-024) |
+
+### Security
+
+| 통제 | 위치 |
+|------|------|
+| 전송 구간 | 뷰어에서 CloudFront는 HTTPS(TLS 1.2_2021), CloudFront에서 ALB는 VPC Origin을 거친 VPC 내부 HTTP 80이며 `edge-stack.ts`가 origin을 `HTTPS_ONLY`로 바꿀 때까지 유지 |
+| WAF | 아직 미연결 (Edge 참고) |
+| 인증 | JWT bearer(24시간) + bcrypt 비밀번호, 가입은 이메일 username과 관리자 승인 필수, `/api/admin/*`는 관리자 전용 |
+| 시크릿 | Secrets Manager(DB), SSM SecureString(JWT 키, Anthropic 키와 workspace, OpenAI bearer)을 ECS secrets로 주입 |
+| 프라이빗 네트워킹 | ALB, RDS, 태스크는 프라이빗 서브넷, AWS API 트래픽은 인터페이스 엔드포인트 경유 |
+
+## CDK 스택
+
+| 스택 | 의존 | 책임 |
+|------|------|------|
+| Network | 없음 | VPC, NAT gateway, VPC 엔드포인트 |
+| Data | Network | RDS, Secrets Manager, SSM 파라미터 |
+| Cluster | Network | ECS 클러스터, ECR 저장소, 공유 KMS 키 |
+| AgentCore | 없음 | AgentCore Memory, IAM 정책 |
+| AppServices | Network, Data, Cluster, AgentCore | frontend, backend Fargate 서비스, 내부 ALB, ALB 로그 |
+| Edge | AppServices | CloudFront, alias 인증서, 캐시 정책, CloudFront 로그 |
+| Scheduler | Network, Data, Cluster, AgentCore | EventBridge 스케줄 5개, 태스크 정의 5개 |
+| Observability | AppServices, Cluster, Data | 알람, 대시보드, SNS 토픽 |
+
+재사용 construct는 `cdk/lib/constructs/`에 있습니다. `fargate-service.ts`(서비스, 타깃 그룹, 오토스케일, 로그 그룹)와 `pinned-image.ts`(`-c backendImage=`, `-c frontendImage=`로 받은 digest 고정 이미지 URI)입니다.
+
+## 핵심 설계 결정
+
+[`docs/decisions/`](./decisions/)의 ADR-001~ADR-029를 참조합니다(012, 014, 015, 016은 결번).
+
+| ADR | 결정 |
+|-----|------|
+| 001 | 인터넷 대면 ALB 대신 CloudFront VPC Origin |
+| 002 | RDS t4g.micro Single-AZ (시계열 손실 허용) |
+| 003 | AutoProber를 EventBridge 구동 Fargate 태스크로 분리 |
+| 004 | VPC 내부 ALB에서 ECS 구간은 HTTP, 보안 그룹으로 격리 |
+| 005 | ACM Private CA 인증서를 ARN으로 주입 |
+| 006 | AgentCore Memory만 사용, Runtime은 이연 |
+| 007 | CloudFront 경유 SSE: VIEWER_REQUEST only + simulated streaming |
+| 008 | CDK TypeScript, VPC Origin 같은 신기능은 L2 construct 우선 |
+| 009 | FloatingChat 듀얼 모드 (popup, iframe) |
+| 010 | ECR 불변 태그, production `:latest` 금지 |
+| 011 | Scheduler IAM `ecs:RunTask`를 태스크 정의 family `:*`로 |
+| 013 | 출력 분석: stop reason 분포와 출력 길이 |
+| 017 | 모델 카탈로그 축소 (13 → 12) |
+| 018 | Fargate 이미지 캐시 버그 우회용 신규 ECR 저장소 `-v2` |
+| 019 | OpenAI on Bedrock Mantle 프로바이더 경로 |
+| 020 | OpenAI 1P direct 프로바이더 경로 (v2.19.1부터 휴면) |
+| 021 | 패리티 런 엔진: 실행 증거 프로브 매트릭스, HTTP 200만으로는 불충분 |
+| 022 | Mantle `/anthropic` surface: SigV4 파생 bearer와 IAM 액션 체인 |
+| 023 | 패리티 피처 19종 확장: 적용 맵, 정직한 제외, 요청 스냅샷 |
+| 024 | 자체 호스팅 SDK와 빌드 타임 `NEXT_PUBLIC_*` 값을 쓰는 RUM 통합 |
+| 025 | GPT-5.6 Global CRIS 채널과 채널별 가격 |
+| 026 | Claude API Features 매트릭스: 문서 대비 실측 드리프트, Mantle `/anthropic`은 us-east-1 |
+| 027 | GPT-6 Astra: 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us`, Mantle 인리전은 us-west-2만 |
+| 028 | Claude Opus 5.5와 GPT-6 Sol, Luna: CP 점 버전 가드 `_is_point_release_of`, Sol, Luna Mantle 인리전은 us-east-1만, agreement offer 단가 |
+| 029 | 대시보드 지표 등급: 48시간 p90/p99 기반 카테고리별 절대 임계치, TPS는 낮은 쪽만 판정, `lib/metricGrade.ts` 단일 출처 |
+
+## 운영
+
+- **배포**: [`docs/runbooks/deploy.md`](./runbooks/deploy.md)
+- **롤백**: [`docs/runbooks/rollback.md`](./runbooks/rollback.md)
+- **장애 대응**: [`docs/runbooks/troubleshooting.md`](./runbooks/troubleshooting.md)
+- **검증**: `make verify`가 CDK lint, typecheck, 테스트, synth 뒤 ruff, pytest, frontend tsc, vitest를 실행합니다.

@@ -2,9 +2,16 @@
 
 ## 0. 사전 요구사항
 
-1. **AWS CLI 자격** — 대상 계정/리전에 admin 권한.
-2. **CDK Bootstrap** — `cdk bootstrap aws://ACCOUNT/us-east-1`이 완료된 계정.
-3. **ACM Private CA 인증서** — ALB internal listener용 (ADR-005). cert ARN 확보.
+1. **AWS CLI 자격** — 대상 계정/리전(ap-northeast-2)에 admin 권한.
+2. **CDK Bootstrap** — `npx cdk bootstrap aws://ACCOUNT/ap-northeast-2`가 완료된 계정. 모든 스택이 ap-northeast-2에
+   배포된다(`cdk/bin/app.ts` — `CDK_DEFAULT_REGION`이 없을 때의 기본값). CDK CLI는 셸의 AWS 기본 리전으로
+   `CDK_DEFAULT_REGION`을 채우므로 기본 리전이 다르면 먼저 `export AWS_REGION=ap-northeast-2`. us-east-1 bootstrap은 필요 없다.
+3. **ACM 인증서 2개**
+   - ALB internal listener용 (ADR-005) — ALB와 같은 **ap-northeast-2** 인증서. `-c albCertificateArn`으로 주입
+     (운영 계정 값은 `cdk/cdk.json` context에 있다).
+   - CloudFront 대체 도메인용 — **us-east-1** 인증서(CloudFront viewer cert 제약). EdgeStack은 ARN으로 가져오기만
+     하므로(`fromCertificateArn`) us-east-1에 스택이나 bootstrap은 없다. 기본값은 운영 계정의 `llm-monitor.whchoi.net`과
+     `*.whchoi.net` 인증서 — 다른 계정은 `-c monitorDomain=… -c monitorCertArn=…`.
 4. **Docker / Node 20 / Python 3.11** — 로컬 빌드 환경.
 
 ## 1. 로컬 검증
@@ -13,21 +20,36 @@
 make verify
 ```
 
-CDK lint + typecheck + jest(v2.28.0 기준 77) + cdk-nag clean + ruff + pytest(318) + frontend tsc + vitest(216) 모두 PASS 확인.
+CDK lint + typecheck + jest + synth(cdk-nag) + ruff + pytest + frontend typecheck + vitest를 차례로 돌린다. 마지막 줄
+`✓ make verify PASS`를 확인한다. 테스트 수는 릴리스마다 바뀌므로 여기에 적지 않는다 — 스위트별로 따로 돌릴 때:
+
+```bash
+(cd cdk && npm test)                          # jest
+(cd backend && python3.12 -m pytest tests/ -q) # Python 3.10+ 필요 — 시스템 python3가 3.9면 수집 단계에서 실패
+(cd frontend && npm test)                     # vitest run
+```
+
+브라우저 회귀(Playwright, `make test-ui`)는 `make verify`에 포함되지 않는다.
 
 ## 2. 컨테이너 이미지 빌드 + ECR push
 
-CDK가 ECR repo를 만든 직후 image push가 필요. 첫 deploy는 두 단계:
+첫 deploy는 저장소 준비 → push 두 단계다. CDK(`BedrockMonitor-Cluster`)는 `bedrock-monitor-frontend`와 옛
+`bedrock-monitor-backend`(둘 다 MUTABLE)만 만든다. 운영 backend 저장소 `bedrock-monitor-backend-v2`(IMMUTABLE, ADR-018)는
+CDK가 만들지 않으므로 최초 1회 CLI로 만든다.
 
 > **중요 (ADR-010)**: `:latest` tag는 **로컬 dev 전용**. Production task definition에는 **immutable tag (`v<timestamp>` 또는 `v<git-sha>`)** 만 사용. `:latest`로 push하면 Docker layer dedupe + ECS image cache 콤보로 새 코드가 production에 silent 반영 안 되는 사고가 발생.
 
 ```bash
-# (a) ECR repo만 먼저 생성.
-cd cdk && npx cdk deploy BedrockMonitor-Cluster
-
-# (b) 로그인 → 빌드 → push. 항상 immutable tag 사용.
+# (a) ECR repo 준비 (최초 1회).
 ACCOUNT=$(aws sts get-caller-identity --query Account --output text)
 REGION=ap-northeast-2
+# (a-1) CDK 관리 repo(frontend + 옛 backend). 의존 스택 Network도 함께 배포된다.
+(cd cdk && npx cdk deploy BedrockMonitor-Cluster)
+# (a-2) 운영 backend repo — CDK 밖에서 생성 (이미 있으면 RepositoryAlreadyExistsException, 무시)
+aws ecr create-repository --repository-name bedrock-monitor-backend-v2 \
+  --image-tag-mutability IMMUTABLE --image-scanning-configuration scanOnPush=true --region $REGION
+
+# (b) 로그인 → 빌드 → push. 항상 immutable tag 사용.
 TAG="v$(date +%s)"   # 또는 v$(git rev-parse --short HEAD)
 aws ecr get-login-password --region $REGION \
   | docker login --username AWS --password-stdin $ACCOUNT.dkr.ecr.$REGION.amazonaws.com
@@ -47,6 +69,13 @@ docker build --no-cache --pull --platform linux/arm64 \
 docker tag bedrock-monitor-frontend:$TAG \
   $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
 docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
+
+# (c) push한 이미지의 digest — §3 CDK 배포의 -c backendImage/-c frontendImage에 쓴다 (값은 "sha256:…")
+BE_DIGEST=$(aws ecr describe-images --repository-name bedrock-monitor-backend-v2 --image-ids imageTag=$TAG \
+  --region $REGION --query 'imageDetails[0].imageDigest' --output text)
+FE_DIGEST=$(aws ecr describe-images --repository-name bedrock-monitor-frontend --image-ids imageTag=$TAG \
+  --region $REGION --query 'imageDetails[0].imageDigest' --output text)
+echo "$BE_DIGEST $FE_DIGEST"
 ```
 
 ### 2-1. Task Definition을 새 tag로 update (incremental redeploy)
@@ -54,8 +83,10 @@ docker push $ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG
 `:latest`를 사용하지 않으므로 push 후 task definition을 새 revision으로 register하는 단계가 추가된다:
 
 ```bash
-# Backend
-aws ecs describe-task-definition --task-definition BedrockMonitorAppServicesBackendTaskDef* \
+# Backend — 서비스가 지금 쓰는 task def에서 시작 (--task-definition은 와일드카드를 받지 않는다)
+BE_TD=$(aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION \
+  --query 'services[0].taskDefinition' --output text)
+aws ecs describe-task-definition --task-definition "$BE_TD" \
   --region $REGION > /tmp/td-be.json
 python3 -c "
 import json
@@ -79,11 +110,17 @@ aws ecs update-service --cluster bedrock-monitor --service backend \
 # GptBench:       family BedrockMonitorSchedulerGptBenchTaskDef*,       schedule rate(15 minutes), CLI gptbench_runner --once (v2.18.0)
 # FeaturesVerify: family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule cron(30 17 * * ? *) Etc/UTC, CLI features_runner --once (v2.23.0, 고정 cron v2.29.0)
 # 정확한 family 이름: aws ecs list-task-definition-families --family-prefix BedrockMonitorScheduler --status ACTIVE --region $REGION
-aws ecs describe-task-definition --task-definition BedrockMonitorSchedulerAutoProberTaskDef* \
+AP_FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerAutoProberTaskDef \
+  --status ACTIVE --region $REGION --query 'families[0]' --output text)
+aws ecs describe-task-definition --task-definition "$AP_FAM" \
   --region $REGION > /tmp/td-ap.json
 # ... (위와 동일하게 image 교체 + register) ...
 AP_ARN=...
-aws scheduler get-schedule --name "<AutoProberSchedule>" --region $REGION > /tmp/sched.json
+# 스케줄 이름 — AutoProber/Insights는 Scheduler 스택 output(AutoProberScheduleName / InsightsScheduleName)에 있다.
+# 5개 전부: aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION --query 'Schedules[].Name'
+AP_SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='AutoProberScheduleName'].OutputValue" --output text)
+aws scheduler get-schedule --name "$AP_SCHED" --region $REGION > /tmp/sched.json
 python3 -c "
 import json
 d = json.load(open('/tmp/sched.json'))
@@ -104,26 +141,42 @@ aws scheduler update-schedule --region $REGION --cli-input-json file:///tmp/sche
 > (2026-07-09 실사고 — Edge만 배포해도 의존 스택 AppServices가 함께 갱신됨).
 >
 > ```bash
-> # 현재 운영 digest 확인
-> aws ecs describe-services --cluster bedrock-monitor --services backend frontend \
->   --region ap-northeast-2 --query 'services[].taskDefinition' --output text
-> # (task def에서 image URI 확인 후)
-> npx cdk deploy <스택> --require-approval never \
->   -c backendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-backend-v2@sha256:... \
->   -c frontendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-frontend@sha256:...
+> # 현재 운영 image URI 확인 (backend, frontend 순서로 한 줄씩 — 레지스트리 호스트 포함 전체 URI)
+> for s in backend frontend; do
+>   TD=$(aws ecs describe-services --cluster bedrock-monitor --services $s --region ap-northeast-2 \
+>     --query 'services[0].taskDefinition' --output text)
+>   aws ecs describe-task-definition --task-definition "$TD" --region ap-northeast-2 \
+>     --query 'taskDefinition.containerDefinitions[0].image' --output text
+> done
+> # 새 이미지(§2-(c)) 또는 위에서 확인한 URI로 — 앱 스택 두 개만, 의존 스택은 건드리지 않는다 (cdk/에서 실행)
+> npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler --require-approval never \
+>   -c backendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-backend-v2:<tag>@sha256:<digest> \
+>   -c frontendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-frontend:<tag>@sha256:<digest>
 > ```
 >
-> 대체 도메인(`llm-monitor.whchoi.net`)과 ACM cert도 CDK(edge-stack)가 소유한다 —
+> repo 이름만 넘기면(레지스트리 호스트 누락) ECS가 `docker.io/library/…`로 해석해 pull에 실패하고 서킷 브레이커가
+> 롤백한다. `make deploy`(= `cdk deploy --all`)는 이미지 context를 넘기지 않으므로 운영 배포에 쓰지 않는다.
+>
+> 대체 도메인(`llm-monitor.whchoi.net`)과 ACM cert 연결도 CDK(edge-stack)가 소유한다(인증서 자체는 ARN으로 가져옴) —
 > 콘솔에서 수동 추가한 배포판 설정은 다음 cdk deploy 때 제거되므로 금지.
+
+최초 전체 배포(§2 push 직후, 같은 셸의 `$ACCOUNT`/`$REGION`/`$TAG`/`$BE_DIGEST`/`$FE_DIGEST` 사용). `--all`도 이미지
+context 없이 돌리면 AppServices/Scheduler가 `:latest`로 synth된다.
 
 ```bash
 cd cdk
-npx cdk deploy --all \
-  -c albCertificateArn="arn:aws:acm:us-east-1:ACCOUNT:certificate/UUID" \
-  -c alarmEmail="ops@example.com"
+npx cdk deploy --all --require-approval never \
+  -c albCertificateArn="arn:aws:acm:ap-northeast-2:$ACCOUNT:certificate/UUID" \
+  -c alarmEmail="ops@example.com" \
+  -c backendImage="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-backend-v2:$TAG@$BE_DIGEST" \
+  -c frontendImage="$ACCOUNT.dkr.ecr.$REGION.amazonaws.com/bedrock-monitor-frontend:$TAG@$FE_DIGEST"
 ```
 
-`-c existingVpcId=vpc-xxx -c appSubnetIds=... -c dataSubnetIds=...` 옵션으로 기존 VPC 재사용 가능.
+이후 릴리스는 위 경고 블록의 `--exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler` 형태를 쓴다.
+`alarmEmail`을 빼고 `BedrockMonitor-Observability`를 배포하면 SNS 이메일 구독이 삭제된다.
+
+`-c existingVpcId=vpc-xxx -c appSubnetIds=... -c dataSubnetIds=...` 옵션으로 기존 VPC 재사용 가능 (`cdk/cdk.json` context에는
+운영 계정의 VPC/서브넷/ALB 인증서 값이 들어 있다 — 다른 계정은 `-c`로 덮어쓴다).
 
 ## 4. 배포 후 수동 설정
 
@@ -157,16 +210,16 @@ aws ssm put-parameter --region ap-northeast-2 \
 
 ```bash
 NEW_SECRET=$(openssl rand -base64 48)
-aws ssm put-parameter \
+aws ssm put-parameter --region ap-northeast-2 \
   --name /bedrock-monitor/jwt-secret-key \
   --value "$NEW_SECRET" \
   --type SecureString --overwrite
 ```
 
-backend Fargate Service를 한 번 force-deploy해서 새 값 로드:
+backend Fargate Service를 한 번 force-deploy해서 새 값 로드 (같은 task def로 task만 재기동 — secret은 기동 시 읽힌다):
 
 ```bash
-aws ecs update-service \
+aws ecs update-service --region ap-northeast-2 \
   --cluster bedrock-monitor \
   --service backend \
   --force-new-deployment
@@ -184,7 +237,7 @@ aws ecs update-service \
 
 ```bash
 # CloudFront 도메인은 EdgeStack output 또는 콘솔에서 확인.
-CF_DOMAIN=$(aws cloudformation describe-stacks \
+CF_DOMAIN=$(aws cloudformation describe-stacks --region ap-northeast-2 \
   --stack-name BedrockMonitor-Edge \
   --query "Stacks[0].Outputs[?OutputKey=='CloudFrontDomain'].OutputValue" \
   --output text)
@@ -278,7 +331,7 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.ca
 ### 5-2. v2.29.0 배포 경로와 확인 (CP 10분 주기, FeaturesVerify 고정 cron)
 
 **배포 경로**: CDK 변경이 있다(FeaturesVerify 스케줄 `rate(24 hours)` → `cron(30 17 * * ? *)` Etc/UTC, AutoProber task def
-env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`). 이미지-only 경로(§2-1, §6) 금지 — env가 복사되지 않는다(코드 기본값도 600이라
+env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`). 이미지-only 경로(§2-1) 금지 — env가 복사되지 않는다(코드 기본값도 600이라
 동작은 같지만 설정이 보이지 않는다). **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를
 배포한다(§3 경고). IAM 변경 없음, DB 마이그레이션 없음.
 
@@ -316,18 +369,19 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, chan
 
 ## 6. 후속 배포 (코드만 변경 시)
 
-⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`)에는 이 이미지-only
-경로와 §2-1(기존 task-def 복사 재등록)을 쓰지 말 것** — 기존 task definition의 env가
+⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`)에는 이미지-only
+경로(§2-1 기존 task-def 복사 재등록)를 쓰지 말 것** — 기존 task definition의 env가
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포
 (`BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`, digest 고정 `-c backendImage/-c frontendImage`)로
 backend 서비스와 스케줄 태스크(autoprober/insights/parityrun/gptbench/featuresverify) **양쪽** task def를 갱신할 것.
 
 ```bash
-make build              # backend + frontend 이미지 재빌드
-# 위 step 2-(b) 동일하게 push
-aws ecs update-service --cluster bedrock-monitor --service backend  --force-new-deployment
-aws ecs update-service --cluster bedrock-monitor --service frontend --force-new-deployment
+make build   # 로컬 확인 전용 — :dev 태그, --platform linux/arm64와 RUM build arg가 없어 운영 push 금지
+# 운영 이미지: §2-(b) 빌드·push(v<epoch> 태그, arm64, RUM build arg) → §2-(c) digest 확인
+# → §3 경고 블록의 digest 고정 CDK 배포(--exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler)
 ```
 
-인프라 변경 없으면 `cdk deploy`는 생략.
+`aws ecs update-service --force-new-deployment`는 **새 코드를 내보내지 않는다** — 서비스의 task def가 digest로 고정돼
+있어 같은 이미지로 task만 재기동한다(SSM 값 재로딩 용도, §4-1). 인프라 변경이 없어도 새 이미지는 digest 고정 CDK 배포로
+내보낸다(신규 env가 없는 릴리스에 한해 §2-1 수동 경로도 가능).
