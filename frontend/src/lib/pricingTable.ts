@@ -129,7 +129,7 @@ export function tierBadges(tier: PricingTier, notes: PricingNote[], lang: "ko" |
       ? { kind: "promo_check", label: L("Check whether the promotion has ended", "프로모션 종료 여부 확인 필요"), detail, ref }
       : {
         kind: "promo",
-        label: L(`Promotion (until at least ${note.min_until}, manual note)`, `프로모션(최소 ${note.min_until}까지, 수동 메모)`),
+        label: L(`Promotion (until at least ${note.min_until})`, `프로모션(최소 ${note.min_until}까지)`),
         detail,
         ref,
       });

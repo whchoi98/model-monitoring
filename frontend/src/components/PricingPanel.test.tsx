@@ -80,7 +80,7 @@ describe("PricingContent", () => {
     expect(cell(html, "gpt-5.6-sol", "in_region")).toMatch(/data-badge="promo"[^>]*break-keep[^>]*>프로모션\(최소 <span class="whitespace-nowrap">2026-11-21<\/span>/);
     expect(cell(html, "claude-fable-5-1", "us")).toMatch(/data-badge="unverified" class="[^"]*whitespace-nowrap/);
     expect(html).toMatch(/data-pending-count="true" class="whitespace-nowrap/);
-    expect(html).toMatch(/whitespace-nowrap[^"]*"[^>]*>수동 메모</);
+    expect(count(html, "수동 메모")).toBe(1); // only in the manual-note reference title, no duplicate chip
     expect(html).toContain('<span class="whitespace-nowrap">확인일 2026-09-26</span>');
   });
 

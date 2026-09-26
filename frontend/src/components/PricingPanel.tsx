@@ -297,14 +297,10 @@ function ReferenceItem({ reference, lang, highlighted }: { reference: PricingRef
       id={`ref-${reference.n}`}
       data-kind={reference.kind}
       data-highlighted={highlighted ? "true" : "false"}
-      className={`scroll-mt-36 rounded-lg px-2 py-1.5 transition-colors ${highlighted ? "bg-blue-500/15 ring-1 ring-blue-500/40" : ""}`}
+      className={`scroll-mt-36 grid grid-cols-[2.75rem_1fr] rounded-lg px-2 py-1.5 transition-colors ${highlighted ? "bg-blue-500/15 ring-1 ring-blue-500/40" : ""}`}
     >
-      <span className="mr-1.5 whitespace-nowrap tabular-nums text-gray-500">[{reference.n}]</span>
-      {reference.kind === "manual_note" && (
-        <span className="mr-1.5 whitespace-nowrap rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
-          {lang === "en" ? "Manual note" : "수동 메모"}
-        </span>
-      )}
+      <span className="whitespace-nowrap text-right pr-2 tabular-nums text-gray-500">[{reference.n}]</span>
+      <span>
       {reference.url ? (
         <a href={reference.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
           <Runs text={title} tail={<span aria-hidden="true"> ↗</span>} />
@@ -317,6 +313,7 @@ function ReferenceItem({ reference, lang, highlighted }: { reference: PricingRef
           , <span className="whitespace-nowrap">{lang === "en" ? "checked" : "확인일"} {reference.as_of}</span>
         </span>
       )}
+      </span>
     </li>
   );
 }

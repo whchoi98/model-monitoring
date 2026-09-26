@@ -53,7 +53,7 @@ describe("textRuns — 토큰 중간에서 줄이 바뀌지 않게 나눈다", (
   test("가격 쌍, 리전 id, ISO 날짜, offer id, In-Region은 한 덩어리", () => {
     expect(nowrap("새 값 $3.00 / $18.00")).toEqual(["$3.00 / $18.00"]);
     expect(nowrap("Global $5.00 / $30.00, US $5.50 / $33.00")).toEqual(["$5.00 / $30.00", "$5.50 / $33.00"]);
-    expect(nowrap("프로모션(최소 2026-11-21까지, 수동 메모)")).toEqual(["2026-11-21"]);
+    expect(nowrap("프로모션(최소 2026-11-21까지)")).toEqual(["2026-11-21"]);
     expect(nowrap("Amazon Bedrock 약정 오퍼 요금표, offer-icq4574v6gz3i (Claude Fable 5.1)")).toEqual(["offer-icq4574v6gz3i"]);
     expect(nowrap("Global 채널 단가는 같은 모델의 US, In-Region 채널과 다를 수 있다")).toEqual(["In-Region"]);
     expect(nowrap("캐시, batch, long-context, priority 단가")).toEqual(["long-context"]);
@@ -135,11 +135,11 @@ describe("tierBadges", () => {
   test("수동 메모 → 프로모션 배지, 설명은 프로모션 이전 단가, 메모 근거는 참고 자료 각주", () => {
     const [badge] = tierBadges(tier(), notesForTier([SOL_PROMO], "in_region"), "ko", SEPT_26);
     expect(badge).toEqual({
-      kind: "promo", label: "프로모션(최소 2026-11-21까지, 수동 메모)",
+      kind: "promo", label: "프로모션(최소 2026-11-21까지)",
       detail: "프로모션 이전 단가 $5.50 / $33.00", ref: "note:gpt-5.6-sol",
     });
     const [en] = tierBadges(tier(), notesForTier([SOL_PROMO], "global"), "en", SEPT_26);
-    expect(en.label).toBe("Promotion (until at least 2026-11-21, manual note)");
+    expect(en.label).toBe("Promotion (until at least 2026-11-21)");
     expect(en.detail).toBe("Price before the promotion $5.00 / $30.00");
     expect(en.ref).toBe(noteReferenceId("gpt-5.6-sol"));
   });

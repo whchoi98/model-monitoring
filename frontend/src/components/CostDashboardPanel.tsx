@@ -64,8 +64,8 @@ export default function CostDashboardPanel() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
-              ? "Token usage × public pricing → estimated USD spend by model and channel."
-              : "토큰 사용량 × 공개 단가 → 모델·채널별 추정 비용 (USD)"}
+              ? "Token usage × official unit prices → estimated USD spend by model and channel."
+              : "토큰 사용량 × 공식 단가 → 모델, 채널별 추정 비용 (USD)"}
           </p>
         </div>
         <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
@@ -260,7 +260,7 @@ export default function CostDashboardPanel() {
         <p data-cost-methodology>
           {lang === "en"
             ? "Token counts come from each model's response usage object (per call). Unit prices are refreshed from official sources every 12 hours, and each probe is costed at the price in effect at its time. See "
-            : "토큰 수는 모델 응답의 usage 객체에서 호출별로 수집합니다. 단가는 공식 출처에서 12시간마다 자동 갱신되며 각 프로브 시각의 단가로 계산합니다. 모델별 단가와 출처는 "}
+            : "토큰 수는 모델 응답의 usage 객체에서 호출별로 수집합니다. 단가는 공식 출처에서 12시간마다 자동 갱신되고, 비용은 각 프로브 시각의 단가로 계산합니다. 모델별 단가와 출처는 "}
           <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
           {lang === "en" ? " for per-model prices and sources." : " 메뉴를 참고하세요."}
         </p>
@@ -280,12 +280,12 @@ export default function CostDashboardPanel() {
           </span>{" "}
           {lang === "en"
             ? "linear extrapolation — total_cost_in_window ÷ window_hours × 24 × 30. Useful as a rough budget signal but does not account for variable workload or pricing changes."
-            : "선택한 기간 비용을 시간당으로 환산해 × 24 × 30으로 단순 외삽. 워크로드 변동·단가 변경은 반영되지 않은 대략적 budget 신호입니다."}
+            : "선택한 기간 비용을 시간당으로 환산해 × 24 × 30으로 단순 외삽. 워크로드 변동, 단가 변경은 반영되지 않은 대략적 budget 신호입니다."}
         </p>
         <p>
           {lang === "en"
             ? "Excluded from cost: failed and overloaded calls (we still charge nothing for these, but they wouldn't reflect actual application spend). Cost is built from successful invocations only."
-            : "실패·overloaded 호출은 비용 집계에서 제외 (실제 운영 비용을 정확히 반영하기 위해). 성공 호출만 합산합니다."}
+            : "실패와 과부하(overloaded) 호출은 비용 집계에서 제외하고 성공 호출만 합산합니다."}
         </p>
       </div>
     </div>

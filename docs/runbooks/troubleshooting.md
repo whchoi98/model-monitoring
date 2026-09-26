@@ -112,7 +112,7 @@ curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer
 
 **배경**: GPT-5.6 Sol 단가 In-Region, Geo $4.40 / $22, Global $4 / $20은 프로모션 단가다(v2.28.1). 2026-09-23 AWS 모델 카드에는 "최소
 2026-11-21까지"가 있었지만 지금 공식 출처 어디에도 종료일이 없어서, 이 정보는 `pricing_sources.PRICE_NOTES` 수동 메모로만
-관리한다. `/pricing`의 Sol 셀에는 "프로모션(최소 2026-11-21까지, 수동 메모)" 배지가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인
+관리한다. `/pricing`의 Sol 셀에는 "프로모션(최소 2026-11-21까지)" 배지와 수동 메모 참고 자료 각주가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인
 필요"로 바뀐다.
 
 ### 확인

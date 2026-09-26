@@ -188,8 +188,8 @@ const pricingReferences: PricingReference[] = [
   },
   {
     n: 10, id: "note:gpt-5.6-sol", kind: "manual_note",
-    title_en: "GPT 5.6 Sol promotion until at least 2026-11-21, listed on the AWS model card on 2026-09-23 (no longer shown), CHANGELOG v2.28.1",
-    title_ko: "GPT 5.6 Sol 프로모션 최소 2026-11-21까지, 2026-09-23 AWS 모델 카드 기재(현재 미게재), CHANGELOG v2.28.1",
+    title_en: "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)",
+    title_ko: "GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)",
     url: null, as_of: null,
   },
 ];

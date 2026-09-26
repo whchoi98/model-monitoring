@@ -72,7 +72,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.locator('tr[data-family="nova-2-lite"] [data-badge-detail="unverified"]')).toHaveText("초기값");
   const promo = page.locator('tr[data-family="gpt-5.6-sol"] [data-badge="promo"]');
   await expect(promo).toHaveCount(2);
-  await expect(promo.first()).toContainText("프로모션(최소 2026-11-21까지, 수동 메모)");
+  await expect(promo.first()).toContainText("프로모션(최소 2026-11-21까지)");
   const promoDetail = page.locator('tr[data-family="gpt-5.6-sol"] td[data-tier="in_region"] [data-badge-detail="promo"]');
   await expect(promoDetail).toContainText("프로모션 이전 단가 $5.50 / $33.00");
   // The note's basis (2026-09-23) is the manual-note reference, one footnote away.
