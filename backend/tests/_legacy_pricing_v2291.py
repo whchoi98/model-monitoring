@@ -1,9 +1,10 @@
-"""모델 토큰 단가 (USD per 1M tokens) - frontend lib/pricing.ts와 동기화.
+"""FROZEN copy of backend/pricing.py at v2.29.1 (git 8ffb283) — equivalence test only (ADR-030).
 
-가격 출처: AWS Bedrock public pricing(모델 카드) + Anthropic public pricing (2026 기준).
-모델 카드가 아직 없는 신규 출시 모델은 Bedrock ListFoundationModelAgreementOffers의
-offer rate card를 출처로 쓰고, 카드가 게시되면 재대조한다 (예: GPT 6 Sol/Luna, ADR-028).
-가격 변경 시 본 파일과 frontend/src/lib/pricing.ts를 함께 수정.
+backend/pricing.py was deleted in v2.30.0; costs now come from price_history (price_history.py).
+test_cost_time_effective.py checks that the new per-row cost equals this copy on the 44 channels
+whose price did not change, and that the 11 corrected channels (Bedrock Claude US x1.1, Nova 2.0
+Lite 0.33/2.75) differ from it. Never edit the table below and never import this module from
+application code.
 """
 
 from __future__ import annotations

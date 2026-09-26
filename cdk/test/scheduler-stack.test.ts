@@ -37,8 +37,8 @@ describe("SchedulerStack", () => {
     template = Template.fromStack(scheduler);
   });
 
-  it("Schedule이 5개 생성된다 (AutoProber + Insights + ParityRun + GptBench + FeaturesVerify)", () => {
-    template.resourceCountIs("AWS::Scheduler::Schedule", 5);
+  it("Schedule이 6개 생성된다 (AutoProber + Insights + ParityRun + GptBench + FeaturesVerify + PricingSync)", () => {
+    template.resourceCountIs("AWS::Scheduler::Schedule", 6);
   });
 
   it("AutoProber는 rate(5 minutes) 스케줄을 사용한다", () => {
@@ -76,8 +76,8 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("TaskDefinition이 5개 생성된다", () => {
-    template.resourceCountIs("AWS::ECS::TaskDefinition", 5);
+  it("TaskDefinition이 6개 생성된다 (PricingSync 포함, v2.30.0)", () => {
+    template.resourceCountIs("AWS::ECS::TaskDefinition", 6);
   });
 
   it("Task는 Fargate, awsvpc, X86_64로 설정된다", () => {
@@ -203,6 +203,95 @@ describe("SchedulerStack", () => {
       ScheduleExpression: "rate(5 minutes)",
       Description: Match.stringLikeRegexp("Bedrock 모니터링"),
     }));
+  });
+
+  describe("PricingSync (v2.30.0, ADR-030)", () => {
+    const PRICING_COMMAND = ["python", "-m", "pricing_sync_runner", "--once"];
+    type Container = { Command: string[]; Environment?: { Name: string; Value: string }[]; Secrets?: { Name: string }[] };
+    type CfnResource = ReturnType<Template["findResources"]>[string];
+
+    const taskDefByCommand = (command: string[]): [string, CfnResource] => {
+      const found = Object.entries(template.findResources("AWS::ECS::TaskDefinition")).filter(([, resource]) =>
+        (resource.Properties.ContainerDefinitions as Container[]).some(
+          (container) => container.Command.join(" ") === command.join(" ")));
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+    const containerOf = (taskDef: CfnResource): Container => taskDef.Properties.ContainerDefinitions[0];
+    const pricingRoleLogicalId = (): string => {
+      const [, taskDef] = taskDefByCommand(PRICING_COMMAND);
+      return taskDef.Properties.TaskRoleArn["Fn::GetAtt"][0];
+    };
+    const schedulerStatement = (sid: string): { Resource: unknown[] } => {
+      const statements = Object.entries(template.findResources("AWS::IAM::Policy"))
+        .filter(([logicalId]) => logicalId.startsWith("SchedulerInvokeRoleDefaultPolicy"))
+        .flatMap(([, policy]) => policy.Properties.PolicyDocument.Statement)
+        .filter((statement: { Sid?: string }) => statement.Sid === sid);
+      expect(statements).toHaveLength(1);
+      return statements[0];
+    };
+
+    it("컨테이너 CMD는 pricing_sync_runner --once, 로그 그룹 /ecs/pricingsync 14일, 0.5 vCPU / 1 GB", () => {
+      const [, taskDef] = taskDefByCommand(PRICING_COMMAND);
+      expect(taskDef.Properties.Cpu).toBe("512");
+      expect(taskDef.Properties.Memory).toBe("1024");
+      const logGroupRef = containerOf(taskDef) as unknown as { LogConfiguration: { Options: { "awslogs-group": { Ref: string } } } };
+      const logGroupId = logGroupRef.LogConfiguration.Options["awslogs-group"].Ref;
+      const logGroups = template.findResources("AWS::Logs::LogGroup");
+      expect(logGroups[logGroupId]?.Properties).toEqual({ LogGroupName: "/ecs/pricingsync", RetentionInDays: 14 });
+    });
+
+    it("rate(12 hours) 스케줄이 PricingSync task def를 실행한다 (ParityRun과 별개의 12시간 스케줄)", () => {
+      const [taskDefId] = taskDefByCommand(PRICING_COMMAND);
+      const targeting = Object.values(template.findResources("AWS::Scheduler::Schedule"))
+        .filter((schedule) => schedule.Properties.Target.EcsParameters.TaskDefinitionArn.Ref === taskDefId);
+      expect(targeting).toHaveLength(1);
+      expect(targeting[0]!.Properties.ScheduleExpression).toBe("rate(12 hours)");
+      expect(targeting[0]!.Properties.Description).toMatch(/every 12 hours/);
+      const twelveHour = Object.values(template.findResources("AWS::Scheduler::Schedule"))
+        .filter((schedule) => schedule.Properties.ScheduleExpression === "rate(12 hours)");
+      expect(twelveHour).toHaveLength(2);
+    });
+
+    it("AutoProber와 같은 env/secret을 받는다 (CP 디스커버리, OpenAI 등록용) — CP 주기 노브만 빠진다", () => {
+      const pricing = containerOf(taskDefByCommand(PRICING_COMMAND)[1]);
+      const autoProber = containerOf(taskDefByCommand(["python", "-m", "auto_prober_runner", "--once"])[1]);
+      expect(pricing.Environment).toEqual(
+        (autoProber.Environment ?? []).filter((variable) => variable.Name !== "ANTHROPIC_CP_PROBE_INTERVAL_S"));
+      expect((pricing.Secrets ?? []).map((secret) => secret.Name).sort())
+        .toEqual((autoProber.Secrets ?? []).map((secret) => secret.Name).sort());
+      expect((pricing.Secrets ?? []).map((secret) => secret.Name)).toEqual(
+        expect.arrayContaining(["ANTHROPIC_API_KEY", "ANTHROPIC_WORKSPACE_ID", "OPENAI_API_KEY", "DB_HOST", "DB_PASSWORD"]));
+    });
+
+    it("전용 task role은 가격 읽기 액션 2개만 갖는다 — bedrock:Invoke* 없음, 다른 정책 없음", () => {
+      const roleId = pricingRoleLogicalId();
+      const role = template.findResources("AWS::IAM::Role")[roleId];
+      expect(role).toBeDefined();
+      expect(role!.Properties.ManagedPolicyArns).toBeUndefined();
+      const statements = (role!.Properties.Policies as { PolicyDocument: { Statement: { Action: string | string[]; Resource: unknown }[] } }[])
+        .flatMap((policy) => policy.PolicyDocument.Statement);
+      const actions = statements.flatMap((statement) => [statement.Action].flat()).sort();
+      expect(actions).toEqual(["bedrock:ListFoundationModelAgreementOffers", "pricing:GetProducts"]);
+      expect(statements.map((statement) => statement.Resource)).toEqual(["*"]);
+      expect(actions.some((action) => action.startsWith("bedrock:Invoke"))).toBe(false);
+      // 이 역할에 붙는 AWS::IAM::Policy(DefaultPolicy 등)가 없어야 한다.
+      const attached = Object.values(template.findResources("AWS::IAM::Policy"))
+        .filter((policy) => JSON.stringify(policy.Properties.Roles ?? []).includes(roleId));
+      expect(attached).toEqual([]);
+    });
+
+    it("Scheduler 역할: RunTask family ':*'와 명시 PassRole 목록에 PricingSync가 들어간다 (ADR-011)", () => {
+      const [, taskDef] = taskDefByCommand(PRICING_COMMAND);
+      const family = taskDef.Properties.Family as string;
+      expect(schedulerStatement("RunTaskFamilyWildcard").Resource).toContain(
+        `arn:aws:ecs:us-east-1:111111111111:task-definition/${family}:*`);
+      expect(schedulerStatement("PassTaskRoles").Resource).toContainEqual({ "Fn::GetAtt": [pricingRoleLogicalId(), "Arn"] });
+    });
+
+    it("스케줄 이름을 PricingSyncScheduleName output으로 내보낸다 (런북 수동 run-task용)", () => {
+      expect(Object.keys(template.findOutputs("PricingSyncScheduleName"))).toEqual(["PricingSyncScheduleName"]);
+    });
   });
 
   it("autoprober task def에 GPT-6 Sol/Luna model id가 주입된다 (v2.27.0)", () => {

@@ -245,6 +245,54 @@ class GptBenchResult(Base):
     error_message = Column(Text, nullable=True)
 
 
+class PriceHistory(Base):
+    """모델 채널(model_id)별 토큰 단가 이력 (v2.30.0, ADR-030).
+
+    유효 행 = 같은 model_id에서 status IN ('seed','verified')이고 effective_from <= t인 행 중
+    (effective_from, id)가 가장 늦은 행. 비용은 각 프로브 시각의 유효 단가로 계산한다
+    (price_history.py). seed 행은 effective_from=1970-01-01Z, observed_at=NULL (pricing_seed.py).
+    단가는 float로 저장한다 — numeric은 PostgreSQL에서 Decimal로 돌아와 float 누적과 섞이면 TypeError.
+    """
+
+    __tablename__ = "price_history"
+    __table_args__ = (
+        Index("ix_price_history_model_eff", "model_id", "effective_from"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    model_id = Column(Text, nullable=False)          # probe_results.model_id와 같은 값
+    family_key = Column(Text, nullable=False)        # claude-opus-5-5 | gpt-6-sol | nova-2-lite ...
+    channel = Column(Text, nullable=False)           # cp | global | us | inregion:<aws-region>
+    input_per_mtok = Column(Float, nullable=False)   # USD per 1M input tokens
+    output_per_mtok = Column(Float, nullable=False)  # USD per 1M output tokens
+    effective_from = Column(DateTime(timezone=True), nullable=False)
+    source_id = Column(Text, nullable=False)         # offer:<offerId> | pricelist:<usagetype> | anthropic-pricing
+    status = Column(Text, nullable=False)            # seed | verified | pending_review | rejected
+    observed_at = Column(DateTime(timezone=True), nullable=True)  # 출처에서 마지막으로 확인한 시각, seed는 NULL
+    run_id = Column(Integer, nullable=True)          # 이 행을 만든(또는 마지막으로 관측한) price_sync_runs.id
+    created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class PriceSyncRun(Base):
+    """공식 단가 동기화 런 1회 (v2.30.0) — PricingSync 태스크가 12시간마다 기록.
+
+    런을 시작할 때 status='running' 행을 먼저 넣고, 끝나면 completed | partial | failed로 닫는다.
+    summary: {"sources": {출처: {"calls", "ok", "failed"}}, "channels": {model_id: 결과}, "errors": [...]}.
+    """
+
+    __tablename__ = "price_sync_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(Text, nullable=False)  # running | completed | partial | failed
+    summary = Column(JSON, nullable=True)
+    changes = Column(Integer, nullable=False, default=0)  # 적용한 새 행 수 (verified)
+    # 이 런이 검토 대기로 분류한 채널 수 = 결과 pending 또는 no_baseline(새 pending_review 행, 또는 같은 값 대기 행 재관측).
+    # /api/pricing pending_review(대기 행이 있는 활성 채널 전부)와 달리 이 런이 다시 관측하지 않은 대기 채널은 빠져 더 작을 수 있다.
+    pending = Column(Integer, nullable=False, default=0)
+
+
 def ensure_performance_indexes(engine) -> None:
     """기존 DB에 성능 인덱스를 멱등하게 생성 (main.py lifespan에서 호출).
 

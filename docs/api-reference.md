@@ -286,20 +286,107 @@ regeneration is running. Poll `GET /api/insights/latest` for the result.
 ## Analytics (Public)
 
 ### GET /api/cost/summary · /api/cost/channel-compare · /api/cost/trend
-30-day cost projection, per-channel comparison, cost trend. Costs are computed at query time from `backend/pricing.py`
-`PRICE_TABLE` (mirrored in `frontend/src/lib/pricing.ts`), so a price change re-prices past rows. A model without a price key
-has a null cost (shown as "-"). Since v2.28.0 the six GPT-6 Sol/Luna channels are priced from the Bedrock agreement-offer rate
-card (`gpt-6-sol` / `-us` $2.20 / $11, `-global` $2 / $10; `gpt-6-luna` / `-us` $0.11 / $0.55, `-global` $0.10 / $0.50 per
-MTok — ADR-028 v2.28.0 follow-up) instead of null.
+30-day cost projection, per-channel comparison, cost trend. Since v2.30.0 (ADR-030) every successful probe row is priced at the
+unit price in effect at its `timestamp`: `backend/price_history.py` joins `probe_results` to `price_history` on an exact
+`model_id` match and the row's time range (`effective_from` up to the next price's `effective_from`, rows in status `seed` or
+`verified`), and computes `row_cost = (input_tokens × input_per_mtok + output_tokens × output_per_mtok) / 1,000,000`. Summary and
+channel-compare sum those row costs; a model without a price row has a null cost (shown as "-") while its tokens still count in
+the totals, and channel-compare keeps adding a null as 0. Trend buckets use the same per-row costs. Before v2.30.0 costs were
+computed at query time from `backend/pricing.py` (removed), so a price change re-priced every past row (ADR-025 rule, now
+superseded). The time before the first PricingSync run is priced with the seed (`pricing_seed.py`, effective from
+1970-01-01): price changes made before v2.30.0 are not reconstructed, and the 11 channels whose code price was wrong (Bedrock
+Claude US, Nova 2.0 Lite) are corrected for all history. Response shapes are unchanged.
 
 ### GET /api/reliability/multi-channel
 Success rate + error buckets grouped by family/channel.
 
 ### GET /api/efficiency/score
-0-100 weighted Token Efficiency Score per workload category.
+0-100 weighted Token Efficiency Score per workload category. The cost component averages the per-row cost of successful rows
+that have a price (the unit price in effect at each probe's time, v2.30.0).
 
 ### GET /api/analysis/stop-reasons · /api/analysis/output-length
 Stop-reason distribution + output-length histograms.
+
+---
+
+## Unit Prices (Public) — v2.30.0, ADR-030
+
+Data source for `/pricing` (Unit Prices / 비용 단가), Model Explorer card prices and Comparison Lab costs. Prices are USD per
+1M tokens, Standard tier input and output only (no cache, batch, long-context, priority or flex prices). The PricingSync task
+(`python -m pricing_sync_runner --once`, every 12 hours) refreshes them from three official sources: the Bedrock agreement-offer
+rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 20 + OpenAI 25 channels), the AWS Price List API (`GetProducts`,
+Nova 2.0 Lite) and Anthropic's `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude Platform on AWS 9 channels).
+A change of more than 50% on input or output (the boundary itself is applied) is stored as `pending_review` and waits for admin
+approval (see Admin below). Observed prices are compared and stored at 6 decimals (a positive value that rounds to 0 counts as a
+parse failure), and a parser error of any type only skips that source's channels (`skipped:parse_failed`) without failing the
+run. Dormant 1P channels and labels matching `HIDDEN_MODEL_PATTERNS` are excluded.
+
+### GET /api/pricing
+Current price table. The backend keeps a 60 s in-process cache per task (no `lang` in the key — the body carries both languages).
+
+**Response (abridged):**
+```json
+{
+  "currency": "USD",
+  "unit": "per_1m_tokens",
+  "generated_at": "2026-09-26T16:00:00Z",
+  "last_sync": {"id": 12, "started_at": "2026-09-26T15:00:00Z", "finished_at": "2026-09-26T15:00:31Z", "status": "completed"},
+  "pending_review": 0,
+  "families": [
+    {
+      "family_key": "claude-opus-5-5", "family": "Claude Opus 5.5", "provider": "anthropic",
+      "tiers": {
+        "cp":     {"input": 4,   "output": 20, "model_ids": ["anthropic:claude-opus-5-5"], "source_ids": ["anthropic-pricing"], "footnotes": [1], "verification": "verified", "observed_at": "2026-09-26T15:00:00Z", "pending": null},
+        "global": {"input": 4,   "output": 20, "model_ids": ["global.anthropic.claude-opus-5-5"], "source_ids": ["offer:offer-7sp77cpl4rveu"], "footnotes": [2], "verification": "verified", "observed_at": "2026-09-26T15:00:00Z", "pending": null},
+        "us":     {"input": 4.4, "output": 22, "model_ids": ["us.anthropic.claude-opus-5-5"], "source_ids": ["offer:offer-7sp77cpl4rveu"], "footnotes": [2], "verification": "verified", "observed_at": "2026-09-26T15:00:00Z", "pending": null},
+        "in_region": []
+      },
+      "notes": []
+    }
+  ],
+  "models": {"us.anthropic.claude-opus-5-5": {"input": 4.4, "output": 22, "verification": "verified"}},
+  "references": [
+    {"n": 1, "id": "anthropic-pricing", "kind": "anthropic_doc", "title_en": "Anthropic API pricing (Claude Platform on AWS uses standard pricing)", "title_ko": "Anthropic API 요금 (Claude Platform on AWS는 표준 요금)", "url": "https://platform.claude.com/docs/en/about-claude/pricing#model-pricing", "as_of": "2026-09-26"}
+  ],
+  "disclaimer": {"en": "This price list is compiled automatically from public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing pages.", "ko": "이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요."}
+}
+```
+
+- `families` come in display order (provider Anthropic Claude → Amazon Nova → OpenAI, then the family order of
+  `frontend/src/lib/sortModels.ts` `FAMILY_ORDER`, mirrored and pinned by `pricing_sources.FAMILY_ORDER`). Clients render that
+  order and the footnote numbers as sent; they never re-sort or renumber.
+- `tiers` always has the four keys `cp`, `global`, `us`, `in_region`. The first three are an object or `null`; `in_region` is
+  always an array whose elements add `regions` and group regions with the same price (sorted by region name).
+- Prices are JSON numbers with at most 6 decimals and no trailing zeros (`4`, `4.4`, `0.11`).
+- `verification` per cell: `verified` (observed by the latest finished run, whatever its status), `stale` (last observed
+  earlier — `observed_at` tells when), `seed_only` (never observed by an official source yet). `pending` is the latest
+  `pending_review` row of that `model_id` (`{id, input, output, observed_at}`) or `null`.
+- `pending_review` counts every active channel (distinct `model_id`s) that has any `pending_review` row, whichever run left it;
+  the admin list below shows every pending row. It is not the same number as `price_sync_runs.pending`, which counts only the
+  channels that one run classified as pending (a new `pending_review` row or a re-observed held value, `no_baseline` included),
+  so the run's number can be lower.
+- `last_sync` is the latest finished run (any status) or `null` before the first run.
+- `models` maps each active `model_id` to its current price (used by Model Explorer and Comparison Lab).
+- `notes` holds manual notes that are not official-source facts (GPT-5.6 Sol promotional price, `min_until` 2026-11-21 with the
+  prior prices); a note disappears once a sync observes its `prior_price`.
+- `references[]`: `n` (1-based, in order of first citation, then fixed official pages, manual notes last), `id`
+  (`offer:<offerId>`, `pricelist:<usagetype>`, `anthropic-pricing`, `official:<slug>`, `note:<family_key>`), `kind`
+  (`agreement_offer`, `price_list`, `anthropic_doc`, `official_page`, `manual_note`), bilingual titles (a `manual_note` title
+  names the family, e.g. "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)"), `url`, `as_of` (UTC date
+  of the latest observation of that source, or the seed date 2026-09-26; `null` for `official_page` and `manual_note`, and a
+  `manual_note` has `url: null`).
+- Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
+  last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels.
+
+### GET /api/pricing/export?format=csv|md|json&lang=ko|en
+Download the same table as a file: `Content-Disposition: attachment; filename="llm-monitor-unit-prices-YYYY-MM-DD.<csv|md|json>"`.
+`lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then one table per
+provider (model | Claude Platform on AWS | Global | US | In-Region, cells with `[^n]`), notes, the references as footnote
+definitions and the disclaimer again. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted field
+(`"# <disclaimer>"`, so the commas in the text never split it into columns), the header
+`provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,verification,observed_at,footnotes,source_ids`, one
+row per tier element (`channel` is `cp`, `global`, `us` or `in_region`; list columns are space-separated), a blank line, then
+`reference_n,reference_id,kind,title,url,as_of` and the references.
 
 ---
 
@@ -405,3 +492,25 @@ User management.
 
 ### POST /api/admin/reset-monitoring-data
 Purge stored probe data.
+
+### GET /api/admin/pricing/pending — v2.30.0
+Unit prices waiting for review (`status = 'pending_review'`): for each row the current effective price, the new price, the input
+and output change ratios, the source and the reason — `changed` (a change above 50%) or `no_baseline` (a `model_id` with no
+seed or verified price; approving it applies the price to all history, `effective_from` 1970-01-01). Response
+`{"pending": [{id, model_id, family_key, channel, reason, current: {input, output} | null, new: {input, output}, change:
+{input, output} | null, source_id, effective_from, observed_at}]}`, ordered by `id`, pending rows of every `model_id`.
+
+### POST /api/admin/pricing/pending/{row_id}/approve — v2.30.0
+Sets the row to `verified` and keeps its `effective_from` (the start of the run that observed it, or 1970-01-01 for
+`no_baseline`), so costs from that time use the new price. When a verified price of the same `model_id` already comes later in
+the price lookup order `(effective_from, id)` (a later start, or the same start with a higher `id`), the response lists it in
+`warnings`; that later price keeps winning from its own start.
+
+### POST /api/admin/pricing/pending/{row_id}/reject — v2.30.0
+Sets the row to `rejected`; the same value is not raised again until the official value changes.
+
+Approve and reject both clear the `/api/pricing` cache of the backend task that served the request; other backend tasks can serve the previous
+table for up to 60 s. A table that was being built while the cache was cleared is returned once but not cached (generation
+counter). Both return `{ok, id, status, effective_from, warnings}`. `401` without a token, `403` for a non-admin user, `404` for
+an unknown `row_id` (`detail` "단가 행 <id>을(를) 찾을 수 없습니다"), `409` when the row is not `pending_review` (`detail`
+"단가 행 <id>는 검토 대기 상태가 아닙니다 (현재: <status>)").

@@ -10,9 +10,12 @@
   In-Region, US CRIS는 Sol $2.20/$11, Luna $0.11/$0.55, Global CRIS는 Sol $2/$10, Luna $0.10/$0.50.
 """
 
-import pricing
+import pytest
+
+import pricing_seed
 import prober
 from parity.catalog import is_reasoning_capable, supports_forced_tool_choice
+from pricing_sources import price_identity
 from routers.reliability import _LABEL_RE
 
 # 2026-09-23 CP on AWS /v1/models 실측 순서 그대로 — 점 버전이 base 버전보다 먼저 온다.
@@ -79,11 +82,15 @@ def test_date_suffix_is_not_a_point_release():
 
 
 def test_opus55_pricing_all_three_channels_not_opus5_fallback():
-    expected = {"input": 4.0, "output": 20.0}
+    # v2.30.0: exact per-model_id seed rows, no prefix fallback (ADR-030). Bedrock US is Global x1.1.
     for mid in ("global.anthropic.claude-opus-5-5", "us.anthropic.claude-opus-5-5", "anthropic:claude-opus-5-5"):
-        assert pricing.get_pricing(mid) == expected, mid
-    # Opus 5는 불변
-    assert pricing.get_pricing("anthropic:claude-opus-5") == {"input": 5.0, "output": 25.0}
+        assert price_identity(mid).family_key == "claude-opus-5-5", mid
+    assert pricing_seed.SEED["global.anthropic.claude-opus-5-5"][:2] == pytest.approx((4.0, 20.0))
+    assert pricing_seed.SEED["us.anthropic.claude-opus-5-5"][:2] == pytest.approx((4.4, 22.0))
+    assert pricing_seed.CP_SEED["claude-opus-5-5"][:2] == pytest.approx((4.0, 20.0))
+    # Opus 5는 불변 — CP id claude-opus-5는 Opus 5.5가 아니라 Opus 5로 분류된다
+    assert price_identity("anthropic:claude-opus-5").family_key == "claude-opus-5"
+    assert pricing_seed.CP_SEED["claude-opus-5"][:2] == pytest.approx((5.0, 25.0))
 
 
 def test_opus55_reasoning_and_forced_tool_choice_flags():
@@ -143,17 +150,18 @@ def test_gpt6_sol_luna_pricing_per_channel_and_never_matches_astra():
     }
     assert sorted(expected) == sorted(_GPT6_SOL_LUNA_KEYS)
     astra_prices = [
-        pricing.get_pricing(mid)
+        pricing_seed.SEED[mid][:2]
         for mid in (
             "openai:global:global.openai.gpt-6-astra",
             "openai:us:us.openai.gpt-6-astra",
             "openai:us-west-2:openai.gpt-6-astra",
         )
     ]
-    assert all(p is not None for p in astra_prices)
     for mid, price in expected.items():
-        assert pricing.get_pricing(mid) == price, mid
-        assert pricing.get_pricing(mid) not in astra_prices, mid
+        seeded = pricing_seed.SEED[mid][:2]
+        assert seeded == pytest.approx((price["input"], price["output"])), mid
+        assert seeded not in astra_prices, mid
+        assert price_identity(mid).family_key != "gpt-6-astra", mid
 
 
 def test_gpt6_openai_reasoning_markers_stay_excluded():

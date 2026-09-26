@@ -1,0 +1,752 @@
+{
+ "modelId": "openai.gpt-5.4",
+ "offers": [
+  {
+   "offerId": "offer-5l5a5izq5fbec",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "USE1_input_tokens_long_ctx_standard",
+       "price": "5.5",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_long_ctx_standard",
+       "price": "5.5",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_long_ctx_standard",
+       "price": "5.5",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_long_ctx_standard",
+       "price": "5.5",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_long_ctx_standard",
+       "price": "5.5",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "input_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "input_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "input_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "input_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "input_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_long_ctx_standard",
+       "price": "24.75",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_long_ctx_standard",
+       "price": "24.75",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_long_ctx_standard",
+       "price": "24.75",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_long_ctx_standard",
+       "price": "24.75",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_long_ctx_standard",
+       "price": "24.75",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "output_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "output_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "output_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "output_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_long_ctx_priority",
+       "price": "0",
+       "description": "output_tokens_long_ctx_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_standard",
+       "price": "2.75",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_standard",
+       "price": "2.75",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_standard",
+       "price": "2.75",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_standard",
+       "price": "2.75",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_standard",
+       "price": "2.75",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_priority",
+       "price": "5.5",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_priority",
+       "price": "5.5",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_priority",
+       "price": "5.5",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_priority",
+       "price": "5.5",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_priority",
+       "price": "5.5",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_flex",
+       "price": "1.375",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_flex",
+       "price": "1.375",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_flex",
+       "price": "1.375",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_flex",
+       "price": "1.375",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_flex",
+       "price": "1.375",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_batch",
+       "price": "1.375",
+       "description": "input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_batch",
+       "price": "1.375",
+       "description": "input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_batch",
+       "price": "1.375",
+       "description": "input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_batch",
+       "price": "1.375",
+       "description": "input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_batch",
+       "price": "1.375",
+       "description": "input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_standard",
+       "price": "16.5",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_standard",
+       "price": "16.5",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_standard",
+       "price": "16.5",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_standard",
+       "price": "16.5",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_standard",
+       "price": "16.5",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_priority",
+       "price": "33",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_priority",
+       "price": "33",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_priority",
+       "price": "33",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_priority",
+       "price": "33",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_priority",
+       "price": "33",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_flex",
+       "price": "8.25",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_flex",
+       "price": "8.25",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_flex",
+       "price": "8.25",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_flex",
+       "price": "8.25",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_flex",
+       "price": "8.25",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_batch",
+       "price": "8.25",
+       "description": "output_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_batch",
+       "price": "8.25",
+       "description": "output_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_batch",
+       "price": "8.25",
+       "description": "output_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_batch",
+       "price": "8.25",
+       "description": "output_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_batch",
+       "price": "8.25",
+       "description": "output_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_long_ctx_global_standard",
+       "price": "5",
+       "description": "input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "USE1_input_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_long_ctx_global_standard",
+       "price": "22.5",
+       "description": "USE1_output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "USE1_output_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_standard",
+       "price": "2.5",
+       "description": "USE1_input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_priority",
+       "price": "5",
+       "description": "USE1_input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_flex",
+       "price": "1.25",
+       "description": "USE1_input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_batch",
+       "price": "1.25",
+       "description": "USE1_input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_standard",
+       "price": "15",
+       "description": "USE1_output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_priority",
+       "price": "30",
+       "description": "USE1_output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_flex",
+       "price": "7.5",
+       "description": "USE1_output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_batch",
+       "price": "7.5",
+       "description": "USE1_output_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_long_ctx_global_standard",
+       "price": "5",
+       "description": "USE2_input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "USE2_input_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_long_ctx_global_standard",
+       "price": "22.5",
+       "description": "USE2_output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "USE2_output_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_standard",
+       "price": "2.5",
+       "description": "USE2_input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_priority",
+       "price": "5",
+       "description": "USE2_input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_flex",
+       "price": "1.25",
+       "description": "USE2_input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_batch",
+       "price": "1.25",
+       "description": "USE2_input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_standard",
+       "price": "15",
+       "description": "USE2_output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_priority",
+       "price": "30",
+       "description": "USE2_output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_flex",
+       "price": "7.5",
+       "description": "USE2_output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_batch",
+       "price": "7.5",
+       "description": "USE2_output_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_long_ctx_global_standard",
+       "price": "5",
+       "description": "USW2_input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "USW2_input_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_long_ctx_global_standard",
+       "price": "22.5",
+       "description": "USW2_output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "USW2_output_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_standard",
+       "price": "2.5",
+       "description": "USW2_input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_priority",
+       "price": "5",
+       "description": "USW2_input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_flex",
+       "price": "1.25",
+       "description": "USW2_input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_batch",
+       "price": "1.25",
+       "description": "USW2_input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_standard",
+       "price": "15",
+       "description": "USW2_output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_priority",
+       "price": "30",
+       "description": "USW2_output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_flex",
+       "price": "7.5",
+       "description": "USW2_output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_batch",
+       "price": "7.5",
+       "description": "USW2_output_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_long_ctx_global_standard",
+       "price": "5",
+       "description": "APN2_input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "APN2_input_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_long_ctx_global_standard",
+       "price": "22.5",
+       "description": "APN2_output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "APN2_output_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_global_standard",
+       "price": "2.5",
+       "description": "APN2_input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_global_priority",
+       "price": "5",
+       "description": "APN2_input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_global_flex",
+       "price": "1.25",
+       "description": "APN2_input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_global_batch",
+       "price": "1.25",
+       "description": "APN2_input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_standard",
+       "price": "15",
+       "description": "APN2_output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_priority",
+       "price": "30",
+       "description": "APN2_output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_flex",
+       "price": "7.5",
+       "description": "APN2_output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_batch",
+       "price": "7.5",
+       "description": "APN2_output_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_long_ctx_global_standard",
+       "price": "5",
+       "description": "EU_input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "EU_input_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_long_ctx_global_standard",
+       "price": "22.5",
+       "description": "EU_output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_long_ctx_global_priority",
+       "price": "0",
+       "description": "EU_output_tokens_long_ctx_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_standard",
+       "price": "2.5",
+       "description": "EU_input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_priority",
+       "price": "5",
+       "description": "EU_input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_flex",
+       "price": "1.25",
+       "description": "EU_input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_batch",
+       "price": "1.25",
+       "description": "EU_input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_standard",
+       "price": "15",
+       "description": "EU_output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_priority",
+       "price": "30",
+       "description": "EU_output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_flex",
+       "price": "7.5",
+       "description": "EU_output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_batch",
+       "price": "7.5",
+       "description": "EU_output_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_standard",
+       "price": "0.275",
+       "description": "cache_read_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_standard",
+       "price": "0.275",
+       "description": "cache_read_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_standard",
+       "price": "0.275",
+       "description": "cache_read_tokens_standard",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

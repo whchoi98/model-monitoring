@@ -1,5 +1,8 @@
 """Cost Dashboard router - 토큰 단가 × 입출력 적산으로 비용 통계.
 
+v2.30.0 (ADR-030): 단가는 price_history에서 각 프로브 시각에 유효했던 값을 행 단위로 조인한다
+(price_history.with_row_cost). 단가 행이 없는 모델은 비용 NULL, 토큰 합계에는 포함.
+
 Endpoints:
   GET /api/cost/summary?window=24h     - 모델별 비용 합계 + total
   GET /api/cost/channel-compare?window=24h - Bedrock vs Anthropic CP on AWS 채널 비교
@@ -21,7 +24,7 @@ from fastapi import Depends
 from database import get_db
 from models import ProbeResult
 from visibility import hidden_patterns
-from pricing import estimate_cost_usd
+from price_history import as_utc, with_row_cost
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cost", tags=["cost"])
@@ -80,13 +83,19 @@ def get_cost_summary(
 ):
     """모델별 비용 합계."""
     since = datetime.now(timezone.utc) - _parse_window(window)
-    rows = (
+    query, row_cost = with_row_cost(
         db.query(
             ProbeResult.model_id,
             ProbeResult.model_name,
             func.count(ProbeResult.id).label("samples"),
             func.coalesce(func.sum(ProbeResult.input_tokens), 0).label("in_tok"),
             func.coalesce(func.sum(ProbeResult.output_tokens), 0).label("out_tok"),
+        )
+    )
+    rows = (
+        query.add_columns(
+            func.sum(row_cost).label("cost"),
+            func.count(row_cost).label("priced"),
         )
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
@@ -100,7 +109,7 @@ def get_cost_summary(
     total_in = 0
     total_out = 0
     for r in rows:
-        cost = estimate_cost_usd(r.model_id, int(r.in_tok), int(r.out_tok))
+        cost = float(r.cost) if r.priced else None
         avg = (cost / r.samples) if cost is not None and r.samples > 0 else None
         if cost is not None:
             total_cost += cost
@@ -148,12 +157,18 @@ def get_channel_compare(
 ):
     """채널별 (Bedrock Global / US / Nova / Anthropic CP) 합계."""
     since = datetime.now(timezone.utc) - _parse_window(window)
-    rows = (
+    query, row_cost = with_row_cost(
         db.query(
             ProbeResult.model_id,
             func.count(ProbeResult.id).label("samples"),
             func.coalesce(func.sum(ProbeResult.input_tokens), 0).label("in_tok"),
             func.coalesce(func.sum(ProbeResult.output_tokens), 0).label("out_tok"),
+        )
+    )
+    rows = (
+        query.add_columns(
+            func.sum(row_cost).label("cost"),
+            func.count(row_cost).label("priced"),
         )
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
@@ -169,9 +184,8 @@ def get_channel_compare(
         slot["samples"] += int(r.samples)
         slot["input_tokens"] += int(r.in_tok)
         slot["output_tokens"] += int(r.out_tok)
-        cost = estimate_cost_usd(r.model_id, int(r.in_tok), int(r.out_tok))
-        if cost is not None:
-            slot["cost_usd"] += cost
+        if r.priced:  # 단가 없는 모델은 0으로 더한다 (현행 유지)
+            slot["cost_usd"] += float(r.cost)
 
     channels = [
         ChannelRow(
@@ -210,15 +224,15 @@ def get_cost_trend(
     since = datetime.now(timezone.utc) - delta
     bucket_min = 60 if delta >= timedelta(hours=12) else 5
 
-    # date_trunc를 사용하지 않고 Python으로 bucket 계산 (DB-portable).
-    rows = (
+    # date_trunc를 사용하지 않고 Python으로 bucket 계산 (DB-portable). 비용은 행 단위 시점 단가.
+    query, row_cost = with_row_cost(
         db.query(
-            ProbeResult.model_id,
             ProbeResult.model_name,
             ProbeResult.timestamp,
-            ProbeResult.input_tokens,
-            ProbeResult.output_tokens,
         )
+    )
+    rows = (
+        query.add_columns(row_cost.label("cost"))
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
         .filter(*[~ProbeResult.model_name.contains(p) for p in hidden_patterns()])
@@ -228,11 +242,11 @@ def get_cost_trend(
     bucket_seconds = bucket_min * 60
     points_map: dict[tuple[str, str], float] = {}
     for r in rows:
-        cost = estimate_cost_usd(r.model_id, r.input_tokens or 0, r.output_tokens or 0)
-        if cost is None:
+        if r.cost is None:
             continue
-        # bucket start: floor timestamp to bucket_min
-        ts = r.timestamp.replace(microsecond=0)
+        cost = float(r.cost)
+        # bucket start: floor timestamp to bucket_min (SQLite는 naive로 돌려주므로 UTC로 고정)
+        ts = as_utc(r.timestamp).replace(microsecond=0)
         epoch = int(ts.timestamp())
         bucket_epoch = (epoch // bucket_seconds) * bucket_seconds
         bucket_iso = datetime.fromtimestamp(bucket_epoch, tz=timezone.utc).isoformat()

@@ -131,3 +131,13 @@ Price List API에는 GPT-6 항목이 아직 없다.
   `gpt-6-astra`, 정렬은 기존 규약 그대로). 코드 주석(prober, gptbench, CDK AppServices/Scheduler)과 CLAUDE.md 표도 같은
   표현으로 바꿨다.
 - 벤치: Astra 3채널은 그대로이고, 같은 릴리스에서 GPT-6 Sol/Luna 6채널이 벤치에 합류했다(12 → 18채널, ADR-028 후속).
+
+## 후속 (v2.30.0, 2026-09-26) — 소급 정책 대체
+
+- 위 Consequences와 후속(v2.27.0)의 "비용은 조회 시점 계산이라 소급 재계산(산정)된다" 정책은 **ADR-030이 대체했다.** v2.30.0부터
+  비용은 각 프로브 시각에 유효했던 단가로 계산하고, 단가는 코드 표가 아니라 `price_history` 테이블의 `model_id` 단위 행이다.
+  PricingSync 태스크가 12시간마다 Astra agreement offer(`offer-7epta7rbw5aws`)로 확인한다.
+- `PRICE_TABLE`의 `gpt-6-astra`, `gpt-6-astra-us`, `gpt-6-astra-global` 3키와 `_normalize_key`의 `-us` 서픽스는 `backend/pricing.py`와
+  함께 삭제됐다. 비용 조인이 `model_id` 정확 일치라 prefix fallback이 없으므로 "3키를 항상 함께 둔다" 규칙도 필요 없다. 3채널
+  seed(`openai:us-west-2:openai.gpt-6-astra`, `openai:us:us.openai.gpt-6-astra` $11 / $55, `openai:global:global.openai.gpt-6-astra`
+  $10 / $50)는 v2.29.1 값과 같아 비용은 바뀌지 않는다.

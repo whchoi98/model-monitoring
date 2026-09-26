@@ -1,6 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import Link from "next/link";
 import {
   fetchCostSummary,
   fetchChannelCompare,
@@ -63,8 +64,8 @@ export default function CostDashboardPanel() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
-              ? "Token usage × public pricing → estimated USD spend by model and channel."
-              : "토큰 사용량 × 공개 단가 → 모델·채널별 추정 비용 (USD)"}
+              ? "Token usage × official unit prices → estimated USD spend by model and channel."
+              : "토큰 사용량 × 공식 단가 → 모델, 채널별 추정 비용 (USD)"}
           </p>
         </div>
         <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
@@ -234,8 +235,12 @@ export default function CostDashboardPanel() {
         )}
         <p className="text-[11px] text-gray-500 mt-2">
           {lang === "en"
-            ? "Cost based on public Bedrock + Anthropic pricing. Excludes failed/overloaded calls."
-            : "비용은 Bedrock + Anthropic 공개 단가 기반. 실패/과부하 호출은 제외."}
+            ? "Cost is calculated from "
+            : "비용은 공식 출처에서 12시간마다 갱신하는 "}
+          <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
+          {lang === "en"
+            ? ", refreshed from official sources every 12 hours, and excludes failed and overloaded calls."
+            : "로 계산하며, 실패와 과부하 호출은 제외합니다."}
         </p>
       </section>
 
@@ -252,18 +257,22 @@ export default function CostDashboardPanel() {
             cost = input_tokens × input_price/1M + output_tokens × output_price/1M
           </code>
         </p>
-        <p>
+        <p data-cost-methodology>
           {lang === "en"
-            ? "Token counts come from each model's response usage object (per-call). Public unit prices are stored in `pricing.py` (backend) and `lib/pricing.ts` (frontend) and must be updated together when AWS/Anthropic publishes new tiers."
-            : "토큰 수는 모델 응답의 usage 객체에서 호출별로 수집합니다. 공개 단가는 `pricing.py`(backend) + `lib/pricing.ts`(frontend)에 정의되어 있고 AWS/Anthropic의 단가 변경 시 함께 업데이트해야 합니다."}
+            ? "Token counts come from each model's response usage object (per call). Unit prices are refreshed from official sources every 12 hours, and each probe is costed at the price in effect at its time. See "
+            : "토큰 수는 모델 응답의 usage 객체에서 호출별로 수집합니다. 단가는 공식 출처에서 12시간마다 자동 갱신되고, 비용은 각 프로브 시각의 단가로 계산합니다. 모델별 단가와 출처는 "}
+          <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
+          {lang === "en" ? " for per-model prices and sources." : " 메뉴를 참고하세요."}
         </p>
         <p>
           <span className="text-gray-300 font-semibold">
             {lang === "en" ? "Channel comparison" : "채널 비교"}:
           </span>{" "}
           {lang === "en"
-            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). Unit prices may differ slightly across channels — this dashboard reports the actual numbers, not assumptions."
-            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 채널별 단가가 다를 수 있으며 본 대시보드는 실측 수치 그대로를 보여줍니다."}
+            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). See "
+            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 채널별 단가는 "}
+          <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
+          {lang === "en" ? " for per-channel prices." : " 메뉴를 참고하세요."}
         </p>
         <p>
           <span className="text-gray-300 font-semibold">
@@ -271,12 +280,12 @@ export default function CostDashboardPanel() {
           </span>{" "}
           {lang === "en"
             ? "linear extrapolation — total_cost_in_window ÷ window_hours × 24 × 30. Useful as a rough budget signal but does not account for variable workload or pricing changes."
-            : "선택한 기간 비용을 시간당으로 환산해 × 24 × 30으로 단순 외삽. 워크로드 변동·단가 변경은 반영되지 않은 대략적 budget 신호입니다."}
+            : "선택한 기간 비용을 시간당으로 환산해 × 24 × 30으로 단순 외삽. 워크로드 변동, 단가 변경은 반영되지 않은 대략적 budget 신호입니다."}
         </p>
         <p>
           {lang === "en"
             ? "Excluded from cost: failed and overloaded calls (we still charge nothing for these, but they wouldn't reflect actual application spend). Cost is built from successful invocations only."
-            : "실패·overloaded 호출은 비용 집계에서 제외 (실제 운영 비용을 정확히 반영하기 위해). 성공 호출만 합산합니다."}
+            : "실패와 과부하(overloaded) 호출은 비용 집계에서 제외하고 성공 호출만 합산합니다."}
         </p>
       </div>
     </div>

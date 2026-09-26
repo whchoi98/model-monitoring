@@ -1,8 +1,11 @@
 """Claude Fable 5.1 카탈로그 편입 (v2.22.0) — 3채널 등록·단가·substring 충돌·패리티 스위치 검증."""
 
-import pricing
+import pytest
+
+import pricing_seed
 import prober
 from parity.catalog import is_applicable, is_reasoning_capable, supports_forced_tool_choice
+from pricing_sources import ANTHROPIC_SOURCE_ID, price_identity
 from routers.reliability import _LABEL_RE
 
 
@@ -32,9 +35,14 @@ def test_discovery_substring_does_not_mislabel_fable51_as_fable5():
 
 
 def test_pricing_all_three_channels():
-    expected = {"input": 10.0, "output": 50.0}
+    # v2.30.0: per-model_id seed rows (ADR-030). Global and CP are $10/$50, Bedrock US is Global x1.1.
     for mid in ("global.anthropic.claude-fable-5-1", "us.anthropic.claude-fable-5-1", "anthropic:claude-fable-5-1"):
-        assert pricing.get_pricing(mid) == expected, mid
+        assert price_identity(mid).family_key == "claude-fable-5-1", mid
+    assert pricing_seed.SEED["global.anthropic.claude-fable-5-1"][:2] == pytest.approx((10.0, 50.0))
+    assert pricing_seed.SEED["us.anthropic.claude-fable-5-1"][:2] == pytest.approx((11.0, 55.0))
+    assert pricing_seed.CP_SEED["claude-fable-5-1"] == (10.0, 50.0, ANTHROPIC_SOURCE_ID)
+    # substring prefix collision (fable-5 ⊂ fable-5-1) must not reach the price identity either
+    assert price_identity("anthropic:claude-fable-5").family_key == "claude-fable-5"
 
 
 def test_reasoning_and_parity_flags():

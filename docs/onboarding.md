@@ -59,7 +59,8 @@ npm run dev
 - **Model Cards**: Catalog coverage, current failures, stale results and unmeasured channels; search/filter/sort and select cards to compare trends. TTFT / total latency / TPS values are graded per workload category — blue normal, amber ▲ warning, rose ◆ critical; thresholds live in `frontend/src/lib/metricGrade.ts` (v2.28.0, ADR-029).
 - **Trend Charts**: Actual elapsed time with explicit gaps for failed or missing measurements. Filter/selection state is preserved in dashboard URLs.
 - **Shared UI**: Public pages render during sign-in checks. Failed reads keep same-query cached results with a warning and retry; a changed filter cannot display an older query's data.
-- **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, pricing, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)
+- **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, unit prices from `/api/pricing`, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)
+- **Unit Prices** (`/pricing`, v2.30.0): Standard input/output price per model family and channel with source footnotes and CSV / Markdown / JSON download. The PricingSync Fargate task refreshes prices from official sources every 12 hours into `price_history`; costs use the price in effect at each probe's time, and a change above 50% waits for admin approval — see ADR-030
 - **Parity Run** (`/parity`, v2.11.0): Fargate sweep every 12 hours probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
 - **Comparison Lab**: one prompt → N models in parallel via `/api/compare/run` (SSE, auth)
 
@@ -74,6 +75,7 @@ npm run dev
 | View backend logs (prod) | `aws logs tail /ecs/backend --follow` |
 | View autoprober logs | `aws logs tail /ecs/autoprober --since 1h` |
 | View parity run logs | `aws logs tail /ecs/parityrun --since 1d` |
+| View price sync logs | `aws logs tail /ecs/pricingsync --since 13h` |
 | Trigger probe (local, JWT) | `curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:8000/api/auto-probe/trigger` |
 | Access DB (local) | `docker exec -it monitoring-postgres psql -U postgres -d monitoring` |
 

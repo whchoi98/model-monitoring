@@ -25,6 +25,7 @@ from routers import analysis as analysis_router
 from routers import parity as parity_router
 from routers import gptbench as gptbench_router
 from routers import features as features_router
+from routers import pricing as pricing_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -158,6 +159,18 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Label repair failed (non-fatal)")
 
+    # 단가 seed (v2.30.0, ADR-030) — price_history에 행이 하나도 없는 활성 model_id에만 공식 단가 seed를 넣는다.
+    # CP seed는 family_key 단위라 현재 활성 CP model_id로 풀어 넣어야 하므로 모델 등록 다음에 둔다.
+    # 마이그레이션과 분리된 자체 트랜잭션 + pg_advisory_xact_lock(917350003) — 실패해도 기동은 계속한다.
+    try:
+        from pricing_seed import ensure_seed
+        from pricing_sources import active_channels
+        from prober import AVAILABLE_MODELS
+        from visibility import hidden_patterns
+        ensure_seed(engine, active_channels(AVAILABLE_MODELS, hidden_patterns()))
+    except Exception:
+        logger.exception("Price seed failed (non-fatal, backend continues)")
+
     logger.info("Database tables ready.")
 
     yield
@@ -212,7 +225,7 @@ app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
     # OpenAPI(/docs)에 노출되는 런타임 버전 — 릴리스 시 CLAUDE.md "Version strings" 목록과 함께 범프.
-    version="2.29.1",
+    version="2.30.0",
     lifespan=lifespan,
 )
 
@@ -243,6 +256,8 @@ app.include_router(analysis_router.router)
 app.include_router(parity_router.router)
 app.include_router(gptbench_router.router)
 app.include_router(features_router.router)
+app.include_router(pricing_router.router)
+app.include_router(pricing_router.admin_router)
 
 
 @app.get("/api/health", tags=["health"])

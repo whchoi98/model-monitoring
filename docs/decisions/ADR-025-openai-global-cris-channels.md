@@ -74,3 +74,11 @@ tools/parity는 전부 동적이라 무변경 자동 편입 (parity는 12h 런�
 - 1P 재노출 선행 조건(`-1p` 단가 분리)은 그대로다. 다만 방향이 모델마다 다르다: Terra/Luna는 base 키가 1P 정가보다
   10% 높아 과대 산정, Sol은 프로모션 단가가 1P 정가($5/$30)보다 낮아 과소 산정된다. 자세한 기록은 ADR-028 후속(v2.28.1).
 
+## 후속 (v2.30.0, 2026-09-26) — 소급 정책 대체
+
+- 이 ADR의 "비용은 조회 시점 계산이라 소급 재계산됨" 정책은 **ADR-030이 대체했다.** v2.30.0부터 비용은 각 프로브 시각에 유효했던
+  단가로 계산하고, 단가는 `price_history` 테이블에 `model_id` 단위 행으로 두며 PricingSync 태스크가 12시간마다 공식 출처에서 갱신한다.
+- `PRICE_TABLE`, `_normalize_key`, `-global` / `-us` suffix 키, `get_pricing` prefix fallback은 `backend/pricing.py`와 함께 삭제됐다.
+  Global CRIS 단가가 in-region과 다르다는 사실은 그대로이며, 이제 채널마다 별도 단가 행이다.
+- 같은 조사에서 `_normalize_key`가 Claude `us.`와 `global.`을 같은 키로 합쳐 Bedrock Claude US 10채널이 Global 단가(공식 US는
+  Global × 1.1)로 산정되던 오류를 찾았고, v2.30.0 seed로 과거까지 교정했다(ADR-030 Decision 2).
