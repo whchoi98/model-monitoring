@@ -10,6 +10,7 @@ import {
   ChatStreamEvents,
   Insight,
   AutoProbeAnomalies,
+  PricingResponse,
 } from "./types";
 import { ApiError, fetchJson } from "./http";
 import type {
@@ -888,4 +889,17 @@ export async function fetchFeaturesEvidence(q: { run_id: number; feature: string
 
 export async function triggerFeaturesRun(): Promise<{ triggered: boolean; message: string }> {
   return authenticatedJson(`${BASE}/api/features/trigger`, { method: "POST" });
+}
+
+// ── Unit prices (v2.30.0) ───────────────────────────────────────────────
+
+/** Public price table, backend single source (official sources refreshed every 12 hours). */
+export async function fetchPricing(signal?: AbortSignal): Promise<PricingResponse> {
+  return fetchJson(`${BASE}/api/pricing`, { signal });
+}
+
+/** Same-origin download link; the backend sets Content-Disposition with the dated file name. */
+export function pricingExportUrl(format: "csv" | "md" | "json", lang: "ko" | "en"): string {
+  const sp = new URLSearchParams({ format, lang });
+  return `${BASE}/api/pricing/export?${sp.toString()}`;
 }

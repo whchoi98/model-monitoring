@@ -162,3 +162,82 @@ export interface Insight {
   model_breakdown: Record<string, unknown> | null;
   created_at: string;
 }
+
+// ---------------------------------------------------------------------------
+// Unit prices (v2.30.0) — GET /api/pricing. The backend owns ordering and footnote numbers.
+// ---------------------------------------------------------------------------
+
+export type PriceVerification = "verified" | "stale" | "seed_only" | "none";
+
+export interface PricingPending {
+  id: number;
+  input: number;
+  output: number;
+  observed_at: string;
+}
+
+export interface PricingTier {
+  input: number;
+  output: number;
+  model_ids: string[];
+  source_ids: string[];
+  footnotes: number[];
+  verification: PriceVerification;
+  observed_at: string | null;
+  pending: PricingPending | null;
+}
+
+export interface PricingInRegionTier extends PricingTier {
+  regions: string[];
+}
+
+export interface PricingNote {
+  family_key: string;
+  kind: "promo";
+  min_until: string;
+  prior_price: Record<string, { input: number; output: number }>;
+  text_ko: string;
+  text_en: string;
+  source: "manual_note";
+}
+
+export interface PricingFamily {
+  family_key: string;
+  family: string;
+  provider: "anthropic" | "amazon" | "openai";
+  tiers: {
+    cp: PricingTier | null;
+    global: PricingTier | null;
+    us: PricingTier | null;
+    in_region: PricingInRegionTier[];
+  };
+  notes: PricingNote[];
+}
+
+export interface PricingReference {
+  n: number;
+  id: string;
+  kind: "agreement_offer" | "price_list" | "anthropic_doc" | "official_page" | "manual_note";
+  title_en: string;
+  title_ko: string;
+  url: string | null;
+  as_of: string | null;
+}
+
+export interface PricingModelPrice {
+  input: number;
+  output: number;
+  verification: PriceVerification;
+}
+
+export interface PricingResponse {
+  currency: "USD";
+  unit: "per_1m_tokens";
+  generated_at: string;
+  last_sync: { id: number; started_at: string; finished_at: string | null; status: string } | null;
+  pending_review: number;
+  families: PricingFamily[];
+  models: Record<string, PricingModelPrice>;
+  references: PricingReference[];
+  disclaimer: { en: string; ko: string };
+}
