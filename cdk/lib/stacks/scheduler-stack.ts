@@ -1,4 +1,4 @@
-// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify one-shot TaskDefinitions.
+// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify / PricingSync one-shot TaskDefinitions.
 //
 // 책임:
 //   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
@@ -10,8 +10,11 @@
 //   - rate(15 minutes) → GptBench Fargate Task (gptbench_runner --once)
 //   - cron(30 17 * * ? *) Etc/UTC → FeaturesVerify Fargate Task (features_runner --once)
 //     (v2.29.0: 매일 17:30 UTC = 02:30 KST 고정 1회. 이전 rate(24 hours)는 스케줄 생성 시각 기준이라 시각이 고정되지 않았다)
+//   - rate(12 hours) → PricingSync Fargate Task (pricing_sync_runner --once)
+//     (v2.30.0: 공식 단가 동기화 — Bedrock agreement offers, AWS Price List, Anthropic pricing.md. 모델 호출 권한 없음, ADR-030)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
 //   - 모든 task는 RDS:5432 egress + Bedrock/Mantle 액세스 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
+//     (PricingSync의 Bedrock 액세스는 공식 단가 읽기(agreement offers, Price List)뿐이고 모델 호출 권한은 없다)
 import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
@@ -132,6 +135,27 @@ export class SchedulerStack extends cdk.Stack {
     });
     // Insights는 향후 AgentCore Memory를 인사이트 컨텍스트로 활용할 가능성 있음 - 정책 attach.
     insightsTaskRole.addManagedPolicy(props.agentCoreMemoryAccessPolicy);
+
+    // PricingSync (v2.30.0, ADR-030) — 공식 단가 읽기 전용 호출 2개만. 모델 호출(bedrock:Invoke*)은 주지 않는다.
+    // DB는 다른 태스크와 같다(schedulerTaskSg → RDS 5432, DB secret은 실행 역할이 주입).
+    // CP/OpenAI 채널 등록(_discover_anthropic_models, _register_openai_models)은 API 키 secret과 env만 쓰므로 IAM이 필요 없다.
+    const pricingSyncTaskRole = new iam.Role(this, "PricingSyncTaskRole", {
+      assumedBy: new iam.ServicePrincipal("ecs-tasks.amazonaws.com"),
+      description: "PricingSync task role - official price reads (agreement offers, Price List) + DB, no model invocation",
+      inlinePolicies: {
+        pricing: new iam.PolicyDocument({
+          statements: [
+            new iam.PolicyStatement({
+              sid: "OfficialPriceReads",
+              effect: iam.Effect.ALLOW,
+              actions: ["bedrock:ListFoundationModelAgreementOffers", "pricing:GetProducts"],
+              // 두 API 모두 리소스 ARN이 없는 읽기 전용 카탈로그 호출이라 Resource는 *.
+              resources: ["*"],
+            }),
+          ],
+        }),
+      },
+    });
 
     // Claude Platform on AWS (Path 3 External) - vendor endpoint.
     // AppServicesStack과 동일하게 사전 생성된 SSM SecureString을 import.
@@ -316,6 +340,16 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/features",
     );
 
+    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 55채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
+    // price_history에 기록한다(50% 초과 변화는 검토 대기). 같은 env/secret(buildTaskDef 기본값)으로 CP 디스커버리와
+    // OpenAI 채널 등록을 AutoProber와 똑같이 해야 활성 채널 집합이 맞는다. extraEnvironment 없음.
+    const pricingSyncTaskDef = buildTaskDef(
+      "PricingSyncTaskDef",
+      pricingSyncTaskRole,
+      ["python", "-m", "pricing_sync_runner", "--once"],
+      "/ecs/pricingsync",
+    );
+
     // ---------------------------------------------------------------------
     // 4-1) Scheduler invoke role (ADR-011).
     //    L2 EcsRunFargateTask가 자동 생성하는 role은 ecs:RunTask Resource를 task def의
@@ -344,6 +378,7 @@ export class SchedulerStack extends cdk.Stack {
           // bump되는 순간 스케줄이 silent fail (ADR-011과 동일 시나리오).
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${gptBenchTaskDef.family}:*`,
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${featuresTaskDef.family}:*`,
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${pricingSyncTaskDef.family}:*`,
         ],
       }),
     );
@@ -355,6 +390,8 @@ export class SchedulerStack extends cdk.Stack {
         resources: [
           autoProberTaskRole.roleArn,
           insightsTaskRole.roleArn,
+          // PricingSync 역할도 명시 목록에 둔다 — L2 target이 붙이는 revision 고정 문에 기대지 않는다(ADR-011).
+          pricingSyncTaskRole.roleArn,
           executionRole.roleArn,
         ],
         conditions: {
@@ -427,6 +464,22 @@ export class SchedulerStack extends cdk.Stack {
       }),
     });
 
+    const pricingSyncSchedule = new scheduler.Schedule(this, "PricingSyncSchedule", {
+      // 12시간 주기 (v2.30.0, 사용자 결정 2026-09-26) — offers FM 18개 순차 약 25초 + Price List 1회 + Anthropic 문서 1회.
+      //   런 전체 상한 300초(SYNC_DEADLINE_S), pg_try_advisory_lock(917350004)로 수동 실행과 겹치지 않는다
+      //   (기다리지 않는 잠금 — 겹치면 두 번째 런은 즉시 exit 1, 런 행 없음).
+      schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(12)),
+      description: "Official unit-price sync (Bedrock agreement offers, AWS Price List, Anthropic pricing doc) every 12 hours",
+      target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
+        taskDefinition: pricingSyncTaskDef,
+        vpcSubnets: props.appSubnets,
+        securityGroups: [schedulerTaskSg],
+        assignPublicIp: false,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
+      }),
+    });
+
     this.insightsSchedule = new scheduler.Schedule(this, "InsightsSchedule", {
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
       description: "Insights every 5 minutes (Sonnet 4.6)",
@@ -474,6 +527,19 @@ export class SchedulerStack extends cdk.Stack {
     ]);
 
     NagSuppressions.addResourceSuppressions(
+      pricingSyncTaskRole,
+      [
+        {
+          id: "AwsSolutions-IAM5",
+          reason:
+            "ADR-030: bedrock:ListFoundationModelAgreementOffers와 pricing:GetProducts는 리소스 ARN이 없는 읽기 전용 카탈로그 호출이라 Resource *. 모델 호출 권한은 없다.",
+          appliesTo: ["Resource::*"],
+        },
+      ],
+      true,
+    );
+
+    NagSuppressions.addResourceSuppressions(
       schedulerInvokeRole,
       [
         {
@@ -493,6 +559,9 @@ export class SchedulerStack extends cdk.Stack {
     });
     new cdk.CfnOutput(this, "InsightsScheduleName", {
       value: this.insightsSchedule.scheduleName,
+    });
+    new cdk.CfnOutput(this, "PricingSyncScheduleName", {
+      value: pricingSyncSchedule.scheduleName,
     });
     new cdk.CfnOutput(this, "SchedulerTaskSgId", {
       value: schedulerTaskSg.securityGroupId,

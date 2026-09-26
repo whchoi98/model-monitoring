@@ -29,7 +29,7 @@ for r in bedrock-monitor-backend-v2 bedrock-monitor-frontend; do
 done
 ```
 
-**A-2. 권장 — digest 고정 CDK 재배포** (backend·frontend 서비스와 스케줄 태스크 5개가 함께 돌아간다)
+**A-2. 권장 — digest 고정 CDK 재배포** (backend·frontend 서비스와 스케줄 태스크 6개가 함께 돌아간다)
 
 ```bash
 PREV_TAG="v<epoch>"   # ← A-1에서 고른 직전 정상 tag로 바꾼다
@@ -46,7 +46,26 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
-**A-3. 빠른 경로 — 서비스만 이전 revision으로** (스케줄 태스크 5개는 되돌아가지 않는다)
+**v2.30.0을 되돌린 뒤 다시 배포할 때 (PricingSync 로그 그룹)**. v2.30.0은 CDK를 바꾼 릴리스라 위 규칙대로 v2.29.1 tag의 `cdk/`로
+되돌린다. 그러면 PricingSync 스케줄, 태스크 정의, 역할은 지워지지만 로그 그룹 `/ecs/pricingsync`는 이름을 고정했고
+`RemovalPolicy.RETAIN`(`cdk/lib/stacks/scheduler-stack.ts` `buildTaskDef`)이라 계정에 남는다. 이 상태로 v2.30.0 이상을 다시 배포하면
+CloudFormation이 같은 이름의 로그 그룹을 새로 만들려다 `Resource of type 'AWS::Logs::LogGroup' with identifier '/ecs/pricingsync'
+already exists`로 Scheduler 스택 업데이트가 실패하고 롤백된다. 두 스택은 서로 의존하지 않아 `cdk deploy`가 선언
+순서(기본 동시성 1)대로 AppServices를 먼저 끝내므로, 서비스 2개만 새 이미지로 가고 스케줄 태스크 5개는 옛 이미지에 남는 혼합 상태가 된다. 재배포 전에 둘 중
+하나를 한다.
+
+```bash
+# 남아 있는지 확인 — 빈 결과면 아무것도 하지 않아도 된다
+aws logs describe-log-groups --log-group-name-prefix /ecs/pricingsync --region $REGION --query 'logGroups[].logGroupName'
+# (1) 삭제 후 평소대로 배포 — 로그를 보존해야 하면 먼저 S3로 내보낸다(aws logs create-export-task)
+aws logs delete-log-group --log-group-name /ecs/pricingsync --region $REGION
+# (2) 또는 남은 로그 그룹을 스택으로 가져오며 배포 — 이름이 고정되고 DeletionPolicy가 Retain인 리소스만 가져온다
+#     (CloudFormation 자동 가져오기, CDK CLI 2.1122.0에서 플래그 확인). 가져온 뒤 Scheduler 스택 drift detection을 권장한다.
+npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler --require-approval never \
+  --import-existing-resources -c backendImage=<v2.30.0 backend URI> -c frontendImage=<v2.30.0 frontend URI>
+```
+
+**A-3. 빠른 경로 — 서비스만 이전 revision으로** (스케줄 태스크 6개는 되돌아가지 않는다)
 
 CloudFormation은 task def를 교체할 때 자신이 만든 옛 revision을 INACTIVE로 등록 해제하고(수동 등록한 revision은 ACTIVE로
 남는다), INACTIVE revision으로는 `update-service`를 할 수 없다. 그래서 ACTIVE 목록에서 고르고, 직전 image의 revision이 없으면 A-2를 쓴다.
@@ -67,7 +86,28 @@ aws ecs update-service --cluster bedrock-monitor --service backend --region $REG
 
 이 경로는 CDK 상태와 어긋나므로 다음 CDK 배포가 context 이미지로 덮어쓴다. 스케줄 태스크만 되돌려야 하면
 [deploy.md §2-1](./deploy.md)의 절차(image 교체 revision 등록 → `get-schedule` → `TaskDefinitionArn` 교체 → `update-schedule`)를
-직전 image로 5개 스케줄에 적용한다.
+직전 image로 6개 스케줄에 적용한다(v2.30.0 PricingSync 포함).
+
+**되돌릴 image가 v2.30.0 이전이면 PricingSync는 그 image로 바꾸지 않는다.** `pricing_sync_runner` 모듈은 v2.30.0에 생겼으므로
+v2.29.1 이하 image로 바꾸면 PricingSync 태스크가 12시간마다 `No module named pricing_sync_runner`로 exit 1이 된다. 둘 중 하나를 한다.
+
+1. 나머지 스케줄 5개만 위 절차로 직전 image에 맞추고, PricingSync 스케줄은 DISABLED로 바꾼다(아래 명령). v2.30.0 이상으로 다시
+   올린 뒤 같은 명령에서 `'DISABLED'` → `'ENABLED'`로 재개한다.
+2. 직전 릴리스 git tag의 `cdk/`로 A-2를 실행한다. 그 CDK에는 PricingSync가 없어 스케줄, 태스크 정의, 역할이 함께 지워진다
+   (로그 그룹 `/ecs/pricingsync`는 남는다. 다시 올릴 때는 A-2의 v2.30.0 재배포 절차를 따른다).
+
+```bash
+SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='PricingSyncScheduleName'].OutputValue" --output text)
+aws scheduler get-schedule --name "$SCHED" --region $REGION --output json | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+d['State'] = 'DISABLED'
+for k in ('Arn', 'CreationDate', 'LastModificationDate'): d.pop(k, None)
+print(json.dumps(d))" > /tmp/sched-state.json
+aws scheduler update-schedule --region $REGION --cli-input-json file:///tmp/sched-state.json
+aws scheduler get-schedule --name "$SCHED" --region $REGION --query State --output text   # 기댓값: DISABLED
+```
 
 **ECS circuit breaker**(`circuitBreaker: { rollback: true }`)는 새 task가 기동이나 헬스체크에 계속 실패할 때만 직전 안정
 배포로 자동 복귀한다. task가 정상 기동하는 코드 회귀(기능 버그, 잘못된 값)는 위 절차로 직접 되돌린다.
@@ -139,7 +179,7 @@ aws ecs update-service --cluster bedrock-monitor --service backend  --desired-co
 aws ecs update-service --cluster bedrock-monitor --service frontend --desired-count 0 --region $REGION
 ```
 
-서비스를 멈춰도 스케줄 태스크 5개(autoprober, insights, parityrun, gptbench, featuresverify)는 계속 돈다(모델 호출 비용 발생).
+서비스를 멈춰도 스케줄 태스크 6개(autoprober, insights, parityrun, gptbench, featuresverify, pricingsync)는 계속 돈다(pricingsync를 뺀 5개는 모델 호출 비용 발생 — pricingsync는 공식 단가 읽기만 한다).
 함께 멈추려면 스케줄을 DISABLED로 바꾼다 (재개는 같은 명령에서 `'DISABLED'` → `'ENABLED'`):
 
 ```bash
@@ -159,7 +199,7 @@ CloudFront 단에서 `Disabled` 토글로 전체 차단 가능 (사용자에게 
 
 ## 배포 전 롤백 포인트 기록
 
-배포 직전에 서비스 2개와 스케줄 태스크 5개가 쓰는 task def와 image를 기록해 둔다. 롤백 기준은 image(tag@digest)다 —
+배포 직전에 서비스 2개와 스케줄 태스크 6개가 쓰는 task def와 image를 기록해 둔다. 롤백 기준은 image(tag@digest)다 —
 task def revision은 다음 CDK 배포에서 INACTIVE가 되면 `update-service`에 쓸 수 없다(A-3). 기록한 image로 A-2를 실행한다.
 
 ```bash
@@ -171,7 +211,7 @@ for s in backend frontend; do
   echo "$s $TD $(aws ecs describe-task-definition --task-definition "$TD" --region $REGION \
     --query 'taskDefinition.containerDefinitions[0].image' --output text)"
 done
-# 스케줄 태스크 5개 (autoprober, insights, parityrun, gptbench, featuresverify) — 스케줄이 가리키는 revision 기준
+# 스케줄 태스크 6개 (autoprober, insights, parityrun, gptbench, featuresverify, pricingsync) — 스케줄이 가리키는 revision 기준
 for n in $(aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION \
     --query 'Schedules[].Name' --output text); do
   TD=$(aws scheduler get-schedule --name "$n" --region $REGION \

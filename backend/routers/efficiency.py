@@ -24,7 +24,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import ProbeResult
 from visibility import visible_only
-from pricing import estimate_cost_usd
+from price_history import with_row_cost
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/efficiency", tags=["efficiency"])
@@ -109,15 +109,15 @@ def get_efficiency_score(
     category 미지정 시 전체. 지정 시 그 카테고리만 (공정 비교 권장: 같은 prompt 기준).
     """
     since = datetime.now(timezone.utc) - _parse_window(window)
-    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(
-        ProbeResult.timestamp >= since)
+    q, row_cost = with_row_cost(visible_only(db.query(ProbeResult), ProbeResult.model_name))
+    q = q.add_columns(row_cost.label("row_cost")).filter(ProbeResult.timestamp >= since)
     if category:
         q = q.filter(ProbeResult.category == category)
     rows = q.all()
 
-    # Aggregate per model
+    # Aggregate per model — 비용은 각 프로브 시각의 단가(row_cost, 단가 없으면 None)
     agg: dict[str, dict] = {}
-    for r in rows:
+    for r, cost in rows:
         a = agg.setdefault(
             r.model_id,
             {
@@ -143,9 +143,8 @@ def get_efficiency_score(
                 a["latency"].append(float(r.total_latency_ms))
             if r.tps is not None:
                 a["tps"].append(float(r.tps))
-            cost = estimate_cost_usd(r.model_id, r.input_tokens or 0, r.output_tokens or 0)
             if cost is not None:
-                a["costs"].append(cost)
+                a["costs"].append(float(cost))
 
     # 모델별 평균 계산
     per_model: list[dict] = []

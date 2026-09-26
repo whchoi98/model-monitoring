@@ -1,0 +1,542 @@
+{
+ "modelId": "anthropic.claude-sonnet-4-6",
+ "offers": [
+  {
+   "offerId": "offer-ldnd26nhxx676",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "APN2_InputTokenCount_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount_LCtx_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_LCtx_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount_Global",
+       "price": "3",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_Global",
+       "price": "15",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount_LCtx_Global",
+       "price": "3",
+       "description": "Million Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_LCtx_Global",
+       "price": "15",
+       "description": "Million Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_LCtx_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_LCtx_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_Global",
+       "price": "3",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_Global",
+       "price": "15",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_LCtx_Global",
+       "price": "3",
+       "description": "Million Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_LCtx_Global",
+       "price": "15",
+       "description": "Million Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_LCtx_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_LCtx_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_Global",
+       "price": "3",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_Global",
+       "price": "15",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_LCtx_Global",
+       "price": "3",
+       "description": "Million Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_LCtx_Global",
+       "price": "15",
+       "description": "Million Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_LCtx_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_LCtx_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_Global",
+       "price": "3",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_Global",
+       "price": "15",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_LCtx_Global",
+       "price": "3",
+       "description": "Million Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_LCtx_Global",
+       "price": "15",
+       "description": "Million Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_LCtx_Global_Batch",
+       "price": "1.5",
+       "description": "Million Batch Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_LCtx_Global_Batch",
+       "price": "7.5",
+       "description": "Million Batch Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_Global",
+       "price": "3",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_Global",
+       "price": "15",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_LCtx_Global",
+       "price": "3",
+       "description": "Million Input Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_LCtx_Global",
+       "price": "15",
+       "description": "Million Output Tokens Long Context Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_Batch",
+       "price": "8.25",
+       "description": "Million Batch Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_LCtx_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_LCtx_Batch",
+       "price": "8.25",
+       "description": "Million Batch Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount",
+       "price": "3.3",
+       "description": "Million Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount",
+       "price": "16.5",
+       "description": "Million Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_LCtx",
+       "price": "3.3",
+       "description": "Million Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_LCtx",
+       "price": "16.5",
+       "description": "Million Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_Batch",
+       "price": "8.25",
+       "description": "Million Batch Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_LCtx_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_LCtx_Batch",
+       "price": "8.25",
+       "description": "Million Batch Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount",
+       "price": "3.3",
+       "description": "Million Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount",
+       "price": "16.5",
+       "description": "Million Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_LCtx",
+       "price": "3.3",
+       "description": "Million Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_LCtx",
+       "price": "16.5",
+       "description": "Million Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_Batch",
+       "price": "8.25",
+       "description": "Million Batch Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_LCtx_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_LCtx_Batch",
+       "price": "8.25",
+       "description": "Million Batch Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount",
+       "price": "3.3",
+       "description": "Million Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount",
+       "price": "16.5",
+       "description": "Million Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_LCtx",
+       "price": "3.3",
+       "description": "Million Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_LCtx",
+       "price": "16.5",
+       "description": "Million Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_InputTokenCount_Batch",
+       "price": "1.8",
+       "description": "Million Batch Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_OutputTokenCount_Batch",
+       "price": "9",
+       "description": "Million Batch Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_InputTokenCount_LCtx_Batch",
+       "price": "1.8",
+       "description": "Million Batch Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_OutputTokenCount_LCtx_Batch",
+       "price": "9",
+       "description": "Million Batch Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_InputTokenCount",
+       "price": "3.6",
+       "description": "Million Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_OutputTokenCount",
+       "price": "18",
+       "description": "Million Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_InputTokenCount_LCtx",
+       "price": "3.6",
+       "description": "Million Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_OutputTokenCount_LCtx",
+       "price": "18",
+       "description": "Million Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_Batch",
+       "price": "8.25",
+       "description": "Million Batch Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_LCtx_Batch",
+       "price": "1.65",
+       "description": "Million Batch Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_LCtx_Batch",
+       "price": "8.25",
+       "description": "Million Batch Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount",
+       "price": "3.3",
+       "description": "Million Input Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount",
+       "price": "16.5",
+       "description": "Million Response Tokens Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_LCtx",
+       "price": "3.3",
+       "description": "Million Input Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_LCtx",
+       "price": "16.5",
+       "description": "Million Output Tokens Long Context Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_InputTPM_Geo",
+       "price": "0.198",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_OutputTPM_Global",
+       "price": "0.9",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_InputTPM_Global",
+       "price": "0.18",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_OutputTPM_Geo",
+       "price": "0.99",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_InputTPM_Global",
+       "price": "0.18",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_OutputTPM_Global",
+       "price": "0.9",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_InputTPM_Geo",
+       "price": "0.198",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Regional CRIS",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_OutputTPM_Geo",
+       "price": "0.99",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Regional CRIS",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

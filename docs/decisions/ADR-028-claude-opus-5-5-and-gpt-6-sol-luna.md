@@ -196,3 +196,12 @@ US CRIS 3; 휴면 1P 5 포함 총계 51 → 60). reliability/cost/analysis/effic
   "최소 2026-11-21까지" 프로모션이라고 밝히므로 종료 후 재확인이 필요하다. 비용은 조회 시점에 계산되므로 과거 행도
   새 단가로 소급 산정된다(사용자 승인). Terra, Luna는 카드와 저장소가 일치해 변경 없음.
 
+## 후속 (v2.30.0, 2026-09-26)
+
+- **GPT-6 Sol, Luna 모델 카드 재대조 완료**: 두 모델의 AWS 모델 카드가 게시됐고 값이 agreement offer(Sol `offer-pycji3sz5gpcc`,
+  Luna `offer-gmo53nkzc5or6`)와 일치한다. "모델 카드가 게재되면 재대조" 후속은 닫는다.
+- **단가 관리 방식 변경**: v2.30.0부터 단가는 코드 표가 아니라 `price_history`에 있고 PricingSync가 12시간마다 같은 offer API로
+  확인한다. 위 "비용은 조회 시점 계산이라 소급 산정된다"는 문장은 ADR-030이 대체했다(비용은 프로브 시각의 단가로 계산).
+- Opus 5.5 US(`us.anthropic.claude-opus-5-5`)의 공식 단가는 $4.40 / $22(Global × 1.1)다. v2.29.1 코드는 Global과 같은 $4 / $20이었고
+  v2.30.0 seed로 과거까지 교정했다(ADR-030).
+- GPT-5.6 Sol 프로모션의 "최소 2026-11-21까지"는 현재 공식 출처에 없어 `pricing_sources.PRICE_NOTES` 수동 메모로 관리한다.

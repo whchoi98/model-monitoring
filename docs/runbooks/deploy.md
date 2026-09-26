@@ -103,12 +103,13 @@ BE_ARN=$(aws ecs register-task-definition --region $REGION \
 aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
-# 스케줄 태스크 5개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
+# 스케줄 태스크 6개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
 # AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once (env ANTHROPIC_CP_PROBE_INTERVAL_S=300 = CP도 매 사이클 — v2.29.1, 600이면 CP만 두 사이클에 한 번)
 # Insights:       family BedrockMonitorSchedulerInsightsTaskDef*,       schedule rate(5 minutes),  CLI insights_runner --window 6h
 # ParityRun:      family BedrockMonitorSchedulerParityRunTaskDef*,      schedule rate(12 hours),   CLI parity_runner --once (v2.11.0)
 # GptBench:       family BedrockMonitorSchedulerGptBenchTaskDef*,       schedule rate(15 minutes), CLI gptbench_runner --once (v2.18.0)
 # FeaturesVerify: family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule cron(30 17 * * ? *) Etc/UTC, CLI features_runner --once (v2.23.0, 고정 cron v2.29.0)
+# PricingSync:    family BedrockMonitorSchedulerPricingSyncTaskDef*,    schedule rate(12 hours),   CLI pricing_sync_runner --once (v2.30.0, 전용 task role — 최초 배포는 CDK로만)
 # 정확한 family 이름: aws ecs list-task-definition-families --family-prefix BedrockMonitorScheduler --status ACTIVE --region $REGION
 AP_FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerAutoProberTaskDef \
   --status ACTIVE --region $REGION --query 'families[0]' --output text)
@@ -117,7 +118,7 @@ aws ecs describe-task-definition --task-definition "$AP_FAM" \
 # ... (위와 동일하게 image 교체 + register) ...
 AP_ARN=...
 # 스케줄 이름 — AutoProber/Insights는 Scheduler 스택 output(AutoProberScheduleName / InsightsScheduleName)에 있다.
-# 5개 전부: aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION --query 'Schedules[].Name'
+# 6개 전부: aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION --query 'Schedules[].Name'
 AP_SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
   --query "Stacks[0].Outputs[?OutputKey=='AutoProberScheduleName'].OutputValue" --output text)
 aws scheduler get-schedule --name "$AP_SCHED" --region $REGION > /tmp/sched.json
@@ -411,6 +412,72 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, chan
   `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 AutoProber task와 backend 서비스에 넣고 같은 경로로 배포한 뒤 §5-2의 2~4번으로 확인한다.
 - FeaturesVerify는 바뀌지 않는다(`cron(30 17 * * ? *)` Etc/UTC).
 
+### 5-4. v2.30.0 배포 경로와 확인 (비용 단가 메뉴, PricingSync)
+
+**배포 경로**: CDK 변경이 있다. Scheduler 스택에 `PricingSyncTaskRole`(`bedrock:ListFoundationModelAgreementOffers`,
+`pricing:GetProducts`만), `PricingSyncTaskDef`(`python -m pricing_sync_runner --once`, 로그 그룹 `/ecs/pricingsync`),
+`PricingSyncSchedule`(`rate(12 hours)`), Scheduler 역할의 RunTask family `:*`와 PassRole 추가, output `PricingSyncScheduleName`이
+생긴다. 이미지-only 경로(§2-1) 금지 — 새 태스크 정의와 스케줄은 CDK로만 생긴다. **digest 고정 CDK로
+`BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 backend, frontend 이미지 모두로 배포한다(§3 경고). 신규 env는 없다.
+DB는 새 테이블 2개(`price_history`, `price_sync_runs`)를 backend 기동 시 `create_all`이 만들고, 같은 기동에서 seed(활성 55채널,
+`effective_from` 1970-01-01)를 넣는다. 그래서 배포 직후부터 `/cost`의 Bedrock Claude US 10채널과 Nova 2.0 Lite 비용이 과거까지
+교정된 값으로 보인다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 스케줄 — rate(12 hours), PricingSync task def를 가리킨다
+SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='PricingSyncScheduleName'].OutputValue" --output text)
+aws scheduler get-schedule --name "$SCHED" --region $REGION \
+  --query '{e:ScheduleExpression,td:Target.EcsParameters.TaskDefinitionArn}'
+# 기댓값: {"e": "rate(12 hours)", "td": "arn:aws:ecs:ap-northeast-2:…:task-definition/BedrockMonitorSchedulerPricingSyncTaskDef…:N"}
+
+# 2. 첫 스케줄 런(배포 뒤 최대 12시간)을 기다리지 않고 1회 수동 실행 — 네트워크 설정은 스케줄 타깃에서 복사
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerPricingSyncTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+NETCFG=$(aws scheduler get-schedule --name "$SCHED" --region $REGION \
+  --query 'Target.EcsParameters.NetworkConfiguration.awsvpcConfiguration' --output json \
+  | jq -c '{awsvpcConfiguration: {subnets: .Subnets, securityGroups: .SecurityGroups, assignPublicIp: .AssignPublicIp}}')
+aws ecs run-task --cluster bedrock-monitor --task-definition "$FAM" --launch-type FARGATE --region $REGION \
+  --network-configuration "$NETCFG" --query 'tasks[0].taskArn' --output text
+# 약 1분 뒤 로그 (런 요약 한 줄: run_id, status, 채널별 결과 수, 오류 수. 오류가 있으면 그 앞에 오류마다 "pricing sync: …" WARNING 한 줄)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION
+
+# 3. 그 런이 completed이고 55채널이 verified인지
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync, pending_review, families: (.families | length),
+  models: (.models | length), references: (.references | length),
+  verification: ([.models[] | .verification] | group_by(.) | map({(.[0]): length}) | add)}'
+# 기댓값: last_sync.status "completed", pending_review 0, families 19, models 55, verification {"verified": 55},
+#   references 약 30(오퍼 18, Price List 1~2, Anthropic 1, 공식 페이지 9, 수동 메모 1)
+
+# 4. 교정 11채널 — 비용이 seed 단가와 맞는지 (첫 동기화가 값을 바꾸지 않았으면 과거 전체가 이 단가다)
+curl -s "https://$CF_DOMAIN/api/cost/summary?window=24h" | jq '[.rows[]
+  | select(.model_id == "us.amazon.nova-2-lite-v1:0" or .model_id == "us.anthropic.claude-opus-5-5" or .model_id == "global.anthropic.claude-opus-5-5")
+  | {model_id, cost_usd, expected: ((.input_tokens * (if (.model_id | startswith("us.amazon")) then 0.33 elif (.model_id | startswith("us.")) then 4.4 else 4 end)
+      + .output_tokens * (if (.model_id | startswith("us.amazon")) then 2.75 elif (.model_id | startswith("us.")) then 22 else 20 end)) / 1000000)}]'
+# 기댓값: 행마다 cost_usd ≈ expected (부동소수 반올림 차이만). US Opus 5.5는 Global의 1.1배 단가다.
+
+# 5. 다운로드 3형식 — 첨부 파일 이름과 면책 문구
+for f in csv md json; do
+  curl -s -D - -o /dev/null "https://$CF_DOMAIN/api/pricing/export?format=$f&lang=ko" | grep -i '^content-disposition'
+done
+curl -s "https://$CF_DOMAIN/api/pricing/export?format=csv&lang=ko" | head -2
+# 기댓값: attachment; filename="llm-monitor-unit-prices-YYYY-MM-DD.csv" (md, json 동일 형식),
+#   CSV 첫 줄은 BOM + 따옴표로 감싼 필드 하나 "# 이 가격표는 공개 자료를 …" (문구의 쉼표가 열을 나누지 않는다)
+```
+
+- 화면 확인: `/pricing`(헤더 메뉴 "비용" 바로 뒤 "비용 단가")에 면책 상자, 마지막 공식 단가 동기화 시각, 다운로드 버튼 3개, 제공사별 표,
+  각주 번호, 참고 자료 목록이 보인다. 첫 런 전에는 모든 셀에 "자동 확인 안 됨"(초기값) 배지가 붙는 것이 정상이다.
+- `pending_review`가 0보다 크면 `troubleshooting.md`의 "검토 대기 단가 승인"을 따른다. 3번에서 `verified`가 55보다 적으면
+  같은 문서의 "비용 단가 동기화 실패"로 원인을 찾는다.
+- 모델 탐색(`/models`) 카드 단가와 `/cost` 방법론 문단의 `/pricing` 링크도 확인한다.
+- **v2.30.0을 v2.29.1 CDK로 되돌렸다가 다시 배포하는 경우**: 최초 배포에는 `/ecs/pricingsync`가 없어 충돌하지 않는다. 그러나 되돌린
+  뒤에는 이 로그 그룹이 `RemovalPolicy.RETAIN`으로 남아, 재배포 때 Scheduler 스택이 `… '/ecs/pricingsync' already exists`로 실패하고
+  AppServices만 새 이미지로 가는 혼합 상태가 된다. 재배포 전에 `aws logs describe-log-groups --log-group-name-prefix /ecs/pricingsync`로
+  확인하고, 남아 있으면 삭제(`aws logs delete-log-group --log-group-name /ecs/pricingsync --region $REGION`, 보존이 필요하면 먼저
+  export)하거나 `cdk deploy`에 `--import-existing-resources`를 붙인다. 자세한 명령은 [rollback.md A-2](./rollback.md)에 있다.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`)에는 이미지-only
@@ -418,7 +485,7 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, chan
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포
 (`BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`, digest 고정 `-c backendImage/-c frontendImage`)로
-backend 서비스와 스케줄 태스크(autoprober/insights/parityrun/gptbench/featuresverify) **양쪽** task def를 갱신할 것.
+backend 서비스와 스케줄 태스크(autoprober/insights/parityrun/gptbench/featuresverify/pricingsync) **양쪽** task def를 갱신할 것.
 
 ```bash
 make build   # 로컬 확인 전용 — :dev 태그, --platform linux/arm64와 RUM build arg가 없어 운영 push 금지

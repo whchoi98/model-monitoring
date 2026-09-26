@@ -1,7 +1,7 @@
 # Backend Tests — Offline pytest suite
 
 ## Role
-29 `test_*.py` modules (430 tests) covering probe logic, cadence, watchdogs, catalogs, routers and migrations.
+`test_*.py` modules covering probe logic, cadence, watchdogs, catalogs, unit prices, routers and migrations.
 No network, no AWS credentials, no PostgreSQL. CI runs the same suite on Python 3.11 (`.github/workflows/ci.yml`).
 
 ## Key Files
@@ -14,7 +14,8 @@ No network, no AWS credentials, no PostgreSQL. CI runs the same suite on Python 
   - `test_auto_prober_timeout.py`, `test_auto_prober_runner.py`, `test_probe_watchdog.py`, `test_stream_watchdog.py` — one hung model yields an error row, the run completes, the runner exits via `os._exit` (2026-09-23)
   - `test_auto_prober_pool.py`, `test_database_config.py` — DB pool exhaustion incidents (2026-06-09, 2026-07-08)
   - `test_startup_migration.py`, `test_perf_indexes.py` — source-level guards on lifespan migration cost and index declarations
-  - `test_fable51_catalog.py`, `test_opus55_gpt6_catalog.py`, `test_openai_pricing.py`, `test_label_repair.py` — model catalog labels, pricing keys, point-release matching
+  - `test_fable51_catalog.py`, `test_opus55_gpt6_catalog.py`, `test_label_repair.py` — model catalog labels, seed prices and `price_identity` classification, point-release matching
+  - `test_pricing_sources.py`, `test_pricing_seed.py`, `test_pricing_parsers.py`, `test_pricing_sync.py`, `test_pricing_sync_runner.py`, `test_price_history.py`, `test_cost_time_effective.py`, `test_openai_pricing.py`, `test_pricing_payload.py`, `test_pricing_export.py`, `test_pricing_router.py` — unit prices (v2.30.0, ADR-030): offline parser fixtures in `fixtures/pricing/` (no `offerToken`, `legalTerm.url` or presigned URLs), sync thresholds (0.5 inclusive: 22 → 33 verified, 22 → 33.01 pending), 6-decimal quantization and zero-rounding rejection, any parser exception → `skipped:parse_failed`, seed coverage of every active channel, time-effective cost joins and the v2.29.1 equivalence copy, `/api/pricing` and export goldens, backend `FAMILY_ORDER` = `frontend/src/lib/sortModels.ts`. Shared data modules `pricing_catalog.py` (the 55 active channels), `_pricing_dataset.py` (payload and export golden dataset) and `_legacy_pricing_v2291.py` (frozen v2.29.1 price table, equivalence test only) are not collected
   - `test_claude_features.py`, `test_parity_logic.py`, `test_parity_openai_client.py` — verification engines (cell-count pins 813 + 162)
 
 ## Gotchas

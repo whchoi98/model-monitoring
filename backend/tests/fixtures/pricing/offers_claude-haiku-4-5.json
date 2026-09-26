@@ -1,0 +1,602 @@
+{
+ "modelId": "anthropic.claude-haiku-4-5-20251001-v1:0",
+ "offers": [
+  {
+   "offerId": "offer-fudwqbphlos64",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "APN2_input_tokens_global_batch",
+       "price": "0.5",
+       "description": "Input Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_batch",
+       "price": "2.5",
+       "description": "Output Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_global_standard",
+       "price": "1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_standard",
+       "price": "5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_global_standard",
+       "price": "0.1",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_batch",
+       "price": "0.5",
+       "description": "Input Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_batch",
+       "price": "2.5",
+       "description": "Output Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_standard",
+       "price": "1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_standard",
+       "price": "5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_global_standard",
+       "price": "0.1",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_batch",
+       "price": "0.5",
+       "description": "Input Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_batch",
+       "price": "2.5",
+       "description": "Output Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_standard",
+       "price": "1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_standard",
+       "price": "5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_global_standard",
+       "price": "0.1",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_batch",
+       "price": "0.5",
+       "description": "Input Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_batch",
+       "price": "2.5",
+       "description": "Output Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_standard",
+       "price": "1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_standard",
+       "price": "5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_global_standard",
+       "price": "0.1",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_batch",
+       "price": "0.5",
+       "description": "Input Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_batch",
+       "price": "2.5",
+       "description": "Output Tokens - Batch, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_standard",
+       "price": "1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_standard",
+       "price": "5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_global_standard",
+       "price": "0.1",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_batch",
+       "price": "0.55",
+       "description": "Input Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_batch",
+       "price": "2.75",
+       "description": "Output Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_standard",
+       "price": "1.1",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_standard",
+       "price": "5.5",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_standard",
+       "price": "0.11",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_batch",
+       "price": "0.55",
+       "description": "Input Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_batch",
+       "price": "2.75",
+       "description": "Output Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_standard",
+       "price": "1.1",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_standard",
+       "price": "5.5",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_standard",
+       "price": "0.11",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_batch",
+       "price": "0.55",
+       "description": "Input Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_batch",
+       "price": "2.75",
+       "description": "Output Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_standard",
+       "price": "1.1",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_standard",
+       "price": "5.5",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_standard",
+       "price": "0.11",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_batch",
+       "price": "0.55",
+       "description": "Input Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_batch",
+       "price": "2.75",
+       "description": "Output Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_standard",
+       "price": "1.1",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_standard",
+       "price": "5.5",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_standard",
+       "price": "0.11",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_batch",
+       "price": "0.55",
+       "description": "Input Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_batch",
+       "price": "2.75",
+       "description": "Output Tokens - Batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_standard",
+       "price": "1.1",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_standard",
+       "price": "5.5",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_standard",
+       "price": "0.11",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount_Global_Batch",
+       "price": "0.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_Global_Batch",
+       "price": "2.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount_Global",
+       "price": "1",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_Global",
+       "price": "5",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_Global_Batch",
+       "price": "0.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_Global_Batch",
+       "price": "2.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_Global",
+       "price": "1",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_Global",
+       "price": "5",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_Global_Batch",
+       "price": "0.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_Global_Batch",
+       "price": "2.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_Global",
+       "price": "1",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_Global",
+       "price": "5",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_Global_Batch",
+       "price": "0.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_Global_Batch",
+       "price": "2.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_Global",
+       "price": "1",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_Global",
+       "price": "5",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_Global_Batch",
+       "price": "0.5",
+       "description": "Million Batch Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_Global_Batch",
+       "price": "2.5",
+       "description": "Million Batch Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_Global",
+       "price": "1",
+       "description": "Million Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_Global",
+       "price": "5",
+       "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount_Batch",
+       "price": "0.55",
+       "description": "Input Token Count (Batch)",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount_Batch",
+       "price": "2.75",
+       "description": "Output Token Count (Batch)",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_InputTokenCount",
+       "price": "1.1",
+       "description": "Input Token Count",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_OutputTokenCount",
+       "price": "5.5",
+       "description": "Output Token Count",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount_Batch",
+       "price": "0.55",
+       "description": "Million Batch Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount_Batch",
+       "price": "2.75",
+       "description": "Million Batch Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_InputTokenCount",
+       "price": "1.1",
+       "description": "Million Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_OutputTokenCount",
+       "price": "5.5",
+       "description": "Million Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount_Batch",
+       "price": "0.55",
+       "description": "Million Batch Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount_Batch",
+       "price": "2.75",
+       "description": "Million Batch Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_InputTokenCount",
+       "price": "1.1",
+       "description": "Million Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_OutputTokenCount",
+       "price": "5.5",
+       "description": "Million Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount_Batch",
+       "price": "0.55",
+       "description": "Million Batch Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount_Batch",
+       "price": "2.75",
+       "description": "Million Batch Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_InputTokenCount",
+       "price": "1.1",
+       "description": "Million Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_OutputTokenCount",
+       "price": "5.5",
+       "description": "Million Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount_Batch",
+       "price": "0.55",
+       "description": "Million Batch Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount_Batch",
+       "price": "2.75",
+       "description": "Million Batch Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_InputTokenCount",
+       "price": "1.1",
+       "description": "Million Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_OutputTokenCount",
+       "price": "5.5",
+       "description": "Million Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_OutputTPM_Geo",
+       "price": "0.33",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_InputTPM_Global",
+       "price": "0.06",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_InputTPM_Geo",
+       "price": "0.066",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_InputTPM_Geo",
+       "price": "0.066",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_OutputTPM_Geo",
+       "price": "0.33",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_InputTPM_Global",
+       "price": "0.06",
+       "description": "Per Hour per 1K Input TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_Reserved_1Month_OutputTPM_Global",
+       "price": "0.3",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_Reserved_1Month_OutputTPM_Global",
+       "price": "0.3",
+       "description": "Per Hour per 1K Output TPM Reserved 1 Month Global",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

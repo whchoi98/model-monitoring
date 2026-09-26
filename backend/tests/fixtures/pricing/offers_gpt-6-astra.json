@@ -1,0 +1,122 @@
+{
+ "modelId": "openai.gpt-6-astra",
+ "offers": [
+  {
+   "offerId": "offer-7epta7rbw5aws",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "input_tokens_standard",
+       "price": "11",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_standard",
+       "price": "10",
+       "description": "input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_priority",
+       "price": "20",
+       "description": "input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_flex",
+       "price": "5",
+       "description": "input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_priority",
+       "price": "22",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_flex",
+       "price": "5.5",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_standard",
+       "price": "50",
+       "description": "output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_priority",
+       "price": "100",
+       "description": "output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_flex",
+       "price": "25",
+       "description": "output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_standard",
+       "price": "55",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_priority",
+       "price": "110",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_flex",
+       "price": "27.5",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_global_standard",
+       "price": "1",
+       "description": "cache_read_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_standard",
+       "price": "1.1",
+       "description": "cache_read_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_global_standard",
+       "price": "20",
+       "description": "input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_global_standard",
+       "price": "75",
+       "description": "output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_standard",
+       "price": "22",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_standard",
+       "price": "82.5",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

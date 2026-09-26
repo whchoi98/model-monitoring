@@ -1,0 +1,194 @@
+{
+ "modelId": "anthropic.claude-opus-5-5",
+ "offers": [
+  {
+   "offerId": "offer-7sp77cpl4rveu",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "APN2_input_tokens_global_standard",
+       "price": "4",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_standard",
+       "price": "20",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_global_standard",
+       "price": "0.2",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_standard",
+       "price": "4",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_standard",
+       "price": "20",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_global_standard",
+       "price": "0.2",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_standard",
+       "price": "4",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_standard",
+       "price": "20",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_global_standard",
+       "price": "0.2",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_standard",
+       "price": "4",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_standard",
+       "price": "20",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_global_standard",
+       "price": "0.2",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_standard",
+       "price": "4",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_standard",
+       "price": "20",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_global_standard",
+       "price": "0.2",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_standard",
+       "price": "4.4",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_standard",
+       "price": "22",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_standard",
+       "price": "0.22",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_standard",
+       "price": "4.4",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_standard",
+       "price": "22",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_standard",
+       "price": "0.22",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_standard",
+       "price": "4.4",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_standard",
+       "price": "22",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_standard",
+       "price": "0.22",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_input_tokens_standard",
+       "price": "4.8",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_output_tokens_standard",
+       "price": "24",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_read_tokens_standard",
+       "price": "0.24",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_standard",
+       "price": "4.4",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_standard",
+       "price": "22",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_standard",
+       "price": "0.22",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

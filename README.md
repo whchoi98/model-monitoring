@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.29.1-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.30.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -18,9 +18,9 @@ Amazon Bedrock, Anthropic CP on AWS, OpenAI GPT on Bedrock LLM 채널의 응답 
 
 ## Overview
 
-Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 55 LLM channels (21 Bedrock, 9 Anthropic CP on AWS, 25 OpenAI GPT on Bedrock) across Bedrock Global / US inference profiles (including Claude Opus 5.5, v2.27.0), Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle in-region endpoints (Path 4) plus Bedrock Global cross-region profiles for GPT-5.6 and GPT-6 Astra, Sol and Luna and US cross-region profiles for GPT-6 Astra, Sol and Luna (v2.20.0, v2.25.0, v2.27.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, and 30-day cost projections — all behind a Next.js dashboard with ten monitoring views.
+Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 55 LLM channels (21 Bedrock, 9 Anthropic CP on AWS, 25 OpenAI GPT on Bedrock) across Bedrock Global / US inference profiles (including Claude Opus 5.5, v2.27.0), Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle in-region endpoints (Path 4) plus Bedrock Global cross-region profiles for GPT-5.6 and GPT-6 Astra, Sol and Luna and US cross-region profiles for GPT-6 Astra, Sol and Luna (v2.20.0, v2.25.0, v2.27.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, 30-day cost projections, and official unit prices synced every 12 hours — all behind a Next.js dashboard with eleven monitoring views.
 
-The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories. A built-in chatbot (Claude Sonnet 4.6 with four Bedrock tools) lets you query the time-series data conversationally.
+The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories and a 12-hourly sync of official unit prices. A built-in chatbot (Claude Sonnet 4.6 with four Bedrock tools) lets you query the time-series data conversationally.
 
 ![Dashboard overview: channel counts, per-model status strip, collection cadence](docs/images/ui/dashboard-en.png)
 
@@ -28,7 +28,8 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
 - **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 55 monitored channels. The 9 Claude Platform on AWS channels are probed every cycle with the same category as every other channel (v2.29.1 reverted the v2.29.0 10-minute cadence); setting `ANTHROPIC_CP_PROBE_INTERVAL_S=600` switches them to every other cycle with their own category rotation, an operational lever if the monthly usage cap returns.
-- **Ten analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (18-channel TTFB/TTFT bench over Bedrock Mantle in-region and cross-region profiles — GPT 5.4/5.5/5.6 Terra and GPT-6 Astra/Sol/Luna, 15-min cycles), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
+- **Eleven analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison, each probe priced at the unit price in effect at its time), Unit Prices (Standard input/output price per model family and channel with numbered source footnotes and CSV / Markdown / JSON download, v2.30.0), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (18-channel TTFB/TTFT bench over Bedrock Mantle in-region and cross-region profiles — GPT 5.4/5.5/5.6 Terra and GPT-6 Astra/Sol/Luna, 15-min cycles), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
+- **Unit prices from official sources** — the Unit Prices page (`/pricing`) lists the Standard input and output price per 1M tokens of every active model family across the Claude Platform on AWS, Global, US and In-Region channels. Each price carries a numbered footnote to its source, and the page links the reference list and downloads as CSV, Markdown or JSON. A scheduled PricingSync task reads the Bedrock agreement-offer rate cards, the AWS Price List API and Anthropic's pricing page every 12 hours; a change above 50% on input or output waits for admin approval. Cost and efficiency figures use the price in effect at each probe's time. The page and every download state that the list is reference information compiled from public sources, not an official AWS statement (v2.30.0, ADR-030).
 - **Graded model-card metrics** — on the dashboard, each card's TTFT, total latency and TPS value turns blue (normal), amber ▲ (warning) or rose ◆ (critical) against per-workload-category thresholds derived from 48 h of production p90/p99 (TPS is graded only on the low side); a legend expands into the full threshold table, and values carry a `data-grade` attribute and screen-reader descriptions (v2.28.0, ADR-029).
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 19 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
 - **Daily Claude API Features sweep** — a scheduled Fargate task (daily at 17:30 UTC, 02:30 KST, v2.29.0) runs the 39-row catalog (= 33 documented features + 4 core Messages + Models API 1 + strict_tool_use split 1) against Claude Platform on AWS, Bedrock Mantle `/anthropic`, and Bedrock runtime (Messages API + InvokeModel + Converse) for 5 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 975 cells per run, v2.28.0), surfacing a documentation-drift banner when observed behavior disagrees with the documented availability.
@@ -169,6 +170,10 @@ curl https://<your-cloudfront-domain>/api/auto-probe/latest
 # Filter by workload category
 curl "https://<your-cloudfront-domain>/api/auto-probe/latest?category=code-gen"
 
+# Unit prices (official sources, synced every 12 hours) and a CSV download
+curl -s https://<your-cloudfront-domain>/api/pricing | jq '{last_sync, pending_review, families: (.families | length)}'
+curl -OJ "https://<your-cloudfront-domain>/api/pricing/export?format=csv&lang=en"
+
 # Authenticate and run a manual probe (SSE stream)
 TOKEN=$(curl -sX POST https://<your-cloudfront-domain>/api/auth/login \
   -H 'Content-Type: application/json' \
@@ -229,16 +234,23 @@ model-monitoring/
 │   ├── prober.py                 # 55 active (+5 dormant 1P) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P
 │   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
 │   ├── gptbench.py               # GPT on AWS bench cycle (18 channels × 10 runs, TTFB/TTFT)
-│   ├── pricing.py                # token unit price table
+│   ├── pricing_sources.py        # price identity per channel, source maps, disclaimer, reference pages (v2.30.0)
+│   ├── pricing_seed.py           # official seed prices for the 55 active channels + ensure_seed
+│   ├── pricing_parsers.py        # agreement-offer, Price List and Anthropic pricing.md parsers
+│   ├── pricing_sync.py           # 12-hourly sync: fetch, compare, 50% guard, record
+│   ├── pricing_sync_runner.py    # PricingSync task entry: python -m pricing_sync_runner --once
+│   ├── price_history.py          # effective prices, per-row cost subquery, verification state
+│   ├── pricing_payload.py        # /api/pricing payload (order, footnotes, references)
+│   ├── pricing_export.py         # CSV, Markdown and JSON export
 │   ├── agent/                    # chatbot core: Bedrock model ids, 4 tools, AgentCore Memory, streaming
 │   ├── parity/                   # parity run engine: catalog (6 surfaces × 19 features), engine, probes, runner
 │   ├── claude_features/          # catalog (39 rows × 5 surfaces × 5 models), transports, probes, engine, runner (v2.23.0)
-│   ├── routers/                  # 17 router modules (auth, admin, analysis, cost, gptbench, features, …)
+│   ├── routers/                  # 18 router modules (auth, admin, analysis, cost, pricing, gptbench, features, …)
 │   └── tests/                    # pytest suite
-├── frontend/                     # Next.js 16 standalone + 11 routes (installable PWA)
-│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA icons
+├── frontend/                     # Next.js 16 standalone + 12 routes (installable PWA)
+│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /pricing, /reliability, /efficiency, /analysis + manifest.ts / PWA icons
 │   ├── src/components/           # 30+ React components (dashboard, panels, chat)
-│   ├── src/lib/                  # api client, i18n, sortModels, pricing mirror, version + vitest unit tests
+│   ├── src/lib/                  # api client, i18n, sortModels, pricingTable, version + vitest unit tests
 │   └── e2e/                      # Playwright browser regression specs (fixture APIs)
 ├── cdk/                          # 8 CDK TypeScript stacks
 │   ├── lib/stacks/               # Network, Data, Cluster, AgentCore, AppServices, …
@@ -247,7 +259,7 @@ model-monitoring/
 │   ├── architecture.md           # full system design
 │   ├── api-reference.md          # endpoint reference
 │   ├── onboarding.md             # onboarding guide: local setup, key concepts, common tasks
-│   ├── decisions/                # ADR-001 through ADR-029
+│   ├── decisions/                # ADR-001 through ADR-030
 │   ├── images/                   # README screenshots (ui/*-en.png, ui/*-ko.png)
 │   └── runbooks/                 # deploy, rollback, troubleshooting
 ├── CHANGELOG.md                  # Keep a Changelog format (bilingual, repo root)
@@ -303,6 +315,7 @@ Key endpoint groups:
 | Comparison Lab | `/api/compare/run` | JWT required |
 | Prompts | `/api/prompts/*` | list public; create, delete and optimize require JWT |
 | Cost / Reliability / Efficiency / Analysis | `/api/{cost,reliability,efficiency,analysis}/*` | public |
+| Unit Prices | `/api/pricing`, `/api/pricing/export` | public; review approval under `/api/admin/pricing/*` is admin only |
 | Parity Run | `/api/parity/*` | public reads; trigger requires JWT |
 | Claude API Features | `/api/features/*` | public reads; trigger requires JWT |
 | GPT on AWS | `/api/gptbench/*` | public |
@@ -341,9 +354,9 @@ This project is licensed under the MIT License.
 
 ## 개요
 
-Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opus 5.5 포함, v2.27.0), Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle 인리전 엔드포인트(Path 4)와 GPT-5.6, GPT-6 Astra, Sol, Luna의 Bedrock Global cross-region 프로파일, GPT-6 Astra, Sol, Luna의 US cross-region 프로파일(v2.20.0, v2.25.0, v2.27.0)에 걸친 55개 LLM 채널(Bedrock 21, Anthropic CP on AWS 9, OpenAI GPT on Bedrock 25)을 지속적으로 프로빙하는 운영 등급 관측 플랫폼입니다. (OpenAI 1P direct 경로(Path 5)는 코드에 남아 있지만 v2.19.1부터 휴면·비노출 상태입니다.) 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측을 10개 모니터링 화면을 갖춘 Next.js 대시보드에서 제공합니다.
+Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opus 5.5 포함, v2.27.0), Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle 인리전 엔드포인트(Path 4)와 GPT-5.6, GPT-6 Astra, Sol, Luna의 Bedrock Global cross-region 프로파일, GPT-6 Astra, Sol, Luna의 US cross-region 프로파일(v2.20.0, v2.25.0, v2.27.0)에 걸친 55개 LLM 채널(Bedrock 21, Anthropic CP on AWS 9, OpenAI GPT on Bedrock 25)을 지속적으로 프로빙하는 운영 등급 관측 플랫폼입니다. (OpenAI 1P direct 경로(Path 5)는 코드에 남아 있지만 v2.19.1부터 휴면·비노출 상태입니다.) 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측, 12시간마다 갱신되는 공식 단가를 11개 모니터링 화면을 갖춘 Next.js 대시보드에서 제공합니다.
 
-이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 프롬프트 카테고리를 라운드로빈하는 워크로드 프로빙을 실행합니다. Claude Sonnet 4.6 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
+이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 프롬프트 카테고리를 라운드로빈하는 워크로드 프로빙을 실행하고, 12시간마다 공식 단가를 동기화합니다. Claude Sonnet 4.6 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
 
 ![대시보드 개요: 채널 수, 모델별 상태 스트립, 수집 주기](docs/images/ui/dashboard-ko.png)
 
@@ -351,7 +364,8 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
 - **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 55개 모니터링 채널에 호출합니다. Claude Platform on AWS 9채널도 매 사이클 다른 채널과 같은 카테고리로 호출합니다(v2.29.1에서 v2.29.0의 10분 주기를 되돌렸습니다). `ANTHROPIC_CP_PROBE_INTERVAL_S=600`으로 설정하면 이 채널만 두 사이클에 한 번, 카테고리를 따로 순환하며 호출하므로 월간 사용 한도가 다시 걸릴 때 운영 레버로 쓸 수 있습니다.
-- **10개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle 인리전과 교차 리전 프로파일 18채널 TTFB/TTFT 벤치 — GPT 5.4/5.5/5.6 Terra, GPT-6 Astra/Sol/Luna, 15분 주기), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
+- **11개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교, 프로브마다 그 시각에 유효했던 단가로 계산), 비용 단가(모델 패밀리와 채널별 Standard 입력/출력 단가, 번호 각주 출처, CSV / Markdown / JSON 다운로드, v2.30.0), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle 인리전과 교차 리전 프로파일 18채널 TTFB/TTFT 벤치 — GPT 5.4/5.5/5.6 Terra, GPT-6 Astra/Sol/Luna, 15분 주기), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
+- **공식 출처 기반 단가** — 비용 단가 페이지(`/pricing`)가 활성 모델 패밀리마다 Claude Platform on AWS, Global, US, In-Region 채널의 Standard 입력, 출력 단가(1M 토큰당)를 보여 줍니다. 단가마다 번호 각주로 출처를 달고, 참고 자료 목록과 CSV, Markdown, JSON 다운로드를 제공합니다. 스케줄된 PricingSync 태스크가 12시간마다 Bedrock agreement offer rate card, AWS Price List API, Anthropic 요금 문서를 읽고, 입력이나 출력이 50%를 넘게 바뀌면 관리자 승인을 기다립니다. 비용과 효율성 수치는 각 프로브 시각에 유효했던 단가로 계산합니다. 화면과 모든 다운로드 파일에 공개 자료를 모은 참고용 정보이며 AWS 공식 입장이 아니라는 안내를 표시합니다 (v2.30.0, ADR-030).
 - **모델 카드 지표 등급** — 대시보드 카드의 TTFT, 총 응답시간, TPS 값을 운영 48시간 p90/p99로 정한 워크로드 카테고리별 기준에 따라 파랑(양호), 호박 ▲(경고), 장미 ◆(위험)으로 표시합니다(TPS는 낮은 쪽만 판정). 범례를 펼치면 전체 기준표가 나오고, 값마다 `data-grade` 속성과 스크린 리더 설명이 붙습니다 (v2.28.0, ADR-029).
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 19 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
 - **일일 Claude API 기능 검증 스윕** — 스케줄된 Fargate 태스크(매일 17:30 UTC, 02:30 KST, v2.29.0)가 39행 카탈로그(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)를 Claude Platform on AWS · Bedrock Mantle `/anthropic` · Bedrock runtime(Messages API + InvokeModel + Converse)에서 대표 모델 5종(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5 — 런당 975셀, v2.28.0)으로 실행하고, 실측이 문서상 가용성과 어긋나면 문서 드리프트 배너로 표시합니다.
@@ -492,6 +506,10 @@ curl https://<your-cloudfront-domain>/api/auto-probe/latest
 # 워크로드 카테고리별 필터링
 curl "https://<your-cloudfront-domain>/api/auto-probe/latest?category=code-gen"
 
+# 단가(공식 출처, 12시간마다 갱신)와 CSV 다운로드
+curl -s https://<your-cloudfront-domain>/api/pricing | jq '{last_sync, pending_review, families: (.families | length)}'
+curl -OJ "https://<your-cloudfront-domain>/api/pricing/export?format=csv&lang=ko"
+
 # 로그인 후 수동 프로브 실행 (SSE 스트리밍)
 TOKEN=$(curl -sX POST https://<your-cloudfront-domain>/api/auth/login \
   -H 'Content-Type: application/json' \
@@ -552,16 +570,23 @@ model-monitoring/
 │   ├── prober.py                 # 활성 55개(+1P 5개 휴면) AVAILABLE_MODELS, retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P
 │   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
 │   ├── gptbench.py               # GPT on AWS 벤치 사이클 (18채널 × 10회, TTFB/TTFT)
-│   ├── pricing.py                # 토큰 단가 테이블
+│   ├── pricing_sources.py        # 채널별 단가 식별자, 출처 매핑, 면책 문구, 참고 페이지 (v2.30.0)
+│   ├── pricing_seed.py           # 활성 55채널 공식 단가 seed + ensure_seed
+│   ├── pricing_parsers.py        # agreement offer, Price List, Anthropic pricing.md 파서
+│   ├── pricing_sync.py           # 12시간 동기화: 가져오기, 비교, 50% 안전장치, 기록
+│   ├── pricing_sync_runner.py    # PricingSync 태스크 진입점: python -m pricing_sync_runner --once
+│   ├── price_history.py          # 유효 단가, 행 단위 비용 서브쿼리, 계산 상태
+│   ├── pricing_payload.py        # /api/pricing 응답 (순서, 각주, 참고 자료)
+│   ├── pricing_export.py         # CSV, Markdown, JSON 내보내기
 │   ├── agent/                    # 챗봇 core: Bedrock model id, 4개 도구, AgentCore Memory, 스트리밍
 │   ├── parity/                   # 패리티 런 엔진: 카탈로그(6 surface × 19 피처), 엔진, 프로브, 러너
 │   ├── claude_features/          # 카탈로그(39행 × 5 surface × 5모델), 전송기, 프로브, 엔진, 러너 (v2.23.0)
-│   ├── routers/                  # 17개 라우터 모듈 (auth, admin, analysis, cost, gptbench, features, …)
+│   ├── routers/                  # 18개 라우터 모듈 (auth, admin, analysis, cost, pricing, gptbench, features, …)
 │   └── tests/                    # pytest 테스트
-├── frontend/                     # Next.js 16 standalone + 11 라우트 (설치형 PWA)
-│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /reliability, /efficiency, /analysis + manifest.ts / PWA 아이콘
+├── frontend/                     # Next.js 16 standalone + 12 라우트 (설치형 PWA)
+│   ├── src/app/                  # /, /models, /parity, /gpt-on-aws, /claude-features, /chat, /prompts, /cost, /pricing, /reliability, /efficiency, /analysis + manifest.ts / PWA 아이콘
 │   ├── src/components/           # 30+ React 컴포넌트 (대시보드, 패널, 챗)
-│   ├── src/lib/                  # API 클라이언트, i18n, sortModels, pricing 미러, version + vitest 단위 테스트
+│   ├── src/lib/                  # API 클라이언트, i18n, sortModels, pricingTable, version + vitest 단위 테스트
 │   └── e2e/                      # Playwright 브라우저 회귀 스펙 (모의 API)
 ├── cdk/                          # 8개 CDK TypeScript 스택
 │   ├── lib/stacks/               # Network, Data, Cluster, AgentCore, AppServices, …
@@ -570,7 +595,7 @@ model-monitoring/
 │   ├── architecture.md           # 전체 시스템 설계
 │   ├── api-reference.md          # 엔드포인트 레퍼런스
 │   ├── onboarding.md             # 온보딩 가이드: 로컬 환경 구성, 핵심 개념, 자주 하는 작업
-│   ├── decisions/                # ADR-001 ~ ADR-029
+│   ├── decisions/                # ADR-001 ~ ADR-030
 │   ├── images/                   # README 스크린샷 (ui/*-en.png, ui/*-ko.png)
 │   └── runbooks/                 # 배포, 롤백, 트러블슈팅
 ├── CHANGELOG.md                  # Keep a Changelog 형식 (bilingual, 저장소 루트)
@@ -626,6 +651,7 @@ https://<your-cloudfront-domain>/openapi.json
 | 비교 실험실 | `/api/compare/run` | JWT 필요 |
 | 프롬프트 | `/api/prompts/*` | 목록 공개, 생성, 삭제, 최적화는 JWT 필요 |
 | 비용 / 신뢰성 / 효율성 / 분석 | `/api/{cost,reliability,efficiency,analysis}/*` | 공개 |
+| 비용 단가 | `/api/pricing`, `/api/pricing/export` | 공개, 검토 대기 승인(`/api/admin/pricing/*`)은 admin 전용 |
 | 패리티 런 | `/api/parity/*` | 조회 공개, 실행은 JWT 필요 |
 | Claude API 기능 검증 | `/api/features/*` | 조회 공개, 실행은 JWT 필요 |
 | GPT on AWS | `/api/gptbench/*` | 공개 |

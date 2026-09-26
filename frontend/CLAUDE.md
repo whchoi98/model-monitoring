@@ -28,7 +28,7 @@ Dashboard UI for monitoring LLM channel performance — Amazon Bedrock, Claude P
 - Components use Tailwind dark theme (bg-gray-900/950 palette); v2.8.0부터 화이트 테마 토글 (`html.light` class + `light:` variant, `lib/theme.ts`)
 - Default model cards group by family (newest first), then channel (Anthropic → Global → US → OpenAI regions). Attention/TTFT sorting uses a flat grid. An empty comparison selection means all models.
 - Card metric values are graded per workload category (normal blue / warning amber ▲ / critical rose ◆, v2.28.0). The KO grade names are 양호/경고/위험 — never 정상 for a grade, which belongs to the channel health badge. Thresholds, display rounding and color classes live only in `src/lib/metricGrade.ts` (ADR-029); tests and e2e read the `data-grade` attribute, not color classes.
-- Pages: `/` 대시보드 (`/?view=manual` = 수동 프로브, 로그인 필요 — 결과 테이블/차트/비교 분석 탭, 비교 분석 탭은 `ComparisonView`), `/chat` 챗봇 팝업 창(헤더 없음, `FloatingChat`이 여는 `ChatPanel variant="popup"`), `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/gpt-on-aws` GPT on AWS 벤치 (v2.18.0), `/claude-features` Claude API Features 매트릭스 (v2.23.0), `/prompts`, `/cost`, `/reliability`, `/efficiency`, `/analysis`
+- Pages: `/` 대시보드 (`/?view=manual` = 수동 프로브, 로그인 필요 — 결과 테이블/차트/비교 분석 탭, 비교 분석 탭은 `ComparisonView`), `/chat` 챗봇 팝업 창(헤더 없음, `FloatingChat`이 여는 `ChatPanel variant="popup"`), `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/gpt-on-aws` GPT on AWS 벤치 (v2.18.0), `/claude-features` Claude API Features 매트릭스 (v2.23.0), `/prompts`, `/cost`, `/pricing` 비용 단가 (v2.30.0 — 단가는 `/api/pricing`만 읽고 프런트에 단가 표를 두지 않는다), `/reliability`, `/efficiency`, `/analysis`
 
 ## Commands
 ```bash
