@@ -147,23 +147,34 @@ def _pricelist_item(item) -> dict:
     return item
 
 
+def _object(value, what: str) -> dict:
+    """A nested price list field as a dict: {} when missing, PriceParseError when present but not an object."""
+    if value is None:
+        return {}
+    if not isinstance(value, dict):
+        raise PriceParseError(f"price list {what} is not an object")
+    return value
+
+
+def _usagetype_of(item: dict):
+    return _object(_object(item.get("product"), "product").get("attributes"), "product.attributes").get("usagetype")
+
+
 def _pricelist_usd_per_million(items: list[dict], usagetype: str) -> Decimal:
-    matches = [
-        it for it in items
-        if ((it.get("product") or {}).get("attributes") or {}).get("usagetype") == usagetype
-    ]
+    matches = [it for it in items if _usagetype_of(it) == usagetype]
     if len(matches) != 1:
         raise PriceParseError(f"expected 1 product for usagetype {usagetype}, got {len(matches)}")
+    on_demand = _object(_object(matches[0].get("terms"), "terms").get("OnDemand"), "terms.OnDemand")
     dims = [
-        dim
-        for term in ((matches[0].get("terms") or {}).get("OnDemand") or {}).values()
-        for dim in ((term or {}).get("priceDimensions") or {}).values()
+        _object(dim, "price dimension")
+        for term in on_demand.values()
+        for dim in _object(_object(term, "OnDemand term").get("priceDimensions"), "priceDimensions").values()
     ]
     if len(dims) != 1:
         raise PriceParseError(f"expected 1 OnDemand price dimension for {usagetype}, got {len(dims)}")
     if dims[0].get("unit") != _PRICELIST_UNIT:
         raise PriceParseError(f"unexpected unit for {usagetype}: {dims[0].get('unit')!r}")
-    usd = _decimal((dims[0].get("pricePerUnit") or {}).get("USD"))
+    usd = _decimal(_object(dims[0].get("pricePerUnit"), "pricePerUnit").get("USD"))
     if usd is None or usd <= 0:
         raise PriceParseError(f"no positive USD price for {usagetype}")
     return usd * _PER_MILLION_FROM_PER_THOUSAND

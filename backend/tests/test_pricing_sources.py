@@ -108,6 +108,8 @@ def test_active_channels_hidden_and_unclassifiable(caplog):
     "eu.anthropic.claude-opus-5", "anthropic.claude-opus-5", "us.anthropic.claude-opus-5-5-v1:0",
     "global.amazon.nova-2-lite-v1:0", "us.amazon.nova-lite-v1:0", "anthropic:claude-opus-4-6",
     "anthropic:claude-opus-4-5-20251101", "anthropic:claude-sonnet-4-5-20250929", "anthropic:claude-mythos-5-1", "",
+    # the prefix is checked, not just its length ("global." is 7 characters, "us." is 3)
+    "openai:global:xxxxxxxopenai.gpt-6-sol", "openai:us:xxxopenai.gpt-6-astra",
 ])
 def test_unclassifiable_model_ids_return_none(model_id):
     assert price_identity(model_id) is None
@@ -125,6 +127,15 @@ def test_cp_point_release_safety():
         "claude-sonnet-5-5": None, "claude-opus-5-6": None,  # 타깃 없는 점 버전은 fail-closed
     }
     assert price_identity("global.anthropic.claude-sonnet-5-5") is None
+
+
+def test_cp_family_key_does_not_depend_on_target_order(monkeypatch):
+    """The longer target wins because shorter ones yield to it, not because it is listed first."""
+    monkeypatch.setattr(ps, "_CP_TARGETS", tuple(reversed(ps._CP_TARGETS)))
+    assert ps._CP_TARGETS.index("opus-5") < ps._CP_TARGETS.index("opus-5-5")  # the shorter one is tried first
+    assert ps._cp_family_key("claude-opus-5-5") == "claude-opus-5-5"
+    assert ps._cp_family_key("claude-fable-5-1-20261015") == "claude-fable-5-1"
+    assert ps._cp_family_key("claude-opus-5") == "claude-opus-5"
 
 
 @pytest.mark.parametrize("actual_id", [

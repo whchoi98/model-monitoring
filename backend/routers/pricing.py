@@ -10,7 +10,7 @@ Admin (JWT, username == "admin"):
 
 CloudFront does not cache /api/*, so the payload is cached in-process for 60 s (no lang in the key: the
 body carries both languages). Approve/reject clear this process's cache at once; other backend tasks catch
-up within 60 s.
+up within 60 s. A build that overlaps a clear is returned but not cached (generation counter).
 """
 
 import logging
@@ -21,6 +21,7 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from pydantic import BaseModel
+from sqlalchemy import and_, or_
 from sqlalchemy.orm import Session
 
 import prober
@@ -48,7 +49,7 @@ _EXPORT_MEDIA_TYPES = {
 }
 
 _cache_lock = threading.Lock()
-_cache: dict = {"at": 0.0, "payload": None}
+_cache: dict = {"at": 0.0, "payload": None, "generation": 0}
 _monotonic = time.monotonic  # patched by tests
 
 
@@ -56,6 +57,7 @@ def invalidate_cache() -> None:
     with _cache_lock:
         _cache["payload"] = None
         _cache["at"] = 0.0
+        _cache["generation"] += 1
 
 
 def _active(db: Session, now: datetime) -> dict:
@@ -81,11 +83,13 @@ def _payload(db: Session) -> dict:
         cached = _cache["payload"]
         if cached is not None and _monotonic() - _cache["at"] < CACHE_TTL_S:
             return cached
+        generation = _cache["generation"]
     now = datetime.now(timezone.utc)
     payload = build_pricing_payload(db, _active(db, now), now=now)
     with _cache_lock:
-        _cache["payload"] = payload
-        _cache["at"] = _monotonic()
+        if _cache["generation"] == generation:  # an approve/reject during the build may have made it stale
+            _cache["payload"] = payload
+            _cache["at"] = _monotonic()
     return payload
 
 
@@ -180,22 +184,29 @@ def list_pending_prices(db: Session = Depends(get_db), user: User = Depends(get_
 def _pending_or_404(db: Session, row_id: int) -> PriceHistory:
     row = db.get(PriceHistory, row_id)
     if row is None:
-        raise HTTPException(status_code=404, detail=f"price row {row_id} not found")
+        raise HTTPException(status_code=404, detail=f"단가 행 {row_id}을(를) 찾을 수 없습니다")
     if row.status != "pending_review":
-        raise HTTPException(status_code=409, detail=f"price row {row_id}는 검토 대기 상태가 아닙니다 (현재: {row.status})")
+        raise HTTPException(status_code=409, detail=f"단가 행 {row_id}는 검토 대기 상태가 아닙니다 (현재: {row.status})")
     return row
 
 
 @admin_router.post("/pending/{row_id}/approve", response_model=PendingAction)
 def approve_pending_price(row_id: int, db: Session = Depends(get_db), user: User = Depends(get_current_user)):
     """pending_review -> verified. effective_from stays the insert-time value (the observing run's start, or
-    1970 for no_baseline). A verified row that already starts later keeps winning from its own start."""
+    1970 for no_baseline). A verified row that comes later in the price lookup order (effective_from, id) —
+    a later start, or the same start with a higher id — keeps winning from its own start."""
     _ensure_admin(user)
     row = _pending_or_404(db, row_id)
     later = (
         db.query(PriceHistory)
-        .filter(PriceHistory.model_id == row.model_id, PriceHistory.status == "verified",
-                PriceHistory.effective_from > row.effective_from, PriceHistory.id != row.id)
+        .filter(
+            PriceHistory.model_id == row.model_id,
+            PriceHistory.status == "verified",
+            or_(
+                PriceHistory.effective_from > row.effective_from,
+                and_(PriceHistory.effective_from == row.effective_from, PriceHistory.id > row.id),
+            ),
+        )
         .order_by(PriceHistory.effective_from, PriceHistory.id)
         .all()
     )

@@ -1,9 +1,9 @@
 """pricing_payload.build_pricing_payload — exact /api/pricing JSON on a small golden dataset (v2.30.0).
 
 Dataset (tests/_pricing_dataset.py): Claude Opus 5.5 on three channels, a stale Nova row, GPT 6 Luna with no
-price rows, GPT 5.6 Sol with a pending row and a seed-only in-region row, GPT 5.6 Terra whose us-west-2 price
-differs from us-east-1/us-east-2, GPT 5.5 seed-only, GPT 5.4 on three equal regions, and rows for inactive
-model_ids that must never appear. OFFICIAL_PAGES and PRICE_NOTES are pinned to test copies so the golden does
+price rows, GPT 5.6 Sol with two pending rows on its Global channel and a seed-only in-region row, GPT 5.6 Terra
+whose us-west-2 price differs from us-east-1/us-east-2, GPT 5.5 seed-only, GPT 5.4 on three equal regions, and
+rows for inactive model_ids that must never appear. OFFICIAL_PAGES and PRICE_NOTES are pinned to test copies so the golden does
 not depend on their production wording; DISCLAIMER is the spec text.
 """
 

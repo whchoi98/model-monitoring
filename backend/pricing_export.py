@@ -156,10 +156,14 @@ def to_markdown(payload: dict, lang: str) -> str:
 
 
 def to_csv(payload: dict, lang: str) -> str:
-    """UTF-8 BOM (Excel), a raw "# <disclaimer>" first line, the price rows, a blank line, the references."""
+    """UTF-8 BOM (Excel), a "# <disclaimer>" first line, the price rows, a blank line, the references.
+
+    The disclaimer line is one quoted CSV field, so the commas in its text never split it into columns.
+    """
     _lang(lang)
     buf = io.StringIO()
-    buf.write(BOM + "# " + payload["disclaimer"][lang] + "\n")
+    buf.write(BOM)
+    csv.writer(buf, lineterminator="\n", quoting=csv.QUOTE_ALL).writerow(["# " + payload["disclaimer"][lang]])
     writer = csv.writer(buf, lineterminator="\n")
     writer.writerow(CSV_HEADER)
     for family in payload["families"]:

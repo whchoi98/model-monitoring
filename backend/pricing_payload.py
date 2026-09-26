@@ -93,9 +93,9 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
     pending = pending_rows(db, ids)
     last_run = last_finished_run(db)
     pending_count = 0
-    if ids:
+    if ids:  # channels waiting for review (distinct model_ids, as price_sync_runs.pending), not rows
         pending_count = (
-            db.query(func.count(PriceHistory.id))
+            db.query(func.count(PriceHistory.model_id.distinct()))
             .filter(PriceHistory.model_id.in_(ids), PriceHistory.status == "pending_review")
             .scalar()
         ) or 0

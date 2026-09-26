@@ -21,6 +21,8 @@ logger = logging.getLogger(__name__)
 
 SEED_SOURCE_DATE = date(2026, 9, 26)  # seed만 있는 참고 자료의 확인일(as_of)
 # backend 태스크 기동과 PricingSync 러너가 겹쳐도 같은 model_id를 두 번 seed하지 않는다(트랜잭션 잠금).
+# 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
+_SEED_TIMEOUT_SQL = ("SET LOCAL statement_timeout = '30000'", "SET LOCAL lock_timeout = '5000'")
 _SEED_LOCK_SQL = "SELECT pg_advisory_xact_lock(917350003)"
 
 # Bedrock Claude FM id → (offerId, Global in, Global out, US in, US out). US = USE1_*, Global = APN2_*_global.
@@ -92,9 +94,9 @@ def seed_rows(active: Mapping[str, PriceIdentity]) -> dict[str, tuple[float, flo
 def ensure_seed(engine, active: Mapping[str, PriceIdentity]) -> int:
     """price_history에 행이 하나도 없는 활성 model_id에만 seed 행을 넣고 넣은 수를 돌려준다.
 
-    model_id 단위 멱등(테이블 전체 비었는지 보지 않음), 자체 트랜잭션, PostgreSQL은
-    pg_advisory_xact_lock(917350003) 아래(SQLite 생략). effective_from=EPOCH, status='seed',
-    observed_at=NULL. 예외는 호출부(main.py lifespan, pricing_sync_runner)로 올린다.
+    model_id 단위 멱등(테이블 전체 비었는지 보지 않음), 자체 트랜잭션, PostgreSQL은 SET LOCAL
+    statement_timeout 30초와 lock_timeout 5초를 건 뒤 pg_advisory_xact_lock(917350003) 아래(SQLite 생략).
+    effective_from=EPOCH, status='seed', observed_at=NULL. 예외는 호출부(main.py lifespan, pricing_sync_runner)로 올린다.
     """
     rows = seed_rows(active)
     if not rows:
@@ -102,6 +104,8 @@ def ensure_seed(engine, active: Mapping[str, PriceIdentity]) -> int:
     table = PriceHistory.__table__
     with engine.begin() as conn:
         if engine.dialect.name == "postgresql":
+            for sql in _SEED_TIMEOUT_SQL:
+                conn.execute(text(sql))
             conn.execute(text(_SEED_LOCK_SQL))
         existing = set(conn.execute(
             select(table.c.model_id).where(table.c.model_id.in_(list(rows))).distinct()

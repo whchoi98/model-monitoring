@@ -83,6 +83,17 @@ def test_exit_code_follows_the_run_status(wired, status, code):
     assert runner.main(["--once"]) == code
 
 
+def test_create_tables_failure_exits_one_before_seed_or_sync(wired, monkeypatch):
+    def broken():
+        wired.calls.append("create_tables")
+        raise RuntimeError("could not connect to the database")
+
+    monkeypatch.setattr(runner, "create_tables", broken)
+    assert runner.main(["--once"]) == 1
+    assert "ensure_seed" not in wired.calls and "run_sync" not in wired.calls
+    assert wired.calls == ["create_tables"]  # not even model registration runs
+
+
 def test_a_failing_registration_is_not_fatal(wired, monkeypatch):
     def broken():
         wired.calls.append("discover_cp")

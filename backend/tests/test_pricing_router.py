@@ -132,6 +132,27 @@ def test_payload_is_cached_for_60_seconds(env, monkeypatch):
     assert client.get("/api/pricing").json()["pending_review"] == 1  # 60 s elapsed
 
 
+def test_a_build_that_overlaps_a_cache_clear_is_not_cached(env, monkeypatch):
+    _, client, _ = env
+    monkeypatch.setattr(pricing_router, "_monotonic", lambda: 1000.0)
+    builds = []
+    real_build = pricing_router.build_pricing_payload
+
+    def build_then_clear(*args, **kwargs):
+        builds.append(1)
+        payload = real_build(*args, **kwargs)
+        if len(builds) == 1:
+            pricing_router.invalidate_cache()  # an approve/reject commits while this build runs
+        return payload
+
+    monkeypatch.setattr(pricing_router, "build_pricing_payload", build_then_clear)
+    assert client.get("/api/pricing").status_code == 200
+    assert client.get("/api/pricing").status_code == 200
+    assert len(builds) == 2  # the first (possibly stale) result was returned but not cached
+    assert client.get("/api/pricing").status_code == 200
+    assert len(builds) == 2  # the second one was cached
+
+
 def test_approve_keeps_effective_from_clears_cache_and_warns_about_later_rows(env):
     factory, client, now = env
     change_at = now - timedelta(minutes=30)
@@ -162,6 +183,24 @@ def test_approve_keeps_effective_from_clears_cache_and_warns_about_later_rows(en
     assert after["models"]["us.anthropic.claude-opus-5-5"]["input"] == 5  # later verified row still wins now
 
 
+def test_approve_warns_about_a_verified_row_with_the_same_start_and_a_higher_id(env):
+    factory, client, now = env
+    change_at = now - timedelta(minutes=30)
+    with factory() as db:  # same start, lower id: the approved row wins over it, no warning
+        add_price(db, "us.anthropic.claude-opus-5-5", 6.0, 30.0, effective_from=change_at, status="verified",
+                  observed_at=change_at, source_id=OPUS_OFFER)
+        db.commit()
+    row_id = _pending(factory, "us.anthropic.claude-opus-5-5", 9.0, 45.0, effective_from=change_at,
+                      observed_at=change_at)
+    with factory() as db:  # same start, higher id: it stays ahead of the approved row in the price lookup
+        later_id = add_price(db, "us.anthropic.claude-opus-5-5", 5.0, 25.0, effective_from=change_at,
+                             status="verified", observed_at=change_at, source_id=OPUS_OFFER).id
+        db.commit()
+    body = client.post(f"/api/admin/pricing/pending/{row_id}/approve", headers=_auth("admin")).json()
+    assert len(body["warnings"]) == 1 and body["warnings"][0].startswith(f"id {later_id}의 단가 5 / 25가 ")
+    assert client.get("/api/pricing").json()["models"]["us.anthropic.claude-opus-5-5"]["input"] == 5
+
+
 def test_approve_no_baseline_row_applies_from_1970(env):
     factory, client, now = env
     row_id = _pending(factory, "openai:us-east-1:openai.gpt-5.4", 3.0, 18.0, effective_from=EPOCH, observed_at=now)
@@ -181,7 +220,9 @@ def test_reject_marks_rejected_and_clears_cache(env):
     assert client.get("/api/pricing").json()["pending_review"] == 0
     again = client.post(f"/api/admin/pricing/pending/{row_id}/approve", headers=_auth("admin"))
     assert again.status_code == 409  # only pending_review rows can be decided
-    assert client.post("/api/admin/pricing/pending/99999/reject", headers=_auth("admin")).status_code == 404
+    assert again.json()["detail"] == f"단가 행 {row_id}는 검토 대기 상태가 아닙니다 (현재: rejected)"
+    missing = client.post("/api/admin/pricing/pending/99999/reject", headers=_auth("admin"))
+    assert missing.status_code == 404 and missing.json()["detail"] == "단가 행 99999을(를) 찾을 수 없습니다"
 
 
 def test_pending_list_reports_current_value_and_change_ratio(env):
@@ -221,7 +262,7 @@ def test_export_headers_and_bodies(env, fmt, content_type, ext):
     assert res.headers["content-disposition"] == f'attachment; filename="llm-monitor-unit-prices-{today}.{ext}"'
     text = res.content.decode("utf-8")
     if fmt == "csv":
-        assert text.startswith(BOM + "# " + DISCLAIMER["en"] + "\n")
+        assert text.startswith(BOM + '"# ' + DISCLAIMER["en"] + '"\n')
     elif fmt == "md":
         assert text.startswith("> " + DISCLAIMER["en"] + "\n")
         assert text.rstrip("\n").endswith("> " + DISCLAIMER["en"])

@@ -178,9 +178,13 @@ def test_ensure_seed_postgres_takes_transaction_advisory_lock_first():
 
     pg = SimpleNamespace(dialect=SimpleNamespace(name="postgresql"), begin=_Begin)
     assert ensure_seed(pg, {"us.amazon.nova-2-lite-v1:0": ACTIVE["us.amazon.nova-2-lite-v1:0"]}) == 1
-    assert log[0] == "SELECT pg_advisory_xact_lock(917350003)"
-    assert log[1].startswith("SELECT DISTINCT price_history.model_id")
-    assert log[2].startswith("INSERT INTO price_history") and len(log) == 3
+    assert log[:3] == [  # 트랜잭션 한정 상한 두 개, 그다음 잠금
+        "SET LOCAL statement_timeout = '30000'",
+        "SET LOCAL lock_timeout = '5000'",
+        "SELECT pg_advisory_xact_lock(917350003)",
+    ]
+    assert log[3].startswith("SELECT DISTINCT price_history.model_id")
+    assert log[4].startswith("INSERT INTO price_history") and len(log) == 5
     assert ensure_seed(SimpleNamespace(dialect=pg.dialect, begin=None), {}) == 0  # 빈 활성 집합은 DB를 건드리지 않는다
 
 

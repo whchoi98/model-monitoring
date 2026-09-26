@@ -123,6 +123,14 @@ def test_zero_price_other_unit_and_conflicting_duplicates_are_dropped():
     assert select_offer_price(half, "us") == P(7, 70)          # a candidate needs both input and output
 
 
+@pytest.mark.parametrize("bad", ["NaN", "Infinity", "-Infinity"])
+def test_non_finite_rate_card_prices_are_never_candidates(bad):
+    card = [E("USE1_input_tokens_standard", bad), E("USE1_output_tokens_standard", "22"),
+            E("input_tokens_standard", "4"), E("output_tokens_standard", "20")]
+    assert select_offer_price(card, "us") == P(4, 20)  # the USE1 pair has no input, the flat pair wins
+    assert select_offer_price([E("input_tokens_standard", "4"), E("output_tokens_standard", bad)], "us") is None
+
+
 def _drain(card, channel):
     seen, rc = [], list(card)
     while (price := select_offer_price(rc, channel)) is not None:
@@ -175,6 +183,50 @@ def test_price_list_unit_mismatch_missing_or_duplicate_product_raises():
     for bad in ([s for s in items if out_ut + '"' not in s], items + items, ["not json"]):
         with pytest.raises(PriceParseError):
             parse_pricelist(bad, in_ut, out_ut)
+
+
+def _nova_decoded():
+    """Decoded Nova Price List items and the input-usagetype item (one OnDemand term, one dimension)."""
+    decoded = [json.loads(s) for s in _load("pricelist_nova-2-lite.json")["PriceList"]]
+    (item,) = [it for it in decoded if it["product"]["attributes"]["usagetype"] == NOVA_USAGETYPES["nova-2-lite"][0]]
+    return decoded, item
+
+
+def _only_dimension(item):
+    (term,) = item["terms"]["OnDemand"].values()
+    (dim,) = term["priceDimensions"].values()
+    return term["priceDimensions"], dim
+
+
+def test_price_list_two_on_demand_dimensions_raise():
+    decoded, item = _nova_decoded()
+    dims, dim = _only_dimension(item)
+    dims["EXTRA.RATE"] = dict(dim, rateCode="EXTRA.RATE")
+    with pytest.raises(PriceParseError, match="expected 1 OnDemand price dimension"):
+        parse_pricelist(decoded, *NOVA_USAGETYPES["nova-2-lite"])
+
+
+@pytest.mark.parametrize("usd", ["0", "0.0000000000", "-0.00033", "NaN", None])
+def test_price_list_zero_negative_or_missing_usd_raises(usd):
+    decoded, item = _nova_decoded()
+    _only_dimension(item)[1]["pricePerUnit"] = {} if usd is None else {"USD": usd}
+    with pytest.raises(PriceParseError, match="no positive USD price"):
+        parse_pricelist(decoded, *NOVA_USAGETYPES["nova-2-lite"])
+
+
+@pytest.mark.parametrize("path", [
+    ("product",), ("product", "attributes"), ("terms",), ("terms", "OnDemand"), ("terms", "OnDemand", "*"),
+    ("terms", "OnDemand", "*", "priceDimensions"), ("terms", "OnDemand", "*", "priceDimensions", "*"),
+    ("terms", "OnDemand", "*", "priceDimensions", "*", "pricePerUnit"),
+], ids=".".join)
+def test_price_list_fields_that_are_not_objects_raise_price_parse_error(path):
+    """A nested field of the wrong type is a PriceParseError, never an AttributeError ("*" = the only key)."""
+    decoded, parent = _nova_decoded()
+    for key in path[:-1]:
+        parent = parent[next(iter(parent)) if key == "*" else key]
+    parent[next(iter(parent)) if path[-1] == "*" else path[-1]] = ["not", "an", "object"]
+    with pytest.raises(PriceParseError, match="is not an object"):
+        parse_pricelist(decoded, *NOVA_USAGETYPES["nova-2-lite"])
 
 
 # ---------------------------------------------------------------- Anthropic pricing markdown
@@ -234,6 +286,25 @@ def test_columns_by_header_name_bad_values_skipped_and_ambiguous_names_dropped()
         "| Claude Opus 4.8 (legacy) | $15 / MTok | $75 / MTok |",
         "| Claude Haiku 4.5 | $1 / MTok | $5 / MTok |",
     )) == {"Claude Haiku 4.5": P(1, 5)}
+
+
+def test_only_the_first_table_under_the_heading_is_read():
+    second = _md("| Claude Opus 5 | $2.50 / MTok | $12.50 / MTok |", "| Claude Sonnet 5 | $1 / MTok | $5 / MTok |")
+    doc = _md("| Claude Opus 5 | $5 / MTok | $25 / MTok |") + "\n" + second.split("\n\n", 1)[1]  # no heading between
+    assert parse_anthropic_pricing_md(doc) == {"Claude Opus 5": P(5, 25)}
+
+
+def test_rows_with_the_wrong_cell_count_are_skipped():
+    assert parse_anthropic_pricing_md(_md(
+        "| Claude Opus 5 | $5 / MTok | $25 / MTok | $6.25 / MTok |",
+        "| Claude Sonnet 5 | $2 / MTok |",
+        "| Claude Haiku 4.5 | $1 / MTok | $5 / MTok |",
+    )) == {"Claude Haiku 4.5": P(1, 5)}
+
+
+def test_a_table_without_parseable_rows_raises():
+    with pytest.raises(PriceParseError, match="no parseable rows"):
+        parse_anthropic_pricing_md(_md("| Claude Opus 5 | $5 per MTok | $25 / MTok |", "| Claude Sonnet 5 | TBD | TBD |"))
 
 
 @pytest.mark.parametrize("doc", [

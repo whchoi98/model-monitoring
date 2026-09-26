@@ -147,6 +147,14 @@ def test_current_rows_returns_the_row_effective_at_now(db):
     assert current_rows(db, []) == {}
 
 
+def test_current_rows_breaks_an_effective_from_tie_by_the_higher_id(db):
+    _price(db, M, 2.0, 10.0, T, observed_at=T)
+    newer = _price(db, M, 3.0, 15.0, T, observed_at=T)
+    _price(db, M, 1.0, 5.0, EPOCH, status="seed")  # highest id, earlier start: effective_from is compared first
+    assert current_rows(db, [M], now=T)[M].id == newer.id
+    assert current_rows(db, [M], now=T + timedelta(days=1))[M].id == newer.id
+
+
 def test_pending_rows_returns_the_most_recently_observed_pending_row(db):
     _price(db, M, 1.0, 5.0, EPOCH, status="seed")
     _price(db, M, 9.0, 45.0, T, status="pending_review", observed_at=T + timedelta(hours=12))

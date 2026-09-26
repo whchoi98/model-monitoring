@@ -100,6 +100,10 @@ def load(db):
     add_price(db, "us.anthropic.claude-opus-4-6-v1", 5.5, 27.5, observed_at=RUN2, source_id="offer:offer-hidden")
     add_price(db, "openai:us-east-2:openai.gpt-5.5", 5.5, 33.0, effective_from=RUN2, status="pending_review",
               observed_at=RUN2, source_id=G55)
+    # An older pending value for the same Sol Global channel: the cell still shows the newer one (id 6), and
+    # pending_review counts the channel once.
+    add_price(db, "openai:global:global.openai.gpt-5.6-sol", 8.0, 40.0, effective_from=RUN1,
+              status="pending_review", observed_at=RUN1, source_id=SOL)
     db.commit()
 
 
@@ -135,7 +139,7 @@ EXPECTED_PAYLOAD = {
     "unit": "per_1m_tokens",
     "generated_at": "2026-09-25T16:00:00Z",
     "last_sync": {"id": 2, "started_at": R2, "finished_at": "2026-09-25T15:00:31Z", "status": "completed"},
-    "pending_review": 1,  # the gpt-5.5 us-east-2 pending row is not in the active set
+    "pending_review": 1,  # distinct channels: Sol Global has two pending rows, gpt-5.5 us-east-2 is not active
     "families": [
         _family("claude-opus-5-5", "Claude Opus 5.5", "anthropic",
                 cp=_cell(4, 20, ["anthropic:claude-opus-5-5"], ["anthropic-pricing"], [1], "verified", R2),

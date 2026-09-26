@@ -4,6 +4,9 @@ Order: running row first -> Anthropic pricing.md -> Price List (Nova) -> agreeme
 cheap sources first so a slow offers API cannot starve them) -> per-channel compare -> run closed as
 completed / partial / failed. offerToken and presigned legalTerm URLs are stripped by `default_fetchers`
 right after the call; no response body is ever logged.
+
+A parser exception of any type only skips that source's (or FM id's) channels as skipped:parse_failed; it
+never fails the run. Observed prices are quantized to 6 decimals before they are compared or stored.
 """
 
 import logging
@@ -39,6 +42,7 @@ from pricing_sources import (
 logger = logging.getLogger(__name__)
 
 CHANGE_THRESHOLD = Decimal("0.5")
+PRICE_QUANTUM = Decimal("0.000001")  # observed prices are compared and stored at 6 decimals (as price_number shows)
 SYNC_DEADLINE_S = 300.0
 SYNC_LOCK_KEY = 917350004
 
@@ -170,6 +174,16 @@ def _dec(v: float) -> Decimal:
     return Decimal(str(round(v, 6)))
 
 
+def _quantized(price: UnitPrice) -> UnitPrice:
+    """Both sides at 6 decimals. A value that cannot be quantized raises decimal.InvalidOperation (parse failure)."""
+    return UnitPrice(input=price.input.quantize(PRICE_QUANTUM), output=price.output.quantize(PRICE_QUANTUM))
+
+
+def _parse_message(exc: Exception) -> str:
+    """PriceParseError text as-is; any other parser exception (a shape the parser did not expect) with its type."""
+    return str(exc) if isinstance(exc, PriceParseError) else _short(exc)
+
+
 def classify_change(current: tuple[float, float] | None, new: UnitPrice) -> str:
     """"unchanged" | "changed" (both |new-old|/old <= 0.5, boundary inclusive) | "pending" | "no_baseline"."""
     if current is None:
@@ -259,10 +273,10 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
         table: dict[str, UnitPrice] = {}
         if reason is None:
             try:
-                table = parse_anthropic_pricing_md(text)
-            except PriceParseError as exc:
+                table = {name: _quantized(p) for name, p in parse_anthropic_pricing_md(text).items()}
+            except Exception as exc:  # noqa: BLE001 — any parser error only skips the CP channels
                 reason = "parse_failed"
-                errors.append(f"anthropic_doc: {exc}")
+                errors.append(f"anthropic_doc: {_parse_message(exc)}")
         for doc_name in sorted(doc_groups):
             price = table.get(doc_name)
             if reason is None and price is None:
@@ -281,28 +295,32 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
         price = None
         if reason is None:
             try:
-                price = parse_pricelist(items, usagetypes[0], usagetypes[1])
-            except PriceParseError as exc:
+                price = _quantized(parse_pricelist(items, usagetypes[0], usagetypes[1]))
+            except Exception as exc:  # noqa: BLE001 — any parser error only skips this family's channels
                 reason = "parse_failed"
-                errors.append(f"pricelist {family_key}: {exc}")
+                errors.append(f"pricelist {family_key}: {_parse_message(exc)}")
         settle(members, price, reason, pricelist_source_id(usagetypes[0]))
 
     # 3) Bedrock agreement offers — Bedrock Claude + OpenAI (one call per FM id)
     for fm_id in sorted(groups["offers"]):
         members = groups["offers"][fm_id]
         response, reason = fetch("offers", fm_id, lambda fm=fm_id: fetchers.offers(fm))
+        prices: dict[str, UnitPrice | None] = {}
         if reason is None:
             try:
                 offer_id, rate_card = single_public_offer(response)
-            except PriceParseError as exc:
+                for model_id, ident in members:
+                    price = select_offer_price(rate_card, ident.channel)
+                    prices[model_id] = None if price is None else _quantized(price)
+            except Exception as exc:  # noqa: BLE001 — any parser error only skips this FM's channels
                 offers_list = response.get("offers") if isinstance(response, dict) else None
                 reason = "offer_count" if isinstance(offers_list, list) and len(offers_list) != 1 else "parse_failed"
-                errors.append(f"offers {fm_id}: {exc}")
+                errors.append(f"offers {fm_id}: {_parse_message(exc)}")
         if reason is not None:
             settle(members, None, reason, None)
             continue
         for model_id, ident in members:
-            price = select_offer_price(rate_card, ident.channel)
+            price = prices[model_id]
             if price is None:
                 errors.append(f"offers {fm_id}: no standard price for channel {ident.channel}")
                 channels[model_id] = "skipped:not_found"

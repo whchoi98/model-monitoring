@@ -58,7 +58,12 @@ def _sol_offer(inp, out, g_inp, g_out, offers=1):
             "offers": [{"offerId": SOL_OFFER_ID, "termDetails": {"usageBasedPricingTerm": {"rateCard": card}}}] * offers}
 
 
-def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=None, calls=None, opus_extra=None):
+def _nova_items():
+    return json.loads((FIXTURES / "pricelist_nova-2-lite.json").read_text(encoding="utf-8"))["PriceList"]
+
+
+def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=None, calls=None, opus_extra=None,
+              sol_response=None, pricelist_items=None):
     calls = [] if calls is None else calls
 
     def track(name):
@@ -75,11 +80,11 @@ def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=No
             response["offers"][0].update(opus_extra or {})
             return response
         assert fm_id == "openai.gpt-5.6-sol", fm_id
-        return _sol_offer(*sol, offers=sol_offers)
+        return sol_response if sol_response is not None else _sol_offer(*sol, offers=sol_offers)
 
     def pricelist(input_usagetype, output_usagetype):
         track("pricelist")
-        return json.loads((FIXTURES / "pricelist_nova-2-lite.json").read_text(encoding="utf-8"))["PriceList"]
+        return pricelist_items if pricelist_items is not None else _nova_items()
 
     def anthropic_doc():
         track("anthropic_doc")
@@ -160,6 +165,25 @@ def test_same_values_only_refresh_observed_at_and_run_id(Session):
         assert (row.input_per_mtok, row.output_per_mtok) == BASELINE[model_id][:2]
 
 
+def test_an_unchanged_value_from_a_new_offer_id_refreshes_the_source_id(Session):
+    _seed(Session, {**BASELINE, SOL_E1: (4.4, 22.0, "offer:old")})
+    run = _sync(Session)
+    assert run.summary["channels"][SOL_E1] == "unchanged" and (run.changes, run.pending) == (0, 0)
+    (row,) = _rows(Session, SOL_E1)                                   # no new row, the seed row is re-cited
+    assert row.source_id == f"offer:{SOL_OFFER_ID}" and row.status == "seed" and row.run_id == run.id
+
+
+def test_observed_prices_are_quantized_to_six_decimals_before_compare_and_store(Session):
+    _seed(Session)
+    run = _sync(Session, sol=("4.4000004", "22.0000001", "4.0000004", "20"))  # 7 decimals = stored value at 6
+    assert run.summary["channels"][SOL_E1] == run.summary["channels"][SOL_G] == "unchanged"
+    assert (run.changes, run.pending) == (0, 0) and len(_rows(Session, SOL_E1)) == 1
+    changed = _sync(Session, at=T1, sol=("5.5000004", "33.0000001", "4", "20"))
+    assert changed.summary["channels"][SOL_E1] == "changed"
+    _, new = _rows(Session, SOL_E1)
+    assert (new.input_per_mtok, new.output_per_mtok) == (5.5, 33.0)  # stored quantized, not 5.5000004
+
+
 def test_changes_up_to_fifty_percent_apply_from_the_run_start(Session):
     _seed(Session)
     run = _sync(Session, sol=("5.5", "33", "5", "30"))
@@ -237,6 +261,63 @@ def test_one_offer_problem_skips_only_that_models_channels(Session, kw, reason):
     run = _sync(Session, **kw)
     assert run.status == "partial" and run.summary["channels"][OPUS_US] == "unchanged"
     assert run.summary["channels"][SOL_G] == run.summary["channels"][SOL_E1] == reason
+
+
+def _malformed_nova_items(kind):
+    items = [json.loads(s) for s in _nova_items()]
+    if kind == "product-not-an-object":
+        items.append({"product": "USE1-Nova2.0Lite-input-tokens", "terms": {}})
+    else:  # "on-demand-not-an-object"
+        for item in items:
+            if item["product"]["attributes"]["usagetype"] == "USE1-Nova2.0Lite-output-tokens":
+                item["terms"]["OnDemand"] = ["not", "an", "object"]
+    return items
+
+
+@pytest.mark.parametrize("kind", ["product-not-an-object", "on-demand-not-an-object"])
+def test_a_malformed_price_list_item_skips_only_nova(Session, kind):
+    _seed(Session)
+    run = _sync(Session, pricelist_items=_malformed_nova_items(kind))
+    assert run.status == "partial" and run.summary["channels"][NOVA] == "skipped:parse_failed"
+    assert all(run.summary["channels"][m] == "unchanged" for m in ALL if m != NOVA)  # other sources still apply
+    assert run.summary["sources"]["pricelist"] == {"calls": 1, "ok": 1, "failed": 0}
+    assert any(e.startswith("pricelist nova-2-lite: price list ") for e in run.summary["errors"])
+    (row,) = _rows(Session, NOVA)
+    assert row.observed_at is None and row.run_id is None
+
+
+@pytest.mark.parametrize("response", [
+    {"modelId": "openai.gpt-5.6-sol", "offers": "none"},
+    _sol_offer("1e999999999", "22", "4", "20"),  # finite, but not representable at 6 decimals (InvalidOperation)
+], ids=["offers-not-a-list", "unquantizable-price"])
+def test_a_malformed_offers_response_skips_only_that_models_channels(Session, response):
+    _seed(Session)
+    run = _sync(Session, sol_response=response)
+    assert run.status == "partial"
+    assert run.summary["channels"][SOL_G] == run.summary["channels"][SOL_E1] == "skipped:parse_failed"
+    assert all(run.summary["channels"][m] == "unchanged" for m in ALL if m not in (SOL_G, SOL_E1))
+    assert run.summary["sources"]["offers"] == {"calls": 2, "ok": 2, "failed": 0}
+    assert any(e.startswith("offers openai.gpt-5.6-sol: ") for e in run.summary["errors"])
+    assert all(r.observed_at is None for m in (SOL_G, SOL_E1) for r in _rows(Session, m))
+
+
+@pytest.mark.parametrize(("parser", "skipped"), [
+    ("parse_anthropic_pricing_md", {CP_HAIKU}),
+    ("parse_pricelist", {NOVA}),
+    ("select_offer_price", {OPUS_G, OPUS_US, SOL_G, SOL_E1}),
+])
+def test_any_parser_exception_only_skips_that_sources_channels(Session, monkeypatch, parser, skipped):
+    _seed(Session)
+
+    def boom(*_args):
+        raise KeyError("unexpected shape")
+
+    monkeypatch.setattr(pricing_sync, parser, boom)
+    run = _sync(Session)
+    assert run.status == "partial" and run.finished_at is not None
+    assert {m: r for m, r in run.summary["channels"].items() if r != "unchanged"} == {
+        m: "skipped:parse_failed" for m in skipped}
+    assert any("KeyError: 'unexpected shape'" in e for e in run.summary["errors"])
 
 
 def test_no_claude_platform_on_aws_channels_makes_the_run_partial(Session):

@@ -129,7 +129,7 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 > This price list is compiled automatically from public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing pages.
 """
 
-GOLDEN_CSV_KO = BOM + """# 이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.
+GOLDEN_CSV_KO = BOM + """"# 이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요."
 provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,verification,observed_at,footnotes,source_ids
 anthropic,Claude Opus 5.5,cp,,anthropic:claude-opus-5-5,4,20,verified,2026-09-25T15:00:00Z,1,anthropic-pricing
 anthropic,Claude Opus 5.5,global,,global.anthropic.claude-opus-5-5,4,20,verified,2026-09-25T15:00:00Z,2,offer:offer-7sp77cpl4rveu
@@ -172,7 +172,7 @@ def test_csv_golden_ko():
 def test_csv_en_changes_only_the_disclaimer_and_reference_titles():
     en = to_csv(EXPECTED_PAYLOAD, "en")
     first, rest = en.split("\n", 1)
-    assert first == BOM + "# " + EXPECTED_PAYLOAD["disclaimer"]["en"]
+    assert first == BOM + '"# ' + EXPECTED_PAYLOAD["disclaimer"]["en"] + '"'
     assert '2,offer:offer-7sp77cpl4rveu,agreement_offer,"Amazon Bedrock agreement offer rate card, ' in rest
     assert rest.split("\n\n")[0] == GOLDEN_CSV_KO.split("\n", 1)[1].split("\n\n")[0]  # price rows are language-neutral
 
@@ -180,7 +180,9 @@ def test_csv_en_changes_only_the_disclaimer_and_reference_titles():
 def test_csv_parses_back_into_two_tables():
     text = to_csv(EXPECTED_PAYLOAD, "ko")
     lines = text.lstrip(BOM).split("\n")
-    assert lines[0].startswith("# ")
+    # the disclaimer is one quoted field even though the Korean text contains a comma
+    assert next(csv.reader([lines[0]])) == ["# " + EXPECTED_PAYLOAD["disclaimer"]["ko"]]
+    assert "," in EXPECTED_PAYLOAD["disclaimer"]["ko"]
     prices, references = "\n".join(lines[1:]).split("\n\n")
     rows = list(csv.DictReader(io.StringIO(prices)))
     assert len(rows) == 11  # one row per cell (tier element), empty cells have no row
