@@ -2,6 +2,13 @@
 
 Base URL: `http://localhost:8000` (dev) | `https://d36s7ml54xwemr.cloudfront.net` (prod, CloudFront → internal ALB)
 
+## Health (Public)
+
+### GET /api/health
+Liveness check (`backend/main.py`). Always returns `{"status": "ok"}`; it does not touch the database or Bedrock.
+
+---
+
 ## Authentication
 
 ### POST /api/auth/login
@@ -102,6 +109,21 @@ up to 168; fractional windows are accepted. `category` is optional. Windows
 over 24 hours use hourly averages and min–max values from successful calls;
 failed-only buckets retain null metrics.
 
+### GET /api/auto-probe/categories
+Workload preset list from `auto_prober.WORKLOAD_PRESETS`, in rotation order — the valid values of the `category` filter above.
+
+**Response:**
+```json
+[
+  { "id": "chat-short", "label_ko": "짧은 대화", "label_en": "Short chat" },
+  { "id": "reasoning", "label_ko": "추론", "label_en": "Reasoning" },
+  { "id": "code-gen", "label_ko": "코드 생성", "label_en": "Code generation" },
+  { "id": "summarize", "label_ko": "요약", "label_en": "Summarization" },
+  { "id": "structured", "label_ko": "JSON 추출", "label_en": "JSON extraction" },
+  { "id": "translate", "label_ko": "번역", "label_en": "Translation" }
+]
+```
+
 ### POST /api/auto-probe/trigger
 **JWT required.** Reserves one automatic probe cycle before starting a
 background worker. Manual triggers and scheduled cycles use the same
@@ -124,7 +146,7 @@ matches the dashboard scope. Zero probes means no observations, not 100% success
 
 ---
 
-## Manual Probe (Auth Required)
+## Manual Probe (run = Auth Required)
 
 ### POST /api/probes/run
 **Auth required.** SSE streaming probe execution.
@@ -134,13 +156,30 @@ matches the dashboard scope. Zero probes means no observations, not 100% success
 {
   "model_ids": ["us.anthropic.claude-opus-4-7"],
   "prompt": "Hello",
-  "temperature": 0.7,
+  "temperature": 0.1,
   "max_tokens": 256,
+  "concurrency": 1,
   "repeat_count": 1
 }
 ```
 
-**Response:** Server-Sent Events stream with progress and results.
+| Field | Default | Limits |
+|-------|---------|--------|
+| `model_ids` | (required) | every id must be in `GET /api/models`; unknown ids or an empty list → `400` |
+| `prompt` | (required) | string |
+| `temperature` | `0.1` | 0.0–1.0 |
+| `max_tokens` | `256` | 1–4096 |
+| `concurrency` | `1` | 1–20 |
+| `repeat_count` | `1` | 1–50 |
+
+Out-of-range values → `422`. Defaults and limits come from `ProbeRunRequest` in `backend/schemas.py`.
+
+**Response:** Server-Sent Events stream (`start` with `run_id` / `ttft` / `token` / `result` / `error` / `complete`).
+The run and its results are stored as a manual run (`is_auto = 0`).
+
+### GET /api/probes/{run_id}
+One stored probe run with all its results (`ProbeRunResponse`: `id`, `created_at`, `prompt`, `temperature`, `max_tokens`,
+`concurrency`, `repeat_count`, `status`, `is_auto`, `results[]`). No auth. `404` if the run does not exist.
 
 ---
 
@@ -163,14 +202,17 @@ Returns available model list.
 
 ## Results (Public)
 
-### GET /api/results?model_id=X&limit=50&offset=0
-Query stored probe results with optional filters.
+### GET /api/results?model_id=X&run_id=N&start_time=…&end_time=…&limit=100&offset=0
+Query stored probe results (manual and automatic), newest first. All filters are optional: `model_id`, `run_id`,
+`start_time` / `end_time` (ISO 8601, inclusive bounds on the result `timestamp`), `limit` (default 100, 1–1000), `offset`
+(default 0). Rows whose label matches `HIDDEN_MODEL_PATTERNS` (default `(1P)`, the dormant 1P channels) are excluded.
 
 ### GET /api/results/latest
 Latest results across all models.
 
 ### GET /api/results/stats
-Statistics: avg, p50, p95, p99 per model.
+Statistics: avg, p50, p95, p99 per model, successful probes only. Optional `start_time`, `end_time`, `run_id`, `category`.
+Without `start_time` and `run_id` the window is the last 24 hours.
 
 ---
 
@@ -185,12 +227,36 @@ List all prompt sets.
 ### DELETE /api/prompts/{id}
 **Auth required.** Delete a prompt set.
 
+### POST /api/prompts/optimize
+**Auth required.** Bedrock Prompt Optimization (`bedrock-agent-runtime` `OptimizePrompt`, region `BEDROCK_OPTIMIZE_REGION`,
+default `us-east-1`). Synchronous: the event stream is collected and returned as JSON.
+
+**Request:**
+```json
+{ "prompt": "string (1-20000 chars)", "target_model_id": "global.anthropic.claude-opus-4-7" }
+```
+
+A `global.` / `us.` / `eu.` / `apac.` inference-profile prefix on `target_model_id` is stripped before the call (the API takes
+foundation-model ids).
+
+**Response (200):**
+```json
+{ "analyze_message": "string | null", "optimized_prompt": "string", "target_model_id": "as sent", "request_id": "string | null" }
+```
+
+`502` carries the Bedrock error code and message; `500` if no optimized prompt came back.
+
 ---
 
 ## Insights (regenerate = Auth Required)
 
 ### GET /api/insights/latest · GET /api/insights
 Latest saved AI insight (bilingual Markdown) / list of recent insights.
+
+### POST /api/insights/regenerate
+**Auth required.** Non-streaming regenerate. Body `{"window": "6h"}` (default `6h`). Starts `insights_runner.run_once(window)`
+in a backend thread and returns at once: `{"triggered": true, "message": "..."}`, or `{"triggered": false, ...}` while another
+regeneration is running. Poll `GET /api/insights/latest` for the result.
 
 ### POST /api/insights/stream-regenerate
 **Auth required.** SSE stream — regenerate the insight summary.
