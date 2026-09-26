@@ -25,6 +25,7 @@ from routers import analysis as analysis_router
 from routers import parity as parity_router
 from routers import gptbench as gptbench_router
 from routers import features as features_router
+from routers import pricing as pricing_router
 
 logging.basicConfig(
     level=logging.INFO,
@@ -255,6 +256,8 @@ app.include_router(analysis_router.router)
 app.include_router(parity_router.router)
 app.include_router(gptbench_router.router)
 app.include_router(features_router.router)
+app.include_router(pricing_router.router)
+app.include_router(pricing_router.admin_router)
 
 
 @app.get("/api/health", tags=["health"])
