@@ -1,5 +1,5 @@
 /**
- * 비용 단가 표 순수 로직 (v2.30.0) — 화면 포맷(소수 둘째 자리 고정), 배지 판정, `costFromPrices`.
+ * 비용 단가 표 순수 로직 (v2.30.0) — 화면 포맷(소수 둘째 자리 고정), 줄바꿈 단위(`textRuns`), 배지 판정, `costFromPrices`.
  *
  * 정렬과 각주 번호는 백엔드가 정하므로 여기서는 검사하지 않는다. 배지 규칙은 설계서 UI 절:
  * stale, seed_only → "자동 확인 안 됨", pending → "검토 대기", 수동 메모 → 프로모션(날짜가 지나면 확인 필요).
@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fetchPricing, pricingExportUrl } from "./api";
 import type { PricingModelPrice, PricingNote, PricingTier } from "./types";
 import {
-  costFromPrices, formatPricePair, formatUnitPrice, noteReferenceId, notesForTier, tierBadges, utcDate,
+  costFromPrices, formatPricePair, formatUnitPrice, noteReferenceId, notesForTier, textRuns, tierBadges, utcDate,
 } from "./pricingTable";
 
 afterEach(() => {
@@ -47,6 +47,43 @@ describe("formatUnitPrice / formatPricePair — 화면은 소수 둘째 자리 �
   });
 });
 
+describe("textRuns — 토큰 중간에서 줄이 바뀌지 않게 나눈다", () => {
+  const nowrap = (text: string, glueLast = false) => textRuns(text, glueLast).filter((run) => run.nowrap).map((run) => run.text);
+
+  test("가격 쌍, 리전 id, ISO 날짜, offer id, In-Region은 한 덩어리", () => {
+    expect(nowrap("새 값 $3.00 / $18.00")).toEqual(["$3.00 / $18.00"]);
+    expect(nowrap("Global $5.00 / $30.00, US $5.50 / $33.00")).toEqual(["$5.00 / $30.00", "$5.50 / $33.00"]);
+    expect(nowrap("프로모션(최소 2026-11-21까지, 수동 메모)")).toEqual(["2026-11-21"]);
+    expect(nowrap("Amazon Bedrock 약정 오퍼 요금표, offer-icq4574v6gz3i (Claude Fable 5.1)")).toEqual(["offer-icq4574v6gz3i"]);
+    expect(nowrap("Global 채널 단가는 같은 모델의 US, In-Region 채널과 다를 수 있다")).toEqual(["In-Region"]);
+    expect(nowrap("캐시, batch, long-context, priority 단가")).toEqual(["long-context"]);
+  });
+
+  test("이어 붙이면 원문 그대로다", () => {
+    const text = "AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)";
+    expect(textRuns(text).map((run) => run.text).join("")).toBe(text);
+    expect(textRuns(text, true).map((run) => run.text).join("")).toBe(text);
+    expect(textRuns("")).toEqual([]);
+  });
+
+  test("glueLast는 마지막 단어를 nowrap으로 떼어 각주가 붙게 한다", () => {
+    expect(textRuns("프로모션 이전 단가 $5.50 / $33.00", true)).toEqual([
+      { text: "프로모션 이전 단가 ", nowrap: false }, { text: "$5.50 / $33.00", nowrap: true },
+    ]);
+    expect(textRuns("Anthropic API 요금 (Claude Platform on AWS는 표준 요금)", true).slice(-2)).toEqual([
+      { text: "Anthropic API 요금 (Claude Platform on AWS는 표준 ", nowrap: false }, { text: "요금)", nowrap: true },
+    ]);
+    expect(textRuns("초기값", true)).toEqual([{ text: "초기값", nowrap: true }]);
+    expect(nowrap("단가 없음", false)).toEqual([]);
+  });
+
+  test("32자를 넘는 토큰은 nowrap으로 두지 않는다 (overflow-wrap:anywhere가 좁은 열 안에서 끊는다)", () => {
+    const long = "aws-external-anthropic-us-east-2-api-endpoint-host";
+    expect(nowrap(`endpoint ${long}`)).toEqual([]);
+    expect(nowrap(`endpoint ${long}`, true)).toEqual([]);
+  });
+});
+
 describe("utcDate", () => {
   test("UTC 날짜만 남긴다, 오프셋 없는 값은 UTC로 읽는다", () => {
     expect(utcDate("2026-09-26T15:00:00Z")).toBe("2026-09-26");
@@ -61,22 +98,22 @@ describe("tierBadges", () => {
     expect(tierBadges(tier(), [], "ko", SEPT_26)).toEqual([]);
   });
 
-  test("stale → 자동 확인 안 됨, 설명은 마지막 확인일", () => {
+  test("stale → 자동 확인 안 됨, 설명은 공식 출처 확인일", () => {
     const stale = tier({ verification: "stale", observed_at: "2026-09-20T03:00:00Z" });
     expect(tierBadges(stale, [], "ko", SEPT_26)).toEqual([
-      { kind: "unverified", label: "자동 확인 안 됨", detail: "마지막 확인 2026-09-20" },
+      { kind: "unverified", label: "자동 확인 안 됨", detail: "공식 출처 확인 2026-09-20" },
     ]);
     expect(tierBadges(stale, [], "en", SEPT_26)).toEqual([
-      { kind: "unverified", label: "Not auto-verified", detail: "Last verified 2026-09-20" },
+      { kind: "unverified", label: "Not auto-verified", detail: "Confirmed at source 2026-09-20" },
     ]);
   });
 
-  test("observed_at이 없는 stale → 초기값이 아니라 마지막 확인일 없음", () => {
+  test("observed_at이 없는 stale → 초기값이 아니라 공식 출처 확인일 없음", () => {
     const stale = tier({ verification: "stale", observed_at: null });
     expect(tierBadges(stale, [], "ko", SEPT_26)).toEqual([
-      { kind: "unverified", label: "자동 확인 안 됨", detail: "마지막 확인일 없음" },
+      { kind: "unverified", label: "자동 확인 안 됨", detail: "공식 출처 확인일 없음" },
     ]);
-    expect(tierBadges(stale, [], "en", SEPT_26)[0].detail).toBe("No confirmation date");
+    expect(tierBadges(stale, [], "en", SEPT_26)[0].detail).toBe("No source confirmation date");
   });
 
   test("seed_only → 자동 확인 안 됨, 설명은 초기값", () => {

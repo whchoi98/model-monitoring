@@ -25,7 +25,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.getByRole("note", { name: "면책 안내" }).getByRole("link", { name: "Amazon Bedrock 요금" }))
     .toHaveAttribute("href", "https://aws.amazon.com/bedrock/pricing/");
   await expect(page.locator('[data-disclaimer="bottom"]')).toHaveText(DISCLAIMER_KO);
-  await expect(page.locator("[data-last-sync]")).toContainText("마지막 자동 확인");
+  await expect(page.locator("[data-last-sync]")).toContainText("마지막 공식 단가 동기화: ");
   await expect(page.locator("[data-last-sync]")).toContainText("완료");
   await expect(page.locator("[data-pending-count]")).toHaveText("검토 대기 1건");
 
@@ -35,6 +35,22 @@ test("unit prices render the backend table, badges and both disclaimers", async 
     .toHaveText(["GPT 6 Astra", "GPT 5.6 Sol", "GPT 5.4"]);
   await expect(page.getByRole("region", { name: "Anthropic Claude 단가 표" }).getByRole("columnheader"))
     .toHaveText(["모델", "Claude Platform on AWS", "Global", "US", "In-Region"]);
+  // The unit is said once above the tables, and each table's caption names it with the unit.
+  await expect(page.locator("[data-unit-legend]")).toHaveText("각 단가 셀: 입력 / 출력, 1M 토큰당 USD");
+  for (const provider of ["Anthropic Claude", "Amazon Nova", "OpenAI"]) {
+    await expect(page.getByRole("table", { name: `${provider} 단가 (입력 / 출력, 1M 토큰당 USD)`, exact: true })).toBeVisible();
+  }
+  // Fixed layout: the three provider tables put every column at the same x, with four equal price columns.
+  const columns = await page.locator("main table").evaluateAll((tables) => tables.map((table) =>
+    [...table.querySelectorAll("thead th")].map((th) => {
+      const box = th.getBoundingClientRect();
+      return [Math.round(box.left), Math.round(box.width)];
+    })));
+  expect(columns).toHaveLength(3);
+  expect(columns[1]).toEqual(columns[0]);
+  expect(columns[2]).toEqual(columns[0]);
+  const priceWidths = columns[0].slice(1).map(([, width]) => width);
+  expect(Math.max(...priceWidths) - Math.min(...priceWidths)).toBeLessThanOrEqual(1);
 
   const opus = page.locator('tr[data-family="claude-opus-5-5"]');
   await expect(opus.locator('td[data-tier="cp"]')).toContainText("$4.00 / $20.00");
@@ -52,7 +68,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
 
   const fableUs = page.locator('tr[data-family="claude-fable-5-1"] td[data-tier="us"]');
   await expect(fableUs.locator('[data-badge="unverified"]')).toContainText("자동 확인 안 됨");
-  await expect(fableUs.locator('[data-badge-detail="unverified"]')).toHaveText("마지막 확인 2026-09-20");
+  await expect(fableUs.locator('[data-badge-detail="unverified"]')).toHaveText("공식 출처 확인 2026-09-20");
   await expect(page.locator('tr[data-family="nova-2-lite"] [data-badge-detail="unverified"]')).toHaveText("초기값");
   const promo = page.locator('tr[data-family="gpt-5.6-sol"] [data-badge="promo"]');
   await expect(promo).toHaveCount(2);
@@ -182,6 +198,32 @@ test("a 375px phone scrolls only the price table, with the model column pinned",
   const box = (await table.boundingBox())!;
   const model = (await table.getByRole("rowheader").first().boundingBox())!;
   expect(Math.abs(model.x - box.x)).toBeLessThan(2);
+  // The pinned model column is opaque with a divider in both themes, so scrolled prices never show beside the name.
+  for (const theme of ["dark", "light"]) {
+    await page.evaluate((value) => document.documentElement.classList.toggle("light", value === "light"), theme);
+    const sticky = await table.getByRole("rowheader").first().evaluate((element) => {
+      const style = getComputedStyle(element);
+      return { divider: style.borderRightWidth, background: style.backgroundColor };
+    });
+    expect(sticky.divider).toBe("1px");
+    expect(sticky.background).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
+  }
+  await page.evaluate(() => document.documentElement.classList.remove("light"));
+  // No token wraps inside: region ids, price pairs, the sync time, short badges and the pending count stay whole.
+  const split = await page.evaluate(() => {
+    const inline = [...document.querySelectorAll("[data-regions] > span, [data-price-line] > span:first-child, [data-last-sync] time")];
+    const boxes = [...document.querySelectorAll('[data-badge="unverified"], [data-badge="pending"], [data-pending-count]')];
+    return [
+      ...inline.filter((element) => element.getClientRects().length > 1),
+      ...boxes.filter((element) => element.getBoundingClientRect().height > 2 * parseFloat(getComputedStyle(element).lineHeight)),
+    ].map((element) => element.textContent);
+  });
+  expect(split).toEqual([]);
+  // Nothing in a price cell spills into the next column.
+  const spilled = await page.locator("main td").evaluateAll((cells) => cells
+    .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+    .map((cell) => cell.closest("tr")?.getAttribute("data-family")));
+  expect(spilled).toEqual([]);
 
   await page.locator("header button[aria-controls]").click();
   await expect(page.getByRole("navigation", { name: "모바일 메뉴" }).getByRole("link", { name: "비용 단가", exact: true }))

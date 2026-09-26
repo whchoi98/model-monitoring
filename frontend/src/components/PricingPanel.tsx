@@ -1,16 +1,18 @@
 "use client";
 
 // 비용 단가 (v2.30.0) — GET /api/pricing 단일 출처. 제공사 섹션, 행 순서, 각주 번호는 응답 그대로 쓴다.
-// 공식 단가는 12시간마다 자동 확인되고, 면책 문구는 상단 안내 상자와 참고 자료 끝에 두 번 표기한다.
+// 공식 단가는 12시간마다 자동 동기화되고, 면책 문구는 상단 안내 상자와 참고 자료 끝에 두 번 표기한다.
 // 배지 설명과 모델 ID는 title 툴팁에만 두지 않는다(터치, 키보드 사용자가 볼 수 없다). 배지 설명은 배지 옆 글자로,
 // 모델 ID는 "모델 ID 보기" 토글로 보여 준다. 폰에서는 표만 가로로 스크롤되므로 표 위 안내와 오른쪽 가장자리 흐림으로 알린다.
+// 한글 문장은 break-keep(어절 단위 줄바꿈), 리전 id, 날짜, 가격 쌍, 배지, 각주는 토큰 중간에서 줄이 바뀌지 않는다.
+// 세 제공사 표는 같은 고정 열 폭(table-fixed)이라 데스크톱에서 열 위치가 같다.
 
-import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchPricing, pricingExportUrl } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n-context";
 import {
-  TIER_LABELS, formatPricePair, notesForTier, tierBadges,
+  TIER_LABELS, formatPricePair, notesForTier, textRuns, tierBadges,
   type PricingBadge, type PricingTierKey,
 } from "@/lib/pricingTable";
 import type {
@@ -51,14 +53,45 @@ const NOTES: { en: string; ko: string }[] = [
   { en: "Cache, batch, long-context and priority prices are not included", ko: "캐시, batch, long-context, priority 단가는 포함하지 않는다" },
   { en: "The cost pages use the price in effect at each probe's time", ko: "비용 화면은 각 프로브 시각의 단가로 계산한다" },
 ];
-const CELL = "border-b border-gray-800/60 px-2 py-2.5 align-top";
-const STICKY = "sticky left-0 z-10 bg-gray-900";
+const UNIT = { en: "input / output, USD per 1M tokens", ko: "입력 / 출력, 1M 토큰당 USD" };
+// Korean prose wraps between words; a token too long for its line may still break anywhere instead of overflowing.
+const PROSE = "break-keep [overflow-wrap:anywhere]";
+const CELL = "border-b border-gray-800/60 px-2 py-2.5 align-top break-keep";
+// Opaque in both themes (gray-900 is the card color) with a divider, so scrolled price fragments never touch the name.
+const STICKY = "sticky left-0 z-10 border-r border-r-gray-800 bg-gray-900";
+// The same fixed widths in every provider table: the model column, then four equal price columns.
+const TABLE = "w-full min-w-[800px] table-fixed border-separate border-spacing-0 text-xs";
+const MODEL_COL = "w-36";
+const PRICE_COL = "w-[calc((100%_-_9rem)/4)]";
 const BADGE_CLASS: Record<PricingBadge["kind"], string> = {
   unverified: "border-amber-500/40 bg-amber-500/10 text-amber-300",
   pending: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   promo: "border-purple-500/40 bg-purple-500/10 text-purple-300",
   promo_check: "border-rose-500/40 bg-rose-500/10 text-rose-300",
 };
+// Short labels never wrap. Promotion labels are longer than a phone-width column in English, so they wrap only between
+// words (their date stays whole).
+const BADGE_WRAP: Record<PricingBadge["kind"], string> = {
+  unverified: "whitespace-nowrap",
+  pending: "whitespace-nowrap",
+  promo: "break-keep",
+  promo_check: "break-keep",
+};
+
+/** Text whose price pairs and hyphenated tokens never wrap inside; `tail` (a footnote, "↗") stays with the last word. */
+function Runs({ text, tail }: { text: string; tail?: ReactNode }) {
+  const runs = textRuns(text, tail !== undefined);
+  // textRuns makes the last word a nowrap run whenever it can; otherwise (empty text) the tail simply follows.
+  const glueAt = runs.length > 0 && runs[runs.length - 1].nowrap ? runs.length - 1 : -1;
+  return (
+    <>
+      {runs.map((run, i) => (run.nowrap
+        ? <span key={i} className="whitespace-nowrap">{run.text}{i === glueAt && tail}</span>
+        : <Fragment key={i}>{run.text}</Fragment>))}
+      {glueAt === -1 && tail}
+    </>
+  );
+}
 
 /** Consecutive runs of the same provider, in response order (the backend already sorted them). */
 export function providerSections(families: PricingFamily[]): { provider: PricingFamily["provider"]; families: PricingFamily[] }[] {
@@ -117,8 +150,8 @@ function PriceTableScroll({ label, lang, children }: { label: string; lang: Lang
   return (
     <>
       {cue.overflow && (
-        <p aria-hidden="true" data-scroll-hint className={`mb-2 text-[11px] text-gray-500 ${cue.scrolled ? "invisible" : ""}`}>
-          → {L("Scroll the table sideways for Global, US and In-Region prices", "표를 옆으로 스크롤하면 Global, US, In-Region 단가가 보입니다")}
+        <p aria-hidden="true" data-scroll-hint className={`mb-2 text-[11px] text-gray-500 ${PROSE} ${cue.scrolled ? "invisible" : ""}`}>
+          → <Runs text={L("Scroll the table sideways for Global, US and In-Region prices", "표를 옆으로 스크롤하면 Global, US, In-Region 단가가 보입니다")} />
         </p>
       )}
       <div className="relative">
@@ -168,19 +201,51 @@ function Badges({ badges, lang, refNumbers, onFootnote }: {
           <div key={badge.kind} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
             <span
               data-badge={badge.kind}
-              className={`rounded border px-1.5 py-0.5 text-[10px] font-medium leading-tight ${BADGE_CLASS[badge.kind]}`}
+              className={`min-w-0 rounded border px-1.5 py-0.5 text-[10px] font-medium leading-tight ${BADGE_WRAP[badge.kind]} ${BADGE_CLASS[badge.kind]}`}
             >
-              {badge.label}
+              <Runs text={badge.label} />
             </span>
             <span className="sr-only">, </span>
-            <span data-badge-detail={badge.kind} className="text-[10px] leading-tight text-gray-400">
-              <span className="tabular-nums">{badge.detail}</span>
-              {n !== undefined && <Footnotes numbers={[n]} lang={lang} onFootnote={onFootnote} />}
+            <span data-badge-detail={badge.kind} className="min-w-0 break-keep text-[10px] leading-tight text-gray-400">
+              <span className="tabular-nums">
+                <Runs text={badge.detail} tail={n === undefined ? undefined : <Footnotes numbers={[n]} lang={lang} onFootnote={onFootnote} />} />
+              </span>
             </span>
           </div>
         );
       })}
     </div>
+  );
+}
+
+/** One price line: the pair, then (In-Region) its regions. The footnote stays with the last token, each region whole. */
+function PriceLine({ entry, lang, onFootnote }: {
+  entry: PricingTier | PricingInRegionTier;
+  lang: Lang;
+  onFootnote: (n: number) => void;
+}) {
+  const regions = "regions" in entry ? entry.regions : [];
+  const footnotes = <Footnotes numbers={entry.footnotes} lang={lang} onFootnote={onFootnote} />;
+  return (
+    <>
+      <span className="whitespace-nowrap">
+        <span className="tabular-nums text-gray-100" title={entry.model_ids.join("\n")}>{formatPricePair(entry)}</span>
+        {regions.length === 0 && footnotes}
+      </span>
+      {regions.length > 0 && (
+        <>
+          {" "}
+          <span data-regions className="text-gray-400">
+            {regions.map((region, i) => (
+              <Fragment key={region}>
+                {i > 0 && ", "}
+                <span className="whitespace-nowrap">{region}{i === regions.length - 1 && footnotes}</span>
+              </Fragment>
+            ))}
+          </span>
+        </>
+      )}
+    </>
   );
 }
 
@@ -211,11 +276,7 @@ function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFo
       <div className="space-y-2">
         {entries.map((entry) => (
           <div key={entry.model_ids.join(" ")} data-price-line>
-            <span className="whitespace-nowrap tabular-nums text-gray-100" title={entry.model_ids.join("\n")}>
-              {formatPricePair(entry)}
-            </span>
-            {"regions" in entry && <>{" "}<span className="text-gray-400">{entry.regions.join(", ")}</span></>}
-            <Footnotes numbers={entry.footnotes} lang={lang} onFootnote={onFootnote} />
+            <PriceLine entry={entry} lang={lang} onFootnote={onFootnote} />
             {showModelIds && (
               <span data-model-ids className="mt-0.5 block break-all font-mono text-[10px] leading-snug text-gray-500">
                 {entry.model_ids.map((id) => <span key={id} className="block">{id}</span>)}
@@ -238,21 +299,23 @@ function ReferenceItem({ reference, lang, highlighted }: { reference: PricingRef
       data-highlighted={highlighted ? "true" : "false"}
       className={`scroll-mt-36 rounded-lg px-2 py-1.5 transition-colors ${highlighted ? "bg-blue-500/15 ring-1 ring-blue-500/40" : ""}`}
     >
-      <span className="mr-1.5 tabular-nums text-gray-500">[{reference.n}]</span>
+      <span className="mr-1.5 whitespace-nowrap tabular-nums text-gray-500">[{reference.n}]</span>
       {reference.kind === "manual_note" && (
-        <span className="mr-1.5 rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
+        <span className="mr-1.5 whitespace-nowrap rounded border border-purple-500/40 bg-purple-500/10 px-1.5 py-0.5 text-[10px] font-medium text-purple-300">
           {lang === "en" ? "Manual note" : "수동 메모"}
         </span>
       )}
       {reference.url ? (
-        <a href={reference.url} target="_blank" rel="noopener noreferrer" className="break-words text-blue-400 hover:underline">
-          {title}<span aria-hidden="true"> ↗</span>
+        <a href={reference.url} target="_blank" rel="noopener noreferrer" className="text-blue-400 hover:underline">
+          <Runs text={title} tail={<span aria-hidden="true"> ↗</span>} />
         </a>
       ) : (
-        <span className="break-words text-gray-300">{title}</span>
+        <span className="text-gray-300"><Runs text={title} /></span>
       )}
       {reference.as_of && (
-        <span className="text-gray-500">, {lang === "en" ? "checked" : "확인일"} {reference.as_of}</span>
+        <span className="text-gray-500">
+          , <span className="whitespace-nowrap">{lang === "en" ? "checked" : "확인일"} {reference.as_of}</span>
+        </span>
       )}
     </li>
   );
@@ -280,12 +343,12 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
         role="note"
         aria-label={L("Disclaimer", "면책 안내")}
         data-disclaimer="top"
-        className="rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-200"
+        className={`rounded-xl border border-amber-500/50 bg-amber-500/10 p-4 text-sm leading-relaxed text-amber-200 ${PROSE}`}
       >
         <p>{data.disclaimer[lang]}</p>
         <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs">
           {OFFICIAL_LINKS.map((link) => (
-            <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" className="font-medium underline hover:no-underline">
+            <a key={link.url} href={link.url} target="_blank" rel="noopener noreferrer" className="whitespace-nowrap font-medium underline hover:no-underline">
               {L(link.en, link.ko)}<span aria-hidden="true"> ↗</span>
             </a>
           ))}
@@ -293,25 +356,26 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
       </div>
 
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <p className="text-xs text-gray-400" data-last-sync>
-          {sync && syncStatus ? (
-            <>
-              {L("Last automatic check", "마지막 자동 확인")}:{" "}
-              {sync.finished_at ? (
-                <time dateTime={sync.finished_at} className="tabular-nums text-gray-300">{formatDateTime(sync.finished_at, lang)}</time>
-              ) : (
-                <span className="text-gray-300">{L("in progress", "진행 중")}</span>
-              )}
-              , {L(syncStatus.en, syncStatus.ko)}
-            </>
-          ) : (
-            L("No automatic check has run yet, initial values are shown.", "자동 확인 기록이 아직 없어 초기값을 표시합니다.")
-          )}
+        <p className="flex flex-wrap items-baseline gap-x-3 gap-y-1 break-keep text-xs text-gray-400" data-last-sync>
+          <span>
+            {sync && syncStatus ? (
+              <>
+                {L("Last official price sync", "마지막 공식 단가 동기화")}:{" "}
+                {sync.finished_at ? (
+                  <time dateTime={sync.finished_at} className="whitespace-nowrap tabular-nums text-gray-300">{formatDateTime(sync.finished_at, lang)}</time>
+                ) : (
+                  <span className="text-gray-300">{L("in progress", "진행 중")}</span>
+                )}
+                , {L(syncStatus.en, syncStatus.ko)}
+              </>
+            ) : (
+              L("No official price sync has run yet, initial values are shown.", "공식 단가 동기화 기록이 아직 없어 초기값을 표시합니다.")
+            )}
+          </span>
           {data.pending_review > 0 && (
             <>
-              {" "}
               <span className="sr-only">, </span>
-              <span data-pending-count className="ml-3 rounded border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
+              <span data-pending-count className="whitespace-nowrap rounded border border-sky-500/40 bg-sky-500/10 px-1.5 py-0.5 text-sky-300">
                 {L(`${data.pending_review} pending review`, `검토 대기 ${data.pending_review}건`)}
               </span>
             </>
@@ -341,30 +405,45 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
       {data.families.length === 0 && (
         <DataEmpty
           title={L("No unit prices yet.", "표시할 단가가 없습니다.")}
-          description={L("No active channel has a price yet. Refresh after the next automatic check.", "활성 채널의 단가가 아직 없습니다. 다음 자동 확인 뒤 새로고침하세요.")}
+          description={L("No active channel has a price yet. Refresh after the next price sync.", "활성 채널의 단가가 아직 없습니다. 다음 단가 동기화 뒤 새로고침하세요.")}
         />
+      )}
+
+      {data.families.length > 0 && (
+        <p data-unit-legend className="break-keep text-xs text-gray-400">
+          {L("Each price cell", "각 단가 셀")}:{" "}
+          <span className="whitespace-nowrap font-medium text-gray-300">{L("input / output", "입력 / 출력")}</span>,{" "}
+          <span className="whitespace-nowrap font-medium text-gray-300">{L("USD per 1M tokens", "1M 토큰당 USD")}</span>
+        </p>
       )}
 
       {providerSections(data.families).map((section) => {
         const label = PROVIDER_LABELS[section.provider];
         return (
           <section key={section.provider} aria-labelledby={`pricing-${section.provider}`} className="min-w-0 rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <h2 id={`pricing-${section.provider}`} className="mb-3 text-sm font-semibold text-gray-200">{label}</h2>
+            <h2 id={`pricing-${section.provider}`} className="mb-3 break-keep text-sm font-semibold text-gray-200">{label}</h2>
             <PriceTableScroll label={label} lang={lang}>
-              <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
+              <table className={TABLE}>
+                <caption className="sr-only">{L(`${label} prices (${UNIT.en})`, `${label} 단가 (${UNIT.ko})`)}</caption>
+                <colgroup>
+                  <col className={MODEL_COL} />
+                  {TIER_KEYS.map((key) => <col key={key} className={PRICE_COL} />)}
+                </colgroup>
                 <thead>
                   <tr className="text-gray-500">
-                    <th scope="col" className={`${STICKY} border-b border-gray-800 py-2 pr-3 text-left font-medium`}>{L("Model", "모델")}</th>
+                    <th scope="col" className={`${STICKY} border-b border-gray-800 py-2 pr-3 text-left align-bottom font-medium`}>{L("Model", "모델")}</th>
                     {TIER_KEYS.map((key) => (
-                      <th key={key} scope="col" className="border-b border-gray-800 px-2 py-2 text-left font-medium">{TIER_LABELS[key]}</th>
+                      <th key={key} scope="col" className="break-keep border-b border-gray-800 px-2 py-2 text-left align-bottom font-medium">
+                        <Runs text={TIER_LABELS[key]} />
+                      </th>
                     ))}
                   </tr>
                 </thead>
                 <tbody>
                   {section.families.map((family) => (
                     <tr key={family.family_key} data-family={family.family_key}>
-                      <th scope="row" className={`${STICKY} ${CELL} whitespace-nowrap pl-0 pr-3 text-left font-semibold text-gray-200`}>
-                        {family.family}
+                      <th scope="row" className={`${STICKY} ${CELL} pl-0 pr-3 text-left font-semibold text-gray-200`}>
+                        <Runs text={family.family} />
                       </th>
                       {TIER_KEYS.map((key) => (
                         <TierCell
@@ -382,20 +461,20 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
       })}
 
       <section aria-labelledby="pricing-notes-title" className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <h2 id="pricing-notes-title" className="mb-2 text-sm font-semibold text-gray-200">{L("Notes", "참고 사항")}</h2>
-        <ol className="list-decimal space-y-1 pl-5 text-xs leading-relaxed text-gray-400">
-          {NOTES.map((note) => <li key={note.en}>{L(note.en, note.ko)}</li>)}
+        <h2 id="pricing-notes-title" className="mb-2 break-keep text-sm font-semibold text-gray-200">{L("Notes", "참고 사항")}</h2>
+        <ol className={`list-decimal space-y-1 pl-5 text-xs leading-relaxed text-gray-400 ${PROSE}`}>
+          {NOTES.map((note) => <li key={note.en}><Runs text={L(note.en, note.ko)} /></li>)}
         </ol>
       </section>
 
       <section aria-labelledby="pricing-references-title" className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <h2 id="pricing-references-title" className="mb-2 text-sm font-semibold text-gray-200">{L("References", "참고 자료")}</h2>
-        <ol className="space-y-0.5 text-xs leading-relaxed">
+        <h2 id="pricing-references-title" className="mb-2 break-keep text-sm font-semibold text-gray-200">{L("References", "참고 자료")}</h2>
+        <ol className={`space-y-0.5 text-xs leading-relaxed ${PROSE}`}>
           {data.references.map((reference) => (
             <ReferenceItem key={reference.id} reference={reference} lang={lang} highlighted={highlight === reference.n} />
           ))}
         </ol>
-        <p data-disclaimer="bottom" className="mt-4 border-t border-gray-800 pt-3 text-xs leading-relaxed text-amber-300">
+        <p data-disclaimer="bottom" className={`mt-4 border-t border-gray-800 pt-3 text-xs leading-relaxed text-amber-300 ${PROSE}`}>
           {data.disclaimer[lang]}
         </p>
       </section>
@@ -421,12 +500,12 @@ export default function PricingPanel() {
   return (
     <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
       <div className="flex items-start justify-between flex-wrap gap-3">
-        <div className="min-w-0">
+        <div className="min-w-0 break-keep">
           <h1 className="text-2xl font-bold text-gray-100">{L("Unit Prices", "비용 단가")}</h1>
           <p className="text-sm text-gray-500 mt-1">
             {L(
-              "Per-model token prices (USD per 1M tokens), checked against official sources every 12 hours.",
-              "모델별 토큰 단가(USD, 1M 토큰당)를 공식 출처에서 12시간마다 자동으로 확인해 보여 줍니다.",
+              "Per-model token prices (USD per 1M tokens), synced with official sources every 12 hours.",
+              "모델별 토큰 단가(USD, 1M 토큰당)를 12시간마다 공식 출처와 동기화해 보여 줍니다.",
             )}
           </p>
         </div>

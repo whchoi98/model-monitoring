@@ -144,7 +144,7 @@ model-monitoring/
 │   │   │   ├── ModelStatusGrid.tsx      # family-grouped 55 cards (Bedrock prefix) + 지표 값 등급 색(양호 파랑/경고 호박 ▲/위험 장미 ◆, data-grade, 범례 + 접이식 기준표 — lib/metricGrade.ts, ADR-029, v2.28.0)
 │   │   │   ├── TrendChart.tsx           # MODEL_COLORS 라벨 (21 Bedrock + 9 Anthropic CP + 25 OpenAI Mantle/Global/US 활성; 1P 5개는 휴면)
 │   │   │   ├── CostDashboardPanel.tsx   # 방법론 문단이 /pricing으로 연결 (v2.30.0)
-│   │   │   ├── PricingPanel.tsx         # 비용 단가 표(제공사 섹션, 채널 4열, 각주 → #ref-n) + 면책 상자 + 마지막 자동 확인 + 다운로드 3종 + 참고 자료 (v2.30.0)
+│   │   │   ├── PricingPanel.tsx         # 비용 단가 표(제공사 섹션, 채널 4열, 각주 → #ref-n) + 면책 상자 + 마지막 공식 단가 동기화 + 다운로드 3종 + 참고 자료 (v2.30.0)
 │   │   │   ├── ReliabilityPanel.tsx
 │   │   │   ├── EfficiencyPanel.tsx
 │   │   │   ├── AnalysisPanel.tsx        # v2.1.0

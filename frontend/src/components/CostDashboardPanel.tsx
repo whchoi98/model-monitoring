@@ -235,10 +235,12 @@ export default function CostDashboardPanel() {
         )}
         <p className="text-[11px] text-gray-500 mt-2">
           {lang === "en"
-            ? "Cost uses unit prices from official sources, refreshed every 12 hours, see "
-            : "비용은 공식 출처에서 12시간마다 갱신되는 단가 기반, 단가는 "}
+            ? "Cost is calculated from "
+            : "비용은 공식 출처에서 12시간마다 갱신하는 "}
           <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
-          {lang === "en" ? ". Excludes failed/overloaded calls." : " 메뉴 참고. 실패/과부하 호출은 제외."}
+          {lang === "en"
+            ? ", refreshed from official sources every 12 hours, and excludes failed and overloaded calls."
+            : "로 계산하며, 실패와 과부하 호출은 제외합니다."}
         </p>
       </section>
 
@@ -267,10 +269,10 @@ export default function CostDashboardPanel() {
             {lang === "en" ? "Channel comparison" : "채널 비교"}:
           </span>{" "}
           {lang === "en"
-            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). Unit prices are refreshed from official sources every 12 hours and each probe is costed at the price in effect at its time, see "
-            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 단가는 공식 출처에서 12시간마다 자동 갱신되며 각 프로브 시각의 단가로 계산합니다. 채널별 단가는 "}
+            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). See "
+            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 채널별 단가는 "}
           <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
-          {lang === "en" ? "." : " 메뉴를 참고하세요."}
+          {lang === "en" ? " for per-channel prices." : " 메뉴를 참고하세요."}
         </p>
         <p>
           <span className="text-gray-300 font-semibold">

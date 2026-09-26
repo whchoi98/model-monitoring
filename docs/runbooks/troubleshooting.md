@@ -13,10 +13,10 @@ Anthropic `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude P
 ### 증상
 
 - `/pricing` 셀에 "자동 확인 안 됨" 배지. `verification`이 `stale`(마지막 확인이 가장 최근에 끝난 런보다 이전, 배지 옆 설명
-  "마지막 확인 <날짜>", `observed_at`이 없으면 "마지막 확인일 없음") 또는 `seed_only`(한 번도 확인되지 않음, 배지 옆 설명 "초기값")다.
+  "공식 출처 확인 <날짜>", `observed_at`이 없으면 "공식 출처 확인일 없음") 또는 `seed_only`(한 번도 확인되지 않음, 배지 옆 설명 "초기값")다.
 - 한 출처만 실패하면 그 출처의 채널만 `stale`이 된다. 예: Anthropic 문서가 실패한 `partial` 런 뒤에는 Claude Platform on AWS 열 9셀만
   배지가 붙는다.
-- "마지막 자동 확인" 시각이 12시간보다 오래됐으면 태스크가 돌지 않은 것이다.
+- "마지막 공식 단가 동기화" 시각이 12시간보다 오래됐으면 태스크가 돌지 않은 것이다.
 
 ### 확인
 
