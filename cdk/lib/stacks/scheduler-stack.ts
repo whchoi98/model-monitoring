@@ -2,8 +2,8 @@
 //
 // 책임:
 //   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
-//     (v2.29.0: Claude Platform on AWS 채널만 10분 주기 — 사이클마다 auto_prober가 고른다,
-//      ANTHROPIC_CP_PROBE_INTERVAL_S. 스케줄 자체는 5분 그대로)
+//     (v2.29.1: Claude Platform on AWS 채널도 매 사이클 — ANTHROPIC_CP_PROBE_INTERVAL_S=300. v2.29.0의 10분
+//      주기는 600으로 되살리는 운영 노브이고, 그때도 사이클마다 auto_prober가 고른다. 스케줄 자체는 5분 그대로)
 //   - rate(5 minutes) → Insights   Fargate Task (insights_runner --window 6h)
 //     (사용자 요청: 새로고침이 없을 때도 인사이트가 최근 데이터를 반영하도록 5분 주기로 단축)
 //   - rate(12 hours) → ParityRun Fargate Task (parity_runner --once)
@@ -272,10 +272,12 @@ export class SchedulerStack extends cdk.Stack {
       ["python", "-m", "auto_prober_runner", "--once"],
       "/ecs/autoprober",
       {
-        // Claude Platform on AWS 채널(anthropic:*) 수집 주기(초) — v2.29.0, 사용자 결정 2026-09-23
-        // (API 스로틀링, 1P만 해당). 5분 사이클 단위로 반올림(600 = 두 사이클에 한 번), 300 이하 = 매 사이클.
-        // 코드 기본값도 600 — 바꿀 때는 backend 서비스(/api/auto-probe/status 표시)에도 같은 값을 주입할 것.
-        ANTHROPIC_CP_PROBE_INTERVAL_S: "600",
+        // Claude Platform on AWS 채널(anthropic:*) 수집 주기(초). v2.29.1 = 300(매 사이클, 사이클 카테고리 그대로) —
+        // 사용자 결정 2026-09-26("원래대로 복귀"). v2.29.0의 600(두 사이클에 한 번 + CP 자체 카테고리 회전, 사용자
+        // 결정 2026-09-23 "API 스로틀링, 1P만 해당")은 이 값을 600으로 바꿔 되살린다. 5분 사이클 단위로 반올림,
+        // 300 이하 = 매 사이클. 코드 기본값도 300 — 바꿀 때는 backend 서비스(/api/auto-probe/status 표시)에도 같은
+        // 값을 주입할 것.
+        ANTHROPIC_CP_PROBE_INTERVAL_S: "300",
       },
     );
 
@@ -367,7 +369,7 @@ export class SchedulerStack extends cdk.Stack {
     // ---------------------------------------------------------------------
     this.autoProberSchedule = new scheduler.Schedule(this, "AutoProberSchedule", {
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
-      description: "5분 주기로 Bedrock 모니터링 프로빙",  // CP 채널은 사이클 두 번에 한 번 (v2.29.0, ANTHROPIC_CP_PROBE_INTERVAL_S)
+      description: "5분 주기로 Bedrock 모니터링 프로빙",  // CP 채널도 매 사이클 (v2.29.1; 600이면 두 번에 한 번 — ANTHROPIC_CP_PROBE_INTERVAL_S)
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: autoProberTaskDef,
         vpcSubnets: props.appSubnets,

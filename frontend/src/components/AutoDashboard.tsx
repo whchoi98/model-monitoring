@@ -85,12 +85,11 @@ export default function AutoDashboard() {
   const refreshing = status.refreshing || latest.refreshing || trend.refreshing || anomalies.refreshing;
   const interval = status.data?.interval_seconds ?? 300;
   const cadence = category ? status.data?.category_interval_seconds ?? interval * (workloads.data?.length || 6) : interval;
-  // Per-channel cadence (v2.29.0): Claude Platform on AWS is collected every 10 minutes (60 per workload).
+  // Per-channel cadence (v2.29.0): /status channel_intervals can give Claude Platform on AWS its own cadence
+  // (600 s when the ANTHROPIC_CP_PROBE_INTERVAL_S knob is raised); since v2.29.1 it defaults to the base one.
   // Serialized so a status refresh with the same values keeps the resolver (and the memoized charts) stable.
-  // /status가 아직 없거나 실패하면 CP 기본 주기(10분, 워크로드별 60분)를 가정한다 — 첫 렌더에서 CP 카드 9장이
-  // 5분 기준으로 '수집 지연' 판정되는 깜빡임을 막는다. /status가 오면 그 값이 우선한다.
-  const channelCadenceJson = JSON.stringify((category ? status.data?.channel_category_intervals : status.data?.channel_intervals)
-    ?? (category ? { anthropic: 3600 } : { anthropic: 600 }));
+  // /status가 아직 없거나 실패하면 모든 채널에 기본 주기를 쓴다(v2.29.1 — CP도 매 사이클 수집). /status가 오면 그 값이 우선한다.
+  const channelCadenceJson = JSON.stringify((category ? status.data?.channel_category_intervals : status.data?.channel_intervals) ?? {});
   const channelCadence = useMemo(() => JSON.parse(channelCadenceJson) as Record<string, number>, [channelCadenceJson]);
   const cadenceFor = useMemo(() => cadenceResolver(cadence, channelCadence), [cadence, channelCadence]);
   const cycleNotes = channelCadenceNotes(status.data?.channel_intervals, interval);

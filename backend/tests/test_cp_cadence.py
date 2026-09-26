@@ -1,10 +1,15 @@
-"""Claude Platform on AWS channels on a 10-minute cadence with their own rotation (v2.29.0).
+"""Claude Platform on AWS cadence: every cycle by default (v2.29.1), 10 minutes as an ops knob (v2.29.0).
 
-User request 2026-09-23: only the CP channels (anthropic:*, the Anthropic 1P API) move from the 5-minute
-AutoProber cadence to 10 minutes; Bedrock Claude, Nova and OpenAI stay at 5 minutes. The decision is
-DB-based: a CP channel is due when the run holding its latest automatic row started at least
-(interval - CP_DUE_TOLERANCE_SECONDS) before the current run. CP channels rotate the six workload
-categories on their own, so every category is still covered (about once an hour).
+User decision 2026-09-26 (v2.29.1): the CP channels (anthropic:*, the Anthropic 1P API) go back to being
+probed every 5-minute cycle with the cycle's workload category, as before v2.29.0 - the default of
+ANTHROPIC_CP_PROBE_INTERVAL_S is 300 and _plan_cycle skips the CP history lookup entirely.
+
+The v2.29.0 mechanism (user request 2026-09-23) stays behind the knob: with an interval above the cycle
+(600), only the CP channels move to 10 minutes; Bedrock Claude, Nova and OpenAI stay at 5 minutes. The
+decision is DB-based: a CP channel is due when the run holding its latest automatic row started at least
+(interval - CP_DUE_TOLERANCE_SECONDS) before the current run. CP channels then rotate the six workload
+categories on their own, so every category is still covered (about once an hour). The `env` fixture sets
+600 explicitly so those tests keep pinning that mode; `default_cadence` switches to the code default.
 
 All records live in a file-backed SQLite DB; the provider boundary is a fake that writes rows.
 """
@@ -75,12 +80,34 @@ def env(monkeypatch, tmp_path):
     monkeypatch.setattr(worker, "_probe_single_model", fake_probe)
     monkeypatch.setattr(worker, "_CYCLE_POLL_SECONDS", 0.01)
     monkeypatch.setattr(worker.auto_prober, "current_cycle_running", False)
+    # The v2.29.0 ops knob (every other cycle + own rotation); default_cadence below uses the v2.29.1 default.
     monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", 600)
     monkeypatch.setenv("RETENTION_DAYS", "0")
     Clock.now = T0
     Clock.cp_row_offset = 90
     yield factory, calls
     engine.dispose()
+
+
+@pytest.fixture()
+def default_cadence(env, monkeypatch):
+    """The interval the AutoProber gets with no env override (v2.29.1: 300 = every cycle)."""
+    monkeypatch.delenv("ANTHROPIC_CP_PROBE_INTERVAL_S", raising=False)
+    monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", probe_cadence._cp_interval_from_env())
+    return env
+
+
+def _record_cp_history(monkeypatch) -> list:
+    """Wrap the real _cp_history and record its calls.
+
+    A raising stub would not do: _plan_cycle catches any exception from the lookup and falls back to the
+    cycle preset for every CP channel, which is exactly what these tests expect - so the stub would be
+    swallowed and the early return (interval <= cycle) would go untested. The tests assert the list is empty.
+    """
+    calls = []
+    real = worker._cp_history
+    monkeypatch.setattr(worker, "_cp_history", lambda run_id: calls.append(run_id) or real(run_id))
+    return calls
 
 
 def cycle_at(seconds: float) -> int:
@@ -187,8 +214,72 @@ def test_old_history_restarts_from_the_cycle_category(env):
 def test_interval_equal_to_the_cycle_probes_cp_every_cycle(env, monkeypatch):
     _, calls = env
     monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", 300)
+    history_calls = _record_cp_history(monkeypatch)
     runs = [cycle_at(300 * i) for i in range(3)]
-    assert all(CP_A in probed(calls, run_id) for run_id in runs)
+    for run_id in runs:
+        seen = probed(calls, run_id)
+        assert seen[CP_A] == seen[CP_B] == seen[BEDROCK] == seen[OPENAI]
+    assert history_calls == []
+
+
+def test_default_cadence_probes_every_cp_model_with_the_cycle_preset_every_cycle(default_cadence, monkeypatch):
+    """v2.29.1 default: CP is planned like every other model and the CP history is never read."""
+    assert probe_cadence.ANTHROPIC_CP_PROBE_INTERVAL_S == probe_cadence.BASE_INTERVAL_SECONDS == 300
+    _, calls = default_cadence
+    history_calls = _record_cp_history(monkeypatch)
+    runs = [cycle_at(300 * i) for i in range(8)]
+
+    for index, run_id in enumerate(runs):
+        assert probed(calls, run_id) == {model_id: PRESET_IDS[index % 6] for model_id in CATALOG}
+    by_model = {}
+    for rid, model_id, category, prompt, max_tokens in calls:
+        if rid == runs[1]:
+            by_model[model_id] = (category, prompt, max_tokens)
+    reasoning = worker.WORKLOAD_PRESETS[1]
+    assert by_model[CP_A] == by_model[BEDROCK] == ("reasoning", reasoning["prompt"], reasoning["max_tokens"])
+    assert history_calls == []
+
+
+def test_plan_cycle_at_the_default_cadence_is_the_cycle_preset_for_every_model(default_cadence, monkeypatch, caplog):
+    history_calls = _record_cp_history(monkeypatch)
+    preset = worker.WORKLOAD_PRESETS[3]
+    plan = worker._plan_cycle(1, preset, dict(CATALOG))
+    assert plan == [(model_id, name, preset) for model_id, name in CATALOG.items()]
+    assert history_calls == []
+    assert "CP cadence lookup failed" not in caplog.text
+
+
+def test_first_cycle_after_returning_to_the_default_rejoins_the_cycle_category(env, monkeypatch):
+    """History written in the 600 s mode (CP on its own rotation) does not carry over to the first default cycle."""
+    _, calls = env
+    runs = [cycle_at(300 * i) for i in range(3)]  # 600 s mode: CP at 0 (chat-short) and 600 (reasoning)
+    assert probed(calls, runs[2])[CP_A] == "reasoning" != probed(calls, runs[2])[BEDROCK]
+    monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", 300)
+    # The real lookup would read the out-of-phase 600 s history (CP last on reasoning) and put CP on code-gen.
+    history_calls = _record_cp_history(monkeypatch)
+    # One cycle after the last CP probe: the 600 s mode would skip CP here and next use code-gen.
+    run_id = cycle_at(900)
+
+    assert probed(calls, run_id) == {model_id: PRESET_IDS[3] for model_id in CATALOG}  # summarize, CP included
+    assert history_calls == []
+
+
+def test_an_interval_that_rounds_to_one_cycle_rejoins_the_cycle_category(env, monkeypatch):
+    """400 s is due every cycle (400 - 150 < 300), so it rounds to 300 and CP stays on the cycle category."""
+    _, calls = env
+    cycle_at(0)
+    cycle_at(300)
+    cycle_at(600)  # 600 s mode: CP now out of phase (reasoning while the cycle is on code-gen)
+    monkeypatch.setenv("ANTHROPIC_CP_PROBE_INTERVAL_S", "400")
+    monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", probe_cadence._cp_interval_from_env())
+    assert probe_cadence.ANTHROPIC_CP_PROBE_INTERVAL_S == 300
+    assert probe_cadence.channel_intervals() == {"anthropic": 300}
+    history_calls = _record_cp_history(monkeypatch)
+    runs = [cycle_at(900 + 300 * i) for i in range(4)]
+
+    for index, run_id in enumerate(runs):
+        assert probed(calls, run_id) == {model_id: PRESET_IDS[(3 + index) % 6] for model_id in CATALOG}
+    assert history_calls == []
 
 
 def test_history_lookup_failure_still_probes_cp_with_the_cycle_preset(env, monkeypatch):
@@ -266,7 +357,9 @@ def test_hung_cp_probe_timeout_row_keeps_the_cp_category(env, monkeypatch):
 
 
 @pytest.mark.parametrize("raw, expected", [
-    (None, 600), ("", 600), ("600", 600), ("900", 900), ("300", 300), ("120", 300), ("abc", 600),
+    (None, 300), ("", 300), ("  ", 300), ("600", 600), ("900", 900), ("300", 300), ("120", 300), ("abc", 300),
+    # Whole cycles, ties down - the same result as the due check (interval - 150 s) on nominal 300 s cycles.
+    ("400", 300), ("450", 300), ("451", 600), ("700", 600), ("750", 600), ("751", 900), ("1000", 900),
 ])
 def test_interval_env_parsing(monkeypatch, raw, expected):
     if raw is None:
@@ -274,6 +367,29 @@ def test_interval_env_parsing(monkeypatch, raw, expected):
     else:
         monkeypatch.setenv("ANTHROPIC_CP_PROBE_INTERVAL_S", raw)
     assert probe_cadence._cp_interval_from_env() == expected
+
+
+def test_rounding_matches_the_due_check_on_nominal_cycles():
+    """_round_to_cycles gives the cycle count _plan_cycle's due check (interval - tolerance) actually yields."""
+    base = probe_cadence.BASE_INTERVAL_SECONDS
+    for value in range(base, 6 * base + 1):
+        due_after = next(k for k in range(1, 10) if k * base >= value - worker.CP_DUE_TOLERANCE_SECONDS)
+        assert probe_cadence._round_to_cycles(value) == due_after * base, value
+
+
+def test_interval_env_default_is_every_cycle(monkeypatch):
+    """v2.29.1: without ANTHROPIC_CP_PROBE_INTERVAL_S the CP channels share the 5-minute cycle again."""
+    monkeypatch.delenv("ANTHROPIC_CP_PROBE_INTERVAL_S", raising=False)
+    assert probe_cadence._cp_interval_from_env() == probe_cadence.BASE_INTERVAL_SECONDS == 300
+    assert probe_cadence._CP_INTERVAL_DEFAULT == 300
+
+
+def test_default_interval_puts_every_channel_on_the_base_cadence(monkeypatch):
+    monkeypatch.delenv("ANTHROPIC_CP_PROBE_INTERVAL_S", raising=False)
+    monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", probe_cadence._cp_interval_from_env())
+    for model_id in (CP_A, CP_B, BEDROCK, OPENAI):
+        assert probe_cadence.interval_for(model_id) == 300
+    assert probe_cadence.channel_intervals() == {"anthropic": 300}
 
 
 def test_interval_for_only_slows_claude_platform_channels(monkeypatch):

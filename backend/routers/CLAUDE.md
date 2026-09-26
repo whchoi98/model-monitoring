@@ -7,7 +7,7 @@ FastAPI router modules defining all API endpoints (17 routers, registered in `ma
 ## Files
 - `auth.py` — `/api/auth/*` — login (public), register (EmailStr enforced), email approval, `/me` (JWT)
 - `admin.py` — `/api/admin/*` — reset-monitoring-data, users CRUD (admin only: `username == "admin"`)
-- `auto_probe.py` — `/api/auto-probe/*` — status (DB reservation + overdue state; `channel_intervals` / `channel_category_intervals` per-channel cadence, v2.29.0), latest (each model's latest row from completed auto runs within its own cadence window — `latest_results.py`, v2.29.0; not the rows of one run), trend, categories, anomalies?hours=&category= (automatic runs only) are public. `trigger` requires JWT and returns 202/409/503; scheduler/manual admission is serialized in `auto_prober.py`.
+- `auto_probe.py` — `/api/auto-probe/*` — status (DB reservation + overdue state; `channel_intervals` / `channel_category_intervals` per-channel cadence, v2.29.0 — `{"anthropic": 300}` / `{"anthropic": 1800}` at the default since v2.29.1), latest (each model's latest row from completed auto runs within its own cadence window — `latest_results.py`, v2.29.0; not the rows of one run), trend, categories, anomalies?hours=&category= (automatic runs only) are public. `trigger` requires JWT and returns 202/409/503; scheduler/manual admission is serialized in `auto_prober.py`.
 - `probes.py` — `/api/probes/run` — SSE streaming manual probe (JWT); `GET /api/probes/{run_id}` — past run + its results (public)
 - `results.py` — `/api/results/*` — stored results query + stats (public)
 - `models.py` — `/api/models` — `AVAILABLE_MODELS` list (public)

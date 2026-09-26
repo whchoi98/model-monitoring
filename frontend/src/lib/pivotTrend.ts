@@ -20,7 +20,8 @@ export interface PivotOptions {
   /** true면 집계 행의 [min,max]를 `<모델명>__range` 컬럼으로 추가 (Recharts range Area용). */
   withRange?: boolean;
   /** Expected spacing of one series; a longer silence breaks its line. A function gets the series' model_id
-   *  (v2.29.0: Claude Platform on AWS is sampled every 10 minutes, other channels every 5). */
+   *  (v2.29.0: per-channel cadence from /status — Claude Platform on AWS every 10 minutes when that knob is
+   *  raised, every 5 like other channels by default since v2.29.1). */
   cadenceSeconds?: number | ((modelId: string) => number);
 }
 

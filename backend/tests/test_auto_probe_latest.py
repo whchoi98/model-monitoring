@@ -1,8 +1,10 @@
 """/api/auto-probe/latest per model, cadence fields in /status, chatbot latest tool (v2.29.0).
 
-Claude Platform on AWS channels are probed every other cycle and rotate categories on their own, so the
-rows of the single latest run no longer cover every model. /latest returns each model's latest row from
-completed automatic runs within a bounded window derived from that model's own cadence.
+With ANTHROPIC_CP_PROBE_INTERVAL_S=600 (the v2.29.0 mode, kept as an ops knob) Claude Platform on AWS
+channels are probed every other cycle and rotate categories on their own, so the rows of the single latest
+run no longer cover every model. /latest returns each model's latest row from completed automatic runs
+within a bounded window derived from that model's own cadence. The `env` fixture pins 600; the
+`default_cadence` tests pin the v2.29.1 default (300 = every cycle), where every window is the base one.
 
 All records live in SQLite memory; no provider is called.
 """
@@ -35,6 +37,7 @@ def env(monkeypatch):
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
+    # The v2.29.0 ops knob; default_cadence below switches to the v2.29.1 code default.
     monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", 600)
     monkeypatch.setattr(worker, "AVAILABLE_MODELS", {mid: name for mid, name in (BEDROCK, NOVA, CP, HIDDEN)})
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", "(1P)")
@@ -50,6 +53,14 @@ def env(monkeypatch):
     with TestClient(app) as client:
         yield engine, factory, client
     engine.dispose()
+
+
+@pytest.fixture()
+def default_cadence(env, monkeypatch):
+    """The interval with no env override (v2.29.1: 300 = CP every cycle)."""
+    monkeypatch.delenv("ANTHROPIC_CP_PROBE_INTERVAL_S", raising=False)
+    monkeypatch.setattr(probe_cadence, "ANTHROPIC_CP_PROBE_INTERVAL_S", probe_cadence._cp_interval_from_env())
+    return env
 
 
 def run(factory, age, rows=(), *, status="completed", is_auto=1):
@@ -169,6 +180,37 @@ def test_status_reports_channel_cadence_and_keeps_existing_fields(env):
     assert data["category_interval_seconds"] == 1800
     assert data["channel_intervals"] == {"anthropic": 600}
     assert data["channel_category_intervals"] == {"anthropic": 3600}
+
+
+def test_status_reports_the_default_cadence_equal_to_the_base_one(default_cadence):
+    """v2.29.1: the contract keeps channel_intervals, whose value now matches the base cadence."""
+    _, _, client = default_cadence
+    data = client.get("/api/auto-probe/status").json()
+    assert data["interval_seconds"] == 300
+    assert data["category_interval_seconds"] == 1800
+    assert data["channel_intervals"] == {"anthropic": 300}
+    assert data["channel_category_intervals"] == {"anthropic": 1800}
+
+
+def test_default_cadence_windows_for_cp_are_the_base_windows(default_cadence):
+    _, factory, client = default_cadence
+    run(factory, 1000, [(CP, "chat-short", 990)])      # older than 3 x 300 s — a 600 s knob would keep it
+    run(factory, 850, [(NOVA, "chat-short", 840)])
+    run(factory, 0, [])
+    assert [m for m, _, _ in latest(client)] == [NOVA[0]]
+
+    run(factory, 3700, [(CP, "code-gen", 3690)])       # beyond 2 x 6 x 300 s
+    kept = run(factory, 3500, [(CP, "code-gen", 3490)])
+    run(factory, 0, [(BEDROCK, "code-gen", -5)])
+    assert [(m, r) for m, r, _ in latest(client, category="code-gen")][0] == (CP[0], kept)
+
+
+def test_default_cadence_cp_rows_of_the_newest_run_are_published_with_the_rest(default_cadence):
+    _, factory, client = default_cadence
+    run(factory, 300, [(BEDROCK, "chat-short", 290), (CP, "chat-short", 210), (NOVA, "chat-short", 280)])
+    newest = run(factory, 0, [(BEDROCK, "reasoning", -10), (CP, "reasoning", -60), (NOVA, "reasoning", -20)])
+    assert latest(client) == [(CP[0], newest, "reasoning"), (BEDROCK[0], newest, "reasoning"),
+                              (NOVA[0], newest, "reasoning")]
 
 
 def test_status_cadence_follows_the_configured_interval(env, monkeypatch):

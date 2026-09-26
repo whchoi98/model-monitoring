@@ -18,9 +18,10 @@ from visibility import visible_only
 def get_latest_results(db: Session, model_id: Optional[str] = None) -> Dict[str, Any]:
     """모델별 최신 자동 프로브 결과 1건씩 반환.
 
-    model_id 지정 시 해당 모델만. run_id/run_created_at은 가장 최근 완료된 auto run이다. v2.29.0부터
-    Claude Platform on AWS 채널은 10분 주기라 그 run에 없을 수 있어, 모델마다 최근 범위 안의 최신 행을
-    돌려준다(latest_results.latest_auto_rows) — 행별 timestamp로 측정 시각을 구분한다.
+    model_id 지정 시 해당 모델만. run_id/run_created_at은 가장 최근 완료된 auto run이다. Claude Platform on
+    AWS 채널은 ANTHROPIC_CP_PROBE_INTERVAL_S가 사이클보다 크면(예: 600, v2.29.0 동작 — v2.29.1 기본값은 매
+    사이클) 그 run에 없을 수 있어, 모델마다 최근 범위 안의 최신 행을 돌려준다
+    (latest_results.latest_auto_rows) — 행별 timestamp로 측정 시각을 구분한다.
     """
     from latest_results import latest_auto_rows
 

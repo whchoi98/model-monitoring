@@ -209,8 +209,8 @@ export default function ReliabilityPanel() {
         </h3>
         <p>
           {lang === "en"
-            ? "Every 5 minutes the auto-prober invokes ALL monitored models in round-robin across 6 workload categories (short chat, reasoning, code-gen, summarization, JSON extraction, translation). Claude Platform on AWS channels are invoked every 10 minutes with their own rotation of the same 6 categories. Each category sends the same prompt to the SAME-FAMILY model in every channel, so per-channel results are directly comparable."
-            : "5분 주기 auto-prober가 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈하며 모니터링 모든 모델을 호출합니다. Claude Platform on AWS 채널은 10분마다 같은 6개 카테고리를 따로 순환합니다. 카테고리마다 같은 family 모델의 모든 채널에 동일한 프롬프트를 보내므로 채널별 결과를 직접 비교할 수 있습니다."}
+            ? "Every 5 minutes the auto-prober invokes ALL monitored models in round-robin across 6 workload categories (short chat, reasoning, code-gen, summarization, JSON extraction, translation). Each category sends the same prompt to the SAME-FAMILY model in every channel, so per-channel results are directly comparable."
+            : "5분 주기 auto-prober가 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈하며 모니터링 모든 모델을 호출합니다. 카테고리마다 같은 family 모델의 모든 채널에 동일한 프롬프트를 보내므로 채널별 결과를 직접 비교할 수 있습니다."}
         </p>
         <p>
           <span className="text-gray-300 font-semibold">

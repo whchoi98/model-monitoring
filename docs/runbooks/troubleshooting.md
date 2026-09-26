@@ -7,8 +7,9 @@
 **배경**: 2026-09-23 19:52 UTC부터 CP on AWS 호출이 전부 429로 거부됐다. 조직이 API 등급(tier)에 따라 정해진 월간
 사용량 상한을 넘겼기 때문이며, 상한은 2026-10-01 00:00 UTC에 풀린다. v2.28.2까지는 이 429를 일시 rate limit으로 보고
 prober 루프(4회 시도)와 anthropic SDK(시도마다 2회 더)가 재시도해 프로브 하나가 최대 12요청이 됐고, `/ecs/autoprober`에
-시간당 1,600~1,700줄이 쌓였다. v2.29.0부터는 재시도 없이 프로브당 요청 1회, 오류 행 1개로 끝나고, CP 채널은 10분 주기라
-호출 수도 절반이다.
+시간당 1,600~1,700줄이 쌓였다. v2.29.0부터는 재시도 없이 프로브당 요청 1회, 오류 행 1개로 끝난다. v2.29.0은 CP 채널을 10분 주기로 늘려 호출 수도
+절반(시간당 54회)이었지만, v2.29.1에서 기본값을 다시 매 사이클(시간당 108회)로 되돌렸다(2026-09-26 사용자 결정).
+재시도 제거는 그대로이고, 10분 주기는 `ANTHROPIC_CP_PROBE_INTERVAL_S=600` 운영 레버로 남아 있다(아래 조치).
 
 ### 증상
 
@@ -30,7 +31,7 @@ aws logs filter-log-events --region $REGION --log-group-name /ecs/autoprober \
   --start-time $(( ($(date +%s) - 3600) * 1000 )) --filter-pattern '"usage cap reached"' --query 'length(events)'
 aws logs filter-log-events --region $REGION --log-group-name /ecs/autoprober \
   --start-time $(( ($(date +%s) - 3600) * 1000 )) --filter-pattern '"Retryable error for anthropic:"' --query 'length(events)'
-# 기댓값(v2.29.0): 첫 번째 ≈ 54(9채널 × 6회/시간), 두 번째 0
+# 기댓값(v2.29.1 기본값): 첫 번째 ≈ 108(9채널 × 12회/시간, ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 ≈ 54), 두 번째 0
 
 # 2. 대시보드에 보이는 마지막 오류 — "regain access on <날짜>"가 상한 해제 시각
 curl -s "https://$CF_DOMAIN/api/auto-probe/anomalies?hours=1" \
@@ -40,12 +41,16 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/anomalies?hours=1" \
 ### 조치
 
 - 모니터 쪽에서 할 일은 없다. 상한 해제 시각(메시지의 "regain access on …", 이번에는 2026-10-01 00:00 UTC)까지 CP 카드는
-  오류로 남는 것이 정상이며, 해제 뒤 첫 CP 사이클(최대 10분)에 자동으로 정상으로 돌아온다.
+  오류로 남는 것이 정상이며, 해제 뒤 첫 CP 사이클(기본 최대 5분, 600 설정이면 최대 10분)에 자동으로 정상으로 돌아온다.
 - 더 빨리 복구하려면 Anthropic Console에서 조직의 API 등급 또는 사용량 한도를 올린다(조직 관리자 권한). 키 교체나 재배포는
   필요 없다.
-- CP 채널을 끄지 않는다 — 오류 행이 상한 기간을 기록하는 증거이고, 10분 주기에서는 호출이 시간당 54회뿐이다. 주기를 더 늘려야
-  하면 AutoProber task env `ANTHROPIC_CP_PROBE_INTERVAL_S`(초, 5분 단위로 반올림)를 CDK에서 바꾸고 backend 서비스에도 같은 값을
-  넣는다(`/api/auto-probe/status` `channel_intervals` 표시용).
+- CP 채널을 끄지 않는다 — 오류 행이 상한 기간을 기록하는 증거이고, 재시도가 없어 기본 주기에서도 호출은 시간당 108회다.
+  상한 기간에 호출을 줄여야 하면 AutoProber task env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`(초, 5분 단위로 반올림)을 CDK에서
+  넣고 backend 서비스에도 같은 값을 넣은 뒤(`/api/auto-probe/status` `channel_intervals` 표시용) digest 고정
+  AppServices + Scheduler 경로로 배포한다. 그러면 v2.29.0처럼 CP만 두 사이클에 한 번, 카테고리를 따로 순환하며 시간당
+  54회가 된다(확인은 `deploy.md` §5-2의 3~4번). 상한이 풀리면 300으로 되돌린다. 600 모드에서는 대시보드가 `/status`를
+  받기 전에(첫 `/status` 요청이 실패하면 다음 새로고침에서 성공할 때까지) 10분을 넘긴 CP 카드를 잠시 "수집 지연"으로 표시할
+  수 있다. v2.29.1 대시보드는 `/status` 전에 600을 가정하지 않기 때문이며, `/status`가 오면 600 기준으로 돌아온다.
 - 로그에 `usage cap reached` 대신 `Retryable error for anthropic:`가 계속 보이면 상한 메시지 문구가 바뀐 것이다 —
   `backend/prober.py` `_USAGE_CAP_MARKERS`에 새 문구를 추가한다.
 
