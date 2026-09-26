@@ -29,7 +29,7 @@ for r in bedrock-monitor-backend-v2 bedrock-monitor-frontend; do
 done
 ```
 
-**A-2. 권장 — digest 고정 CDK 재배포** (backend·frontend 서비스와 스케줄 태스크 5개가 함께 돌아간다)
+**A-2. 권장 — digest 고정 CDK 재배포** (backend·frontend 서비스와 스케줄 태스크 6개가 함께 돌아간다)
 
 ```bash
 PREV_TAG="v<epoch>"   # ← A-1에서 고른 직전 정상 tag로 바꾼다
@@ -46,7 +46,7 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
-**A-3. 빠른 경로 — 서비스만 이전 revision으로** (스케줄 태스크 5개는 되돌아가지 않는다)
+**A-3. 빠른 경로 — 서비스만 이전 revision으로** (스케줄 태스크 6개는 되돌아가지 않는다)
 
 CloudFormation은 task def를 교체할 때 자신이 만든 옛 revision을 INACTIVE로 등록 해제하고(수동 등록한 revision은 ACTIVE로
 남는다), INACTIVE revision으로는 `update-service`를 할 수 없다. 그래서 ACTIVE 목록에서 고르고, 직전 image의 revision이 없으면 A-2를 쓴다.
@@ -139,7 +139,7 @@ aws ecs update-service --cluster bedrock-monitor --service backend  --desired-co
 aws ecs update-service --cluster bedrock-monitor --service frontend --desired-count 0 --region $REGION
 ```
 
-서비스를 멈춰도 스케줄 태스크 5개(autoprober, insights, parityrun, gptbench, featuresverify)는 계속 돈다(모델 호출 비용 발생).
+서비스를 멈춰도 스케줄 태스크 6개(autoprober, insights, parityrun, gptbench, featuresverify, pricingsync)는 계속 돈다(pricingsync를 뺀 5개는 모델 호출 비용 발생 — pricingsync는 공식 단가 읽기만 한다).
 함께 멈추려면 스케줄을 DISABLED로 바꾼다 (재개는 같은 명령에서 `'DISABLED'` → `'ENABLED'`):
 
 ```bash
@@ -159,7 +159,7 @@ CloudFront 단에서 `Disabled` 토글로 전체 차단 가능 (사용자에게 
 
 ## 배포 전 롤백 포인트 기록
 
-배포 직전에 서비스 2개와 스케줄 태스크 5개가 쓰는 task def와 image를 기록해 둔다. 롤백 기준은 image(tag@digest)다 —
+배포 직전에 서비스 2개와 스케줄 태스크 6개가 쓰는 task def와 image를 기록해 둔다. 롤백 기준은 image(tag@digest)다 —
 task def revision은 다음 CDK 배포에서 INACTIVE가 되면 `update-service`에 쓸 수 없다(A-3). 기록한 image로 A-2를 실행한다.
 
 ```bash
@@ -171,7 +171,7 @@ for s in backend frontend; do
   echo "$s $TD $(aws ecs describe-task-definition --task-definition "$TD" --region $REGION \
     --query 'taskDefinition.containerDefinitions[0].image' --output text)"
 done
-# 스케줄 태스크 5개 (autoprober, insights, parityrun, gptbench, featuresverify) — 스케줄이 가리키는 revision 기준
+# 스케줄 태스크 6개 (autoprober, insights, parityrun, gptbench, featuresverify, pricingsync) — 스케줄이 가리키는 revision 기준
 for n in $(aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION \
     --query 'Schedules[].Name' --output text); do
   TD=$(aws scheduler get-schedule --name "$n" --region $REGION \
