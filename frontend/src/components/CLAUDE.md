@@ -13,13 +13,16 @@ React UI components for the monitoring dashboard (monitoring panels, shared UI p
 - `LatencyChart.tsx`, `StatsCards.tsx`, `ProgressBar.tsx` — supporting dashboard widgets
 - `ModelSelector.tsx` — multi-select model chips (`selectedModels: Set<string>`)
 - `ProbeConfigPanel.tsx` + `StreamingView.tsx` — manual probe config + live SSE token stream
-- `ComparePanel.tsx` + `ComparisonView.tsx` — Comparison Lab (N-model parallel invoke)
+- `ComparisonView.tsx` — 수동 프로브(`/?view=manual`)의 "비교 분석" 탭: 해당 프로브 결과 비교
+- `ComparePanel.tsx` — Comparison Lab UI (`compareStream` → `/api/compare/run`, N-model parallel invoke); currently not mounted by any page
 - `CostDashboardPanel.tsx`, `ReliabilityPanel.tsx`, `EfficiencyPanel.tsx`, `AnalysisPanel.tsx` — per-page analytical panels
 - `InsightsPanel.tsx` — SSE stream-regenerate AI insights
 - `PromptsPanel.tsx` — prompt CRUD + Bedrock OptimizePrompt target selector
 - `ModelExplorer.tsx` — 모델 카드 그리드 + 상세 모달 (API 탭: Converse/InvokeModel/Messages/Responses, `lib/modelExplorer.ts` 유도, v2.9.x)
-- `ParityPanel.tsx` — 패리티: provider 요약 카드(세그먼트 막대 `HealthBar`, v2.16.3에서 도넛 대체)+Key Findings 드로어, 직전 런 대비 변경 배너, 모델 콤보박스, 피처별 접이식 그룹(분포 바, Broken 자동 펼침), `EvidenceModal`(Request/Response JSON 접이식) + 수동 트리거 (v2.15.x)
+- `ParityPanel.tsx` — 패리티: provider 요약 카드(세그먼트 막대 `HealthBar`)+Key Findings 드로어, 직전 런 대비 변경 배너, 모델 콤보박스, 피처별 접이식 그룹(분포 바, Broken 자동 펼침), `EvidenceModal`(Request/Response JSON 접이식) + 수동 트리거 (v2.15.x)
 - `ClaudeFeaturesPanel.tsx` — Claude API Features: 5열(CP/Mantle/Bedrock runtime Messages API·InvokeModel·Converse) 매트릭스; 헬스 카드(문서 기준 헬스 docHealth + 6상태 분포 막대 + "{total} 셀" 칩, 클릭 → `SurfaceDrawer` Key Findings 6섹션 — 헤더 sticky, Escape 닫기, 폰 탭아웃 여백); 모델 칩(전체/Fable 5.1/Fable 5/Opus 5.5/Opus 5/Sonnet 5 — 카탈로그 `models` 순서, `buildGroups(..., modelKey, modelOrder)`·`surfaceFindings(..., modelKey)`, 카드·배너·드로어 동일 필터, 드로어 메타 줄에 모델 라벨); 문서 드리프트 배너(0건이면 "문서 드리프트 없음" 카드); 직전 런 대비 변경 배너(`kind` 카탈로그 규칙/실측 태그, 항목 클릭 → 증거 모달, 0건이면 "변경 없음" 카드); 셀 툴팁 모델별 프로브 소요 시간 + 드롭다운 ms/mono model_id; 상태/드리프트 필터 활성 시 그룹 강제 펼침 + 모두 펼치기/접기; 증거 모달(요청 스냅샷·응답 신호·문서 링크·검증 강도 툴팁); 수동 트리거 (`lib/claudeFeatures.ts` 순수 로직 + vitest, v2.24.0). **i18n 예외**: 이 패널과 `ParityPanel`은 `src/lib/i18n.ts` 대신 인라인 `L(en, ko)`/삼항 헬퍼를 쓴다(하위 컴포넌트는 `useLang()` + 로컬 `T`). 라벨은 카탈로그(`labelMaps`)가 단일 출처, 한글 문장은 쉼표 열거·"1." 번호·단정형 판정 문구.
+- `ThemeToggle.tsx` — dark/light theme toggle in `AppHeader` (`lib/theme.ts` `setTheme`/`useTheme`, `aria-pressed`)
+- `AppShell.tsx`, `Providers.tsx`, `Dialog.tsx`, `DataState.tsx`, `RefreshControls.tsx`, `MonitoringOverview.tsx` — shared shell, state and presentation primitives (see below)
 - `LoginForm.tsx` — login + registration (EmailStr) with approval-pending state
 - `ResultsTable.tsx`, `HistoryPanel.tsx` — results table + history cards
 - `chat/` — `FloatingChat`, `ChatModal`, `ChatPanel`, `ChatInput`, `MessageList`, `MessageMarkdown`
@@ -34,8 +37,7 @@ React UI components for the monitoring dashboard (monitoring panels, shared UI p
 ## Patterns
 - Color coding: emerald (good) → amber (warning) → rose (bad) — channel health (`HealthBadge`) and status palettes
 - Metric **value** grades on dashboard cards use a different palette by user request: **blue** (normal) → amber ▲ (warning) → rose ◆ (critical), from `lib/metricGrade.ts` (ADR-029). Do not swap the normal blue for emerald — blue means "fast value", emerald means "healthy channel". Likewise the KO grade name is 양호 (not 정상, the `HealthBadge` word), pinned by `metricGrade.test.ts`
-- `model_name` labels carry a `"Bedrock <family> (<channel>)"` / `"Anthropic <family> (US)"` prefix;
-  `TrendChart` `MODEL_COLORS` keys and `lib/sortModels.ts` `FAMILY_ORDER` must match these byte-for-byte
+- `model_name` labels carry a `"Bedrock <family> (<channel>)"` / `"Anthropic <family> (US)"` / `"OpenAI <family> (<region>|Global|US|1P)"` prefix;
+  `TrendChart` `MODEL_COLORS` keys must match these labels byte-for-byte. `lib/sortModels.ts` `FAMILY_ORDER` entries are matched with `includes`, so a longer family name (Fable 5.1, Opus 5.5) must precede its prefix (Fable 5, Opus 5)
 - Sort order: Anthropic → Global(Bedrock·OpenAI `(Global)` 공통) → US(Bedrock US·OpenAI US CRIS) → OpenAI 리전, family newest-first (`sortModels.ts` `channelRank`/`familyRank`)
-- Tooltips via `MetricTooltip` with Korean descriptions from i18n
-- Auto-refresh via `useAutoRefresh` hook (30s with countdown)
+- Auto-refresh via `useAutoRefresh` hook with countdown — default 30 s (`AutoDashboard`, `CostDashboardPanel`, `ReliabilityPanel`, `EfficiencyPanel`, `AnalysisPanel`); 60 s for `ParityPanel`, `GptOnAwsPanel`, `ClaudeFeaturesPanel`
