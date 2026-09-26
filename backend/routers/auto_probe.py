@@ -142,7 +142,8 @@ def get_status(db: Session = Depends(get_db)):
     )
     category_count = len(prober_service.WORKLOAD_PRESETS)
     # 채널별 주기 (v2.29.0) — 키는 model_id의 첫 ':' 앞 접두("anthropic" = Claude Platform on AWS).
-    # 여기 없는 채널은 interval_seconds / category_interval_seconds를 따른다.
+    # 여기 없는 채널은 interval_seconds / category_interval_seconds를 따른다. v2.29.1 기본값에서는
+    # {"anthropic": 300} / {"anthropic": 1800} — 기본 주기와 같아 대시보드는 채널 주기 안내를 숨긴다.
     channel_intervals = probe_cadence.channel_intervals()
     return {
         "cycle_state": state,
@@ -167,7 +168,7 @@ def get_status(db: Session = Depends(get_db)):
     }
 
 
-# CloudFront 전용 단기 캐시 (max-age=0 → 브라우저 캐시 없음). 데이터는 5분 주기 갱신이므로(CP 채널 10분)
+# CloudFront 전용 단기 캐시 (max-age=0 → 브라우저 캐시 없음). 데이터는 5분 주기 갱신이므로
 # s-maxage=30으로 다중 사용자·30초 자동새로고침의 중복 DB 조회를 edge에서 흡수.
 # CloudFront가 이 헤더를 존중하려면 edge-stack의 /api/auto-probe/* behavior 필요.
 _CACHE_CONTROL = "public, max-age=0, s-maxage=30"
@@ -181,9 +182,11 @@ def get_latest(
 ):
     """Return each model's latest auto-probe result (v2.29.0: per model, not per run).
 
-    category 미지정: 모델별로 자기 주기 3회 범위 안의 최신 행 — 기본 채널은 최신 완료 run의 행이고,
-                     10분 주기 CP 채널은 CP를 건너뛴 사이클에도 직전 run의 행이 남는다.
-    category 지정: 그 카테고리의 모델별 최신 행 — 카테고리 회전 2바퀴 범위(기본 60분, CP 120분).
+    category 미지정: 모델별로 자기 주기 3회 범위 안의 최신 행 — 매 사이클 채널은 최신 완료 run의 행이고,
+                     CP 주기를 늘린 경우(ANTHROPIC_CP_PROBE_INTERVAL_S=600 등) CP를 건너뛴 사이클에도
+                     직전 run의 행이 남는다. v2.29.1 기본값에서는 CP도 매 사이클이다.
+    category 지정: 그 카테고리의 모델별 최신 행 — 카테고리 회전 2바퀴 범위(5분 채널 60분, CP 600초
+                   설정이면 120분).
     기준 시각은 최신 완료 자동 run의 시작 시각 (latest_results 모듈 docstring).
     """
     response.headers["Cache-Control"] = _CACHE_CONTROL

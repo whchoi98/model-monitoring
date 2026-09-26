@@ -7,8 +7,10 @@ v2: EventBridge Scheduler가 별도 Fargate Task(`auto_prober_runner`)를 5분�
   - Fargate one-shot runner (`backend.auto_prober_runner`)
   - 수동 trigger API (`/api/auto-probe/trigger`) — backend 프로세스에서 동기 실행
 
-v2.29.0: 채널별 주기. Claude Platform on AWS 채널(anthropic:*)은 10분(ANTHROPIC_CP_PROBE_INTERVAL_S)
-마다만 프로빙하고 워크로드 카테고리도 채널별로 따로 회전한다(_plan_cycle). 나머지 모델은 매 사이클.
+v2.29.0: 채널별 주기(_plan_cycle). v2.29.1부터 기본값은 다시 매 사이클 — Claude Platform on AWS
+채널(anthropic:*)도 다른 모델과 같은 사이클 카테고리로 매번 프로빙한다(v2.29.0 이전 동작). 운영 노브
+ANTHROPIC_CP_PROBE_INTERVAL_S가 사이클(300s)보다 크면(예: 600) v2.29.0처럼 CP 채널만 그 주기마다
+프로빙하고 워크로드 카테고리도 채널별로 따로 회전한다. 나머지 모델은 항상 매 사이클.
 """
 
 from __future__ import annotations
@@ -56,10 +58,11 @@ PROBE_FUTURE_TIMEOUT_S = max(120.0, PROBE_WALL_CLOCK_S + 30.0)
 CYCLE_DEADLINE_SECONDS = float(RUNNING_TIMEOUT_SECONDS - PROBE_INTERVAL_SECONDS)  # 600s
 _CYCLE_POLL_SECONDS = 1.0
 
-# Claude Platform on AWS 채널 주기 판정 (v2.29.0) — 직전 CP 자동 프로브가 속한 run의 시작 시각
+# Claude Platform on AWS 채널 주기 판정 (v2.29.0, ANTHROPIC_CP_PROBE_INTERVAL_S > 사이클일 때만 — v2.29.1
+# 기본값 300에서는 쓰지 않는다) — 직전 CP 자동 프로브가 속한 run의 시작 시각
 # (ProbeRun.created_at, 사이클 예약 시각)과 이번 run의 시작 시각을 비교한다. 결과 행 timestamp는 기준으로
 # 쓰지 않는다: CP 행은 사이클 안에서 Bedrock 모델 뒤에 쓰여 시작 후 1~2분 늦게 찍히므로(2026-09-23 로그),
-# 행 기준이면 두 사이클 뒤에도 "10분 미만"으로 보여 15분 주기가 된다. 허용 오차는 사이클의 절반(150s) —
+# 행 기준이면 600s 설정에서 두 사이클 뒤에도 "10분 미만"으로 보여 15분 주기가 된다. 허용 오차는 사이클의 절반(150s) —
 # Fargate 기동 지연 때문에 스케줄 run 간격이 281~312s로 흔들려(같은 로그) 두 사이클 간격이 540s 아래로
 # 내려갈 수 있다. 한 사이클 뒤(≈300s)는 여전히 오차 밖이라 걸러진다.
 CP_DUE_TOLERANCE_SECONDS = PROBE_INTERVAL_SECONDS // 2
@@ -153,8 +156,9 @@ def _next_preset() -> dict:
     """직전 ProbeRun의 카테고리 다음 preset을 round-robin으로 반환.
 
     DB에서 가장 최근 auto 결과 행(CP 채널 제외)의 category를 봐서 다음 index 결정. 실패하면 첫 preset.
-    CP 채널(anthropic:*)은 v2.29.0부터 자기 회전을 따로 돌아 같은 run 안에서도 카테고리가 다를 수 있다 —
-    그 행을 읽으면 나머지 모델의 회전이 흔들리므로 제외한다.
+    CP 채널(anthropic:*)은 ANTHROPIC_CP_PROBE_INTERVAL_S가 사이클보다 크면(v2.29.0 동작, 예: 600) 자기 회전을
+    따로 돌아 같은 run 안에서도 카테고리가 다를 수 있다 — 그 행을 읽으면 나머지 모델의 회전이 흔들리므로
+    제외한다. 기본값(300, v2.29.1)에서는 CP 행도 사이클 카테고리라 제외해도 결과가 같다.
     """
     try:
         db = SessionLocal()
@@ -186,7 +190,8 @@ def _cp_history(run_id: int) -> tuple[datetime, dict[str, tuple[Optional[datetim
     """(이번 run 시작 시각, {CP model_id: (직전 CP 자동 프로브 run의 시작 시각, 그 행의 category)}).
 
     run 상태와 무관하게 모든 자동 run의 행을 센다 — 실패한 run의 행도 실제 API 호출이었다.
-    범위는 timestamp 인덱스로 최근 max(1h, 3 × CP 주기)만 읽는다(CP 9채널 × 6행/h).
+    범위는 timestamp 인덱스로 최근 max(1h, 3 × CP 주기)만 읽는다(600s 설정이면 CP 9채널 × 6행/h).
+    CP 주기가 사이클보다 클 때만 _plan_cycle이 부른다.
     """
     db = SessionLocal()
     try:
@@ -216,11 +221,20 @@ def _cp_history(run_id: int) -> tuple[datetime, dict[str, tuple[Optional[datetim
 def _plan_cycle(run_id: int, preset: dict, models: dict[str, str]) -> list[tuple[str, str, dict]]:
     """이번 사이클에 프로빙할 (model_id, model_name, preset) 목록 (v2.29.0).
 
-    CP 채널이 아닌 모델은 전부 사이클 preset. CP 채널은 직전 CP 자동 프로브 run이 시작된 지
-    (주기 − CP_DUE_TOLERANCE_SECONDS) 이상 지났거나 최근 기록이 없을 때만 프로빙하고, 그 채널의 직전
-    category 다음 preset을 쓴다(없으면 사이클 preset) — 10분 주기에서도 6개 카테고리를 모두 돈다
-    (카테고리당 약 60분). 이력 조회가 실패하면 CP도 사이클 preset으로 프로빙한다(모니터링 우선).
+    CP 주기가 사이클 이하면(v2.29.1 기본값 300) 모든 모델(CP 포함)을 사이클 preset으로 — v2.29.0 이전
+    동작이고 CP 이력 조회(_cp_history)도 하지 않는다. 배포 직후 첫 사이클부터 CP가 사이클 카테고리에
+    합류한다(직전 CP 행의 자체 회전 카테고리를 읽지 않으므로). env 값은 probe_cadence가 사이클 배수로
+    반올림해 두므로 301~450도 여기서 300으로 걸린다.
+
+    CP 주기가 사이클보다 크면(운영 노브, 예: 600 = v2.29.0) CP 채널이 아닌 모델은 전부 사이클 preset.
+    CP 채널은 직전 CP 자동 프로브 run이 시작된 지 (주기 − CP_DUE_TOLERANCE_SECONDS) 이상 지났거나 최근
+    기록이 없을 때만 프로빙하고, 그 채널의 직전 category 다음 preset을 쓴다(없으면 사이클 preset) — 10분
+    주기에서도 6개 카테고리를 모두 돈다(카테고리당 약 60분). 이력 조회가 실패하면 CP도 사이클 preset으로
+    프로빙한다(모니터링 우선).
     """
+    if probe_cadence.ANTHROPIC_CP_PROBE_INTERVAL_S <= BASE_INTERVAL_SECONDS:
+        return [(model_id, model_name, preset) for model_id, model_name in models.items()]
+
     cp_ids = [model_id for model_id in models if is_cp_model(model_id)]
     history: dict[str, tuple[Optional[datetime], Optional[str]]] = {}
     now = datetime.now(timezone.utc)
@@ -375,7 +389,7 @@ class _ProbeSlot:
     def __init__(self, model_id: str, model_name: str, preset: Optional[dict] = None):
         self.model_id = model_id
         self.model_name = model_name
-        # 이 모델의 워크로드 preset — CP 채널은 사이클 preset과 다를 수 있다 (v2.29.0).
+        # 이 모델의 워크로드 preset — CP 주기가 사이클보다 크면 CP 채널은 사이클 preset과 다를 수 있다 (v2.29.0).
         self.preset = preset
         self.lock = Lock()
         self.started_at: Optional[float] = None
@@ -535,7 +549,7 @@ def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     def _probe_worker(slot: _ProbeSlot, client) -> None:
         if not slot.begin():
             return  # 시작 전에 사이클이 포기함 — 오류 행은 사이클이 이미 썼다
-        model_preset = slot.preset or preset  # 모델별 preset (CP 채널은 자기 회전, v2.29.0)
+        model_preset = slot.preset or preset  # 모델별 preset (CP 주기 > 사이클이면 CP 채널은 자기 회전, v2.29.0)
         thread_db = SessionLocal()
         try:
             _probe_single_model(

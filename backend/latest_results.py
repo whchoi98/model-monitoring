@@ -1,17 +1,21 @@
 """모델별 최신 자동 프로브 행 (v2.29.0) — /api/auto-probe/latest와 챗봇 get_latest_results 공용.
 
-v2.29.0부터 Claude Platform on AWS 채널은 10분마다(두 사이클에 한 번)만 프로빙하고 워크로드 카테고리도
-따로 회전하므로, "최신 완료 run의 행"만 보면 CP 채널이 사이클 절반 동안 빠진다. 그래서 모델마다 자기
-주기로 잡은 범위 안의 최신 행 하나를 돌려준다.
+v2.29.0에서 Claude Platform on AWS 채널을 10분마다(두 사이클에 한 번)만 프로빙하고 워크로드 카테고리도
+따로 회전하게 하면서, "최신 완료 run의 행"만 보면 CP 채널이 사이클 절반 동안 빠지게 됐다. 그래서 모델마다
+자기 주기(probe_cadence.interval_for)로 잡은 범위 안의 최신 행 하나를 돌려준다. v2.29.1 기본값(CP 300초 =
+매 사이클)에서는 모든 채널의 범위가 기본 주기 기준으로 같아지고, ANTHROPIC_CP_PROBE_INTERVAL_S=600이면
+CP 범위만 다시 두 배가 된다.
 
 기준 시각(anchor)은 최신 완료 자동 run의 시작 시각이다 — 수집이 멈춰도 마지막 스냅샷이 사라지지 않고
 (이전과 같다) 신선도는 프런트엔드가 timestamp로 판정한다. 모델별 범위:
-  - 카테고리 없음: anchor − LATEST_LOOKBACK_INTERVALS × 모델 주기 (기본 채널 15분, CP 30분)
-  - 카테고리 지정: anchor − CATEGORY_LOOKBACK_ROTATIONS × 카테고리 수 × 모델 주기 (기본 60분, CP 120분)
+  - 카테고리 없음: anchor − LATEST_LOOKBACK_INTERVALS × 모델 주기 (5분 채널 15분, CP 600초 설정이면 30분)
+  - 카테고리 지정: anchor − CATEGORY_LOOKBACK_ROTATIONS × 카테고리 수 × 모델 주기 (5분 채널 60분, CP 600초
+    설정이면 120분)
 
 쿼리 2개, 둘 다 테이블 크기와 무관하게 bounded:
   1. 집계 — probe_results.timestamp 범위(ix_probe_results_timestamp)만 읽고 probe_runs PK로 조인,
-     model_id별 max(id)·max(timestamp). 카테고리 없음 ≈ 30분 × 모델 수 행, 카테고리 ≈ 2시간 × 모델 수 행.
+     model_id별 max(id)·max(timestamp). 범위는 가장 긴 채널 주기 기준 — 기본값에서 카테고리 없음 ≈ 15분 × 모델
+     수 행, 카테고리 ≈ 1시간 × 모델 수 행(CP 600초 설정이면 각각 30분, 2시간).
   2. 본문 — PK IN (모델 수 이하)로 전체 행.
 run 상태는 completed만 — 이전 /latest와 같은 공개 기준이다(진행 중·실패 run의 행은 노출하지 않는다).
 """
