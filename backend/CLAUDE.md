@@ -56,6 +56,7 @@ ruff check .                     # = `make backend-lint` (`ruff check backend/` 
 - `X | Y` union syntax is fine (Python 3.10+ runtime is 3.11)
 - `from __future__ import annotations` is allowed in FastAPI modules (most routers use it), but every type in an endpoint or `Depends` signature must then be a module-level name: a model defined inside a function or imported only under `TYPE_CHECKING` cannot be resolved from the string annotation, and FastAPI silently treats a body parameter as a required query parameter (422)
 - bcrypt must be `>=4.0,<4.1` (passlib incompatibility with 5.x)
+- SQLAlchemy must be `<2.1`: 2.1 makes psycopg (v3) the default driver for plain `postgresql://` URLs, and only `psycopg2-binary` is installed, so every DB import fails (CI 2026-09-26 with 2.1.1; production image runs 2.0.54). Moving to 2.1 means adding `psycopg[binary]` or writing `postgresql+psycopg2://` in `database.py`
 - All user input in HTML must use `html.escape()`
 - Secrets must come from environment variables, never hardcoded
 - New Bedrock models may deprecate parameters (e.g., Opus 4.7 → no temperature)
