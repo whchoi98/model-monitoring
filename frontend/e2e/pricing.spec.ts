@@ -45,17 +45,23 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(gpt54).toHaveCount(2);
   await expect(gpt54.nth(0)).toContainText("$2.75 / $16.50 us-east-1, us-east-2");
   await expect(gpt54.nth(1)).toContainText("$2.50 / $15.00 us-west-2");
-  await expect(gpt54.nth(0).locator('[data-badge="pending"]')).toHaveAttribute("title", "새 값 $3.00 / $18.00");
+  // Badge explanations are visible text next to the badge (touch and keyboard users never see a title tooltip).
+  await expect(page.locator("[data-badge][title]")).toHaveCount(0);
+  await expect(gpt54.nth(0).locator('[data-badge-detail="pending"]')).toBeVisible();
+  await expect(gpt54.nth(0).locator('[data-badge-detail="pending"]')).toHaveText("새 값 $3.00 / $18.00");
 
-  const fableUs = page.locator('tr[data-family="claude-fable-5-1"] td[data-tier="us"] [data-badge="unverified"]');
-  await expect(fableUs).toContainText("자동 확인 안 됨");
-  await expect(fableUs).toHaveAttribute("title", "마지막 확인 2026-09-20");
-  await expect(page.locator('tr[data-family="nova-2-lite"] [data-badge="unverified"]')).toHaveAttribute("title", "초기값");
+  const fableUs = page.locator('tr[data-family="claude-fable-5-1"] td[data-tier="us"]');
+  await expect(fableUs.locator('[data-badge="unverified"]')).toContainText("자동 확인 안 됨");
+  await expect(fableUs.locator('[data-badge-detail="unverified"]')).toHaveText("마지막 확인 2026-09-20");
+  await expect(page.locator('tr[data-family="nova-2-lite"] [data-badge-detail="unverified"]')).toHaveText("초기값");
   const promo = page.locator('tr[data-family="gpt-5.6-sol"] [data-badge="promo"]');
   await expect(promo).toHaveCount(2);
   await expect(promo.first()).toContainText("프로모션(최소 2026-11-21까지, 수동 메모)");
-  await expect(page.locator('tr[data-family="gpt-5.6-sol"] td[data-tier="in_region"] [data-badge="promo"]'))
-    .toHaveAttribute("title", /^프로모션 이전 단가 \$5\.50 \/ \$33\.00\n2026-09-23/);
+  const promoDetail = page.locator('tr[data-family="gpt-5.6-sol"] td[data-tier="in_region"] [data-badge-detail="promo"]');
+  await expect(promoDetail).toContainText("프로모션 이전 단가 $5.50 / $33.00");
+  // The note's basis (2026-09-23) is the manual-note reference, one footnote away.
+  await expect(promoDetail.getByRole("link", { name: "참고 자료 10" })).toHaveAttribute("href", "#ref-10");
+  await expect(page.locator("[data-scroll-hint]")).toHaveCount(0);
 
   const notes = page.getByRole("region", { name: "참고 사항" }).getByRole("listitem");
   await expect(notes).toHaveText([
@@ -70,6 +76,25 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.locator("#ref-1").getByRole("link")).toHaveAttribute("rel", "noopener noreferrer");
   await expect(page.locator("#ref-10")).toContainText("수동 메모");
   await expect(page.locator("#ref-10").getByRole("link")).toHaveCount(0);
+});
+
+test("the model-ID toggle lists each price's model IDs, by keyboard too", async ({ page }) => {
+  await page.goto("/pricing");
+  const toggle = page.getByRole("button", { name: "모델 ID 보기", exact: true });
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("[data-model-ids]")).toHaveCount(0);
+
+  await toggle.focus();
+  await page.keyboard.press("Enter");
+  await expect(toggle).toHaveAttribute("aria-pressed", "true");
+  const ids = page.locator('tr[data-family="gpt-5.4"] td[data-tier="in_region"] [data-price-line]').nth(0).locator("[data-model-ids]");
+  await expect(ids).toBeVisible();
+  await expect(ids.locator("span")).toHaveText(["openai:us-east-1:openai.gpt-5.4", "openai:us-east-2:openai.gpt-5.4"]);
+  await expect(page.locator('tr[data-family="claude-opus-5-5"] td[data-tier="cp"] [data-model-ids]')).toHaveText("anthropic:claude-opus-5-5");
+
+  await page.keyboard.press("Space");
+  await expect(toggle).toHaveAttribute("aria-pressed", "false");
+  await expect(page.locator("[data-model-ids]")).toHaveCount(0);
 });
 
 test("a promotion past its minimum date asks to check whether it ended", async ({ page }) => {
@@ -141,7 +166,19 @@ test("a 375px phone scrolls only the price table, with the model column pinned",
     })).toBe(true);
   }
   expect(await table.evaluate((element) => element.scrollWidth > element.clientWidth)).toBe(true);
+  // Overlay scrollbars stay hidden until a scroll, and the first price column is Claude Platform on AWS, so an
+  // OpenAI row would look empty: a hint above each table and a fade on its right edge say it scrolls.
+  const section = page.locator('section[aria-labelledby="pricing-openai"]');
+  const hint = section.locator("[data-scroll-hint]");
+  await expect(hint).toBeVisible();
+  await expect(hint).toHaveText("→ 표를 옆으로 스크롤하면 Global, US, In-Region 단가가 보입니다");
+  await expect(section.locator("[data-scroll-fade]")).toHaveCount(1);
+  await expect(page.locator("[data-scroll-hint]")).toHaveCount(3);
   await table.evaluate((element) => { element.scrollLeft = element.scrollWidth; });
+  await expect(hint).toBeHidden();
+  await expect(section.locator("[data-scroll-fade]")).toHaveCount(0);
+  // Hidden, not removed: the table does not jump up when the hint goes away.
+  expect(await hint.evaluate((element) => element.getBoundingClientRect().height)).toBeGreaterThan(0);
   const box = (await table.boundingBox())!;
   const model = (await table.getByRole("rowheader").first().boundingBox())!;
   expect(Math.abs(model.x - box.x)).toBeLessThan(2);

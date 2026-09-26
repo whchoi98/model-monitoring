@@ -5,7 +5,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, test } from "vitest";
 import type { PricingResponse } from "@/lib/types";
 import { pricingFixture } from "../../e2e/fixtures";
-import { PricingContent, providerSections } from "./PricingPanel";
+import { PricingContent, providerSections, tableScrollCue } from "./PricingPanel";
 
 function render(lang: "ko" | "en", highlight: number | null = null, data: PricingResponse = pricingFixture): string {
   return renderToStaticMarkup(
@@ -28,6 +28,20 @@ describe("providerSections", () => {
       .toEqual([["anthropic", 2], ["amazon", 1], ["openai", 3]]);
     const [fable, , nova, astra] = pricingFixture.families;
     expect(providerSections([astra, fable, nova, astra]).map((s) => s.provider)).toEqual(["openai", "anthropic", "amazon", "openai"]);
+  });
+});
+
+describe("tableScrollCue", () => {
+  test("넘치지 않으면 단서가 없다 (1px 오차는 무시)", () => {
+    expect(tableScrollCue(0, 1182, 1182)).toEqual({ overflow: false, scrolled: false, moreRight: false });
+    expect(tableScrollCue(0, 324, 325)).toEqual({ overflow: false, scrolled: false, moreRight: false });
+  });
+
+  test("폰 폭: 처음엔 오른쪽에 더 있고, 스크롤하면 scrolled, 끝에 닿으면 moreRight가 꺼진다", () => {
+    expect(tableScrollCue(0, 324, 760)).toEqual({ overflow: true, scrolled: false, moreRight: true });
+    expect(tableScrollCue(120, 324, 760)).toEqual({ overflow: true, scrolled: true, moreRight: true });
+    expect(tableScrollCue(436, 324, 760)).toEqual({ overflow: true, scrolled: true, moreRight: false });
+    expect(tableScrollCue(435.5, 324, 760).moreRight).toBe(false);
   });
 });
 
@@ -75,6 +89,29 @@ describe("PricingContent", () => {
     expect(html).toContain("완료");
     expect(html).toContain("검토 대기 1건");
     expect(render("en", null, { ...pricingFixture, last_sync: null, pending_review: 0 })).toContain("No automatic check has run yet");
+  });
+
+  test("배지 설명은 title 툴팁이 아니라 배지 옆 글자, 프로모션은 수동 메모 참고 자료로 각주", () => {
+    const html = render("ko");
+    expect(html).not.toMatch(/data-badge="[a-z_]+"[^>]*title=/);
+    expect(cell(html, "gpt-5.4", "in_region")).toMatch(/data-badge-detail="pending"[^>]*><span[^>]*>새 값 \$3\.00 \/ \$18\.00<\/span>/);
+    expect(cell(html, "claude-fable-5-1", "us")).toContain("마지막 확인 2026-09-20");
+    expect(cell(html, "nova-2-lite", "us")).toMatch(/data-badge-detail="unverified"[^>]*><span[^>]*>초기값<\/span>/);
+    const promo = cell(html, "gpt-5.6-sol", "in_region");
+    expect(promo).toContain("프로모션 이전 단가 $5.50 / $33.00");
+    expect(promo).toMatch(/data-badge-detail="promo"[^>]*>.*href="#ref-10"/);
+    expect(promo).not.toContain("CHANGELOG v2.28.1");
+    expect(cell(render("en"), "gpt-5.6-sol", "global")).toContain("Price before the promotion $5.00 / $30.00");
+  });
+
+  test("모델 ID 토글은 꺼진 상태로 시작하고 모델 ID 목록은 숨긴다, 스크롤 단서는 측정 전이라 없다", () => {
+    const html = render("ko");
+    expect(html).toMatch(/<button type="button" aria-pressed="false" data-model-ids-toggle="true"[^>]*>모델 ID 보기<\/button>/);
+    expect(render("en")).toContain(">Show model IDs</button>");
+    expect(html).not.toContain("data-model-ids=");
+    expect(html).not.toContain("data-scroll-hint");
+    expect(html).not.toContain("data-scroll-fade");
+    expect(count(html, "data-pricing-scroll")).toBe(3);
   });
 
   test("면책 상자의 Anthropic 요금 링크, 참고 자료 확인일, 검토 대기 0건이면 숨김", () => {

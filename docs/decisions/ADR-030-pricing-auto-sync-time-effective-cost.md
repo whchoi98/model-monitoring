@@ -178,8 +178,8 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
   OpenAI, 그 안은 `FAMILY_ORDER`)와 각주 번호는 백엔드가 정하고, 프런트와 export 3형식은 받은 순서와 번호를 그대로 쓴다.
 - 셀별 계산 상태 `verification`: `seed_only`(유효 행이 seed이고 한 번도 확인되지 않음), `verified`(유효 행의 `observed_at`이 가장
   최근에 끝난 런의 시작 시각 이후 — 런 상태 무관), `stale`(그 밖). 한 출처가 계속 실패하면 그 채널은 곧 `stale`이 되어 "자동 확인
-  안 됨" 배지로 드러난다. 배지 툴팁은 `stale`이면 "마지막 확인 <날짜>"(`observed_at`이 없으면 "마지막 확인일 없음"), `seed_only`면
-  "초기값"이다.
+  안 됨" 배지로 드러난다. 배지 옆 설명(툴팁이 아니라 화면 글자라 터치, 키보드 사용자도 본다)은 `stale`이면 "마지막 확인
+  <날짜>"(`observed_at`이 없으면 "마지막 확인일 없음"), `seed_only`면 "초기값"이다.
 - 응답의 `pending_review`는 검토 대기 행이 있는 활성 채널 수(`model_id` 중복 제거)로, `price_sync_runs.pending`과 같은 기준이다.
 - 면책 문구는 `pricing_sources.DISCLAIMER` 한 곳에만 둔다. KO "이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며,
   AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.", EN "This price list is compiled automatically from

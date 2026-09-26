@@ -29,7 +29,21 @@ export function utcDate(value: string | null | undefined): string | null {
   return timestamp === null ? null : new Date(timestamp).toISOString().slice(0, 10);
 }
 
-export type PricingBadge = { kind: "unverified" | "pending" | "promo" | "promo_check"; label: string; title: string };
+/**
+ * One badge of a price cell. `detail` is shown as text next to the badge, because a `title` tooltip never reaches
+ * touch or keyboard users. `ref` is the reference id whose footnote carries the full manual note (promotions only).
+ */
+export type PricingBadge = {
+  kind: "unverified" | "pending" | "promo" | "promo_check";
+  label: string;
+  detail: string;
+  ref?: string;
+};
+
+/** Reference id of a family's manual note, the same format as the backend's `pricing_sources.note_source_id`. */
+export function noteReferenceId(familyKey: string): string {
+  return `note:${familyKey}`;
+}
 
 /** Notes that name a prior price for this tier, narrowed to that tier's prior price only. */
 export function notesForTier(notes: PricingNote[], tier: PricingTierKey): PricingNote[] {
@@ -54,28 +68,31 @@ export function tierBadges(tier: PricingTier, notes: PricingNote[], lang: "ko" |
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const badges: PricingBadge[] = [];
   if (tier.verification === "stale" || tier.verification === "seed_only") {
-    let title = L("Initial value", "초기값");
+    let detail = L("Initial value", "초기값");
     if (tier.verification === "stale") {
       // A stale tier was verified once; without observed_at it has no date, but it is not an initial value either.
       const checked = utcDate(tier.observed_at);
-      title = checked ? L(`Last verified ${checked}`, `마지막 확인 ${checked}`) : L("No confirmation date", "마지막 확인일 없음");
+      detail = checked ? L(`Last verified ${checked}`, `마지막 확인 ${checked}`) : L("No confirmation date", "마지막 확인일 없음");
     }
-    badges.push({ kind: "unverified", label: L("Not auto-verified", "자동 확인 안 됨"), title });
+    badges.push({ kind: "unverified", label: L("Not auto-verified", "자동 확인 안 됨"), detail });
   }
   if (tier.pending) {
     const next = formatPricePair(tier.pending);
-    badges.push({ kind: "pending", label: L("Pending review", "검토 대기"), title: L(`New value ${next}`, `새 값 ${next}`) });
+    badges.push({ kind: "pending", label: L("Pending review", "검토 대기"), detail: L(`New value ${next}`, `새 값 ${next}`) });
   }
   const todayUtc = today.toISOString().slice(0, 10);
   for (const note of notes) {
     if (note.kind !== "promo") continue;
-    const title = `${L("Price before the promotion", "프로모션 이전 단가")} ${priorPriceText(note)}\n${lang === "en" ? note.text_en : note.text_ko}`;
+    // The note's own text (its basis date) is the manual-note reference; the cell links to it instead of repeating it.
+    const detail = `${L("Price before the promotion", "프로모션 이전 단가")} ${priorPriceText(note)}`;
+    const ref = noteReferenceId(note.family_key);
     badges.push(todayUtc > note.min_until
-      ? { kind: "promo_check", label: L("Check whether the promotion has ended", "프로모션 종료 여부 확인 필요"), title }
+      ? { kind: "promo_check", label: L("Check whether the promotion has ended", "프로모션 종료 여부 확인 필요"), detail, ref }
       : {
         kind: "promo",
         label: L(`Promotion (until at least ${note.min_until}, manual note)`, `프로모션(최소 ${note.min_until}까지, 수동 메모)`),
-        title,
+        detail,
+        ref,
       });
   }
   return badges;

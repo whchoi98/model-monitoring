@@ -46,6 +46,25 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
+**v2.30.0을 되돌린 뒤 다시 배포할 때 (PricingSync 로그 그룹)**. v2.30.0은 CDK를 바꾼 릴리스라 위 규칙대로 v2.29.1 tag의 `cdk/`로
+되돌린다. 그러면 PricingSync 스케줄, 태스크 정의, 역할은 지워지지만 로그 그룹 `/ecs/pricingsync`는 이름을 고정했고
+`RemovalPolicy.RETAIN`(`cdk/lib/stacks/scheduler-stack.ts` `buildTaskDef`)이라 계정에 남는다. 이 상태로 v2.30.0 이상을 다시 배포하면
+CloudFormation이 같은 이름의 로그 그룹을 새로 만들려다 `Resource of type 'AWS::Logs::LogGroup' with identifier '/ecs/pricingsync'
+already exists`로 Scheduler 스택 업데이트가 실패하고 롤백된다. 두 스택은 서로 의존하지 않아 `cdk deploy`가 선언
+순서(기본 동시성 1)대로 AppServices를 먼저 끝내므로, 서비스 2개만 새 이미지로 가고 스케줄 태스크 5개는 옛 이미지에 남는 혼합 상태가 된다. 재배포 전에 둘 중
+하나를 한다.
+
+```bash
+# 남아 있는지 확인 — 빈 결과면 아무것도 하지 않아도 된다
+aws logs describe-log-groups --log-group-name-prefix /ecs/pricingsync --region $REGION --query 'logGroups[].logGroupName'
+# (1) 삭제 후 평소대로 배포 — 로그를 보존해야 하면 먼저 S3로 내보낸다(aws logs create-export-task)
+aws logs delete-log-group --log-group-name /ecs/pricingsync --region $REGION
+# (2) 또는 남은 로그 그룹을 스택으로 가져오며 배포 — 이름이 고정되고 DeletionPolicy가 Retain인 리소스만 가져온다
+#     (CloudFormation 자동 가져오기, CDK CLI 2.1122.0에서 플래그 확인). 가져온 뒤 Scheduler 스택 drift detection을 권장한다.
+npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler --require-approval never \
+  --import-existing-resources -c backendImage=<v2.30.0 backend URI> -c frontendImage=<v2.30.0 frontend URI>
+```
+
 **A-3. 빠른 경로 — 서비스만 이전 revision으로** (스케줄 태스크 6개는 되돌아가지 않는다)
 
 CloudFormation은 task def를 교체할 때 자신이 만든 옛 revision을 INACTIVE로 등록 해제하고(수동 등록한 revision은 ACTIVE로

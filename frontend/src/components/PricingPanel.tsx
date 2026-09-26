@@ -2,8 +2,10 @@
 
 // 비용 단가 (v2.30.0) — GET /api/pricing 단일 출처. 제공사 섹션, 행 순서, 각주 번호는 응답 그대로 쓴다.
 // 공식 단가는 12시간마다 자동 확인되고, 면책 문구는 상단 안내 상자와 참고 자료 끝에 두 번 표기한다.
+// 배지 설명과 모델 ID는 title 툴팁에만 두지 않는다(터치, 키보드 사용자가 볼 수 없다). 배지 설명은 배지 옆 글자로,
+// 모델 ID는 "모델 ID 보기" 토글로 보여 준다. 폰에서는 표만 가로로 스크롤되므로 표 위 안내와 오른쪽 가장자리 흐림으로 알린다.
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchPricing, pricingExportUrl } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n-context";
@@ -69,6 +71,69 @@ export function providerSections(families: PricingFamily[]): { provider: Pricing
   return sections;
 }
 
+export type TableScrollCue = { overflow: boolean; scrolled: boolean; moreRight: boolean };
+
+/**
+ * Horizontal scroll state of a price table: `overflow` (wider than its box), `scrolled` (moved off the left edge)
+ * and `moreRight` (columns still hidden on the right). A 1 px tolerance absorbs fractional widths.
+ */
+export function tableScrollCue(scrollLeft: number, clientWidth: number, scrollWidth: number): TableScrollCue {
+  const overflow = scrollWidth - clientWidth > 1;
+  return { overflow, scrolled: scrollLeft > 0, moreRight: overflow && scrollLeft + clientWidth < scrollWidth - 1 };
+}
+
+/** Re-reads the cue on scroll and on resize. A callback ref, so it also starts once the box mounts later. */
+function useTableScrollCue() {
+  const [box, setBox] = useState<HTMLDivElement | null>(null);
+  const [cue, setCue] = useState<TableScrollCue>({ overflow: false, scrolled: false, moreRight: false });
+  useEffect(() => {
+    if (!box) return;
+    const update = () => {
+      const next = tableScrollCue(box.scrollLeft, box.clientWidth, box.scrollWidth);
+      setCue((prev) => (prev.overflow === next.overflow && prev.scrolled === next.scrolled && prev.moreRight === next.moreRight
+        ? prev : next));
+    };
+    update();
+    box.addEventListener("scroll", update, { passive: true });
+    const observer = typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    observer?.observe(box);
+    if (box.firstElementChild) observer?.observe(box.firstElementChild);
+    return () => {
+      box.removeEventListener("scroll", update);
+      observer?.disconnect();
+    };
+  }, [box]);
+  return { ref: setBox, cue };
+}
+
+/**
+ * The scrolling box of one provider table. On a phone the first visible price column is Claude Platform on AWS, so a
+ * row can look empty ("—") while its prices sit off screen. A hint above the table (hidden once scrolled, space kept
+ * so the table does not jump) and a fade on the right edge say there is more.
+ */
+function PriceTableScroll({ label, lang, children }: { label: string; lang: Lang; children: ReactNode }) {
+  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  const { ref, cue } = useTableScrollCue();
+  return (
+    <>
+      {cue.overflow && (
+        <p aria-hidden="true" data-scroll-hint className={`mb-2 text-[11px] text-gray-500 ${cue.scrolled ? "invisible" : ""}`}>
+          → {L("Scroll the table sideways for Global, US and In-Region prices", "표를 옆으로 스크롤하면 Global, US, In-Region 단가가 보입니다")}
+        </p>
+      )}
+      <div className="relative">
+        {/* relative: sr-only 텍스트(absolute)가 스크롤 영역 밖으로 빠져 페이지 가로 스크롤을 만들지 않게 한다. */}
+        <div ref={ref} role="region" aria-label={L(`${label} price table`, `${label} 단가 표`)} tabIndex={0} data-pricing-scroll className="relative overflow-x-auto">
+          {children}
+        </div>
+        {cue.moreRight && (
+          <div aria-hidden="true" data-scroll-fade className="pointer-events-none absolute inset-y-0 right-0 w-8 bg-gradient-to-l from-gray-900 to-transparent" />
+        )}
+      </div>
+    </>
+  );
+}
+
 function Footnotes({ numbers, lang, onFootnote }: { numbers: number[]; lang: Lang; onFootnote: (n: number) => void }) {
   return (
     <>
@@ -88,30 +153,44 @@ function Footnotes({ numbers, lang, onFootnote }: { numbers: number[]; lang: Lan
   );
 }
 
-function Badges({ badges }: { badges: PricingBadge[] }) {
+function Badges({ badges, lang, refNumbers, onFootnote }: {
+  badges: PricingBadge[];
+  lang: Lang;
+  refNumbers: ReadonlyMap<string, number>;
+  onFootnote: (n: number) => void;
+}) {
   if (badges.length === 0) return null;
   return (
-    <div className="mt-1 flex flex-wrap gap-1">
-      {badges.map((badge) => (
-        <span
-          key={badge.kind}
-          data-badge={badge.kind}
-          title={badge.title}
-          className={`rounded border px-1.5 py-0.5 text-[10px] font-medium leading-tight ${BADGE_CLASS[badge.kind]}`}
-        >
-          {badge.label}
-          <span className="sr-only">, {badge.title}</span>
-        </span>
-      ))}
+    <div className="mt-1 space-y-1">
+      {badges.map((badge) => {
+        const n = badge.ref === undefined ? undefined : refNumbers.get(badge.ref);
+        return (
+          <div key={badge.kind} className="flex flex-wrap items-baseline gap-x-1.5 gap-y-0.5">
+            <span
+              data-badge={badge.kind}
+              className={`rounded border px-1.5 py-0.5 text-[10px] font-medium leading-tight ${BADGE_CLASS[badge.kind]}`}
+            >
+              {badge.label}
+            </span>
+            <span className="sr-only">, </span>
+            <span data-badge-detail={badge.kind} className="text-[10px] leading-tight text-gray-400">
+              <span className="tabular-nums">{badge.detail}</span>
+              {n !== undefined && <Footnotes numbers={[n]} lang={lang} onFootnote={onFootnote} />}
+            </span>
+          </div>
+        );
+      })}
     </div>
   );
 }
 
-function TierCell({ family, tierKey, lang, today, onFootnote }: {
+function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFootnote }: {
   family: PricingFamily;
   tierKey: PricingTierKey;
   lang: Lang;
   today: Date;
+  refNumbers: ReadonlyMap<string, number>;
+  showModelIds: boolean;
   onFootnote: (n: number) => void;
 }) {
   const single = tierKey === "in_region" ? null : family.tiers[tierKey];
@@ -137,7 +216,12 @@ function TierCell({ family, tierKey, lang, today, onFootnote }: {
             </span>
             {"regions" in entry && <>{" "}<span className="text-gray-400">{entry.regions.join(", ")}</span></>}
             <Footnotes numbers={entry.footnotes} lang={lang} onFootnote={onFootnote} />
-            <Badges badges={tierBadges(entry, notes, lang, today)} />
+            {showModelIds && (
+              <span data-model-ids className="mt-0.5 block break-all font-mono text-[10px] leading-snug text-gray-500">
+                {entry.model_ids.map((id) => <span key={id} className="block">{id}</span>)}
+              </span>
+            )}
+            <Badges badges={tierBadges(entry, notes, lang, today)} lang={lang} refNumbers={refNumbers} onFootnote={onFootnote} />
           </div>
         ))}
       </div>
@@ -174,7 +258,10 @@ function ReferenceItem({ reference, lang, highlighted }: { reference: PricingRef
   );
 }
 
-/** Everything below the page heading once /api/pricing has answered — pure, so vitest renders it statically. */
+/**
+ * Everything below the page heading once /api/pricing has answered. No fetching, so vitest renders it statically
+ * (the model-ID toggle starts off and the scroll cue starts hidden until the browser measures the table).
+ */
 export function PricingContent({ data, lang, today, highlight, onFootnote }: {
   data: PricingResponse;
   lang: Lang;
@@ -185,6 +272,8 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const sync = data.last_sync;
   const syncStatus = sync ? SYNC_STATUS[sync.status] ?? { en: sync.status, ko: sync.status } : null;
+  const [showModelIds, setShowModelIds] = useState(false);
+  const refNumbers = useMemo(() => new Map(data.references.map((reference) => [reference.id, reference.n])), [data.references]);
   return (
     <>
       <div
@@ -228,13 +317,24 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
             </>
           )}
         </p>
-        <div role="group" aria-label={L("Download price list", "가격표 내려받기")} className="flex flex-wrap items-center gap-2">
-          <span className="text-xs text-gray-400">{L("Download", "내려받기")}</span>
-          {EXPORTS.map((item) => (
-            <a key={item.format} href={pricingExportUrl(item.format, lang)} download className="ui-button">
-              {item.label}
-            </a>
-          ))}
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            aria-pressed={showModelIds}
+            onClick={() => setShowModelIds((value) => !value)}
+            data-model-ids-toggle
+            className={showModelIds ? "ui-button-primary" : "ui-button"}
+          >
+            {L("Show model IDs", "모델 ID 보기")}
+          </button>
+          <div role="group" aria-label={L("Download price list", "가격표 내려받기")} className="flex flex-wrap items-center gap-2">
+            <span className="text-xs text-gray-400">{L("Download", "내려받기")}</span>
+            {EXPORTS.map((item) => (
+              <a key={item.format} href={pricingExportUrl(item.format, lang)} download className="ui-button">
+                {item.label}
+              </a>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -250,8 +350,7 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
         return (
           <section key={section.provider} aria-labelledby={`pricing-${section.provider}`} className="min-w-0 rounded-xl border border-gray-800 bg-gray-900 p-4">
             <h2 id={`pricing-${section.provider}`} className="mb-3 text-sm font-semibold text-gray-200">{label}</h2>
-            {/* relative: sr-only 텍스트(absolute)가 스크롤 영역 밖으로 빠져 페이지 가로 스크롤을 만들지 않게 한다. */}
-            <div role="region" aria-label={L(`${label} price table`, `${label} 단가 표`)} tabIndex={0} data-pricing-scroll className="relative overflow-x-auto">
+            <PriceTableScroll label={label} lang={lang}>
               <table className="w-full min-w-[760px] border-separate border-spacing-0 text-xs">
                 <thead>
                   <tr className="text-gray-500">
@@ -268,13 +367,16 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
                         {family.family}
                       </th>
                       {TIER_KEYS.map((key) => (
-                        <TierCell key={key} family={family} tierKey={key} lang={lang} today={today} onFootnote={onFootnote} />
+                        <TierCell
+                          key={key} family={family} tierKey={key} lang={lang} today={today}
+                          refNumbers={refNumbers} showModelIds={showModelIds} onFootnote={onFootnote}
+                        />
                       ))}
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
+            </PriceTableScroll>
           </section>
         );
       })}

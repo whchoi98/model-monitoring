@@ -8,7 +8,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fetchPricing, pricingExportUrl } from "./api";
 import type { PricingModelPrice, PricingNote, PricingTier } from "./types";
 import {
-  costFromPrices, formatPricePair, formatUnitPrice, notesForTier, tierBadges, utcDate,
+  costFromPrices, formatPricePair, formatUnitPrice, noteReferenceId, notesForTier, tierBadges, utcDate,
 } from "./pricingTable";
 
 afterEach(() => {
@@ -61,53 +61,61 @@ describe("tierBadges", () => {
     expect(tierBadges(tier(), [], "ko", SEPT_26)).toEqual([]);
   });
 
-  test("stale → 자동 확인 안 됨, 툴팁은 마지막 확인일", () => {
+  test("stale → 자동 확인 안 됨, 설명은 마지막 확인일", () => {
     const stale = tier({ verification: "stale", observed_at: "2026-09-20T03:00:00Z" });
     expect(tierBadges(stale, [], "ko", SEPT_26)).toEqual([
-      { kind: "unverified", label: "자동 확인 안 됨", title: "마지막 확인 2026-09-20" },
+      { kind: "unverified", label: "자동 확인 안 됨", detail: "마지막 확인 2026-09-20" },
     ]);
     expect(tierBadges(stale, [], "en", SEPT_26)).toEqual([
-      { kind: "unverified", label: "Not auto-verified", title: "Last verified 2026-09-20" },
+      { kind: "unverified", label: "Not auto-verified", detail: "Last verified 2026-09-20" },
     ]);
   });
 
   test("observed_at이 없는 stale → 초기값이 아니라 마지막 확인일 없음", () => {
     const stale = tier({ verification: "stale", observed_at: null });
     expect(tierBadges(stale, [], "ko", SEPT_26)).toEqual([
-      { kind: "unverified", label: "자동 확인 안 됨", title: "마지막 확인일 없음" },
+      { kind: "unverified", label: "자동 확인 안 됨", detail: "마지막 확인일 없음" },
     ]);
-    expect(tierBadges(stale, [], "en", SEPT_26)[0].title).toBe("No confirmation date");
+    expect(tierBadges(stale, [], "en", SEPT_26)[0].detail).toBe("No confirmation date");
   });
 
-  test("seed_only → 자동 확인 안 됨, 툴팁은 초기값", () => {
+  test("seed_only → 자동 확인 안 됨, 설명은 초기값", () => {
     const seed = tier({ verification: "seed_only", observed_at: null });
-    expect(tierBadges(seed, [], "ko", SEPT_26)).toEqual([{ kind: "unverified", label: "자동 확인 안 됨", title: "초기값" }]);
-    expect(tierBadges(seed, [], "en", SEPT_26)[0].title).toBe("Initial value");
+    expect(tierBadges(seed, [], "ko", SEPT_26)).toEqual([{ kind: "unverified", label: "자동 확인 안 됨", detail: "초기값" }]);
+    expect(tierBadges(seed, [], "en", SEPT_26)[0].detail).toBe("Initial value");
   });
 
   test("none은 배지를 만들지 않는다", () => {
     expect(tierBadges(tier({ verification: "none" }), [], "ko", SEPT_26)).toEqual([]);
   });
 
-  test("pending → 검토 대기, 툴팁은 새 값", () => {
+  test("pending → 검토 대기, 설명은 새 값", () => {
     const pending = tier({ pending: { id: 91, input: 3, output: 18, observed_at: "2026-09-26T15:00:00Z" } });
-    expect(tierBadges(pending, [], "ko", SEPT_26)).toEqual([{ kind: "pending", label: "검토 대기", title: "새 값 $3.00 / $18.00" }]);
-    expect(tierBadges(pending, [], "en", SEPT_26)).toEqual([{ kind: "pending", label: "Pending review", title: "New value $3.00 / $18.00" }]);
+    expect(tierBadges(pending, [], "ko", SEPT_26)).toEqual([{ kind: "pending", label: "검토 대기", detail: "새 값 $3.00 / $18.00" }]);
+    expect(tierBadges(pending, [], "en", SEPT_26)).toEqual([{ kind: "pending", label: "Pending review", detail: "New value $3.00 / $18.00" }]);
   });
 
-  test("수동 메모 → 프로모션 배지, 툴팁은 프로모션 이전 단가와 메모 근거", () => {
+  test("수동 메모 → 프로모션 배지, 설명은 프로모션 이전 단가, 메모 근거는 참고 자료 각주", () => {
     const [badge] = tierBadges(tier(), notesForTier([SOL_PROMO], "in_region"), "ko", SEPT_26);
-    expect(badge.kind).toBe("promo");
-    expect(badge.label).toBe("프로모션(최소 2026-11-21까지, 수동 메모)");
-    expect(badge.title).toBe("프로모션 이전 단가 $5.50 / $33.00\n2026-09-23 AWS 모델 카드 기재(현재 미게재), CHANGELOG v2.28.1");
+    expect(badge).toEqual({
+      kind: "promo", label: "프로모션(최소 2026-11-21까지, 수동 메모)",
+      detail: "프로모션 이전 단가 $5.50 / $33.00", ref: "note:gpt-5.6-sol",
+    });
     const [en] = tierBadges(tier(), notesForTier([SOL_PROMO], "global"), "en", SEPT_26);
     expect(en.label).toBe("Promotion (until at least 2026-11-21, manual note)");
-    expect(en.title).toBe("Price before the promotion $5.00 / $30.00\nListed on the AWS model card on 2026-09-23 (no longer shown), CHANGELOG v2.28.1");
+    expect(en.detail).toBe("Price before the promotion $5.00 / $30.00");
+    expect(en.ref).toBe(noteReferenceId("gpt-5.6-sol"));
+  });
+
+  test("수동 메모 외 배지는 참고 자료 링크가 없다", () => {
+    const stale = tier({ verification: "stale", observed_at: "2026-09-20T03:00:00Z",
+      pending: { id: 7, input: 5.5, output: 33, observed_at: "2026-09-26T15:00:00Z" } });
+    expect(tierBadges(stale, [], "ko", SEPT_26).map((b) => b.ref)).toEqual([undefined, undefined]);
   });
 
   test("티어를 좁히지 않은 메모는 티어 이름과 함께 모든 이전 단가를 보여 준다", () => {
     const [badge] = tierBadges(tier(), [SOL_PROMO], "ko", SEPT_26);
-    expect(badge.title.split("\n")[0]).toBe("프로모션 이전 단가 In-Region $5.50 / $33.00, Global $5.00 / $30.00");
+    expect(badge.detail).toBe("프로모션 이전 단가 In-Region $5.50 / $33.00, Global $5.00 / $30.00");
   });
 
   test("min_until 당일(UTC)까지는 프로모션, 다음 날부터 종료 여부 확인 필요", () => {
@@ -116,7 +124,8 @@ describe("tierBadges", () => {
     const [passed] = tierBadges(tier(), notes, "ko", new Date("2026-11-22T00:00:00Z"));
     expect(passed.kind).toBe("promo_check");
     expect(passed.label).toBe("프로모션 종료 여부 확인 필요");
-    expect(passed.title).toContain("$5.50 / $33.00");
+    expect(passed.detail).toBe("프로모션 이전 단가 $5.50 / $33.00");
+    expect(passed.ref).toBe("note:gpt-5.6-sol");
     expect(tierBadges(tier(), notes, "en", new Date("2026-12-01T00:00:00Z"))[0].label).toBe("Check whether the promotion has ended");
   });
 

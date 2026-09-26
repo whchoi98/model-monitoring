@@ -472,6 +472,11 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=csv&lang=ko" | head -2
 - `pending_review`가 0보다 크면 `troubleshooting.md`의 "검토 대기 단가 승인"을 따른다. 3번에서 `verified`가 55보다 적으면
   같은 문서의 "비용 단가 동기화 실패"로 원인을 찾는다.
 - 모델 탐색(`/models`) 카드 단가와 `/cost` 방법론 문단의 `/pricing` 링크도 확인한다.
+- **v2.30.0을 v2.29.1 CDK로 되돌렸다가 다시 배포하는 경우**: 최초 배포에는 `/ecs/pricingsync`가 없어 충돌하지 않는다. 그러나 되돌린
+  뒤에는 이 로그 그룹이 `RemovalPolicy.RETAIN`으로 남아, 재배포 때 Scheduler 스택이 `… '/ecs/pricingsync' already exists`로 실패하고
+  AppServices만 새 이미지로 가는 혼합 상태가 된다. 재배포 전에 `aws logs describe-log-groups --log-group-name-prefix /ecs/pricingsync`로
+  확인하고, 남아 있으면 삭제(`aws logs delete-log-group --log-group-name /ecs/pricingsync --region $REGION`, 보존이 필요하면 먼저
+  export)하거나 `cdk deploy`에 `--import-existing-resources`를 붙인다. 자세한 명령은 [rollback.md A-2](./rollback.md)에 있다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 
