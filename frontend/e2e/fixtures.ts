@@ -235,6 +235,7 @@ export async function mockApi(page: Page) {
       "/api/auto-probe/anomalies": data.anomalies,
       "/api/auto-probe/categories": categories,
       "/api/insights/latest": null,
+      "/api/pricing": pricingFixture,
 
     };
     const body = values[url.pathname];
