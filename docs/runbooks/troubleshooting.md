@@ -35,7 +35,8 @@ curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync, pending_review, not_v
 aws logs tail /ecs/pricingsync --since 13h --region $REGION
 aws logs tail /ecs/pricingsync --since 13h --region $REGION --filter-pattern WARNING   # 오류와 재시도 경고만
 
-# 3. 최근 태스크 종료 사유 — 컨테이너 이름은 pricingsynctaskdef (containers[0]은 GuardDuty 사이드카일 수 있다)
+# 3. 최근 태스크 종료 사유 — 멈춘 태스크는 약 1시간만 조회되므로 수동 run-task 직후에 쓴다. 그보다 오래된 스케줄 런은 2번 로그로 본다.
+#    컨테이너 이름은 pricingsynctaskdef (containers[0]은 GuardDuty 사이드카일 수 있다)
 FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerPricingSyncTaskDef --status ACTIVE \
   --region $REGION --query 'families[0]' --output text)
 for T in $(aws ecs list-tasks --cluster bedrock-monitor --family "$FAM" --desired-status STOPPED \
@@ -54,7 +55,8 @@ done
 | Price List 단위 변경 | Nova 1셀만 `stale` | `unit`이 `1K tokens`가 아니면 파서가 변경 없음으로 둔다. 새 단위를 확인하고 `parse_pricelist`를 고친다 |
 | 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`)를 확인한다 |
 | 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_try_advisory_lock(917350004)`로 수동 실행과 스케줄 실행이 겹치지 않게 한다. 기다리지 않는 잠금이라 두 번째 런은 즉시 끝난다). 앞 런이 끝난 뒤 다시 실행한다 |
-| CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial` | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
+| seed 또는 테이블 준비 실패 | 로그에 `pricing_sync_runner: create_tables failed` 또는 `pricing_sync_runner: ensure_seed failed — sync skipped`와 예외 traceback 한 묶음, 런 요약 줄 없음, 새 런 행 없음(`last_sync`가 그대로), exit code 1 | 동기화 전에 멈춘 것이다. 먼저 DB 연결(RDS 상태, 태스크 보안 그룹, DB secret)을 확인한다. `ensure_seed` 예외가 `canceling statement due to lock timeout`이면 seed 잠금 `pg_advisory_xact_lock(917350003)`을 5초(`lock_timeout`) 안에 못 잡은 것이다. 같은 잠금을 쓰는 backend 기동 seed와 겹쳤으면 backend 배포가 끝난 뒤 다시 실행한다. 반복되면 잠금을 쥔 세션을 찾는다(`SELECT a.pid, a.state, a.xact_start, a.query FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = 917350003`). `canceling statement due to statement timeout`이면 30초 안에 끝나지 않은 느린 쿼리다 |
+| CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 46 active channels`(평소 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
 
 ### 조치
 
@@ -103,7 +105,8 @@ curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer
   동안 이전 표를 줄 수 있다. 60초 뒤 다시 조회해서 확인한다.
 - `401`은 토큰 없음이나 만료, `403`은 admin이 아닌 계정, `404`는 없는 id(`단가 행 <id>을(를) 찾을 수 없습니다`), `409`는 이미
   승인이나 거부로 처리된 행(`단가 행 <id>는 검토 대기 상태가 아닙니다 (현재: <status>)`)이다. `pending_review` 숫자는 검토 대기
-  행이 있는 채널 수라, 한 채널에 대기 행이 여러 개면 관리자 목록의 행 수가 더 많다.
+  행이 있는 채널 수라, 한 채널에 대기 행이 여러 개면 관리자 목록의 행 수가 더 많다. 런 요약 로그의 `pending=N`은 그 런이 검토
+  대기로 분류한 채널 수라서, 앞선 런이 남긴 대기 행을 다시 관측하지 못한 채널은 빠지고 `pending_review`보다 작을 수 있다.
 
 ## GPT-5.6 Sol 프로모션 종료 확인 — 2026-11-21 이후 (v2.30.0)
 

@@ -361,15 +361,18 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
 - `verification` per cell: `verified` (observed by the latest finished run, whatever its status), `stale` (last observed
   earlier — `observed_at` tells when), `seed_only` (never observed by an official source yet). `pending` is the latest
   `pending_review` row of that `model_id` (`{id, input, output, observed_at}`) or `null`.
-- `pending_review` counts the active channels (distinct `model_id`s) that have a `pending_review` row, the same basis as
-  `price_sync_runs.pending`; the admin list below shows every pending row.
+- `pending_review` counts every active channel (distinct `model_id`s) that has any `pending_review` row, whichever run left it;
+  the admin list below shows every pending row. It is not the same number as `price_sync_runs.pending`, which counts only the
+  channels that one run classified as pending (a new `pending_review` row or a re-observed held value, `no_baseline` included),
+  so the run's number can be lower.
 - `last_sync` is the latest finished run (any status) or `null` before the first run.
 - `models` maps each active `model_id` to its current price (used by Model Explorer and Comparison Lab).
 - `notes` holds manual notes that are not official-source facts (GPT-5.6 Sol promotional price, `min_until` 2026-11-21 with the
   prior prices); a note disappears once a sync observes its `prior_price`.
 - `references[]`: `n` (1-based, in order of first citation, then fixed official pages, manual notes last), `id`
   (`offer:<offerId>`, `pricelist:<usagetype>`, `anthropic-pricing`, `official:<slug>`, `note:<family_key>`), `kind`
-  (`agreement_offer`, `price_list`, `anthropic_doc`, `official_page`, `manual_note`), bilingual titles, `url`, `as_of` (UTC date
+  (`agreement_offer`, `price_list`, `anthropic_doc`, `official_page`, `manual_note`), bilingual titles (a `manual_note` title
+  names the family, e.g. "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)"), `url`, `as_of` (UTC date
   of the latest observation of that source, or the seed date 2026-09-26; `null` for `official_page` and `manual_note`, and a
   `manual_note` has `url: null`).
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the

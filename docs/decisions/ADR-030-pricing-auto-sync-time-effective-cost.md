@@ -143,9 +143,11 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
 7. 런 행은 시작할 때 `running`으로 넣고 커밋한다. 끝날 때 공식 값을 얻은 채널이 하나도 없으면(모든 출처 실패, 첫 호출 전 상한 초과
    포함) `failed`, `skipped:<reason>` 채널이 하나라도 있거나 활성 채널이 없는 출처가 있으면(CP 디스커버리 실패 →
    `anthropic_doc: no active channels`) `partial`(상한을 넘긴 뒤 남은 채널은 `skipped:deadline`), 그 밖에는 `completed`다.
-   `summary`에는 출처별 호출, ok, failed 수와 채널별 결과, 오류(최대 50개)를 싣고, `changes`는 새 verified 행 수, `pending`은 런 뒤
-   검토 대기 중인 채널 수다. 출처와 파서 오류는 채널 결과로만 남고, DB 오류 같은 내부 오류만 런을 `failed`(오류 `internal: …`)로
-   닫은 뒤 예외를 다시 던진다. 러너는 `completed`, `partial`이면 exit 0, `failed`나 내부 오류면 exit 1이고 `os._exit`로 끝난다.
+   `summary`에는 출처별 호출, ok, failed 수와 채널별 결과, 오류(최대 50개)를 싣고, `changes`는 새 verified 행 수, `pending`은 이
+   런이 검토 대기로 분류한 채널 수다. 결과가 `pending` 또는 `no_baseline`인 채널, 즉 새 `pending_review` 행을 넣었거나 같은 값의
+   대기 행을 다시 관측한 채널이다(같은 값의 `rejected` 행이 있는 채널은 `rejected`라 빠진다). 앞선 런이 남긴 대기 행이 있어도 이
+   런의 결과가 건너뜀, 변경 없음, 자동 적용이면 세지 않는다(Decision 6의 `pending_review`와 다른 기준). 출처와 파서 오류는 채널
+   결과로만 남고, DB 오류 같은 내부 오류만 런을 `failed`(오류 `internal: …`)로 닫은 뒤 예외를 다시 던진다. 러너는 `completed`, `partial`이면 exit 0, `failed`나 내부 오류면 exit 1이고 `os._exit`로 끝난다.
 
 ### 4. 검토 대기 승인 (관리자)
 
@@ -180,7 +182,9 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
   최근에 끝난 런의 시작 시각 이후 — 런 상태 무관), `stale`(그 밖). 한 출처가 계속 실패하면 그 채널은 곧 `stale`이 되어 "자동 확인
   안 됨" 배지로 드러난다. 배지 옆 설명(툴팁이 아니라 화면 글자라 터치, 키보드 사용자도 본다)은 `stale`이면 "마지막 확인
   <날짜>"(`observed_at`이 없으면 "마지막 확인일 없음"), `seed_only`면 "초기값"이다.
-- 응답의 `pending_review`는 검토 대기 행이 있는 활성 채널 수(`model_id` 중복 제거)로, `price_sync_runs.pending`과 같은 기준이다.
+- 응답의 `pending_review`는 `pending_review` 행이 하나라도 있는 활성 채널 전부의 수(`model_id` 중복 제거)다. 어느 런이 남긴
+  행인지 가리지 않는다. `price_sync_runs.pending`은 한 런이 검토 대기로 분류한 채널만 세므로(Decision 3의 7번), 앞선 런의 대기 행을
+  그 런이 다시 관측하지 못한 채널이 빠져 이 수보다 작을 수 있다.
 - 면책 문구는 `pricing_sources.DISCLAIMER` 한 곳에만 둔다. KO "이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며,
   AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.", EN "This price list is compiled automatically from
   public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing
@@ -188,7 +192,9 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
   `"# <면책 문구>"`를 따옴표로 감싼 필드 하나로 쓴다(`csv.writer`, 문구의 쉼표가 열을 나누지 않는다).
 - GPT-5.6 Sol 프로모션(In-Region, Geo $4.40 / $22, Global $4 / $20)의 "최소 2026-11-21까지"는 현재 공식 출처 어디에도 없다.
   그래서 공식 출처가 아닌 **수동 메모**(`PRICE_NOTES`, 근거는 2026-09-23 AWS 모델 카드 기재와 CHANGELOG v2.28.1)로 두고 참고
-  자료에 `manual_note`로 구분해 싣는다. 동기화가 이전 단가(`prior_price`)를 관측하면 메모는 응답에서 빠진다.
+  자료에 `manual_note`로 구분해 싣는다. 참고 자료 제목은 패밀리 이름(`FAMILY_ORDER` 문자열) 뒤에 종류와 근거를 붙인
+  "GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)"이다. 동기화가 이전 단가(`prior_price`)를 관측하면 메모는
+  응답에서 빠진다.
 - 범위: USD, Standard 입력과 출력만(캐시, batch, long-context, priority, flex 제외), 휴면 1P와 숨김 채널 제외.
 
 ### 7. 인프라
@@ -217,5 +223,9 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
 - (−) 새 모델을 추가할 때 `pricing_sources.py` 매핑과 `pricing_seed.py`도 고쳐야 한다. "활성 채널 전부가 분류되고 seed 단가가 있다"
   테스트가 CI에서 누락을 잡고, 운영에서는 `no_baseline` 검토 대기로 드러난다.
 - (−) 1P direct 채널(휴면)은 분류 대상이 아니다. 재노출하려면 1P 정가 출처와 분류, seed를 새로 설계해야 한다.
-- ADR-025, ADR-027, ADR-028의 "비용은 조회 시점 계산이라 소급 재계산된다" 문장은 당시 기록으로 남기고, ADR-025에 이 ADR을 가리키는
+- ADR-025, ADR-027, ADR-028의 "비용은 조회 시점 계산이라 소급 재계산된다" 문장은 당시 기록으로 남기고, 세 ADR에 이 ADR을 가리키는
   후속 절을 붙였다.
+  1. ADR-025 "후속 (v2.30.0, 2026-09-26) — 소급 정책 대체": `PRICE_TABLE`, `-global` / `-us` 키 삭제, Bedrock Claude US 10채널 교정.
+  2. ADR-027 "후속 (v2.30.0, 2026-09-26) — 소급 정책 대체": GPT-6 Astra 3채널 단가의 `price_history` 이전, "3키를 항상 함께 둔다"
+     규칙 폐지.
+  3. ADR-028 "후속 (v2.30.0, 2026-09-26)": GPT-6 Sol, Luna 모델 카드 재대조 완료, Opus 5.5 US 교정, GPT-5.6 Sol 프로모션 수동 메모.

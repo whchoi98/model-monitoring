@@ -88,6 +88,27 @@ aws ecs update-service --cluster bedrock-monitor --service backend --region $REG
 [deploy.md §2-1](./deploy.md)의 절차(image 교체 revision 등록 → `get-schedule` → `TaskDefinitionArn` 교체 → `update-schedule`)를
 직전 image로 6개 스케줄에 적용한다(v2.30.0 PricingSync 포함).
 
+**되돌릴 image가 v2.30.0 이전이면 PricingSync는 그 image로 바꾸지 않는다.** `pricing_sync_runner` 모듈은 v2.30.0에 생겼으므로
+v2.29.1 이하 image로 바꾸면 PricingSync 태스크가 12시간마다 `No module named pricing_sync_runner`로 exit 1이 된다. 둘 중 하나를 한다.
+
+1. 나머지 스케줄 5개만 위 절차로 직전 image에 맞추고, PricingSync 스케줄은 DISABLED로 바꾼다(아래 명령). v2.30.0 이상으로 다시
+   올린 뒤 같은 명령에서 `'DISABLED'` → `'ENABLED'`로 재개한다.
+2. 직전 릴리스 git tag의 `cdk/`로 A-2를 실행한다. 그 CDK에는 PricingSync가 없어 스케줄, 태스크 정의, 역할이 함께 지워진다
+   (로그 그룹 `/ecs/pricingsync`는 남는다. 다시 올릴 때는 A-2의 v2.30.0 재배포 절차를 따른다).
+
+```bash
+SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='PricingSyncScheduleName'].OutputValue" --output text)
+aws scheduler get-schedule --name "$SCHED" --region $REGION --output json | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+d['State'] = 'DISABLED'
+for k in ('Arn', 'CreationDate', 'LastModificationDate'): d.pop(k, None)
+print(json.dumps(d))" > /tmp/sched-state.json
+aws scheduler update-schedule --region $REGION --cli-input-json file:///tmp/sched-state.json
+aws scheduler get-schedule --name "$SCHED" --region $REGION --query State --output text   # 기댓값: DISABLED
+```
+
 **ECS circuit breaker**(`circuitBreaker: { rollback: true }`)는 새 task가 기동이나 헬스체크에 계속 실패할 때만 직전 안정
 배포로 자동 복귀한다. task가 정상 기동하는 코드 회귀(기능 버그, 잘못된 값)는 위 절차로 직접 되돌린다.
 
