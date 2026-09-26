@@ -1,4 +1,4 @@
-// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify one-shot TaskDefinitions.
+// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify / PricingSync one-shot TaskDefinitions.
 //
 // 책임:
 //   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
@@ -14,6 +14,7 @@
 //     (v2.30.0: 공식 단가 동기화 — Bedrock agreement offers, AWS Price List, Anthropic pricing.md. 모델 호출 권한 없음, ADR-030)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
 //   - 모든 task는 RDS:5432 egress + Bedrock/Mantle 액세스 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
+//     (PricingSync의 Bedrock 액세스는 공식 단가 읽기(agreement offers, Price List)뿐이고 모델 호출 권한은 없다)
 import * as cdk from "aws-cdk-lib";
 import * as ec2 from "aws-cdk-lib/aws-ec2";
 import * as ecr from "aws-cdk-lib/aws-ecr";
