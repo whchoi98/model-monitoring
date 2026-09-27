@@ -153,3 +153,11 @@ GPT 5.4 Global 캐시 읽기 0.25(`cached_input_tokens`), 쓰기 없음, 긴 컨
    추적하는 모델의 값이 정규화에 실패하면 그 모델의 채널만 `skipped:parse_failed`다. 화면의 `formatUnitPrice`는 예외를 던지지
    않는다(NaN, ±Infinity, 절댓값 1e21 이상은 `$<값>` 그대로 표시). 프런트가 모르는 제공사는 기본 열(빈 첫 열과 AWS Bedrock 세 열,
    `pricingTable.columnsFor`)로 그리고 섹션 이름은 제공사 문자열이다.
+9. 최종 리뷰에서 정한 규칙(계획 C11, C12와 PRICE_NOTES 문구를 대체한다):
+   1. 검토 대기 표기(화면 배지 설명, Markdown)에서 바뀐 캐시 항목의 첫 항목이 캐시 읽기가 아니면 "캐시 쓰기", "캐시 1시간 쓰기"
+      (EN "cache write", "cache 1h write")로 쓴다. 셀의 캐시 줄은 그대로다.
+   2. GPT-5.6 Sol 프로모션 메모에 문장을 확인한 날짜를 넣는다("2026-09-27 기준", "As of 2026-09-27"). 동기화는 표 단가만 읽고 이 문장은
+      읽지 않는다.
+   3. Markdown 다운로드의 동기화 줄은 화면과 같은 이름("마지막 공식 단가 동기화", "Last official price sync")과 상태 번역을 쓴다.
+   4. backend 기동 때 단가 열 추가나 seed가 실패하면 `price-schema-retry` 스레드가 30초 간격으로 최대 3번 다시 시도한다.
+   5. " - "가 없는 열 머리글(Claude Platform on AWS, OpenAI 공식 가격)은 단어 사이에서 줄이 바뀐다.

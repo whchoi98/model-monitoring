@@ -43,8 +43,8 @@ const SOL_PROMO: PricingNote = {
   prior_price: {
     openai_list: { input: 5, output: 30 }, global: { input: 5, output: 30 }, in_region: { input: 5.5, output: 33 },
   },
-  text_ko: "프로모션 단가다. OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.",
-  text_en: "Promotional price. The OpenAI pricing page states that it applies at least through 2026-11-21.",
+  text_ko: "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.",
+  text_en: "Promotional price. As of 2026-09-27, the OpenAI pricing page states that it applies at least through 2026-11-21.",
   source: "openai_doc",
   source_id: "openai-pricing",
 };

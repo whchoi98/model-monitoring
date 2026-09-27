@@ -215,8 +215,10 @@ def schema(monkeypatch):
     columns, seed, slept = _Recorder(), _Recorder(), []
     monkeypatch.setattr(pricing_seed, "ensure_price_columns", columns)
     monkeypatch.setattr(pricing_seed, "ensure_seed", seed)
-    monkeypatch.setattr(main.threading, "Thread", _FakeThread)
-    monkeypatch.setattr(main.time, "sleep", slept.append)
+    # Only main's own module references (main uses threading.Thread and time.sleep and nothing else from them):
+    # patching threading.Thread or time.sleep themselves would reach every other thread in the test process.
+    monkeypatch.setattr(main, "threading", SimpleNamespace(Thread=_FakeThread))
+    monkeypatch.setattr(main, "time", SimpleNamespace(sleep=slept.append))
     _FakeThread.created = []
     return SimpleNamespace(columns=columns, seed=seed, slept=slept, threads=_FakeThread.created)
 
