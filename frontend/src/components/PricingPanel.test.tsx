@@ -1,5 +1,5 @@
 /** 비용 단가 화면 정적 렌더 (v2.30.0, v2.31.0) — 응답 순서 그대로의 제공사 섹션(Anthropic Claude, OpenAI, Amazon Nova),
- * 제공사별 열 머리글(AWS Bedrock - Global CRIS 등), Nova의 빈 첫 열, 캐시 줄과 GPT 긴 컨텍스트 줄, #ref-n 각주,
+ * 제공사별 열 머리글(AWS Bedrock - Global CRIS 등), Nova의 빈 첫 열, 모르는 제공사의 기본 열, 캐시 줄과 GPT 긴 컨텍스트 줄, #ref-n 각주,
  * In Region 여러 줄 셀, 빈 셀 "—", 다운로드 링크, 참고 사항 8개, 면책 문구 두 번, 줄바꿈 단위(break-keep, nowrap 토큰),
  * 같은 고정 열 폭. 브라우저 동작은 e2e/pricing.spec.ts가 맡는다.
  */
@@ -137,6 +137,26 @@ describe("PricingContent", () => {
     // The blank cell is the first cell after the model name, in the header and in the body.
     expect(nova).toMatch(/모델<\/th><td aria-hidden="true" data-tier="none"/);
     expect(nova).toMatch(/<\/th><td aria-hidden="true" data-tier="none" class="[^"]*"><\/td><td data-tier="global"/);
+  });
+
+  test("모르는 제공사(새 백엔드)는 멈추지 않고 기본 열(빈 첫 열 + AWS Bedrock 세 열), 섹션 이름은 제공사 문자열", () => {
+    const nova = pricingFixture.families[pricingFixture.families.length - 1];
+    const unknown = { ...nova, family_key: "gemini-9", family: "Gemini 9", provider: "google" as never };
+    const data = { ...pricingFixture, families: [...pricingFixture.families, unknown] };
+    const bedrock = ["AWS Bedrock - Global CRIS", "AWS Bedrock - US CRIS", "AWS Bedrock - In Region"];
+    const ko = render("ko", null, data);
+    expect(ko).toContain('<h2 id="pricing-google" class="mb-3 break-keep text-sm font-semibold text-gray-200">google</h2>');
+    expect(ko).toContain('<caption class="sr-only">google 단가 (입력 / 출력, 1M 토큰당 USD)</caption>');
+    expect(ko).toContain('aria-label="google 단가 표"');
+    expect(headers(ko, "google")).toEqual(["모델", ...bedrock]);
+    const google = section(ko, "google");
+    expect(count(google, 'data-tier="none"')).toBe(2);
+    expect(google).not.toMatch(/data-tier="(cp|openai_list)"/);
+    expect(cell(ko, "gemini-9", "us")).toContain("$0.33 / $2.75");
+    // The known sections are unchanged.
+    expect(headers(ko, "amazon")).toEqual(["모델", ...bedrock]);
+    expect(count(ko, "data-pricing-scroll")).toBe(4);
+    expect(headers(render("en", null, data), "google")).toEqual(["Model", ...bedrock]);
   });
 
   test("In Region 원소마다 한 줄 (가격, 리전)", () => {

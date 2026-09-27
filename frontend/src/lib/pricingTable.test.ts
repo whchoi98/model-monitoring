@@ -1,6 +1,7 @@
 /**
- * 비용 단가 표 순수 로직 (v2.30.0, v2.31.0) — 열 이름(`tierLabel`, `headerParts`), 제공사별 열(`PROVIDER_COLUMNS`),
- * 화면 포맷(소수 둘째 자리부터 여섯째 자리까지), 캐시와 긴 컨텍스트 항목, 줄바꿈 단위(`textRuns`), 배지 판정,
+ * 비용 단가 표 순수 로직 (v2.30.0, v2.31.0) — 열 이름(`tierLabel`, `headerParts`), 제공사별 열(`PROVIDER_COLUMNS`,
+ * 모르는 제공사는 `columnsFor` 기본 열), 화면 포맷(소수 둘째 자리부터 여섯째 자리까지, 유한하지 않은 값은 그대로),
+ * 캐시와 긴 컨텍스트 항목, 줄바꿈 단위(`textRuns`), 배지 판정,
  * `costFromPrices`.
  *
  * 정렬과 각주 번호는 백엔드가 정하므로 여기서는 검사하지 않는다. 배지 규칙: stale, seed_only → "자동 확인 안 됨",
@@ -10,7 +11,7 @@ import { afterEach, describe, expect, test, vi } from "vitest";
 import { fetchPricing, pricingExportUrl } from "./api";
 import type { PricingModelPrice, PricingNote, PricingPending, PricingTier } from "./types";
 import {
-  PROVIDER_COLUMNS, cacheItems, costFromPrices, formatPricePair, formatUnitPrice, headerParts, longItems,
+  PROVIDER_COLUMNS, cacheItems, columnsFor, costFromPrices, formatPricePair, formatUnitPrice, headerParts, longItems,
   notesForTier, pendingDetail, textRuns, tierBadges, tierLabel, utcDate,
 } from "./pricingTable";
 
@@ -81,6 +82,16 @@ describe("tierLabel / headerParts / PROVIDER_COLUMNS — 열 이름과 제공사
     // Every table has the same number of price columns, so the three tables line up.
     expect(new Set(Object.values(PROVIDER_COLUMNS).map((columns) => columns.length))).toEqual(new Set([4]));
   });
+
+  test("columnsFor: 아는 제공사는 PROVIDER_COLUMNS, 모르는 제공사(새 백엔드)는 빈 첫 열 + AWS Bedrock 세 열", () => {
+    for (const provider of ["anthropic", "openai", "amazon"] as const) {
+      expect(columnsFor(provider)).toEqual(PROVIDER_COLUMNS[provider]);
+    }
+    expect(columnsFor("google")).toEqual([null, "global", "us", "in_region"]);
+    expect(columnsFor("")).toEqual([null, "global", "us", "in_region"]);
+    // Object.prototype names are not providers either.
+    expect(columnsFor("toString")).toEqual([null, "global", "us", "in_region"]);
+  });
 });
 
 describe("formatUnitPrice / formatPricePair — 소수 둘째 자리부터, 여섯째 자리까지", () => {
@@ -90,6 +101,16 @@ describe("formatUnitPrice / formatPricePair — 소수 둘째 자리부터, 여�
     [0.1375, "$0.1375"], [0, "$0.00"], [4.4000000000000004, "$4.40"], [0.0000001, "$0.00"],
   ])("%s → %s", (value, expected) => {
     expect(formatUnitPrice(value)).toBe(expected);
+  });
+
+  test("유한하지 않은 값과 toFixed가 소수부를 주지 않는 값(1e21 이상)은 던지지 않고 그대로 보여 준다", () => {
+    expect(formatUnitPrice(Number.NaN)).toBe("$NaN");
+    expect(formatUnitPrice(Number.POSITIVE_INFINITY)).toBe("$Infinity");
+    expect(formatUnitPrice(Number.NEGATIVE_INFINITY)).toBe("$-Infinity");
+    expect(formatUnitPrice(1e21)).toBe("$1e+21");
+    // Just below 1e21 toFixed still has a fraction part, so the usual two decimals apply.
+    expect(formatUnitPrice(1e20)).toBe("$100000000000000000000.00");
+    expect(formatPricePair({ input: Number.NaN, output: 20 })).toBe("$NaN / $20.00");
   });
 
   test("입력 / 출력 쌍", () => {

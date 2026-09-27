@@ -30,6 +30,18 @@ export const PROVIDER_COLUMNS: Record<PricingFamily["provider"], (PricingTierKey
   amazon: [null, "global", "us", "in_region"],
 };
 
+const DEFAULT_COLUMNS: (PricingTierKey | null)[] = [null, "global", "us", "in_region"];
+
+/**
+ * Price columns of a provider table. A provider the frontend does not know (a newer backend) gets the blank first
+ * column and the three AWS Bedrock columns, so its table still lines up with the others instead of breaking the page.
+ */
+export function columnsFor(provider: string): (PricingTierKey | null)[] {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_COLUMNS, provider)
+    ? PROVIDER_COLUMNS[provider as PricingFamily["provider"]]
+    : DEFAULT_COLUMNS;
+}
+
 /** Header lines that never break inside: "AWS Bedrock - Global CRIS" -> ["AWS Bedrock -", "Global CRIS"]. */
 export function headerParts(label: string): string[] {
   const at = label.indexOf(" - ");
@@ -39,9 +51,12 @@ export function headerParts(label: string): string[] {
 /**
  * "$4.00" — two to six decimals, zeros past the second trimmed: 12.5 -> "$12.50", 1.375 -> "$1.375",
  * 0.0825 -> "$0.0825". Official prices have at most six decimals (the backend's PRICE_QUANTUM).
+ * Never throws: NaN, ±Infinity and values of 1e21 or more, which toFixed gives without a fraction part ("NaN",
+ * "1e+21"), are shown as they are ("$NaN", "$1e+21").
  */
 export function formatUnitPrice(v: number): string {
   const [whole, fraction] = v.toFixed(6).split(".");
+  if (fraction === undefined) return `$${v}`;
   return `$${whole}.${fraction.replace(/0+$/, "").padEnd(2, "0")}`;
 }
 

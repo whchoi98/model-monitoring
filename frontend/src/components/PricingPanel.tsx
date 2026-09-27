@@ -4,6 +4,7 @@
 // 각주 번호는 응답 그대로 쓴다. 열은 제공사마다 PROVIDER_COLUMNS다: 첫 열은 Anthropic이 Claude Platform on AWS, OpenAI가
 // OpenAI 공식 가격(비용 계산에 쓰지 않는 참고 가격)이고, Amazon Nova는 머리글과 칸을 모두 비운다(aria-hidden,
 // data-tier="none"). 이어서 AWS Bedrock - Global CRIS, AWS Bedrock - US CRIS, AWS Bedrock - In Region이다.
+// 프런트가 모르는 제공사(새 백엔드)는 columnsFor의 기본 열(Nova와 같은 빈 첫 열)로 그리고 섹션 이름은 제공사 문자열이다.
 // 세 표는 같은 고정 열 폭(table-fixed, <col> 5개)이라 데스크톱에서 열 위치가 같다.
 // 단가 셀은 입력 / 출력 줄, 프롬프트 캐싱 줄(data-cache-line), GPT 긴 컨텍스트 줄(data-long-line), 모델 ID(토글), 배지 순서다.
 // 캐시와 긴 컨텍스트 단가는 표시만 하고, 비용 화면은 입력과 출력 단가로 계산한다.
@@ -18,7 +19,7 @@ import { fetchPricing, pricingExportUrl } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n-context";
 import {
-  PROVIDER_COLUMNS, cacheItems, formatPricePair, headerParts, longItems, notesForTier, textRuns, tierBadges, tierLabel,
+  cacheItems, columnsFor, formatPricePair, headerParts, longItems, notesForTier, textRuns, tierBadges, tierLabel,
   type PriceItem, type PricingBadge, type PricingTierKey,
 } from "@/lib/pricingTable";
 import type {
@@ -36,6 +37,14 @@ const PROVIDER_LABELS: Record<PricingFamily["provider"], string> = {
   openai: "OpenAI",
   amazon: "Amazon Nova",
 };
+
+/** Section title of a provider; one the frontend does not know (a newer backend) is titled by its own name. */
+function providerLabel(provider: string): string {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, provider)
+    ? PROVIDER_LABELS[provider as PricingFamily["provider"]]
+    : provider;
+}
+
 const EXPORTS: { format: "csv" | "md" | "json"; label: string }[] = [
   { format: "csv", label: "CSV" },
   { format: "md", label: "Markdown" },
@@ -487,8 +496,8 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
       )}
 
       {providerSections(data.families).map((section) => {
-        const label = PROVIDER_LABELS[section.provider];
-        const columns = PROVIDER_COLUMNS[section.provider];
+        const label = providerLabel(section.provider);
+        const columns = columnsFor(section.provider);
         return (
           <section key={section.provider} aria-labelledby={`pricing-${section.provider}`} className="min-w-0 rounded-xl border border-gray-800 bg-gray-900 p-4">
             <h2 id={`pricing-${section.provider}`} className="mb-3 break-keep text-sm font-semibold text-gray-200">{label}</h2>
