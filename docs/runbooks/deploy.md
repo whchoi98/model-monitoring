@@ -478,6 +478,85 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=csv&lang=ko" | head -2
   확인하고, 남아 있으면 삭제(`aws logs delete-log-group --log-group-name /ecs/pricingsync --region $REGION`, 보존이 필요하면 먼저
   export)하거나 `cdk deploy`에 `--import-existing-resources`를 붙인다. 자세한 명령은 [rollback.md A-2](./rollback.md)에 있다.
 
+### 5-5. v2.31.0 배포 경로와 확인 (단가 열 이름, OpenAI 공식 가격, 캐시와 긴 컨텍스트 단가)
+
+**배포 경로**: CDK 코드, IAM, env 변경이 없다. OpenAI 요금 문서(`developers.openai.com`)는 기존 NAT egress로 나간다(PricingSync
+태스크 보안 그룹은 모든 outbound를 허용한다). 새 이미지는 평소처럼 **digest 고정 CDK로 `BedrockMonitor-AppServices` +
+`BedrockMonitor-Scheduler`**를 backend, frontend 이미지 모두로 배포한다(§3 경고, §6). 릴리스 전에 frontend 이미지를 로컬에서 한 번
+빌드한다(`make build-frontend`, v2.30.0 `.dockerignore` 빌드 실패 사고). DB는 새 테이블이 없고 `price_history`에 nullable 열 7개
+(`cache_read_per_mtok`, `cache_write_per_mtok`, `cache_write_1h_per_mtok`, `long_input_per_mtok`, `long_output_per_mtok`,
+`long_cache_read_per_mtok`, `long_cache_write_per_mtok`)가 생긴다. backend 기동 시 `pricing_seed.ensure_price_columns`가 빠진 열만
+`ALTER TABLE price_history ADD COLUMN IF NOT EXISTS`로 추가하고(열이 다 있으면 DDL 없음), 같은 기동의 seed가 OpenAI 공식 가격
+8채널(`openai-list:<family_key>`) seed 행을 넣고 기존 seed 행의 빈 캐시, 긴 컨텍스트 열을 채운다. PricingSync 러너도
+`create_tables()` 바로 뒤에서 같은 열 추가를 먼저 한다. 롤아웃 중 함께 도는 v2.30.0 태스크는 새 열을 모르지만 nullable이라 영향이 없다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 열 마이그레이션 — 새 backend 태스크의 기동 로그에 실패 줄이 없고 /api/pricing이 200이다
+aws logs filter-log-events --log-group-name /ecs/backend --region $REGION \
+  --start-time $(( ($(date +%s) - 3600) * 1000 )) \
+  --filter-pattern '"Price column migration failed"' --query 'events[].message' --output text
+# 기댓값: 빈 출력. 줄이 있어도 아래가 200이면 다른 backend 태스크가 먼저 열을 추가한 것이다.
+curl -s -o /dev/null -w '%{http_code}\n' "https://$CF_DOMAIN/api/pricing"
+# 기댓값: 200. 500이면 troubleshooting.md의 "단가 열 마이그레이션 실패"를 따른다.
+
+# 2. 첫 스케줄 런을 기다리지 않고 PricingSync 1회 수동 실행 — 네트워크 설정은 스케줄 타깃에서 복사
+SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
+  --query "Stacks[0].Outputs[?OutputKey=='PricingSyncScheduleName'].OutputValue" --output text)
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerPricingSyncTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+NETCFG=$(aws scheduler get-schedule --name "$SCHED" --region $REGION \
+  --query 'Target.EcsParameters.NetworkConfiguration.awsvpcConfiguration' --output json \
+  | jq -c '{awsvpcConfiguration: {subnets: .Subnets, securityGroups: .SecurityGroups, assignPublicIp: .AssignPublicIp}}')
+aws ecs run-task --cluster bedrock-monitor --task-definition "$FAM" --launch-type FARGATE --region $REGION \
+  --network-configuration "$NETCFG" --query 'tasks[0].taskArn' --output text
+# 약 1분 뒤 러너 로그
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep 'pricing_sync_runner:'
+# 기댓값: "pricing_sync_runner: 63 active channels"(55 + OpenAI 공식 가격 8),
+#   런 요약 "status=completed changes=0 pending=0 results={'unchanged': 63} errors=0".
+#   seed가 이미 채운 채널은 unchanged다. v2.30.0 동기화가 만든 verified 행처럼 빈 확장 열이 남은 채널은 'enriched'로 세고
+#   (예: results={'enriched': 2, 'unchanged': 61}), changes와 pending은 그래도 0이다.
+
+# 3. /api/pricing — 표 순서, openai_list, 확장 필드
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pending_review,
+  families: (.families | length), providers: (.families | map(.provider) | [.[0], .[10], .[18]]),
+  models: (.models | length), tier_keys: (.families[0].tiers | keys_unsorted),
+  openai_list: ([.families[] | select(.provider == "openai") | .tiers.openai_list.verification] | group_by(.) | map({(.[0]): length}) | add),
+  opus55_global: (.families[] | select(.family_key == "claude-opus-5-5") | .tiers.global | {input, output, cache_read, cache_write, cache_write_1h, long}),
+  astra_global: (.families[] | select(.family_key == "gpt-6-astra") | .tiers.global | {input, output, cache_read, cache_write, long}),
+  nova_us: (.families[] | select(.family_key == "nova-2-lite") | .tiers.us | {input, output, cache_read, cache_write}),
+  references: (.references | length)}'
+# 기댓값: last_sync "completed", pending_review 0, families 19, providers ["anthropic", "openai", "amazon"],
+#   models 55(openai_list 채널은 비용 맵에 없다), tier_keys ["cp", "openai_list", "global", "us", "in_region"],
+#   openai_list {"verified": 8},
+#   opus55_global {"input": 4, "output": 20, "cache_read": 0.2, "cache_write": 5, "cache_write_1h": 8, "long": null},
+#   astra_global {"input": 10, "output": 50, "cache_read": 1, "cache_write": 12.5,
+#     "long": {"input": 20, "output": 75, "cache_read": 2, "cache_write": 25}},
+#   nova_us {"input": 0.33, "output": 2.75, "cache_read": 0.0825, "cache_write": 0},
+#   references 30(오퍼 18, Price List 1, Anthropic 1, OpenAI 1, 공식 페이지 9 — 수동 메모 참고 자료는 없다)
+
+# 4. 다운로드 — CSV 머리글 18열, Markdown OpenAI 표 머리글
+curl -s "https://$CF_DOMAIN/api/pricing/export?format=csv&lang=en" | sed -n 2p
+# 기댓값: provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,cache_read_usd_per_1m,cache_write_usd_per_1m,cache_write_1h_usd_per_1m,long_input_usd_per_1m,long_output_usd_per_1m,long_cache_read_usd_per_1m,long_cache_write_usd_per_1m,verification,observed_at,footnotes,source_ids
+curl -s "https://$CF_DOMAIN/api/pricing/export?format=md&lang=ko" | grep -m1 'OpenAI 공식 가격'
+# 기댓값: | 모델 | OpenAI 공식 가격 | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region |
+```
+
+- 화면 확인: `/pricing` 표가 Anthropic Claude → OpenAI → Amazon Nova 순서이고, 열 머리글이 "AWS Bedrock - Global CRIS",
+  "AWS Bedrock - US CRIS", "AWS Bedrock - In Region"이다. OpenAI 표 첫 열은 "OpenAI 공식 가격"이고 Amazon Nova 표 첫 열은 머리글과
+  칸이 모두 비어 있다. 셀 둘째 줄에 캐시 단가(예 Opus 5.5 Global "캐시 읽기 $0.20, 쓰기 $5.00, 1시간 쓰기 $8.00"), GPT 셋째 줄에 긴
+  컨텍스트 단가(예 GPT 6 Astra Global "긴 컨텍스트 $20.00 / $75.00, 캐시 읽기 $2.00, 쓰기 $25.00")가 보인다. GPT 5.6 Sol 프로모션
+  배지의 각주를 누르면 참고 자료 "OpenAI API 요금 (Standard)"로 이동한다. 상단 안내 상자에 "OpenAI 요금" 링크가 있다.
+- 비용 화면(`/cost`)과 효율성 점수는 바뀌지 않는다(입력, 출력 단가만 쓴다). 배포 전후 같은 기간의 합계가 같으면 정상이다.
+- `pending_review`가 0보다 크면 `troubleshooting.md`의 "검토 대기 단가 승인"을 따른다. 관리자 목록의 `change`에 필드별 변화율이 있다.
+  2번 결과에 `skipped:<reason>`이 있으면 같은 문서의 "비용 단가 동기화 실패"로 원인을 찾는다(OpenAI 문서는 "OpenAI 문서 형식 변경" 행).
+- **v2.30.0 이미지로 되돌리는 경우**: 새 열과 `openai-list:*` 행은 DB에 남지만 v2.30.0 코드는 둘 다 읽지 않는다(v2.30.0
+  `/api/pricing`과 PricingSync는 `AVAILABLE_MODELS`와 최근 CP 행만 활성 채널로 본다). 다시 v2.31.0으로 올리면 그사이 v2.30.0 동기화가
+  만든 행의 빈 확장 열은 다음 동기화에서 `enriched`로 채워진다.
+- 배포 뒤 README 스크린샷 `docs/images/ui/pricing-{en,ko}.png`를 새 열 이름과 캐시 줄이 보이게 다시 캡처하고(운영, 다크 테마,
+  1440x900), README 캡션의 캡처 날짜와 버전을 함께 고친다.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`)에는 이미지-only

@@ -126,3 +126,30 @@ GPT 5.4 Global 캐시 읽기 0.25(`cached_input_tokens`), 쓰기 없음, 긴 컨
 - 백엔드 기동 시 ALTER로 열 추가 → 첫 수동 PricingSync에서 55채널 + OpenAI 공식 가격 8채널 `verified`, 확장 필드 `enriched`, pending 0 기대.
 - Docker 빌드를 릴리스 전에 로컬로 확인한다(v2.30.0 `.dockerignore` 사고).
 - README 스크린샷(`pricing-{en,ko}.png`) 갱신, ADR-030 부록, api-reference, CHANGELOG v2.31.0, 버전 6곳.
+
+## 구현 계획과의 차이 (2026-09-27 계획 기준)
+
+구현은 `docs/superpowers/plans/2026-09-27-pricing-v2-31.md`의 Interface Contract를 따른다. 계획은 2026-09-27 출처 데이터로 규칙을 다시
+정했고, 이 문서와 다른 점은 아래와 같다. 위 본문은 결정 기록으로 그대로 둔다.
+
+1. 마이그레이션 위치: 위 "저장과 마이그레이션"은 lifespan 마이그레이션 블록에 `ALTER TABLE`을 넣는다고 적었다. 구현은
+   `pricing_seed.ensure_price_columns`가 lifespan의 price seed 바로 앞 자체 `try` 블록과 PricingSync 러너(`create_tables()` 바로 뒤)에서
+   빠진 열만 추가한다. 빠진 열이 없으면 DDL을 실행하지 않는다. ADR-030 Decision 1의 "lifespan ALTER 블록에는 넣지 않는다"를 지킨다.
+2. 단위 범례: 화면은 "각 단가 셀: 입력 / 출력, 1M 토큰당 USD. 둘째 줄: 프롬프트 캐싱. GPT 셋째 줄: 긴 컨텍스트"이고, 다운로드 머리말은
+   "통화와 단위: USD, 1M 토큰당, 입력 / 출력. 둘째 줄은 프롬프트 캐싱, GPT 셋째 줄은 긴 컨텍스트 단가다"다.
+3. 참고 사항: 6항목이 아니라 8항목이다. 캐시 쓰기와 1시간 쓰기의 뜻(Claude, OpenAI, Nova), OpenAI 공식 가격은 비용 계산에 쓰지
+   않는다는 항목이 따로 있고, 4번의 괄호 "(프로브는 캐시를 쓰지 않고 입력이 짧다)"는 넣지 않았다. 열 이름을 따라 "Global 채널"은
+   "AWS Bedrock - Global CRIS"로 쓴다.
+4. seed 채우기: 기존 `status='seed'` 행의 빈 확장 열은 입력과 출력이 seed 값과 같은 행만 채운다(값이 바뀐 행에 옛 확장 값을 붙이지 않는다).
+5. Markdown 다운로드: 표마다 독립이므로 Amazon Nova 표에는 빈 첫 열이 없다(화면만 세 표의 열 위치를 맞추려고 빈 열을 둔다).
+6. 첫 수동 PricingSync 기댓값: 기동 시 seed가 기존 seed 행의 빈 확장 열을 먼저 채우므로 대부분 `unchanged`이고
+   (`results={'unchanged': 63}`), v2.30.0 동기화가 만든 verified 행처럼 빈 확장 열이 남은 채널만 `enriched`다. changes와 pending은 0이다.
+7. 계획이 더한 규칙: 긴 컨텍스트 필드는 동기화가 OpenAI 채널에만 남긴다. 문서 표는 활성 채널이 찾는 모델 행만 정규화한다. 확장 열이 모두
+   비어 있는 v2.30.0 보류 행은 입력과 출력만 비교한다. 검토 대기 표기(화면 배지, Markdown)는 바뀐 항목만 보여 준다.
+8. 계획 뒤 구현 검토에서 정한 규칙(계획 Interface Contract의 해당 문장도 대체한다): 문서 표(Anthropic, OpenAI)에서 같은 모델 이름이
+   두 번 나오면 입력이나 출력이 다를 때만 그 이름을 버리고, 같으면 행을 남기되 두 행에서 값이 다른 확장 필드(한쪽만 값이 있는 경우
+   포함)만 `None`으로 둔다(계획 C4, C5는 `UnitPrice` 전체를 비교했다). seed 채우기는 열마다 `COALESCE(열, seed 값)`으로 써서 seed가
+   행을 읽은 뒤 동시 동기화가 커밋한 값을 덮어쓰지 않는다. 동기화의 문서 표 정규화는 찾는 모델 행마다 따로 하고(`settle_doc`),
+   추적하는 모델의 값이 정규화에 실패하면 그 모델의 채널만 `skipped:parse_failed`다. 화면의 `formatUnitPrice`는 예외를 던지지
+   않는다(NaN, ±Infinity, 절댓값 1e21 이상은 `$<값>` 그대로 표시). 프런트가 모르는 제공사는 기본 열(빈 첫 열과 AWS Bedrock 세 열,
+   `pricingTable.columnsFor`)로 그리고 섹션 이름은 제공사 문자열이다.
