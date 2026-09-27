@@ -3,6 +3,8 @@
 price_identity는 전부 정확 일치다(v2.29.1 get_pricing의 prefix fallback이 Claude US를 Global 단가로, Nova 2.0
 Lite를 1세대 Nova Lite 단가로 매칭한 오류). CP는 prober _ANTHROPIC_TARGETS와 같은 substring 규칙 + 점 버전 제외.
 분류할 수 없으면 None(비용 "-"). 새 모델은 이 매핑과 pricing_seed.py를 함께 고친다(tests가 prober 등록으로 잡는다).
+v2.31.0: 표시 전용 "OpenAI 공식 가격" 채널 — 합성 model_id openai-list:<family_key>(AVAILABLE_MODELS, probe_results에는
+없음). active_channels가 활성 OpenAI 패밀리마다 덧붙이고, 출처는 OpenAI 공식 요금 문서(source_kind openai_doc)다.
 """
 
 import logging
@@ -29,9 +31,9 @@ class PriceIdentity:
     family_key: str   # claude-opus-4-6 | claude-haiku-4-5 | nova-2-lite | gpt-6-astra | gpt-5.6-sol | gpt-5.4 ...
     family: str       # FAMILY_ORDER 문자열
     provider: str     # anthropic | amazon | openai
-    channel: str      # cp | global | us | inregion:<aws-region>
-    source_kind: str  # offer | pricelist | anthropic_doc
-    source_ref: str   # offer: FM id / pricelist: NOVA_USAGETYPES 키 / anthropic_doc: 문서 모델명
+    channel: str      # cp | openai_list | global | us | inregion:<aws-region>
+    source_kind: str  # offer | pricelist | anthropic_doc | openai_doc
+    source_ref: str   # offer: FM id / pricelist: NOVA_USAGETYPES 키 / anthropic_doc, openai_doc: 문서 모델명
 
 
 # Bedrock Claude offer FM id → (family_key, family). global./us. 접두를 뗀 값과 정확 일치.
@@ -57,6 +59,10 @@ ANTHROPIC_SOURCE_ID = "anthropic-pricing"
 NOVA_USAGETYPES: dict[str, tuple[str, str]] = {
     "nova-2-lite": ("USE1-Nova2.0Lite-input-tokens", "USE1-Nova2.0Lite-output-tokens"),
 }
+# Nova 프롬프트 캐싱 usagetype (read, write) — 표시 전용, 없거나 모양이 다르면 그 값만 None (v2.31.0)
+NOVA_CACHE_USAGETYPES: dict[str, tuple[str, str]] = {
+    "nova-2-lite": ("USE1-Nova2.0Lite-cache-read-input-token-count", "USE1-Nova2.0Lite-cache-write-input-token-count"),
+}
 _PRICELIST_MODEL_IDS = {"us.amazon.nova-2-lite-v1:0": ("nova-2-lite", "Nova 2.0 Lite", "us")}
 # OpenAI offer FM id(= Mantle in-region id) → (family_key, family)
 _OPENAI_FM: dict[str, tuple[str, str]] = {
@@ -65,6 +71,11 @@ _OPENAI_FM: dict[str, tuple[str, str]] = {
     "openai.gpt-5.6-terra": ("gpt-5.6-terra", "GPT 5.6 Terra"), "openai.gpt-5.6-luna": ("gpt-5.6-luna", "GPT 5.6 Luna"),
     "openai.gpt-5.5": ("gpt-5.5", "GPT 5.5"), "openai.gpt-5.4": ("gpt-5.4", "GPT 5.4"),
 }
+# OpenAI 공식 가격(openai_list, v2.31.0) — 문서 "### Standard pricing data" 표의 모델 이름 = family_key(정확 일치)
+_OPENAI_LIST_FAMILIES: dict[str, str] = {fk: fam for fk, fam in _OPENAI_FM.values()}
+OPENAI_PRICING_URL = "https://developers.openai.com/api/docs/pricing.md"
+OPENAI_SOURCE_ID = "openai-pricing"
+OPENAI_LIST_PREFIX = "openai-list:"
 # in-region은 offer 차원 리전 접두(USE1_/USE2_/USW2_)가 있는 리전만 — 새 리전은 fail-closed(단가 없음).
 _INREGION_REGIONS = ("us-east-1", "us-east-2", "us-west-2")
 
@@ -82,8 +93,18 @@ def _cp_family_key(actual_id: str) -> str | None:
     return None
 
 
+def openai_list_model_id(family_key: str) -> str:
+    """OpenAI 공식 가격 채널의 합성 model_id: "gpt-6-astra" → "openai-list:gpt-6-astra"."""
+    return f"{OPENAI_LIST_PREFIX}{family_key}"
+
+
 def price_identity(model_id: str) -> PriceIdentity | None:
     """활성 채널 model_id → 단가 식별자, 분류할 수 없으면 None(예외 아님)."""
+    if model_id.startswith(OPENAI_LIST_PREFIX):
+        fk = model_id[len(OPENAI_LIST_PREFIX):]
+        if fk not in _OPENAI_LIST_FAMILIES:
+            return None
+        return PriceIdentity(fk, _OPENAI_LIST_FAMILIES[fk], "openai", "openai_list", "openai_doc", fk)
     if model_id.startswith("anthropic:"):
         fk = _cp_family_key(model_id[len("anthropic:"):])
         if fk is None:
@@ -115,8 +136,8 @@ def price_identity(model_id: str) -> PriceIdentity | None:
 
 
 def tier_of(channel: str) -> str:
-    """채널 → /api/pricing tiers 키(cp | global | us | in_region)."""
-    if channel in ("cp", "global", "us"):
+    """채널 → /api/pricing tiers 키(cp | openai_list | global | us | in_region)."""
+    if channel in ("cp", "openai_list", "global", "us"):
         return channel
     if channel.startswith("inregion:"):
         return "in_region"
@@ -128,7 +149,11 @@ def region_of(channel: str) -> str | None:
 
 
 def active_channels(models: Mapping[str, str], hidden: Sequence[str]) -> dict[str, PriceIdentity]:
-    """{model_id: label} → 숨김 라벨은 조용히, 분류 불가 id는 경고 후 뺀 {model_id: PriceIdentity}(순서 유지)."""
+    """{model_id: label} → 숨김 라벨은 조용히, 분류 불가 id는 경고 후 뺀 {model_id: PriceIdentity}(순서 유지).
+
+    끝에 OpenAI 공식 가격 채널(openai-list:<family_key>)을 덧붙인다 — 남은 채널에 나온 OpenAI 패밀리마다,
+    처음 나온 순서로 하나씩, 이미 있으면 건너뛴다(v2.31.0). 패밀리의 채널이 모두 숨김이면 붙지 않는다.
+    """
     out: dict[str, PriceIdentity] = {}
     for model_id, label in models.items():
         if any(p and p in label for p in hidden):
@@ -138,6 +163,12 @@ def active_channels(models: Mapping[str, str], hidden: Sequence[str]) -> dict[st
             logger.warning("No price identity for active model %s (%s) - cost shows '-'", model_id, label)
             continue
         out[model_id] = ident
+    openai_families = dict.fromkeys(i.family_key for i in out.values() if i.provider == "openai")
+    for family_key in openai_families:
+        list_id = openai_list_model_id(family_key)
+        ident = price_identity(list_id)
+        if list_id not in out and ident is not None:
+            out[list_id] = ident
     return out
 
 
@@ -162,6 +193,7 @@ def note_source_id(family_key: str) -> str:
 OFFER_REFERENCE_URL = "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html"
 PRICELIST_REFERENCE_URL = "https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html"
 ANTHROPIC_REFERENCE_URL = "https://platform.claude.com/docs/en/about-claude/pricing#model-pricing"
+OPENAI_REFERENCE_URL = "https://developers.openai.com/api/docs/pricing"
 
 # 화면과 다운로드 3형식 공용 — KO, EN은 여기 한 곳에만 둔다.
 DISCLAIMER: dict[str, str] = {

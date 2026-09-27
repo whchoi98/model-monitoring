@@ -1,9 +1,12 @@
 """단가 식별과 출처 메타데이터 (v2.30.0, ADR-030) — 55채널 정확 분류, 점 버전 안전성(2026-09-23 Opus 5.5 CP
-오등록 실사고 유형), prober 등록 결과와 일치, FAMILY_ORDER = frontend sortModels.ts."""
+오등록 실사고 유형), prober 등록 결과와 일치, FAMILY_ORDER = frontend sortModels.ts.
+v2.31.0: OpenAI 공식 가격 합성 채널(openai-list:<family_key>) 8개, OpenAI 문서 출처 상수, Nova 캐시 usagetype."""
 
+import json
 import logging
 import pathlib
 import re
+from decimal import Decimal
 from types import SimpleNamespace
 
 import pytest
@@ -12,10 +15,15 @@ from sqlalchemy import create_engine, inspect
 import models
 import prober
 import pricing_sources as ps
+from pricing_parsers import parse_openai_pricing_md, parse_pricelist
 from pricing_sources import PriceIdentity, active_channels, price_identity, region_of, tier_of
-from tests.pricing_catalog import ACTIVE_MODELS, CP_MODEL_IDS_20260923, EXPECTED_IDENTITY, HIDDEN_1P_MODELS
+from tests.pricing_catalog import (
+    ACTIVE_MODELS, CP_MODEL_IDS_20260923, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
+)
 
 SORT_MODELS_TS = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "sortModels.ts"
+FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "pricing"
+OPENAI_FAMILIES = {fk: fam for fk, fam, provider, *_ in EXPECTED_IDENTITY.values() if provider == "openai"}
 
 _ENV = {
     "ANTHROPIC_API_KEY": "sk-ant-fake", "ANTHROPIC_WORKSPACE_ID": "wrkspc_fake",  # pragma: allowlist secret
@@ -85,13 +93,16 @@ def test_registered_catalog_minus_hidden_is_exactly_the_55_channels(monkeypatch)
     prober._register_openai_models()
     catalog = prober.AVAILABLE_MODELS
     assert {m: lbl for m, lbl in catalog.items() if "(1P)" in lbl} == HIDDEN_1P_MODELS
+    assert not any(m.startswith(ps.OPENAI_LIST_PREFIX) for m in catalog)  # 합성 id는 prober에 없다
     active = active_channels(catalog, ["(1P)"])
-    assert {m: catalog[m] for m in active} == ACTIVE_MODELS  # 라벨까지 prober 규약과 같다
+    listed = [m for m in active if m.startswith(ps.OPENAI_LIST_PREFIX)]
+    assert {m: catalog[m] for m in active if m not in listed} == ACTIVE_MODELS  # 라벨까지 prober 규약과 같다
+    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 8개
 
 
 def test_active_channels_hidden_and_unclassifiable(caplog):
     with caplog.at_level(logging.WARNING, logger="pricing_sources"):
-        assert list(active_channels({**HIDDEN_1P_MODELS, **ACTIVE_MODELS}, ["(1P)"])) == list(ACTIVE_MODELS)
+        assert list(active_channels({**HIDDEN_1P_MODELS, **ACTIVE_MODELS}, ["(1P)"])) == list(ACTIVE_MODELS) + OPENAI_LIST_IDS
     assert _warnings(caplog) == []  # 숨김은 조용히 뺀다
     catalog = {"openai:1p:gpt-5.4": "OpenAI GPT 5.4 (1P)",
                "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
@@ -110,6 +121,10 @@ def test_active_channels_hidden_and_unclassifiable(caplog):
     "anthropic:claude-opus-4-5-20251101", "anthropic:claude-sonnet-4-5-20250929", "anthropic:claude-mythos-5-1", "",
     # the prefix is checked, not just its length ("global." is 7 characters, "us." is 3)
     "openai:global:xxxxxxxopenai.gpt-6-sol", "openai:us:xxxopenai.gpt-6-astra",
+    # OpenAI official price ids: exact family keys of the eight Bedrock GPT families only
+    "openai-list:", "openai-list:gpt-5.4-mini", "openai-list:gpt-5.4-pro", "openai-list:openai.gpt-5.4",
+    "openai-list:GPT-5.4", "openai-list:gpt-5.4 ", "openai-list:claude-opus-5-5", "openai-list:nova-2-lite",
+    "openai_list:gpt-5.4", "openai:list:gpt-5.4",
 ])
 def test_unclassifiable_model_ids_return_none(model_id):
     assert price_identity(model_id) is None
@@ -168,10 +183,48 @@ def test_family_order_matches_frontend_sort_models():
 
 
 def test_tier_of_and_region_of():
-    assert [tier_of(c) for c in ("cp", "global", "us", "inregion:us-west-2")] == ["cp", "global", "us", "in_region"]
+    assert [tier_of(c) for c in ("cp", "openai_list", "global", "us", "inregion:us-west-2")] == [
+        "cp", "openai_list", "global", "us", "in_region"]
     with pytest.raises(ValueError):
         tier_of("1p")
-    assert (region_of("inregion:us-east-1"), region_of("global")) == ("us-east-1", None)
+    assert (region_of("inregion:us-east-1"), region_of("global"), region_of("openai_list")) == ("us-east-1", None, None)
+
+
+@pytest.mark.parametrize("family_key", list(OPENAI_FAMILIES))
+def test_openai_list_ids_are_classified(family_key):
+    model_id = ps.openai_list_model_id(family_key)
+    assert model_id == f"openai-list:{family_key}"
+    assert price_identity(model_id) == PriceIdentity(
+        family_key, OPENAI_FAMILIES[family_key], "openai", "openai_list", "openai_doc", family_key)
+
+
+def test_openai_list_ids_are_the_eight_bedrock_gpt_families_and_rows_of_the_openai_doc():
+    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 8
+    prices = parse_openai_pricing_md((FIXTURES / "openai_pricing.md").read_text(encoding="utf-8"))
+    assert all(price_identity(m).source_ref in prices for m in OPENAI_LIST_IDS)  # exact doc model names
+
+
+def test_active_channels_appends_one_openai_list_channel_per_visible_openai_family(caplog):
+    models = {
+        "openai:us-east-1:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-1)",
+        "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
+        "openai:global:global.openai.gpt-6-sol": "OpenAI GPT 6 Sol (Global)",
+        "openai:us-east-2:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-2)",
+        "us.amazon.nova-2-lite-v1:0": "Bedrock Nova 2.0 Lite (US)",
+        "openai:us-east-1:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-1)",
+    }
+    with caplog.at_level(logging.WARNING, logger="pricing_sources"):
+        active = active_channels(models, ["(us-east-1)"])
+    assert list(active) == [
+        "global.anthropic.claude-opus-5-5", "openai:global:global.openai.gpt-6-sol", "openai:us-east-2:openai.gpt-5.4",
+        "us.amazon.nova-2-lite-v1:0", "openai-list:gpt-6-sol", "openai-list:gpt-5.4",  # GPT 5.5 is hidden: none
+    ]
+    assert active["openai-list:gpt-5.4"].channel == "openai_list" and _warnings(caplog) == []
+    again = active_channels({"openai-list:gpt-5.4": "OpenAI GPT 5.4 (official)", **models}, [])
+    assert [m for m in again if m.startswith("openai-list:")] == [
+        "openai-list:gpt-5.4", "openai-list:gpt-6-sol", "openai-list:gpt-5.5"]  # an id already present is kept once
+    no_openai = active_channels({"global.anthropic.claude-opus-5-5": "a", "us.amazon.nova-2-lite-v1:0": "b"}, [])
+    assert list(no_openai) == ["global.anthropic.claude-opus-5-5", "us.amazon.nova-2-lite-v1:0"]
 
 
 def test_source_metadata_constants():
@@ -187,6 +240,12 @@ def test_source_metadata_constants():
         "https://platform.claude.com/docs/en/about-claude/pricing#model-pricing",
     )
     assert ps.NOVA_USAGETYPES == {"nova-2-lite": ("USE1-Nova2.0Lite-input-tokens", "USE1-Nova2.0Lite-output-tokens")}
+    assert ps.NOVA_CACHE_USAGETYPES == {"nova-2-lite": (
+        "USE1-Nova2.0Lite-cache-read-input-token-count", "USE1-Nova2.0Lite-cache-write-input-token-count")}
+    assert (ps.OPENAI_PRICING_URL, ps.OPENAI_SOURCE_ID, ps.OPENAI_REFERENCE_URL, ps.OPENAI_LIST_PREFIX) == (
+        "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
+        "https://developers.openai.com/api/docs/pricing", "openai-list:",
+    )
     assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 9
     assert ps.EPOCH.isoformat() == "1970-01-01T00:00:00+00:00"
     assert ps.DISCLAIMER == {
@@ -195,6 +254,14 @@ def test_source_metadata_constants():
         "en": "This price list is compiled automatically from public sources for reference only and is not "
               "an official AWS statement. Always confirm final prices on the official pricing pages.",
     }
+
+
+def test_nova_cache_usagetypes_read_the_price_list_fixture():
+    items = json.loads((FIXTURES / "pricelist_nova-2-lite.json").read_text(encoding="utf-8"))["PriceList"]
+    price = parse_pricelist(items, *ps.NOVA_USAGETYPES["nova-2-lite"], *ps.NOVA_CACHE_USAGETYPES["nova-2-lite"])
+    assert (price.input, price.output, price.cache_read, price.cache_write) == (
+        Decimal("0.33"), Decimal("2.75"), Decimal("0.0825"), Decimal(0))
+    assert set(ps.NOVA_CACHE_USAGETYPES) == set(ps.NOVA_USAGETYPES)
 
 
 def test_official_pages_and_price_notes():

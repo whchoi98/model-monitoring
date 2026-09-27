@@ -73,8 +73,10 @@ def test_registration_runs_before_ensure_seed_before_run_sync(wired):
     assert runner.main(["--once"]) == 0
     assert wired.calls == ["create_tables", "discover_cp", "register_openai", "ensure_seed", "run_sync"]
     assert set(wired.seed_active) == {"global.anthropic.claude-opus-5-5", "anthropic:claude-opus-5-5",
-                                      "openai:us-east-1:openai.gpt-6-sol"}  # registered ids in, (1P) hidden
+                                      "openai:us-east-1:openai.gpt-6-sol",
+                                      "openai-list:gpt-6-sol"}  # registered ids in, (1P) hidden, OpenAI official price
     assert wired.sync_active == wired.seed_active and wired.seed_active["anthropic:claude-opus-5-5"].channel == "cp"
+    assert wired.seed_active["openai-list:gpt-6-sol"].channel == "openai_list"
 
 
 @pytest.mark.parametrize(("status", "code"), [("completed", 0), ("partial", 0), ("failed", 1)])
@@ -202,3 +204,4 @@ def test_hidden_model_patterns_are_applied_to_the_active_set(wired, monkeypatch)
     assert runner.main(["--once"]) == 0
     assert "openai:us-east-1:openai.gpt-6-sol" not in wired.seed_active
     assert "openai:us-east-1:openai.gpt-6-sol" not in wired.sync_active
+    assert "openai-list:gpt-6-sol" not in wired.seed_active  # its family has no visible channel left

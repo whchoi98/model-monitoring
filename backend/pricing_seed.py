@@ -14,7 +14,7 @@ from sqlalchemy import insert, select, text
 
 from models import PriceHistory
 from pricing_sources import (
-    ANTHROPIC_SOURCE_ID, EPOCH, NOVA_USAGETYPES, PriceIdentity, offer_source_id, pricelist_source_id,
+    ANTHROPIC_SOURCE_ID, EPOCH, NOVA_USAGETYPES, OPENAI_SOURCE_ID, PriceIdentity, offer_source_id, pricelist_source_id,
 )
 
 logger = logging.getLogger(__name__)
@@ -78,12 +78,29 @@ CP_SEED: dict[str, tuple[float, float, str]] = {
     )
 }
 
+# OpenAI 공식 가격(openai_list, 표시 전용) — OpenAI pricing.md "### Standard pricing data"(2026-09-27), family_key 단위.
+# 합성 model_id openai-list:<family_key>는 active_channels가 만든다(v2.31.0).
+OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
+    fk: (i, o, OPENAI_SOURCE_ID)
+    for fk, i, o in (
+        ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0), ("gpt-6-luna", 0.1, 0.5),
+        ("gpt-5.6-sol", 4.0, 20.0), ("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2),
+        ("gpt-5.5", 5.0, 30.0), ("gpt-5.4", 2.5, 15.0),
+    )
+}
+
 
 def seed_rows(active: Mapping[str, PriceIdentity]) -> dict[str, tuple[float, float, str]]:
-    """활성 채널 → {model_id: seed}. CP는 family_key로 풀고, seed 없는 id는 경고 후 뺀다(동기화가 no_baseline)."""
+    """활성 채널 → {model_id: seed}. CP와 OpenAI 공식 가격은 family_key로 풀고, seed 없는 id는 경고 후 뺀다
+    (동기화가 no_baseline)."""
     out: dict[str, tuple[float, float, str]] = {}
     for model_id, ident in active.items():
-        seed = CP_SEED.get(ident.family_key) if ident.channel == "cp" else SEED.get(model_id)
+        if ident.channel == "cp":
+            seed = CP_SEED.get(ident.family_key)
+        elif ident.channel == "openai_list":
+            seed = OPENAI_LIST_SEED.get(ident.family_key)
+        else:
+            seed = SEED.get(model_id)
         if seed is None:
             logger.warning("No seed price for %s (%s, %s)", model_id, ident.family_key, ident.channel)
             continue
