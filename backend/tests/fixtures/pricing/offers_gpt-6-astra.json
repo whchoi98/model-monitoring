@@ -85,9 +85,69 @@
        "unit": "Units"
       },
       {
+       "dimension": "cache_read_tokens_global_priority",
+       "price": "2",
+       "description": "cache_read_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_global_flex",
+       "price": "0.5",
+       "description": "cache_read_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
        "dimension": "cache_read_tokens_standard",
        "price": "1.1",
        "description": "cache_read_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_priority",
+       "price": "2.2",
+       "description": "cache_read_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_flex",
+       "price": "0.55",
+       "description": "cache_read_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_standard",
+       "price": "12.5",
+       "description": "cache_write_tokens_30m_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_priority",
+       "price": "25",
+       "description": "cache_write_tokens_30m_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_flex",
+       "price": "6.25",
+       "description": "cache_write_tokens_30m_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_standard",
+       "price": "13.75",
+       "description": "cache_write_tokens_30m_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_priority",
+       "price": "27.5",
+       "description": "cache_write_tokens_30m_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_flex",
+       "price": "6.875",
+       "description": "cache_write_tokens_30m_flex",
        "unit": "Units"
       },
       {
@@ -97,9 +157,45 @@
        "unit": "Units"
       },
       {
+       "dimension": "input_tokens_long_ctx_global_flex",
+       "price": "10",
+       "description": "input_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
        "dimension": "output_tokens_long_ctx_global_standard",
        "price": "75",
        "description": "output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_global_flex",
+       "price": "37.5",
+       "description": "output_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_global_standard",
+       "price": "2",
+       "description": "cache_read_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_global_flex",
+       "price": "1",
+       "description": "cache_read_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_global_standard",
+       "price": "25",
+       "description": "cache_write_tokens_30m_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_global_flex",
+       "price": "12.5",
+       "description": "cache_write_tokens_30m_long_ctx_global_flex",
        "unit": "Units"
       },
       {
@@ -109,9 +205,45 @@
        "unit": "Units"
       },
       {
+       "dimension": "input_tokens_long_ctx_flex",
+       "price": "11",
+       "description": "input_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
        "dimension": "output_tokens_long_ctx_standard",
        "price": "82.5",
        "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_flex",
+       "price": "41.25",
+       "description": "output_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_standard",
+       "price": "2.2",
+       "description": "cache_read_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_flex",
+       "price": "1.1",
+       "description": "cache_read_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_standard",
+       "price": "27.5",
+       "description": "cache_write_tokens_30m_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_flex",
+       "price": "13.75",
+       "description": "cache_write_tokens_30m_long_ctx_flex",
        "unit": "Units"
       }
      ]

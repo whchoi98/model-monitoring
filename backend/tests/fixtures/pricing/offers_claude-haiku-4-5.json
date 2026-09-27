@@ -37,6 +37,18 @@
        "unit": "Units"
       },
       {
+       "dimension": "APN2_cache_write_tokens_global_standard",
+       "price": "1.25",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_1h_global_standard",
+       "price": "2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
        "dimension": "EU_input_tokens_global_batch",
        "price": "0.5",
        "description": "Input Tokens - Batch, Global",
@@ -64,6 +76,18 @@
        "dimension": "EU_cache_read_tokens_global_standard",
        "price": "0.1",
        "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_global_standard",
+       "price": "1.25",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_1h_global_standard",
+       "price": "2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
        "unit": "Units"
       },
       {
@@ -97,6 +121,18 @@
        "unit": "Units"
       },
       {
+       "dimension": "USE1_cache_write_tokens_global_standard",
+       "price": "1.25",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_1h_global_standard",
+       "price": "2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
        "dimension": "USE2_input_tokens_global_batch",
        "price": "0.5",
        "description": "Input Tokens - Batch, Global",
@@ -124,6 +160,18 @@
        "dimension": "USE2_cache_read_tokens_global_standard",
        "price": "0.1",
        "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_global_standard",
+       "price": "1.25",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_1h_global_standard",
+       "price": "2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
        "unit": "Units"
       },
       {
@@ -157,6 +205,18 @@
        "unit": "Units"
       },
       {
+       "dimension": "USW2_cache_write_tokens_global_standard",
+       "price": "1.25",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_1h_global_standard",
+       "price": "2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
        "dimension": "APN2_input_tokens_batch",
        "price": "0.55",
        "description": "Input Tokens - Batch",
@@ -184,6 +244,18 @@
        "dimension": "APN2_cache_read_tokens_standard",
        "price": "0.11",
        "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_standard",
+       "price": "1.375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_1h_standard",
+       "price": "2.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
        "unit": "Units"
       },
       {
@@ -217,6 +289,18 @@
        "unit": "Units"
       },
       {
+       "dimension": "EU_cache_write_tokens_standard",
+       "price": "1.375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_1h_standard",
+       "price": "2.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
        "dimension": "USE1_input_tokens_batch",
        "price": "0.55",
        "description": "Input Tokens - Batch",
@@ -244,6 +328,18 @@
        "dimension": "USE1_cache_read_tokens_standard",
        "price": "0.11",
        "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_standard",
+       "price": "1.375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_1h_standard",
+       "price": "2.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
        "unit": "Units"
       },
       {
@@ -277,6 +373,18 @@
        "unit": "Units"
       },
       {
+       "dimension": "USE2_cache_write_tokens_standard",
+       "price": "1.375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_1h_standard",
+       "price": "2.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
        "dimension": "USW2_input_tokens_batch",
        "price": "0.55",
        "description": "Input Tokens - Batch",
@@ -307,6 +415,18 @@
        "unit": "Units"
       },
       {
+       "dimension": "USW2_cache_write_tokens_standard",
+       "price": "1.375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_1h_standard",
+       "price": "2.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
        "dimension": "APN2_InputTokenCount_Global_Batch",
        "price": "0.5",
        "description": "Million Batch Input Tokens Global",
@@ -328,6 +448,24 @@
        "dimension": "APN2_OutputTokenCount_Global",
        "price": "5",
        "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_CacheReadInputTokenCount_Global",
+       "price": "0.1",
+       "description": "Million Cache Read Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_CacheWriteInputTokenCount_Global",
+       "price": "1.25",
+       "description": "Million Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_CacheWrite1hInputTokenCount_Global",
+       "price": "2",
+       "description": "Million 1 hour Cache Write Input Tokens Global",
        "unit": "Units"
       },
       {
@@ -355,6 +493,24 @@
        "unit": "Units"
       },
       {
+       "dimension": "EU_CacheReadInputTokenCount_Global",
+       "price": "0.1",
+       "description": "Million Cache Read Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_CacheWriteInputTokenCount_Global",
+       "price": "1.25",
+       "description": "Million Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_CacheWrite1hInputTokenCount_Global",
+       "price": "2",
+       "description": "Million 1 hour Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
        "dimension": "USE1_InputTokenCount_Global_Batch",
        "price": "0.5",
        "description": "Million Batch Input Tokens Global",
@@ -376,6 +532,24 @@
        "dimension": "USE1_OutputTokenCount_Global",
        "price": "5",
        "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_CacheReadInputTokenCount_Global",
+       "price": "0.1",
+       "description": "Million Cache Read Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_CacheWriteInputTokenCount_Global",
+       "price": "1.25",
+       "description": "Million Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_CacheWrite1hInputTokenCount_Global",
+       "price": "2",
+       "description": "Million 1 hour Cache Write Input Tokens Global",
        "unit": "Units"
       },
       {
@@ -403,6 +577,24 @@
        "unit": "Units"
       },
       {
+       "dimension": "USE2_CacheReadInputTokenCount_Global",
+       "price": "0.1",
+       "description": "Million Cache Read Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_CacheWriteInputTokenCount_Global",
+       "price": "1.25",
+       "description": "Million Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_CacheWrite1hInputTokenCount_Global",
+       "price": "2",
+       "description": "Million 1 hour Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
        "dimension": "USW2_InputTokenCount_Global_Batch",
        "price": "0.5",
        "description": "Million Batch Input Tokens Global",
@@ -424,6 +616,24 @@
        "dimension": "USW2_OutputTokenCount_Global",
        "price": "5",
        "description": "Million Response Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_CacheReadInputTokenCount_Global",
+       "price": "0.1",
+       "description": "Million Cache Read Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_CacheWriteInputTokenCount_Global",
+       "price": "1.25",
+       "description": "Million Cache Write Input Tokens Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_CacheWrite1hInputTokenCount_Global",
+       "price": "2",
+       "description": "Million 1 hour Cache Write Input Tokens Global",
        "unit": "Units"
       },
       {
@@ -451,6 +661,24 @@
        "unit": "Units"
       },
       {
+       "dimension": "APN2_CacheReadInputTokenCount",
+       "price": "0.11",
+       "description": "Cache Read Input Token Count",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_CacheWriteInputTokenCount",
+       "price": "1.375",
+       "description": "Cache Write Input Token Count",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_CacheWrite1hInputTokenCount",
+       "price": "2.2",
+       "description": "Cache Write 1h Input Token Count",
+       "unit": "Units"
+      },
+      {
        "dimension": "EU_InputTokenCount_Batch",
        "price": "0.55",
        "description": "Million Batch Input Tokens Regional",
@@ -472,6 +700,24 @@
        "dimension": "EU_OutputTokenCount",
        "price": "5.5",
        "description": "Million Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_CacheReadInputTokenCount",
+       "price": "0.11",
+       "description": "Million Cache Read Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_CacheWriteInputTokenCount",
+       "price": "1.375",
+       "description": "Million Cache Write Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_CacheWrite1hInputTokenCount",
+       "price": "2.2",
+       "description": "Million 1 hour Cache Write Input Tokens Regional",
        "unit": "Units"
       },
       {
@@ -499,6 +745,24 @@
        "unit": "Units"
       },
       {
+       "dimension": "USE1_CacheReadInputTokenCount",
+       "price": "0.11",
+       "description": "Million Cache Read Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_CacheWriteInputTokenCount",
+       "price": "1.375",
+       "description": "Million Cache Write Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_CacheWrite1hInputTokenCount",
+       "price": "2.2",
+       "description": "Million 1 hour Cache Write Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
        "dimension": "USE2_InputTokenCount_Batch",
        "price": "0.55",
        "description": "Million Batch Input Tokens Regional",
@@ -523,6 +787,24 @@
        "unit": "Units"
       },
       {
+       "dimension": "USE2_CacheReadInputTokenCount",
+       "price": "0.11",
+       "description": "Million Cache Read Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_CacheWriteInputTokenCount",
+       "price": "1.375",
+       "description": "Million Cache Write Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_CacheWrite1hInputTokenCount",
+       "price": "2.2",
+       "description": "Million 1 hour Cache Write Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
        "dimension": "USW2_InputTokenCount_Batch",
        "price": "0.55",
        "description": "Million Batch Input Tokens Regional",
@@ -544,6 +826,24 @@
        "dimension": "USW2_OutputTokenCount",
        "price": "5.5",
        "description": "Million Response Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_CacheReadInputTokenCount",
+       "price": "0.11",
+       "description": "Million Cache Read Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_CacheWriteInputTokenCount",
+       "price": "1.375",
+       "description": "Million Cache Write Input Tokens Regional",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_CacheWrite1hInputTokenCount",
+       "price": "2.2",
+       "description": "Million 1 hour Cache Write Input Tokens Regional",
        "unit": "Units"
       },
       {

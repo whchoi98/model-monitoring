@@ -466,7 +466,7 @@ def test_default_offers_fetcher_asks_for_public_offers_and_strips_tokens():
     assert bedrock.calls == [{"modelId": "openai.gpt-6-astra", "offerType": "PUBLIC"}]
     assert not any(s in json.dumps(response) for s in ("offerToken", "legalTerm", "FAKE"))
     offer_id, card = single_public_offer(response)
-    assert offer_id == "offer-7epta7rbw5aws" and len(card) == 18
+    assert offer_id == "offer-7epta7rbw5aws" and len(card) == 40
 
 
 def test_default_pricelist_fetcher_filters_exact_usagetypes_and_follows_pages():
