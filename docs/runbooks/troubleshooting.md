@@ -161,9 +161,11 @@ curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer
 
 ### 판단과 조치
 
-1. 새 값을 공식 페이지에서 직접 확인한다. Bedrock 채널은 `/pricing` 참고 자료의 모델 카드나 Amazon Bedrock 요금 페이지, Claude
-   Platform on AWS는 Anthropic 요금 문서, Nova는 Amazon Bedrock 요금 페이지, OpenAI 공식 가격(v2.31.0)은 OpenAI 요금 문서
-   (`https://developers.openai.com/api/docs/pricing`)다.
+1. 새 값을 공식 페이지에서 직접 확인한다. Bedrock 채널은 AWS 모델 카드나 Amazon Bedrock 요금 페이지, Claude Platform on AWS는
+   Anthropic 요금 문서, Nova는 Amazon Bedrock 요금 페이지, OpenAI 공식 가격(v2.31.0)은 OpenAI 요금 문서
+   (`https://developers.openai.com/api/docs/pricing`)다. v2.31.1부터 `/pricing` 참고 자료에는 셀이 인용한 출처만 있고(오퍼 요금표,
+   Price List, Anthropic 문서, OpenAI 문서) 모델 카드와 Amazon Bedrock 요금 페이지 항목은 없다. 세 요금 페이지 링크는 화면 상단 안내
+   상자와 Markdown 다운로드 머리말(`공식 요금 페이지:` 줄)에 있다.
 2. 공식 값이 맞으면 승인한다. 승인한 단가는 그 값을 처음 관측한 런의 시작 시각부터 적용되고, `no_baseline`이면 과거 전체에 적용된다.
    응답의 `warnings`는 단가 조회 순서 `(effective_from, id)`에서 뒤에 오는 verified 단가(더 늦게 시작하거나, 같은 시각에 시작한 더 큰
    id의 행)가 이미 있다는 뜻이다 — 그 구간은 뒤의 단가가 계속 우선한다.

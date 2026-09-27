@@ -415,3 +415,61 @@ $0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. �
   확인 안 됨")가 되고 다른 출처와 비용은 영향을 받지 않는다.
 - (−) `enriched`는 이력을 남기지 않는다. 확장 필드가 처음 관측되기 전의 값은 재구성하지 않는다.
 - (−) 모델을 추가할 때 `pricing_seed.py`의 확장 필드 seed도 고쳐야 하고, 새 OpenAI 패밀리면 `OPENAI_LIST_SEED`도 고친다.
+
+## v2.31.1 후속 (2026-09-27)
+
+사용자 요청(2026-09-27): 참고 자료는 "인용되지 않으면 삭제", 그리고 "GPT AWS Bedrock - US CRIS 와 AWS Bedrock In Region이 가격이 같아
+보입니다. 다시 확인합니다." 이 절은 Decision 6과 v2.31.0 부록 §7(표시와 다운로드)의 참고 자료, Markdown 규칙을 보충한다. 단가 값,
+동기화, 비용 계산은 바뀌지 않는다.
+
+### 1. 인용되지 않는 참고 자료 삭제
+
+- v2.31.0까지 `references`는 셀 각주와 패밀리 메모가 인용한 출처 뒤에 고정 안내 항목 9개(`pricing_sources.OFFICIAL_PAGES`, kind
+  `official_page`, Amazon Bedrock 요금 페이지와 OpenAI 모델 카드 8개)를 덧붙였다. 어느 셀도 이 번호를 인용하지 않았다. 운영 참고 자료
+  30개 중 9개가 본문에서 가리키는 곳이 없는 번호였다.
+- `OFFICIAL_PAGES`, `official_source_id`, `build_pricing_payload`의 덧붙이기 반복문을 지운다. `references`에는 셀 각주나 패밀리 메모가
+  인용한 출처만 들어간다. 운영은 21개다(오퍼 18, Price List 1, Anthropic 문서 1, OpenAI 문서 1).
+- 수동 메모(`manual_note`)는 메모 항목이 자기 참고 자료를 인용하므로 남는다. 번호는 인용된 출처 바로 뒤에 붙는다(전에는 고정 안내 항목
+  뒤).
+- 모르는 형식의 `source_id`를 위한 `_source_reference` 대체 항목(제목은 id, `url` 없음)은 셀이 인용하므로 남기고 kind `official_page`도
+  그대로 둔다. `official_page`는 이제 이 경우에만 나온다.
+- 불변식: 참고 자료 번호 집합은 셀 `footnotes` 번호와 메모 참고 자료 번호의 합집합과 같고, 번호는 1부터 N까지 빈칸이 없다. pytest가
+  실제 seed(`tests/pricing_catalog.py` 활성 55채널과 OpenAI 공식 가격 8채널)로 만든 운영 형태 응답에서 이 불변식과 21개를 고정한다.
+
+### 2. 공식 요금 페이지는 Markdown 머리말 링크로
+
+- Markdown 참고 사항의 "최종 가격은 공식 요금 페이지에서 확인한다[^n]…" 항목(고정 안내 항목의 각주를 모아 인용하던 항목)과 `_TEXT`의
+  `official` 키를 지운다.
+- 대신 머리말의 동기화 줄(검토 대기가 있으면 그 줄) 뒤에 각주 없는 링크 한 줄을 넣는다. KO "- 공식 요금 페이지: [Amazon Bedrock
+  요금](https://aws.amazon.com/bedrock/pricing/), [Anthropic 요금](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI
+  요금](https://developers.openai.com/api/docs/pricing)", EN "- Official pricing pages: [Amazon Bedrock pricing](…), [Anthropic
+  pricing](…), [OpenAI pricing](…)".
+- 세 링크는 `pricing_sources.OFFICIAL_LINKS`(`title_en`, `title_ko`, `url`)에 둔다. 화면 상단 안내 상자
+  (`frontend/src/components/PricingPanel.tsx` `OFFICIAL_LINKS`)와 같은 세 개, 같은 순서이고, pytest가 TS 파일을 읽어 고정한다
+  (`FAMILY_ORDER` 테스트와 같은 방식).
+- CSV와 JSON은 응답을 그대로 따르므로 링크를 넣지 않는다.
+- OpenAI 모델 카드 8개 링크는 어디에도 남지 않는다. GPT 단가의 근거는 셀이 인용하는 오퍼 요금표와 OpenAI 공식 요금 문서다.
+
+### 3. GPT의 US CRIS와 In Region 단가는 같다 — 고정 안내 추가
+
+- 다시 확인한 결과 GPT 표의 US CRIS와 In Region 값이 같은 것이 맞다. 근거는 다음과 같다.
+  1. AWS 모델 카드 GPT-6 Sol: "Mantle in-Region and US geographic cross-Region inference include a 10% premium … Global
+     cross-Region inference uses those rates with no premium".
+  2. AWS 모델 카드 GPT-6 Astra 표: In-Region $11 / $55 = Geo CRIS $11 / $55, Global $10 / $50.
+  3. offer rate card에는 In Region과 US CRIS 공용 차원 `input_tokens_standard` 하나만 있고(Global CRIS는 `input_tokens_global_standard`),
+     GPT 오퍼에는 리전 접두 차원이 없어 동기화가 두 채널에 같은 값을 쓴다(`pricing_parsers.select_offer_price`).
+  4. 2026-09-27 seed에서 US CRIS 채널이 있는 GPT 6 Astra, Sol, Luna는 US CRIS와 In Region의 9개 단가가 모두 같다. 8개 GPT 패밀리 모두
+     In Region 입력과 출력이 OpenAI 공식 가격의 1.1배이고, Global CRIS가 있는 6개 패밀리는 Global CRIS가 OpenAI 공식 가격과 같다(pytest
+     고정).
+- export 고정 안내(`_TEXT[..]['fixed_notes']`)에 3번째 항목을 넣어 9개가 된다. 위치는 "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS,
+  In Region 단가와 다를 수 있다." 바로 뒤다. KO "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에
+  10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다.", EN "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to
+  the OpenAI official price on both, and Global CRIS equals the OpenAI official price." export는 끝 마침표를 두고, 화면(프런트 번들)은 같은
+  문장을 마침표 없이 참고 사항에 넣는다.
+
+### Consequences (v2.31.1)
+
+- (+) 참고 자료의 모든 번호를 본문 각주가 가리킨다. 운영 목록이 30개에서 21개로 준다.
+- (+) GPT 표에서 US CRIS와 In Region 값이 같은 이유가 화면과 Markdown에 적힌다.
+- (−) 앞으로 AWS가 GPT의 US CRIS와 In Region에 다른 단가를 매기면 고정 안내가 틀린다. seed를 고치면 seed 테스트가 드러내지만, 동기화가
+  관측한 값만 달라지는 경우는 테스트가 잡지 못하므로 그때는 문구를 사람이 고친다.
