@@ -1,4 +1,4 @@
-"""routers/pricing.py — /api/pricing, /api/pricing/export, /api/admin/pricing/* (v2.30.0, ADR-030).
+"""routers/pricing.py — /api/pricing, /api/pricing/export, /api/admin/pricing/* (v2.30.0, v2.31.0, ADR-030).
 
 In-memory SQLite, FastAPI TestClient, no network. prober.AVAILABLE_MODELS is replaced per test so the
 active set is deterministic; the 60 s cache is cleared around every test.
@@ -51,7 +51,7 @@ def env(monkeypatch):
         add_price(db, "global.anthropic.claude-opus-5-5", 4.0, 20.0, observed_at=now - timedelta(hours=1),
                   source_id=OPUS_OFFER)
         add_price(db, "us.anthropic.claude-opus-5-5", 4.4, 22.0, observed_at=now - timedelta(hours=1),
-                  source_id=OPUS_OFFER)
+                  source_id=OPUS_OFFER, cache_read=0.22, cache_write=5.5, cache_write_1h=8.8)
         for region in ("us-east-1", "us-east-2"):
             add_price(db, f"openai:{region}:openai.gpt-5.4", 2.75, 16.5, observed_at=now - timedelta(hours=1),
                       source_id=G54_OFFER)
@@ -78,10 +78,10 @@ def _auth(username):
     return {"Authorization": f"Bearer {create_access_token(username)}"}
 
 
-def _pending(factory, model_id, inp, out, *, effective_from, observed_at):
+def _pending(factory, model_id, inp, out, *, effective_from, observed_at, **extra):
     with factory() as db:
         row = add_price(db, model_id, inp, out, effective_from=effective_from, status="pending_review",
-                        observed_at=observed_at, source_id=OPUS_OFFER)
+                        observed_at=observed_at, source_id=OPUS_OFFER, **extra)
         db.commit()
         return row.id
 
@@ -93,7 +93,7 @@ def test_pricing_shape_and_active_set(env):
     assert body["disclaimer"] == {"en": DISCLAIMER["en"], "ko": DISCLAIMER["ko"]}
     assert [f["family_key"] for f in body["families"]] == ["claude-opus-5-5", "gpt-5.4"]
     for family in body["families"]:
-        assert set(family["tiers"]) == {"cp", "global", "us", "in_region"}
+        assert list(family["tiers"]) == ["cp", "openai_list", "global", "us", "in_region"]
         assert isinstance(family["tiers"]["in_region"], list)
     gpt54 = body["families"][1]["tiers"]["in_region"]
     assert [(e["regions"], e["input"], e["output"]) for e in gpt54] == [(["us-east-1", "us-east-2"], 2.75, 16.5)]
@@ -101,7 +101,7 @@ def test_pricing_shape_and_active_set(env):
     assert body["models"]["us.anthropic.claude-opus-5-5"] == {"input": 4.4, "output": 22, "verification": "verified"}
     refs = {r["n"]: r["id"] for r in body["references"]}
     for family in body["families"]:
-        for tier in ("cp", "global", "us"):
+        for tier in ("cp", "openai_list", "global", "us"):
             cell = family["tiers"][tier]
             if cell:
                 assert [refs[n] for n in cell["footnotes"]] == cell["source_ids"]
@@ -225,16 +225,70 @@ def test_reject_marks_rejected_and_clears_cache(env):
     assert missing.status_code == 404 and missing.json()["detail"] == "단가 행 99999을(를) 찾을 수 없습니다"
 
 
+def _value(inp, out, **extra):
+    """A PriceValue as JSON: the seven extra fields are always present, null unless given."""
+    return {"input": inp, "output": out, "cache_read": None, "cache_write": None, "cache_write_1h": None,
+            "long_input": None, "long_output": None, "long_cache_read": None, "long_cache_write": None, **extra}
+
+
 def test_pending_list_reports_current_value_and_change_ratio(env):
     factory, client, now = env
-    row_id = _pending(factory, "us.anthropic.claude-opus-5-5", 6.6, 44.0, effective_from=now, observed_at=now)
+    row_id = _pending(factory, "us.anthropic.claude-opus-5-5", 6.6, 44.0, effective_from=now, observed_at=now,
+                      cache_read=0.33, cache_write=5.5)
     listed = client.get("/api/admin/pricing/pending", headers=_auth("admin")).json()["pending"]
     assert listed == [{
         "id": row_id, "model_id": "us.anthropic.claude-opus-5-5", "family_key": "claude-opus-5-5", "channel": "us",
-        "reason": "changed", "current": {"input": 4.4, "output": 22.0}, "new": {"input": 6.6, "output": 44.0},
-        "change": {"input": 0.5, "output": 1.0}, "source_id": OPUS_OFFER,
+        "reason": "changed",
+        "current": _value(4.4, 22.0, cache_read=0.22, cache_write=5.5, cache_write_1h=8.8),
+        "new": _value(6.6, 44.0, cache_read=0.33, cache_write=5.5),
+        # a ratio for every field set on both sides; cache_write_1h is missing on the new side -> null
+        "change": _value(0.5, 1.0, cache_read=0.5, cache_write=0.0),
+        "source_id": OPUS_OFFER,
         "effective_from": now.strftime("%Y-%m-%dT%H:%M:%SZ"), "observed_at": now.strftime("%Y-%m-%dT%H:%M:%SZ"),
     }]
+
+
+def test_pending_list_long_context_ratios_and_zero_baseline(env):
+    factory, client, now = env
+    with factory() as db:
+        add_price(db, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, observed_at=now - timedelta(hours=1),
+                  source_id="pricelist:USE1-Nova2.0Lite-input-tokens", cache_read=0.0825, cache_write=0.0)
+        add_price(db, "openai:us-east-1:openai.gpt-5.4", 2.75, 16.5, effective_from=now - timedelta(minutes=30),
+                  status="verified", observed_at=now - timedelta(minutes=30), source_id=G54_OFFER,
+                  long_input=5.5, long_output=24.75)
+        db.commit()
+    nova_id = _pending(factory, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, effective_from=now, observed_at=now,
+                       cache_read=0.0825, cache_write=0.1)
+    nova_same_zero_id = _pending(factory, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, effective_from=now,
+                                 observed_at=now, cache_read=0.165, cache_write=0.0)
+    gpt_id = _pending(factory, "openai:us-east-1:openai.gpt-5.4", 2.75, 16.5, effective_from=now, observed_at=now,
+                      long_input=11.0, long_output=24.75)
+    listed = {p["id"]: p for p in client.get("/api/admin/pricing/pending", headers=_auth("admin")).json()["pending"]}
+    # old cache write 0 -> no finite ratio for a new non-zero value
+    assert listed[nova_id]["change"] == _value(0.0, 0.0, cache_read=0.0, cache_write=None)
+    # old cache write 0 and new 0 -> no change (0.0), not null; only the cache read moved
+    assert listed[nova_same_zero_id]["change"] == _value(0.0, 0.0, cache_read=1.0, cache_write=0.0)
+    assert listed[nova_same_zero_id]["current"] == _value(0.33, 2.75, cache_read=0.0825, cache_write=0.0)
+    assert listed[gpt_id]["change"] == _value(0.0, 0.0, long_input=1.0, long_output=0.0)
+    assert listed[gpt_id]["current"] == _value(2.75, 16.5, long_input=5.5, long_output=24.75)
+
+
+def test_openai_official_price_is_in_the_table_but_not_in_the_cost_map(env):
+    factory, client, now = env
+    with factory() as db:
+        add_price(db, "openai-list:gpt-5.4", 2.5, 15.0, observed_at=now - timedelta(hours=1),
+                  source_id="openai-pricing", cache_read=0.25, long_input=5.0, long_output=22.5,
+                  long_cache_read=0.5)
+        db.commit()
+    body = client.get("/api/pricing").json()
+    gpt54 = next(f for f in body["families"] if f["family_key"] == "gpt-5.4")
+    cell = gpt54["tiers"]["openai_list"]
+    assert (cell["model_ids"], cell["input"], cell["output"], cell["cache_read"], cell["long"]) == (
+        ["openai-list:gpt-5.4"], 2.5, 15, 0.25, {"input": 5, "output": 22.5, "cache_read": 0.5, "cache_write": None})
+    assert "openai-list:gpt-5.4" not in body["models"]
+    ref = next(r for r in body["references"] if r["n"] == cell["footnotes"][0])
+    assert (ref["id"], ref["kind"], ref["url"]) == (
+        "openai-pricing", "openai_doc", "https://developers.openai.com/api/docs/pricing")
 
 
 @pytest.mark.parametrize("method,path", [

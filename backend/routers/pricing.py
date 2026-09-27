@@ -30,7 +30,8 @@ from database import get_db
 from models import PriceHistory, User
 from price_history import as_utc, current_rows
 from pricing_export import export_filename, to_csv, to_json, to_markdown
-from pricing_payload import build_pricing_payload, iso_z, price_number
+from pricing_parsers import PRICE_FIELDS
+from pricing_payload import build_pricing_payload, iso_z, price_number, price_number_or_none
 from pricing_sources import EPOCH, active_channels, price_identity
 from routers.admin import _ensure_admin
 from visibility import hidden_patterns
@@ -122,8 +123,16 @@ def export_pricing_table(
 
 
 class PriceValue(BaseModel):
+    """Prices (or change ratios) per field; the seven extra fields are null when a side has no such price."""
     input: float
     output: float
+    cache_read: Optional[float] = None
+    cache_write: Optional[float] = None
+    cache_write_1h: Optional[float] = None
+    long_input: Optional[float] = None
+    long_output: Optional[float] = None
+    long_cache_read: Optional[float] = None
+    long_cache_write: Optional[float] = None
 
 
 class PendingPrice(BaseModel):
@@ -134,7 +143,7 @@ class PendingPrice(BaseModel):
     reason: str  # changed | no_baseline
     current: Optional[PriceValue]
     new: PriceValue
-    change: Optional[PriceValue]  # |new - old| / old per side; null without a baseline
+    change: Optional[PriceValue]  # |new - old| / old per field set on both sides; null without a baseline
     source_id: str
     effective_from: str
     observed_at: Optional[str]
@@ -152,30 +161,43 @@ class PendingAction(BaseModel):
     warnings: list[str]
 
 
-def _ratio(new: float, old: float) -> Optional[float]:
-    return round(abs(new - old) / old, 6) if old else None
+def _ratio(new: Optional[float], old: Optional[float]) -> Optional[float]:
+    """|new - old| / old at 6 decimals; None when either side has no price, or old is 0 and new is not."""
+    if new is None or old is None:
+        return None
+    if old == 0:
+        return 0.0 if new == 0 else None
+    return round(abs(new - old) / old, 6)
+
+
+def _price_value(row: PriceHistory) -> PriceValue:
+    return PriceValue(**{f: price_number_or_none(getattr(row, f"{f}_per_mtok")) for f in PRICE_FIELDS})
+
+
+def _change(new: PriceHistory, old: PriceHistory) -> Optional[PriceValue]:
+    """Change ratio per field; None unless both input and output have one (they always do against a stored row)."""
+    ratios = {f: _ratio(getattr(new, f"{f}_per_mtok"), getattr(old, f"{f}_per_mtok")) for f in PRICE_FIELDS}
+    if ratios["input"] is None or ratios["output"] is None:
+        return None
+    return PriceValue(**ratios)
 
 
 @admin_router.get("/pending", response_model=PendingList)
 def list_pending_prices(db: Session = Depends(get_db), user: User = Depends(get_current_user)):
-    """All pending_review rows, oldest first, with the currently effective value and the change ratio."""
+    """All pending_review rows, oldest first, with the currently effective value and the change ratio per field
+    (input, output and the seven extra fields; an extra field is null when either side has no such price)."""
     _ensure_admin(user)
     rows = db.query(PriceHistory).filter(PriceHistory.status == "pending_review").order_by(PriceHistory.id).all()
     current = current_rows(db, [r.model_id for r in rows])
     out = []
     for r in rows:
         cur = current.get(r.model_id)
-        change = None
-        if cur is not None:
-            ci, co = _ratio(r.input_per_mtok, cur.input_per_mtok), _ratio(r.output_per_mtok, cur.output_per_mtok)
-            change = PriceValue(input=ci, output=co) if ci is not None and co is not None else None
         out.append(PendingPrice(
             id=r.id, model_id=r.model_id, family_key=r.family_key, channel=r.channel,
             reason="no_baseline" if as_utc(r.effective_from) == EPOCH else "changed",
-            current=None if cur is None else PriceValue(
-                input=price_number(cur.input_per_mtok), output=price_number(cur.output_per_mtok)),
-            new=PriceValue(input=price_number(r.input_per_mtok), output=price_number(r.output_per_mtok)),
-            change=change, source_id=r.source_id,
+            current=None if cur is None else _price_value(cur),
+            new=_price_value(r),
+            change=None if cur is None else _change(r, cur), source_id=r.source_id,
             effective_from=iso_z(r.effective_from), observed_at=iso_z(r.observed_at),
         ))
     return PendingList(pending=out)

@@ -2,11 +2,86 @@
 
 증상별 확인과 조치. 배포 절차는 [deploy.md](deploy.md), 되돌리기는 [rollback.md](rollback.md)를 본다.
 
+## 단가 열 마이그레이션 실패 — `/api/pricing` 500 `UndefinedColumn` (v2.31.0, ADR-030 v2.31.0 부록)
+
+**배경**: v2.31.0은 이미 있는 `price_history` 테이블에 캐시와 긴 컨텍스트 단가 열 7개(`cache_read_per_mtok`,
+`cache_write_per_mtok`, `cache_write_1h_per_mtok`, `long_input_per_mtok`, `long_output_per_mtok`, `long_cache_read_per_mtok`,
+`long_cache_write_per_mtok`)를 추가한다. backend 기동(lifespan `_ensure_price_schema`, price seed 바로 앞의 자체 `try` 블록)과
+PricingSync 러너(`create_tables()` 바로 뒤)가 `pricing_seed.ensure_price_columns`를 부른다. 이 함수는 빠진 열이 있을 때만 한
+트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `SET LOCAL lock_timeout = '5000'` 뒤 `ALTER TABLE price_history ADD COLUMN IF NOT
+EXISTS …`를 실행한다. ALTER는 테이블의 ACCESS EXCLUSIVE 잠금이 필요하고, 이 잠금은 읽기가 잡는 ACCESS SHARE와도 충돌한다. 그래서
+그 순간 `price_history`를 읽거나 쓰는 트랜잭션이 있으면 5초 안에 잠금을 못 잡고 실패한다. 롤링 배포 중 다른 backend 태스크(v2.30.0 또는
+v2.31.0)의 `/api/cost/*`, `/api/efficiency/score`(`with_row_cost` 조인), `/api/pricing` 조회가 가장 흔한 원인이고(2026-09-27 운영 실측
+5~17초, 비용과 효율성 화면은 30초마다 자동 새로고침한다), 실행 중인 PricingSync 런도 원인이 된다. ALTER가 잠금을 기다리는 최대 5초 동안에는 뒤따르는
+`price_history` 조회(비용 화면 포함)도 그 뒤에 줄을 선다. backend는 이 실패를 non-fatal로 넘기고 기동을 계속한다. 같은 기동의 seed도
+새 열에 값을 넣으므로 함께 실패한다.
+
+v2.31.0 backend는 열 추가나 seed가 실패하면 백그라운드 스레드(`price-schema-retry`)에서 30초 간격으로 최대 3번 `ensure_price_columns` →
+`ensure_seed`(기동 때와 같은 활성 채널 집합)를 다시 하고, 처음 성공하면 멈춘다. 기동과 `/api/health`는 이 재시도를 기다리지 않는다.
+
+### 증상
+
+- `/pricing` 화면이 불러오기 오류이고 `/api/pricing`, `/api/pricing/export`가 HTTP 500이다. 관리자 검토 대기 목록
+  (`/api/admin/pricing/pending`)도 500이다.
+- `/models` 모델 카드와 상세의 단가가 "단가 정보 없음"이고 비용 단가 불러오기 오류 안내가 뜬다(단가는 `/api/pricing` `models`에서 읽는다).
+- `/ecs/backend` 로그에 기동 때 `Price column migration failed (non-fatal, backend continues)`와 traceback(대개
+  `canceling statement due to lock timeout`)이 있고, 요청마다 `UndefinedColumn`(`column price_history.cache_read_per_mtok does not
+  exist` 등)이 찍힌다. 같은 기동의 `Price seed failed (non-fatal, backend continues)`도 함께 있을 수 있다(seed가 새 열에 값을 넣는다).
+  재시도 스레드는 `Price schema retry n/3 failed`(traceback 포함)나 `Price schema retry n/3 succeeded`를 남기고, 3번 모두 실패하면
+  `Price schema retries exhausted (3); …`로 끝난다.
+- 비용 화면(`/api/cost/*`)과 효율성 점수(`/api/efficiency/score`)는 정상이다. 비용 조인은 입력, 출력 열만 고른다.
+- PricingSync 런은 열 추가 단계에서 exit 1로 끝난다. `/ecs/pricingsync`에 `pricing_sync_runner: ensure_price_columns failed`와
+  traceback이 있고, 그 뒤 모델 등록과 `pricing_sync_runner: … active channels` 줄이 없으며, 새 런 행이 없다(`last_sync`가 그대로).
+
+### 확인
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+curl -s -o /dev/null -w '%{http_code}\n' "https://$CF_DOMAIN/api/pricing"
+# 최근 6시간의 열 추가 실패, 재시도 결과, UndefinedColumn
+aws logs filter-log-events --log-group-name /ecs/backend --region $REGION \
+  --start-time $(( ($(date +%s) - 6 * 3600) * 1000 )) \
+  --filter-pattern '?"Price column migration failed" ?"Price schema retry" ?"Price schema retries exhausted" ?UndefinedColumn' \
+  --query 'events[].message' --output text | head -40
+```
+
+잠금을 쥔 세션은 DB에서 `price_history` 관계의 잠금으로 찾는다(psql로 RDS에 접속할 수 있을 때).
+
+```sql
+SELECT a.pid, l.mode, l.granted, a.state, now() - a.xact_start AS xact_age, left(a.query, 120) AS query
+FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+WHERE l.relation = 'price_history'::regclass
+ORDER BY l.granted DESC, xact_age DESC;
+```
+
+### 조치
+
+1. 먼저 재시도 결과를 본다. backend가 30초 간격으로 3번 다시 시도하므로, 위 로그에 `Price schema retry n/3 succeeded`가 있고
+   `/api/pricing`이 200이면 끝이다. 재시도가 아직 도는 중이면(기동 뒤 약 2분 안) 끝나기를 기다린다. 실패 줄이 이어지면 위 SQL로
+   `price_history` 잠금을 쥔 세션(granted true, 오래된 `xact_age`)을 확인한다. 대개 다른 backend 태스크의 비용, 효율성, 단가 조회나
+   실행 중인 PricingSync 런이다.
+2. 재시도도 모두 실패했으면(`Price schema retries exhausted`) PricingSync를 1회 수동 실행한다(`deploy.md` §5-5의 2번 명령). 러너는
+   `create_tables()` 바로 뒤에 같은 열 추가를 먼저 하고, 이어서 seed와 동기화를 한다. 또는 backend 서비스 태스크를 다시 기동한다. 새
+   태스크의 lifespan이 빠진 열을 다시 확인하고 추가한다(실패하면 다시 재시도 스레드가 돈다). digest 고정 태스크 정의라 같은 이미지로
+   재기동되고 코드는 바뀌지 않는다. 롤아웃이 끝난 뒤, 비용과 효율성 화면을 열어 둔 창이 적을 때 실행한다.
+
+   ```bash
+   REGION=ap-northeast-2
+   aws ecs update-service --cluster bedrock-monitor --service backend --force-new-deployment --region $REGION
+   ```
+
+3. `/api/pricing`이 200이면 끝이다. 같은 기동에서 seed가 실패했어도 재시도, 재기동한 태스크나 러너가 seed를 다시 넣는다(model_id 단위
+   멱등, 기존 seed 행의 빈 확장 열 채우기).
+4. DB에서 열을 직접 추가하지 않는다. 열은 타임아웃을 건 멱등 경로(`ensure_price_columns`)로만 추가한다.
+
 ## 비용 단가 동기화 실패 — "자동 확인 안 됨" 배지 (v2.30.0, ADR-030)
 
-**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 3개에서 활성 55채널의 단가를
-읽는다. Bedrock agreement offer rate card(Bedrock Claude 20 + OpenAI 25, FM 18개를 순차 호출), AWS Price List API(Nova 2.0 Lite),
-Anthropic `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS 9)다. 공식 값을 구하지 못한 채널은
+**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 4개에서 활성 55채널과 OpenAI 공식
+가격 8채널(표시 전용 `openai-list:<family_key>`, v2.31.0)의 단가(입력, 출력, 캐시, 긴 컨텍스트)를 읽는다. Bedrock agreement offer rate
+card(Bedrock Claude 20 + OpenAI 25, FM 18개를 순차 호출), AWS Price List API(Nova 2.0 Lite), Anthropic
+`https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS 9), OpenAI
+`https://developers.openai.com/api/docs/pricing.md`(OpenAI 공식 가격 8)다. 공식 값을 구하지 못한 채널은
 기존 단가를 그대로 두고(`skipped:<reason>`) 화면에 "자동 확인 안 됨"으로 드러난다. 비용 계산은 멈추지 않는다 — 마지막 유효 단가를
 계속 쓴다.
 
@@ -25,10 +100,10 @@ REGION=ap-northeast-2
 CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
 # 1. 마지막 런과 확인되지 않은 셀
 curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync, pending_review, not_verified: [.families[] | .family as $f
-  | ([(.tiers.cp, .tiers.global, .tiers.us) // empty] + .tiers.in_region)[]
+  | ([(.tiers.cp, .tiers.openai_list, .tiers.global, .tiers.us) // empty] + .tiers.in_region)[]
   | select(.verification != "verified") | {family: $f, model_ids, verification, observed_at, pending}]}'
 
-# 2. 최근 런 로그 (런 요약 한 줄 = 상태, 채널별 결과 수 — unchanged, changed, pending, no_baseline, rejected, skipped:<reason> — 와 오류 수.
+# 2. 최근 런 로그 (런 요약 한 줄 = 상태, 채널별 결과 수 — unchanged, enriched(v2.31.0), changed, pending, no_baseline, rejected, skipped:<reason> — 와 오류 수.
 #    요약 앞에는 런 오류마다 "pricing sync: <출처> …" WARNING 한 줄이 찍힌다(호출 실패, 파서 오류, 표에 없는 모델, 5분 상한 초과).
 #    같은 문구가 런 행 price_sync_runs.summary.errors(앞 50개)에도 저장되지만, 그 값을 보여 주는 API는 없으니 이 로그로 본다.
 #    출처 호출이 재시도되면 "pricing sync: … retry n/3" 경고도 찍힌다)
@@ -50,13 +125,14 @@ done
 |------|------|------|
 | 스케줄이 태스크를 실행하지 못함 | `last_sync.started_at`이 12시간보다 오래됨, `/ecs/pricingsync`에 새 로그 없음 | Scheduler 역할의 `RunTaskFamilyWildcard`에 PricingSync family `:*`, `PassTaskRoles`에 `PricingSyncTaskRole`이 있는지 확인(ADR-011). 없으면 digest 고정 CDK로 Scheduler 스택을 다시 배포 |
 | 출처 권한 거부 | 로그에 `AccessDeniedException` (`ListFoundationModelAgreementOffers` 또는 `GetProducts`) | `PricingSyncTaskRole` 인라인 정책의 두 액션 확인. 다른 권한은 필요 없다(모델 호출 권한은 의도적으로 없음) |
-| Anthropic 문서 형식 변경 | CP 9셀만 `stale`, 채널 결과 `skipped:parse_failed`, 로그에 `pricing sync: anthropic_doc: <파서 메시지>` 경고 한 줄. 메시지는 `'## Model pricing' heading not found`, `no pricing table under '## Model pricing'`, `pricing table headers not recognised: [...]`(헤더 "Model", "Base input tokens", "Output tokens" 중 하나가 없음), `pricing table has no parseable rows`, 그 밖의 예외면 `<예외 타입>: <문구>`다. 파서 예외는 종류와 상관없이 그 출처 채널만 건너뛰고, 다른 출처가 성공했으면 런은 `partial`로 끝난다. 표는 읽혔는데 모델명만 없으면 그 채널만 `skipped:not_found`이고 경고는 `pricing sync: anthropic_doc: model '<이름>' not in the table`이다 | 문서를 열어 표 구조를 확인하고 `backend/pricing_parsers.py` `parse_anthropic_pricing_md`와 fixture를 고친다. 모델명이 바뀌었으면(`not in the table`) `pricing_sources.ANTHROPIC_DOC_NAMES`도 고친다 |
+| Anthropic 문서 형식 변경 | CP 9셀만 `stale`, 채널 결과 `skipped:parse_failed`, 로그에 `pricing sync: anthropic_doc: <파서 메시지>` 경고 한 줄. 메시지는 `'## Model pricing' heading not found`, `no pricing table under '## Model pricing'`, `pricing table headers not recognised: [...]`(헤더 "Model", "Base input tokens", "Output tokens" 중 하나가 없음), `pricing table has no parseable rows`, 그 밖의 예외면 `<예외 타입>: <문구>`다. 파서 예외는 종류와 상관없이 그 출처 채널만 건너뛰고, 다른 출처가 성공했으면 런은 `partial`로 끝난다. 표는 읽혔는데 모델명만 없으면 그 채널만 `skipped:not_found`이고 경고는 `pricing sync: anthropic_doc: model '<이름>' not in the table`이다. 캐시 열("Cache hits and refreshes", "5m cache writes", "1h cache writes", v2.31.0)만 없어지면 오류 없이 그 필드만 관측 없음이고 저장 값은 그대로다 | 문서를 열어 표 구조를 확인하고 `backend/pricing_parsers.py` `parse_anthropic_pricing_md`와 fixture를 고친다. 모델명이 바뀌었으면(`not in the table`) `pricing_sources.ANTHROPIC_DOC_NAMES`도 고친다 |
+| OpenAI 문서 형식 변경 (v2.31.0) | OpenAI 공식 가격 8셀만 `stale`, 채널 결과 `skipped:parse_failed`, 로그에 `pricing sync: openai_doc: <파서 메시지>` 경고 한 줄. 제목이 없으면 메시지는 `'### Standard pricing data' heading not found`이고, 제목 아래 표가 없거나 필수 헤더("Model", "Short context input", "Short context output")가 없거나 읽을 행이 없어도 `PriceParseError` 메시지가 찍힌다. 다른 출처가 성공했으면 런은 `partial`이다. 표는 읽혔는데 모델 이름만 없으면 그 채널만 `skipped:not_found`이고 경고는 `pricing sync: openai_doc: model '<이름>' not in the table`이다(같은 모델 이름이 입력이나 출력이 다른 두 행으로 나와 모호할 때도 같다). 추적하는 모델 행의 값만 이상하면(예: 0으로 반올림되는 캐시 값) 그 채널만 `skipped:parse_failed`이고 경고는 `pricing sync: openai_doc <이름>: <메시지>`다. 캐시나 긴 컨텍스트 열만 없어지면 오류 없이 그 필드만 관측 없음이고 저장 값은 그대로다 | `curl -s https://developers.openai.com/api/docs/pricing.md \| grep -A3 '^### Standard pricing data'`로 제목과 헤더를 보고 `backend/pricing_parsers.py` `parse_openai_pricing_md`와 fixture(`backend/tests/fixtures/pricing/openai_pricing.md`)를 고친다. 문서의 모델 이름은 패밀리 키(`gpt-6-astra` 등)와 정확히 일치해야 한다 |
 | 오퍼 형식 변경 | 특정 모델 채널만 `skipped:<reason>`(오퍼 수 ≠ 1, 필수 차원 없음) | `aws bedrock list-foundation-model-agreement-offers --model-id <FM id> --offer-type PUBLIC --region us-east-1 --query 'offers[].termDetails.usageBasedPricingTerm.rateCard[].[dimension, price, unit]' --output table`로 차원 이름을 보고 `pricing_parsers.DIMENSION_RE`와 선택 순서를 고친다(출력에 `offerToken`과 `legalTerm.url`이 나오지 않도록 `--query`를 유지한다) |
-| Price List 단위 변경 | Nova 1셀만 `stale` | `unit`이 `1K tokens`가 아니면 파서가 변경 없음으로 둔다. 새 단위를 확인하고 `parse_pricelist`를 고친다 |
-| 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`)를 확인한다 |
+| Price List 단위 변경 | Nova 1셀만 `stale` | `unit`이 `1K tokens`가 아니면 파서가 변경 없음으로 둔다. 새 단위를 확인하고 `parse_pricelist`를 고친다. 캐시 usagetype(`USE1-Nova2.0Lite-cache-read-input-token-count`, `USE1-Nova2.0Lite-cache-write-input-token-count`, v2.31.0)은 fail-soft라 형식이 달라도 그 필드만 관측 없음이고 셀은 `verified`로 남는다 |
+| 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → OpenAI 문서(v2.31.0) → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`, `developers.openai.com`)를 확인한다 |
 | 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_try_advisory_lock(917350004)`로 수동 실행과 스케줄 실행이 겹치지 않게 한다. 기다리지 않는 잠금이라 두 번째 런은 즉시 끝난다). 앞 런이 끝난 뒤 다시 실행한다 |
-| seed 또는 테이블 준비 실패 | 로그에 `pricing_sync_runner: create_tables failed` 또는 `pricing_sync_runner: ensure_seed failed — sync skipped`와 예외 traceback 한 묶음, 런 요약 줄 없음, 새 런 행 없음(`last_sync`가 그대로), exit code 1 | 동기화 전에 멈춘 것이다. 먼저 DB 연결(RDS 상태, 태스크 보안 그룹, DB secret)을 확인한다. `ensure_seed` 예외가 `canceling statement due to lock timeout`이면 seed 잠금 `pg_advisory_xact_lock(917350003)`을 5초(`lock_timeout`) 안에 못 잡은 것이다. 같은 잠금을 쓰는 backend 기동 seed와 겹쳤으면 backend 배포가 끝난 뒤 다시 실행한다. 반복되면 잠금을 쥔 세션을 찾는다(`SELECT a.pid, a.state, a.xact_start, a.query FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = 917350003`). `canceling statement due to statement timeout`이면 30초 안에 끝나지 않은 느린 쿼리다 |
-| CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 46 active channels`(평소 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
+| seed 또는 테이블 준비 실패 | 로그에 `pricing_sync_runner: create_tables failed`, `pricing_sync_runner: ensure_price_columns failed`(v2.31.0, 위 "단가 열 마이그레이션 실패"), `pricing_sync_runner: ensure_seed failed — sync skipped` 중 하나와 예외 traceback 한 묶음, 런 요약 줄 없음, 새 런 행 없음(`last_sync`가 그대로), exit code 1 | 동기화 전에 멈춘 것이다. 먼저 DB 연결(RDS 상태, 태스크 보안 그룹, DB secret)을 확인한다. `ensure_seed` 예외가 `canceling statement due to lock timeout`이면 seed 잠금 `pg_advisory_xact_lock(917350003)`을 5초(`lock_timeout`) 안에 못 잡은 것이다. 같은 잠금을 쓰는 backend 기동 seed와 겹쳤으면 backend 배포가 끝난 뒤 다시 실행한다. 반복되면 잠금을 쥔 세션을 찾는다(`SELECT a.pid, a.state, a.xact_start, a.query FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = 917350003`). `canceling statement due to statement timeout`이면 30초 안에 끝나지 않은 느린 쿼리다 |
+| CP 디스커버리 실패 | CP 9셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 54 active channels`(평소 63 = 55 + OpenAI 공식 가격 8, v2.30.0에서는 46과 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
 
 ### 조치
 
@@ -67,8 +143,9 @@ done
 
 ## 검토 대기 단가 승인 — "검토 대기" 배지 (v2.30.0, ADR-030)
 
-**배경**: 동기화가 관측한 새 공식 값이 현재 유효 단가보다 입력이나 출력 어느 쪽이든 50%를 넘게 다르면(정확히 50%는 자동 적용)
-자동으로 적용하지 않고 `pending_review` 행으로 남긴다. 단위 오류(1000배)나 파서 오류가 비용에 그대로 들어가는 것을 막는 안전장치다.
+**배경**: 동기화가 관측한 새 공식 값이 현재 유효 단가보다 어느 필드든(입력, 출력, v2.31.0부터 캐시와 긴 컨텍스트 필드도) 50%를 넘게
+다르면(정확히 50%는 자동 적용) 자동으로 적용하지 않고 `pending_review` 행으로 남긴다. 저장 값이 비어 있던 필드를 처음 관측한 것은
+변경이 아니라 현재 행을 채우는 것(`enriched`)이라 대기열에 오지 않는다. 단위 오류(1000배)나 파서 오류가 비용에 그대로 들어가는 것을 막는 안전장치다.
 seed에도 없는 새 model_id(`no_baseline`)도 같은 대기열에 들어간다. 승인 전까지 비용은 기존 단가로 계산된다.
 
 ### 확인
@@ -78,14 +155,15 @@ CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
 curl -s "https://$CF_DOMAIN/api/pricing" | jq '.pending_review'
 TOKEN=$(curl -sX POST "https://$CF_DOMAIN/api/auth/login" -H 'Content-Type: application/json' \
   -d '{"username":"admin","password":"<SEED_ADMIN_PASSWORD>"}' | jq -r .access_token)
-# 행마다 현재 유효 값, 새 값, 입력과 출력 변화율, 출처, 사유(changed 또는 no_baseline)
+# 행마다 현재 유효 값, 새 값(v2.31.0부터 캐시와 긴 컨텍스트 필드 포함), 필드별 변화율, 출처, 사유(changed 또는 no_baseline)
 curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer $TOKEN" | jq .
 ```
 
 ### 판단과 조치
 
 1. 새 값을 공식 페이지에서 직접 확인한다. Bedrock 채널은 `/pricing` 참고 자료의 모델 카드나 Amazon Bedrock 요금 페이지, Claude
-   Platform on AWS는 Anthropic 요금 문서, Nova는 Amazon Bedrock 요금 페이지다.
+   Platform on AWS는 Anthropic 요금 문서, Nova는 Amazon Bedrock 요금 페이지, OpenAI 공식 가격(v2.31.0)은 OpenAI 요금 문서
+   (`https://developers.openai.com/api/docs/pricing`)다.
 2. 공식 값이 맞으면 승인한다. 승인한 단가는 그 값을 처음 관측한 런의 시작 시각부터 적용되고, `no_baseline`이면 과거 전체에 적용된다.
    응답의 `warnings`는 단가 조회 순서 `(effective_from, id)`에서 뒤에 오는 verified 단가(더 늦게 시작하거나, 같은 시각에 시작한 더 큰
    id의 행)가 이미 있다는 뜻이다 — 그 구간은 뒤의 단가가 계속 우선한다.
@@ -108,33 +186,46 @@ curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer
   행이 있는 채널 수라, 한 채널에 대기 행이 여러 개면 관리자 목록의 행 수가 더 많다. 런 요약 로그의 `pending=N`은 그 런이 검토
   대기로 분류한 채널 수라서, 앞선 런이 남긴 대기 행을 다시 관측하지 못한 채널은 빠지고 `pending_review`보다 작을 수 있다.
 
-## GPT-5.6 Sol 프로모션 종료 확인 — 2026-11-21 이후 (v2.30.0)
+## GPT-5.6 Sol 프로모션 종료 확인 — 2026-11-21 이후 (v2.30.0, OpenAI 문서 인용 v2.31.0)
 
-**배경**: GPT-5.6 Sol 단가 In-Region, Geo $4.40 / $22, Global $4 / $20은 프로모션 단가다(v2.28.1). 2026-09-23 AWS 모델 카드에는 "최소
-2026-11-21까지"가 있었지만 지금 공식 출처 어디에도 종료일이 없어서, 이 정보는 `pricing_sources.PRICE_NOTES` 수동 메모로만
-관리한다. `/pricing`의 Sol 셀에는 "프로모션(최소 2026-11-21까지)" 배지와 수동 메모 참고 자료 각주가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인
-필요"로 바뀐다.
+**배경**: GPT-5.6 Sol 단가 OpenAI 공식 가격과 Global $4 / $20, In-Region, Geo $4.40 / $22는 프로모션 단가다(v2.28.1). OpenAI 공식 요금
+문서가 "GPT-5.6 Sol’s promotional pricing is available at least through November 21, 2026."라고 명시한다. 그래서 v2.31.0부터
+`pricing_sources.PRICE_NOTES`의 Sol 메모는 이 문서를 출처로 인용한다(`source` `openai_doc`, `source_id` `openai-pricing`). 동기화는 표 단가만
+읽고 이 문장은 다시 읽지 않으므로(각주의 확인일은 단가 확인일이다), 메모 문구에 문장을 확인한 날짜를 적는다("2026-09-27 기준 OpenAI 공식
+요금 문서에 …"). v2.30.0에서는 공식 출처에 표시가 없어 수동 메모였다. `/pricing`의 Sol 셀(OpenAI 공식 가격, Global, In Region)에는
+"프로모션(최소 2026-11-21까지)" 배지와 OpenAI 참고 자료 각주가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인 필요"로 바뀐다.
 
 ### 확인
 
 ```bash
 CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
 curl -s "https://$CF_DOMAIN/api/pricing" | jq '[.families[] | select(.family_key == "gpt-5.6-sol")
-  | {global: (.tiers.global | {input, output, verification, pending}),
+  | {openai_list: (.tiers.openai_list | {input, output, verification, pending}),
+     global: (.tiers.global | {input, output, verification, pending}),
      in_region: [.tiers.in_region[] | {regions, input, output, verification, pending}], notes}]'
+# OpenAI 공식 요금 문서 — Sol 행(첫 번째 표가 Standard, 아래 Batch 표에도 같은 이름이 있다)과 프로모션 문장
+curl -s https://developers.openai.com/api/docs/pricing.md | grep -m1 -E '^\| gpt-5\.6-sol \|'
+curl -s https://developers.openai.com/api/docs/pricing.md | grep -o 'promotional pricing is available[^.]*'
 # 공식 오퍼 값 직접 조회 (offerToken, legalTerm.url은 출력하지 않는다)
 aws bedrock list-foundation-model-agreement-offers --model-id openai.gpt-5.6-sol --offer-type PUBLIC --region us-east-1 \
   --query "offers[].termDetails.usageBasedPricingTerm.rateCard[?dimension=='input_tokens_standard' || dimension=='output_tokens_standard' || dimension=='input_tokens_global_standard' || dimension=='output_tokens_global_standard'][].[dimension, price]" \
   --output table
 ```
 
+2026-09-27 기준 문서 출력은 `| gpt-5.6-sol | $4.00 | $0.40 | $5.00 | $20.00 | $8.00 | $0.80 | $10.00 | $30.00 |`와
+`promotional pricing is available at least through November 21, 2026`이다.
+
 ### 해석과 조치
 
-- 오퍼가 여전히 4.4 / 22, 4 / 20이면 프로모션이 계속되는 것이다. 모델 카드에서 새 종료일을 확인하고, 있으면
-  `pricing_sources.PRICE_NOTES`의 `min_until`을 고쳐 다음 릴리스로 배포한다.
-- 프로모션이 끝나 이전 단가(In-Region, Geo $5.50 / $33, Global $5 / $30)로 돌아가면 입력 +25%, 출력 +50%라 경계 포함 규칙으로 **자동
-  적용**된다(`verified`, 관측한 런의 시작 시각부터). 동기화가 `prior_price`와 같은 값을 관측하면 수동 메모는 응답에서 빠진다.
+- 문서와 오퍼가 여전히 4 / 20(OpenAI 공식 가격, Global), 4.4 / 22(In-Region, Geo)이고 문서에 프로모션 문장이 있으면 프로모션이 계속되는
+  것이다. 문장의 날짜가 바뀌었으면 `pricing_sources.PRICE_NOTES`의 `min_until`, `text_ko`, `text_en`을 고쳐 다음 릴리스로 배포한다.
+  문구 앞의 기준일("2026-09-27 기준", "As of 2026-09-27")도 문장을 다시 확인한 날짜로 바꾼다.
+- 프로모션이 끝나 이전 단가(OpenAI 공식 가격과 Global $5 / $30, In-Region, Geo $5.50 / $33)로 돌아가면 입력 +25%, 출력 +50%라 경계 포함
+  규칙으로 **자동 적용**된다(`verified`, 관측한 런의 시작 시각부터). 캐시와 긴 컨텍스트 필드도 필드마다 같은 규칙이라, 어느 한 필드라도
+  50%를 넘게 바뀌면 그 채널은 검토 대기로 간다. 동기화가 어느 티어에서든 `prior_price`와 같은 값을 관측하면 메모는 응답에서 빠진다.
 - 이전 단가가 아닌 다른 값으로 바뀌어 50%를 넘으면 검토 대기로 간다. 위 "검토 대기 단가 승인"을 따른다.
+- 단가는 그대로인데 프로모션 문장만 문서에서 사라지면, 메모는 `min_until`까지 그대로 보이고 그 뒤 "프로모션 종료 여부 확인 필요"로
+  바뀐다. 문장이 사라진 것을 확인했으면 메모를 지우거나 고쳐 배포한다.
 
 ## Claude Platform on AWS 채널 전부 429 — 월간 사용량 상한 (2026-09-23, v2.29.0에서 재시도 제거)
 

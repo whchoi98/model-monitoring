@@ -3,8 +3,8 @@
 - **Status**: Accepted
 - **Date**: 2026-09-26
 - **Supersedes**: ADR-025의 "비용은 조회 시점 계산이라 단가를 바꾸면 과거 행도 소급 재계산된다" 정책(ADR-027, ADR-028이 같은 정책을 인용한 문장 포함)
-- **Related**: ADR-011 (Scheduler IAM family `:*`), ADR-018 (digest 고정 배포), ADR-019, ADR-020 (OpenAI Mantle, 1P), ADR-025 (채널별 단가), ADR-027, ADR-028 (agreement offer 단가 출처), v2.30.0, 설계 문서 `docs/superpowers/specs/2026-09-26-pricing-menu-design.md`
-- **Code**: `backend/pricing_sources.py`, `backend/pricing_seed.py`, `backend/pricing_parsers.py`, `backend/pricing_sync.py`, `backend/pricing_sync_runner.py`, `backend/price_history.py`, `backend/pricing_payload.py`, `backend/pricing_export.py`, `backend/routers/pricing.py`, `backend/models.py`(`PriceHistory`, `PriceSyncRun`), `backend/routers/cost.py`, `backend/routers/efficiency.py`, `frontend/src/components/PricingPanel.tsx`, `frontend/src/lib/pricingTable.ts`, `cdk/lib/stacks/scheduler-stack.ts`(`PricingSync*`)
+- **Related**: ADR-011 (Scheduler IAM family `:*`), ADR-018 (digest 고정 배포), ADR-019, ADR-020 (OpenAI Mantle, 1P), ADR-025 (채널별 단가), ADR-027, ADR-028 (agreement offer 단가 출처), v2.30.0, v2.31.0, 설계 문서 `docs/superpowers/specs/2026-09-26-pricing-menu-design.md`(v2.31.0 부록은 `docs/superpowers/specs/2026-09-27-pricing-v2-31-design.md`)
+- **Code**: `backend/pricing_sources.py`, `backend/pricing_seed.py`, `backend/pricing_parsers.py`, `backend/pricing_sync.py`, `backend/pricing_sync_runner.py`, `backend/price_history.py`, `backend/pricing_payload.py`, `backend/pricing_export.py`, `backend/routers/pricing.py`, `backend/models.py`(`PriceHistory`, `PriceSyncRun`), `backend/routers/cost.py`, `backend/routers/efficiency.py`, `frontend/src/components/PricingPanel.tsx`, `frontend/src/lib/pricingTable.ts`, `cdk/lib/stacks/scheduler-stack.ts`(`PricingSync*`), `backend/main.py`(v2.31.0 `_ensure_price_schema`, `_retry_price_schema`)
 
 ## Context
 
@@ -229,3 +229,189 @@ v2.29.1까지 모델 단가는 `backend/pricing.py` `PRICE_TABLE`에 코드로 �
   2. ADR-027 "후속 (v2.30.0, 2026-09-26) — 소급 정책 대체": GPT-6 Astra 3채널 단가의 `price_history` 이전, "3키를 항상 함께 둔다"
      규칙 폐지.
   3. ADR-028 "후속 (v2.30.0, 2026-09-26)": GPT-6 Sol, Luna 모델 카드 재대조 완료, Opus 5.5 US 교정, GPT-5.6 Sol 프로모션 수동 메모.
+
+## v2.31.0 부록 (2026-09-27) — 프롬프트 캐싱 단가, GPT 긴 컨텍스트 단가, OpenAI 공식 가격
+
+사용자 요청(2026-09-27): `/pricing` 열 이름을 "AWS Bedrock - Global CRIS", "AWS Bedrock - US CRIS", "AWS Bedrock - In Region"으로
+바꾸고, 표 순서를 Anthropic Claude → OpenAI → Amazon Nova로 하고, OpenAI 표의 Claude Platform on AWS 열을 OpenAI 공식 가격으로
+바꾸고, 프롬프트 캐싱 단가(모든 채널)와 GPT 긴 컨텍스트 단가를 함께 보여 준다. 설계 문서는
+`docs/superpowers/specs/2026-09-27-pricing-v2-31-design.md`다(구현이 설계 문서와 다른 점은 그 문서 끝 "구현 계획과의 차이"에 있다). 이 부록은
+Decision 1, 2, 3, 4, 6의 해당 규칙을 보충하거나 대체한다. Decision 1은 §6(열 추가), Decision 2는 §1과 §5(`OPENAI_LIST_SEED`, 기존
+seed 행의 빈 확장 열 채우기), Decision 3은 §1, §2, §5(네 번째 출처, 확장 필드, `enriched`와 필드별 50% 안전장치), Decision 4는 §5(관리자
+검토 대기 목록의 확장 필드와 필드별 변화율), Decision 6은 §7, §8(표시, 다운로드, 프로모션 메모)이다. 시점 단가 비용, 50% 안전장치와 관리자
+승인, model_id 단위 seed 멱등 삽입(그 model_id 행이 없을 때만 새 행)은 그대로다.
+
+### 1. 네 번째 출처 — OpenAI 공식 요금 문서와 표시 전용 `openai_list` 채널
+
+- 출처는 `GET https://developers.openai.com/api/docs/pricing.md`(`pricing_sources.OPENAI_PRICING_URL`, 비인증 text/markdown,
+  robots `Allow: /`)다. Anthropic 문서와 같은 httpx 클라이언트, `User-Agent`, 재시도를 쓴다. 가져오는 순서는 Anthropic 문서 →
+  OpenAI 문서 → Price List → offers다(느린 offers가 싼 출처를 `skipped:deadline`으로 밀어내지 않게).
+- `parse_openai_pricing_md`는 `### Standard pricing data` 제목 아래 첫 표만 읽는다. 그 아래 Batch, Flex, Fast 표는 읽지 않는다. 열은
+  헤더 이름으로 찾고("Model", "Short context input", "Short context output"은 필수), 값 셀은 `$<n>` 완전 일치만 받고 `-`는 값 없음이다.
+  모델 이름은 `<sup>`와 끝 괄호 그룹을 지운 뒤 정확 일치로만 찾는다(`gpt-5.5 (<272K context length)` → `gpt-5.5`, `gpt-5.4` ≠
+  `gpt-5.4-mini`).
+- 두 문서 표 모두, 같은 모델 이름이 두 번 나오면 입력이나 출력이 다를 때만 그 이름을 버린다(그 모델을 찾는 채널은 `skipped:not_found`).
+  입력과 출력이 같으면 행을 남기고, 두 행에서 값이 다른 확장 필드(한쪽만 값이 있는 경우 포함)만 `None`으로 둔다
+  (`pricing_parsers._unambiguous`). 캐시 값 하나가 엇갈려도 입력과 출력은 계속 확인된다.
+- 문서 표의 값은 활성 채널이 찾는 모델 행만 하나씩 정규화한다(Anthropic 문서도 같다). Standard 표에는 모델이 약 40개 있으므로, 추적하지
+  않는 행의 `$0.00` 입력이나 0으로 반올림되는 캐시 값이 추적 채널을 `skipped:parse_failed`로 만들지 않는다. 추적하는 모델의 값이
+  정규화에 실패하면 그 모델의 채널만 `skipped:parse_failed`가 되고, 오류는 `<출처> <문서 모델 이름>: <메시지>`로 남는다
+  (`pricing_sync._fetch_all`의 `settle_doc`). 제목이나 표가 없는 파싱 실패는 전과 같이 그 출처의 채널 전부를 건너뛴다.
+- 문서 값은 표시 전용 채널 `openai_list`로 저장한다. 합성 model_id는 `openai-list:<family_key>`(예 `openai-list:gpt-6-astra`),
+  `source_kind`는 `openai_doc`, `source_id`는 `openai-pricing`이다. `active_channels`가 활성 OpenAI 패밀리 8개(GPT 6 Astra, Sol, Luna,
+  GPT 5.6 Sol, Terra, Luna, GPT 5.5, GPT 5.4)마다 이 id를 덧붙이므로 동기화 대상은 63채널(55 + 8)이다.
+- 합성 id는 `AVAILABLE_MODELS`와 `probe_results`에 없어서 비용 조인에 걸리지 않고, `/api/pricing` `models`(비용 맵)에서도 빠진다.
+  seed(`pricing_seed.OPENAI_LIST_SEED`, 2026-09-27 문서 값), 동기화, 50% 안전장치, verification, 이력은 다른 채널과 같다.
+- 휴면 1P 채널(`openai:1p:*`)과는 별개다. 1P 채널은 여전히 분류하지 않고(비용 "-"), `openai_list`는 프로브 채널이 아니라 참고 가격
+  열이다.
+- 참고 자료 `openai-pricing`(kind `openai_doc`)의 제목은 "OpenAI API pricing (Standard)" / "OpenAI API 요금 (Standard)", URL은
+  `https://developers.openai.com/api/docs/pricing`이다. 화면 상단 안내 상자에 "OpenAI 요금" / "OpenAI pricing" 링크가 붙는다.
+- 문서는 "Bedrock pricing in commercial regions matches OpenAI direct pricing for equivalent services"라고 적는다. 2026-09-27
+  fixture에서 Global CRIS 단가는 문서 값과 같고 US CRIS와 In Region 단가는 10% 높다(GPT 6 Astra 문서 10 / 50, Global 10 / 50, US와
+  us-west-2 11 / 55).
+
+### 2. 확장 단가 필드 7개 — 표시 전용
+
+| 필드 | `price_history` 열 | 뜻 |
+|------|--------------------|----|
+| `cache_read` | `cache_read_per_mtok` | 캐시 읽기(cache hit, cached input) |
+| `cache_write` | `cache_write_per_mtok` | 캐시 쓰기. Claude는 5분 캐시, OpenAI는 문서의 "cache writes", Nova는 cache write |
+| `cache_write_1h` | `cache_write_1h_per_mtok` | Claude 1시간 캐시 쓰기 |
+| `long_input`, `long_output` | `long_input_per_mtok`, `long_output_per_mtok` | GPT 긴 컨텍스트 입력, 출력(OpenAI 짧은 컨텍스트 한도를 넘는 요청, GPT 5.4와 5.5는 272K) |
+| `long_cache_read`, `long_cache_write` | `long_cache_read_per_mtok`, `long_cache_write_per_mtok` | GPT 긴 컨텍스트 캐시 읽기, 쓰기 |
+
+- 모두 nullable Float다. 출처에 없는 값은 `NULL`이고 화면에서 생략, CSV에서 빈칸이다. 입력과 출력은 계속 0보다 커야 하고, 확장
+  필드는 정확히 0을 받으며 음수는 받지 않는다.
+- **비용 계산은 바뀌지 않는다.** `with_row_cost`는 입력과 출력만 쓴다. 프로브는 프롬프트 캐싱을 쓰지 않고 입력이 짧으며,
+  `probe_results`에는 캐시 토큰 열이 없다. 확장 필드는 `/pricing` 표와 다운로드에만 나온다.
+- 출처별 읽기 규칙은 다음과 같다.
+  1. agreement offer: 허용 목록 정규식 `pricing_parsers.DIMENSION_RE`에 `cache_read_tokens`, `cached_input_tokens`,
+     `cache_write_tokens`, `cache_write_tokens_1h`, `cache_write_tokens_30m`(`_long_ctx` 변형 포함)과 레거시 `CacheReadInputTokenCount`,
+     `CacheWriteInputTokenCount`, `CacheWrite1hInputTokenCount`를 더했다. 확장 필드는 입력과 출력을 준 **같은 후보 키**(스킴, 리전
+     접두, global 여부)에서만 가져온다. batch, flex, priority, fast, Reserved, 그 밖의 리전 접두는 여전히 후보가 아니다. Claude의
+     `_LCtx` 차원은 기본값과 같으므로(Sonnet 4.6 `APN2_InputTokenCount_LCtx_Global` 3 = 기본 3) 읽지 않고, Claude의 `long`은 항상
+     `null`이다. 허용 목록은 `_long_ctx` 이름을 모든 offer에서 받으므로, 동기화가 OpenAI가 아닌 채널의 긴 컨텍스트 필드를 비교 전에
+     버린다(`pricing_sync._gpt_long_only`). Claude offer에 `_long_ctx` 차원이 새로 생겨도 Claude 셀에 긴 컨텍스트 줄이 나타나지 않는다.
+  2. AWS Price List(Nova): usagetype `USE1-Nova2.0Lite-cache-read-input-token-count`,
+     `USE1-Nova2.0Lite-cache-write-input-token-count`(`pricing_sources.NOVA_CACHE_USAGETYPES`). 캐시 값은 fail-soft다. 상품이 없거나
+     여러 개이거나, 단위가 다르거나, 가격이 없거나 음수이면 그 필드만 `None`이고 입력과 출력은 기존의 엄격한 규칙 그대로다.
+  3. Anthropic 문서: 선택 헤더 "Cache hits and refreshes" → `cache_read`, "5m cache writes" → `cache_write`, "1h cache writes" →
+     `cache_write_1h`.
+  4. OpenAI 문서: "Short context cached input", "Short context cache writes", "Long context input", "Long context output",
+     "Long context cached input", "Long context cache writes".
+
+### 3. `cache_read_tokens`가 `cached_input_tokens`보다 우선한다 — 2026-09-27 offer 근거
+
+GPT 5.6 offer에는 캐시 읽기 차원이 두 이름으로 있고 값이 다르다. `cache_read_tokens`가 현재 단가이고, `cached_input_tokens`는
+2026-07-30 인하(Luna −80%, Terra −20%) 이전 입력 단가의 10%다.
+
+| 모델, 채널 | `cache_read_tokens` | `cached_input_tokens` | OpenAI 문서 cached input | 해석 |
+|------------|---------------------|-----------------------|--------------------------|------|
+| GPT 5.6 Luna Global | 0.02 | 0.1 | $0.02 | 0.1 = 인하 전 Global 입력 1.0(현재 0.2) × 10% |
+| GPT 5.6 Luna US, In Region | 0.022 | 0.11 | 해당 없음 | 0.11 = 인하 전 입력 1.1(현재 0.22) × 10% |
+| GPT 5.6 Terra Global | 0.2 | 0.25 | $0.20 | 0.25 = 인하 전 Global 입력 2.5(현재 2) × 10% |
+
+- 그래서 한 후보 키 안에서는 `cache_read_tokens`(우선순위 1)를 쓰고, 없을 때만 `cached_input_tokens`(우선순위 2)를 쓴다. GPT 5.4,
+  5.5의 `APN2_` 키에는 `cached_input_tokens`만 있고, `USE1_`, `USE2_`, `USW2_` 키에는 두 이름이 같은 값으로 있다(GPT 5.4 0.275,
+  GPT 5.5 0.55).
+- 같은 이유로 `cache_writes_tokens*`는 읽지 않는다. 이 값도 인하 전 입력 기준이다(Luna Global 1.25 = 1.0 × 1.25, Terra Global 3.125 =
+  2.5 × 1.25). OpenAI 캐시 쓰기는 `cache_write_tokens_30m`이고 문서 값과 같다(Luna Global 0.25, Terra Global 2.5).
+- 이 규칙은 fixture(`backend/tests/fixtures/pricing/offers_gpt-5.6-terra.json`, `offers_gpt-5.6-luna.json`, 2026-09-27 재생성)로
+  고정한다.
+
+### 4. Nova 캐시 쓰기 $0
+
+Price List의 `USE1-Nova2.0Lite-cache-write-input-token-count`는 `pricePerUnit.USD` `0.0000000000`(1K tokens)이고
+`USE1-Nova2.0Lite-cache-read-input-token-count`는 `0.0000825000`이다. 그래서 Nova 2.0 Lite는 1M 토큰당 캐시 읽기 $0.0825, 캐시 쓰기
+$0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. 관측 값 정규화(`_quantized`)는 확장 필드의 음수와 0으로 반올림되는 양수를
+파싱 실패로 보고, 정확한 0은 그대로 둔다.
+
+### 5. 빈 필드 채우기(`enriched`)와 필드별 50% 안전장치
+
+- `classify_change`는 `PRICE_FIELDS` 9개(입력, 출력, 확장 7개)를 필드마다 비교한다. 저장 값이 `NULL`이고 관측 값이 있으면 채움,
+  둘 다 있고 다르면 변경, 변경 중 `old <= 0`이거나 변화율이 0.5를 넘으면 대기다. 저장 값이 있는데 관측 값이 없으면(출처에서
+  빠짐) 무시하고 저장 값을 유지한다.
+- 결과는 대기가 하나라도 있으면 `pending`, 아니면 변경이 있으면 `changed`, 아니면 채움이 있으면 **`enriched`**, 아니면 `unchanged`다.
+- `enriched`는 **새 이력 행을 만들지 않고 현재 유효 행의 빈 열을 그 자리에서 채운다.** `observed_at`, `run_id`, `source_id` 갱신은
+  `unchanged`와 같다. 값이 바뀐 것이 아니라 처음 알려진 것이고, 확장 필드는 비용에 쓰이지 않으므로 `effective_from`을 옮길 이유가
+  없다. 그래서 처음 관측한 값이 그 행의 유효 구간 전체에 표시된다.
+- `changed`와 `pending`이 만드는 새 행은 관측 값과 현재 행 값을 합친 값을 담는다(관측 값이 없는 필드는 현재 값). 확장 필드 하나만
+  0.5를 넘게 바뀌어도 그 채널은 `pending_review`로 간다. 이때 입력과 출력은 승인 전까지 현재 행 그대로라 비용은 바뀌지 않는다.
+- `price_sync_runs.changes`는 `changed`만, `pending`은 `pending`과 `no_baseline`만 센다. `enriched`는 런 요약 `summary.channels`에만
+  나온다.
+- 보류 행(`pending_review`, `rejected`) 비교: 확장 열 7개가 모두 `NULL`인 보류 행은 v2.30.0에서 확장 열이 생기기 전에 보류된 행이므로
+  입력과 출력만 비교한다. 그래서 v2.30.0의 검토 대기 행이 같은 값으로 하나 더 생기지 않고, 관리자가 거부한 값이 확장 필드가 채워진 새
+  검토 대기 행으로 다시 올라오지 않는다. 그 행의 빈 확장 열은 그대로 두고, 승인되면 다음 동기화가 `enriched`로 채운다.
+- `ensure_seed`도 같은 원칙이다. 새 seed 행에 확장 필드를 넣고, 입력과 출력이 seed 값과 같은 기존 `status='seed'` 행의 `NULL` 확장
+  열을 seed 값으로 채운다(멱등, 동기화가 실패해도 표가 비지 않는다). 열마다 `COALESCE(열, seed 값)`으로 쓰므로, seed가 행을 읽은
+  뒤 동시 동기화가 커밋한 값은 덮어쓰지 않는다. Decision 2의 새 행 삽입 규칙(그 model_id 행이 하나도 없을 때만)은
+  그대로이고, 이 채우기와 OpenAI 공식 가격 seed(`OPENAI_LIST_SEED`, §1)가 더해진다.
+- Decision 4의 관리자 검토 대기 목록(`GET /api/admin/pricing/pending`)은 `current`와 `new`에 확장 필드 7개(선택, 없으면 `null`)를 싣고,
+  `change`는 양쪽에 값이 있는 필드마다 변화율을 준다(현재 값이 있으면 입력과 출력 변화율은 항상 있다). 화면 배지와 Markdown 다운로드의
+  검토 대기 표기는 바뀐 항목만 보여 준다(입력이나 출력이 바뀌면 쌍, 이어서 바뀐 캐시 항목과 긴 컨텍스트 줄). 바뀐 캐시 항목에 캐시
+  읽기가 없으면 첫 항목에 "캐시"를 붙인다. 캐시 1시간 쓰기만 바뀌면 "새 값 캐시 1시간 쓰기 $17.60"(EN "New value cache 1h write
+  $17.60"), 쓰기와 1시간 쓰기가 바뀌면 "새 값 캐시 쓰기 $11.00, 1시간 쓰기 $17.60"이다. 배지 설명만 읽어도 캐시 단가라는 것이 드러나고,
+  출력 단가로 읽히지 않는다. 셀의 캐시 줄은 "캐시 읽기 $0.55, 쓰기 $6.875"처럼 그대로다.
+
+### 6. 저장과 마이그레이션
+
+- 운영에는 `price_history`가 이미 있으므로 `create_all`만으로는 새 열이 생기지 않는다. `pricing_seed.ensure_price_columns(engine)`이
+  `sqlalchemy.inspect`로 빠진 열을 먼저 확인하고, 빠진 열이 없으면 DDL을 하나도 실행하지 않는다(기동마다 ACCESS EXCLUSIVE 잠금을
+  요청하지 않는다). 빠진 열이 있으면 한 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `SET LOCAL lock_timeout = '5000'` 뒤
+  `ALTER TABLE price_history ADD COLUMN IF NOT EXISTS <col> DOUBLE PRECISION`을 실행한다.
+- 호출 위치는 두 곳이다.
+  1. backend lifespan(`_ensure_price_schema`): price seed 바로 앞의 자체 `try` 블록. 실패하면 `Price column migration failed (non-fatal,
+     backend continues)`를 남기고 기동을 계속한다. 열 추가나 seed가 실패하면 데몬 스레드 `price-schema-retry`가 30초 간격으로 최대 3번
+     `ensure_price_columns` → `ensure_seed`(같은 활성 채널 집합)를 다시 하고 처음 성공하면 멈춘다(롤링 배포 중 다른 태스크의
+     `price_history` 조회가 ALTER 잠금을 막는 경우 대비, 기동은 기다리지 않는다).
+  2. `pricing_sync_runner`: `create_tables()` 바로 뒤. 실패하면 동기화하지 않고 exit 1이다.
+- Decision 1의 "lifespan ALTER 블록에는 넣지 않는다"는 그대로다. 이 ALTER는 lifespan 마이그레이션 블록(`pg_advisory_lock(917350001)`)
+  밖의 자체 트랜잭션이다.
+- 새 열이 없는 DB에서 v2.31.0 코드는 `/api/pricing`, 관리자 검토 대기 목록, seed, 동기화가 `UndefinedColumn`으로 실패한다. 비용
+  조인(`effective_prices_subquery`)은 입력과 출력 열만 고르므로 영향이 없다. v2.30.0 코드는 새 열을 모르지만 모두 nullable이라,
+  롤아웃이나 롤백 중에 두 버전이 함께 돌아도 문제가 없다.
+
+### 7. 표시와 다운로드
+
+- `PROVIDER_ORDER`는 `("anthropic", "openai", "amazon")`이다. Decision 6의 Anthropic Claude → Amazon Nova → OpenAI 순서를 대체한다.
+- `/api/pricing` `tiers`는 항상 다섯 키 `cp`, `openai_list`, `global`, `us`, `in_region` 순서다. 셀마다 `cache_read`, `cache_write`,
+  `cache_write_1h`, `long`(`{input, output, cache_read, cache_write}` 또는 `null`)이 붙고, `pending`에도 같은 네 키가 붙는다. 같은
+  값끼리 한 원소로 묶는 규칙은 9개 값 전체, verification, pending 값 전체를 비교한다.
+- 화면 열 머리글은 Anthropic Claude 표가 Claude Platform on AWS, AWS Bedrock - Global CRIS, AWS Bedrock - US CRIS, AWS Bedrock - In
+  Region이고, OpenAI 표는 첫 열이 OpenAI 공식 가격(EN "OpenAI official price")이다. Amazon Nova 표는 첫 열의 머리글과 칸을 모두 비워
+  세 표의 열 위치를 맞춘다. 셀 둘째 줄은 캐시 단가, GPT 셋째 줄은 긴 컨텍스트 단가다.
+- 두 조각 머리글("AWS Bedrock -" / "Global CRIS")은 두 조각 사이에서만 줄이 바뀐다. " - "가 없는 머리글(Claude Platform on AWS,
+  OpenAI 공식 가격)은 v2.30.0처럼 단어 사이에서 줄이 바뀐다. 이 이름을 한 덩어리로 묶으면 표가 최소 폭 800px로 그려지는 화면에서
+  글꼴 크기만 키울 때(루트 110%) 옆 열 머리글로 넘친다. e2e가 390px, 루트 글꼴 110%에서 `main thead th` 넘침이 없음을 확인한다.
+- CSV에 `cache_read_usd_per_1m`부터 `long_cache_write_usd_per_1m`까지 7열이 붙고 `channel`에 `openai_list`가 생긴다. Markdown은 제공사
+  표마다 자기 열 머리글을 쓰고, 셀 안에서 `<br>`로 둘째 줄과 셋째 줄을 잇는다. Markdown 머리 줄은 화면과 같은 이름 "마지막 공식 단가
+  동기화" / "Last official price sync"와 화면과 같은 상태 번역(완료, 일부 출처 실패, 실패, 진행 중, 모르는 상태는 그대로)을 쓴다.
+- 범위는 USD, Standard 등급이다. batch, flex, priority(fast) 단가는 여전히 넣지 않는다. Decision 6 범위 문장 "Standard 입력과
+  출력만(캐시, batch, long-context, priority, flex 제외)"에서 캐시와 long-context 제외는 이 절이 대체한다.
+
+### 8. GPT-5.6 Sol 프로모션 — 수동 메모에서 OpenAI 문서 인용으로
+
+- OpenAI 문서가 "GPT-5.6 Sol’s promotional pricing is available at least through November 21, 2026."라고 적는다. 그래서 `PRICE_NOTES`의
+  Sol 메모는 수동 메모가 아니라 이 문서를 출처로 인용한다(`source` `openai_doc`, `source_id` `openai-pricing`, `basis_*` 없음). 문구는
+  KO "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.", EN "Promotional price. As
+  of 2026-09-27, the OpenAI pricing page states that it applies at least through 2026-11-21."이다.
+- 동기화(`parse_openai_pricing_md`)는 Standard 표만 읽고 이 문장은 다시 읽지 않는다. 각주 참고 자료의 확인일은 단가 행의 최신 관측일이라
+  문장까지 확인한 것처럼 보일 수 있으므로, 문구에 문장을 확인한 날짜(2026-09-27)를 넣는다. OpenAI가 표 단가는 그대로 두고 문장만 바꾸면
+  메모는 바뀌지 않는다. `min_until`(2026-11-21)이 지나면 화면 배지가 "프로모션 종료 여부 확인 필요"로 바뀐다.
+- `prior_price`에 `openai_list` 5 / 30이 더해진다(Global 5 / 30, In Region 5.5 / 33은 그대로). 동기화가 어느 티어에서든 이전 단가를
+  관측하면 메모는 응답에서 빠진다.
+- 메모의 각주는 그 패밀리 셀 바로 뒤에 같은 번호 매기기(`cite`)로 OpenAI 참고 자료 번호를 받으므로 `manual_note` 참고 자료는 생기지
+  않는다. `manual_note` 형식(`basis_ko`, `basis_en`, `note_source_id`)은 다음 수동 메모를 위해 남긴다.
+- Decision 6의 "현재 공식 출처 어디에도 없다"와 Sol 프로모션을 수동 메모(`manual_note`)로 둔다는 문장은 2026-09-26 기준 기록으로
+  남기고 이 절이 대체한다.
+
+### Consequences (v2.31.0)
+
+- (+) 캐시 단가(모든 채널)와 GPT 긴 컨텍스트 단가가 공식 출처에서 12시간마다 갱신된다. OpenAI 공식 가격과 AWS Bedrock 채널 단가를 한
+  표에서 비교한다.
+- (+) GPT-5.6 Sol 프로모션 기한의 근거가 수동 메모에서 공식 출처 인용으로 바뀌었다.
+- (−) 확장 필드는 표시 전용이다. 캐시를 쓰는 실제 호출의 비용은 이 모니터가 계산하지 않는다.
+- (−) OpenAI 문서는 사람이 읽는 페이지라 구조가 바뀔 수 있다. 파싱이 실패하면 `openai_list` 8채널만 `skipped:parse_failed`("자동
+  확인 안 됨")가 되고 다른 출처와 비용은 영향을 받지 않는다.
+- (−) `enriched`는 이력을 남기지 않는다. 확장 필드가 처음 관측되기 전의 값은 재구성하지 않는다.
+- (−) 모델을 추가할 때 `pricing_seed.py`의 확장 필드 seed도 고쳐야 하고, 새 OpenAI 패밀리면 `OPENAI_LIST_SEED`도 고친다.

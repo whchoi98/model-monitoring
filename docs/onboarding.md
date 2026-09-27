@@ -60,7 +60,7 @@ npm run dev
 - **Trend Charts**: Actual elapsed time with explicit gaps for failed or missing measurements. Filter/selection state is preserved in dashboard URLs.
 - **Shared UI**: Public pages render during sign-in checks. Failed reads keep same-query cached results with a warning and retry; a changed filter cannot display an older query's data.
 - **Model Explorer** (`/models`, v2.9.0): per-model cards with channel info, unit prices from `/api/pricing`, and copy-paste code examples per API (Converse / InvokeModel / Messages / Responses)
-- **Unit Prices** (`/pricing`, v2.30.0): Standard input/output price per model family and channel with source footnotes and CSV / Markdown / JSON download. The PricingSync Fargate task refreshes prices from official sources every 12 hours into `price_history`; costs use the price in effect at each probe's time, and a change above 50% waits for admin approval — see ADR-030
+- **Unit Prices** (`/pricing`, v2.30.0; v2.31.0 adds prompt-caching prices on every channel, GPT long-context prices and an OpenAI official price column): Standard input/output price per model family and channel with source footnotes and CSV / Markdown / JSON download. The PricingSync Fargate task refreshes prices from official sources every 12 hours into `price_history`; costs use the price in effect at each probe's time, and a change above 50% waits for admin approval — see ADR-030
 - **Parity Run** (`/parity`, v2.11.0): Fargate sweep every 12 hours probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
 - **Comparison Lab**: one prompt → N models in parallel via `/api/compare/run` (SSE, auth)
 

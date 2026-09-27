@@ -16,9 +16,11 @@ from sqlalchemy.pool import StaticPool
 import pricing_sync
 from database import Base
 from models import PriceHistory, PriceSyncRun
-from pricing_parsers import UnitPrice, single_public_offer
-from pricing_sources import ANTHROPIC_PRICING_URL, EPOCH, price_identity
-from pricing_sync import CHANGE_THRESHOLD, SYNC_DEADLINE_S, SYNC_LOCK_KEY, Fetchers, classify_change, default_fetchers, run_sync
+from pricing_parsers import EXTRA_FIELDS, PRICE_FIELDS, PriceParseError, UnitPrice, single_public_offer
+from pricing_sources import ANTHROPIC_PRICING_URL, EPOCH, OPENAI_PRICING_URL, price_identity
+from pricing_sync import (
+    CHANGE_THRESHOLD, SOURCES, SYNC_DEADLINE_S, SYNC_LOCK_KEY, Fetchers, classify_change, default_fetchers, run_sync,
+)
 
 FIXTURES = Path(__file__).parent / "fixtures" / "pricing"
 T0 = datetime(2026, 9, 26, 15, 0, tzinfo=timezone.utc)
@@ -27,17 +29,34 @@ OPUS_G, OPUS_US = "global.anthropic.claude-opus-5-5", "us.anthropic.claude-opus-
 SOL_G, SOL_E1 = "openai:global:global.openai.gpt-5.6-sol", "openai:us-east-1:openai.gpt-5.6-sol"
 NOVA = "us.amazon.nova-2-lite-v1:0"
 CP_HAIKU = "anthropic:claude-haiku-4-5-20251001"  # CP ids carry the /v1/models date suffix
-ALL = (OPUS_G, OPUS_US, SOL_G, SOL_E1, NOVA, CP_HAIKU)
+OL_SOL = "openai-list:gpt-5.6-sol"  # OpenAI official price (display only), from the OpenAI pricing markdown
+ALL = (OPUS_G, OPUS_US, SOL_G, SOL_E1, NOVA, CP_HAIKU, OL_SOL)
 SOL_OFFER_ID = "offer-gnqokrqqvdbgw"
 BASELINE = {  # current official values = seed rows: (input, output, source_id)
     OPUS_G: (4.0, 20.0, "offer:offer-7sp77cpl4rveu"), OPUS_US: (4.4, 22.0, "offer:offer-7sp77cpl4rveu"),
     SOL_G: (4.0, 20.0, f"offer:{SOL_OFFER_ID}"), SOL_E1: (4.4, 22.0, f"offer:{SOL_OFFER_ID}"),
     NOVA: (0.33, 2.75, "pricelist:USE1-Nova2.0Lite-input-tokens"), CP_HAIKU: (1.0, 5.0, "anthropic-pricing"),
+    OL_SOL: (4.0, 20.0, "openai-pricing"),
+}
+# The cache and long-context values the committed fixtures carry for the same channels (the fake Sol offer has
+# none), so a seeded channel whose source says the same thing again is "unchanged". extras={} seeds v2.30.0 rows.
+BASELINE_EXTRAS = {
+    OPUS_G: {"cache_read": 0.2, "cache_write": 5.0, "cache_write_1h": 8.0},
+    OPUS_US: {"cache_read": 0.22, "cache_write": 5.5, "cache_write_1h": 8.8},
+    NOVA: {"cache_read": 0.0825, "cache_write": 0.0},
+    CP_HAIKU: {"cache_read": 0.1, "cache_write": 1.25, "cache_write_1h": 2.0},
+    OL_SOL: {"cache_read": 0.4, "cache_write": 5.0, "long_input": 8.0, "long_output": 30.0, "long_cache_read": 0.8,
+             "long_cache_write": 10.0},
 }
 
 
-def P(i, o):
-    return UnitPrice(input=Decimal(str(i)), output=Decimal(str(o)))
+def P(i, o, **extra):
+    return UnitPrice(input=Decimal(str(i)), output=Decimal(str(o)), **{k: Decimal(str(v)) for k, v in extra.items()})
+
+
+def _current(i, o, **extra):
+    """A stored row as classify_change reads it: every PRICE_FIELDS key, None where the column is NULL."""
+    return {**dict.fromkeys(PRICE_FIELDS), "input": i, "output": o, **extra}
 
 
 def _utc(dt):
@@ -50,10 +69,10 @@ def _active(*model_ids):
     return active
 
 
-def _sol_offer(inp, out, g_inp, g_out, offers=1):
+def _sol_offer(inp, out, g_inp, g_out, offers=1, extra=()):
     card = [{"dimension": d, "price": p, "description": d, "unit": "Units"} for d, p in (
         ("input_tokens_standard", inp), ("output_tokens_standard", out), ("input_tokens_global_standard", g_inp),
-        ("output_tokens_global_standard", g_out), ("input_tokens_priority", "8.8"))]
+        ("output_tokens_global_standard", g_out), ("input_tokens_priority", "8.8"), *extra)]
     return {"modelId": "openai.gpt-5.6-sol",
             "offers": [{"offerId": SOL_OFFER_ID, "termDetails": {"usageBasedPricingTerm": {"rateCard": card}}}] * offers}
 
@@ -63,7 +82,7 @@ def _nova_items():
 
 
 def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=None, calls=None, opus_extra=None,
-              sol_response=None, pricelist_items=None):
+              sol_response=None, pricelist_items=None, openai_md=None, pricelist_args=None):
     calls = [] if calls is None else calls
 
     def track(name):
@@ -82,15 +101,21 @@ def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=No
         assert fm_id == "openai.gpt-5.6-sol", fm_id
         return sol_response if sol_response is not None else _sol_offer(*sol, offers=sol_offers)
 
-    def pricelist(input_usagetype, output_usagetype):
+    def pricelist(*usagetypes):
         track("pricelist")
+        if pricelist_args is not None:
+            pricelist_args.append(usagetypes)
         return pricelist_items if pricelist_items is not None else _nova_items()
 
     def anthropic_doc():
         track("anthropic_doc")
         return (FIXTURES / "anthropic_pricing.md").read_text(encoding="utf-8")
 
-    return Fetchers(offers=offers, pricelist=pricelist, anthropic_doc=anthropic_doc)
+    def openai_doc():
+        track("openai_doc")
+        return openai_md if openai_md is not None else (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+
+    return Fetchers(offers=offers, pricelist=pricelist, anthropic_doc=anthropic_doc, openai_doc=openai_doc)
 
 
 @pytest.fixture()
@@ -101,14 +126,19 @@ def Session():
     engine.dispose()
 
 
-def _seed(Session, values=BASELINE):
+def _seed(Session, values=BASELINE, extras=BASELINE_EXTRAS):
     with Session() as db:
         for model_id, (i, o, source_id) in values.items():
             ident = price_identity(model_id)
+            columns = {f"{field}_per_mtok": v for field, v in extras.get(model_id, {}).items()}
             db.add(PriceHistory(model_id=model_id, family_key=ident.family_key, channel=ident.channel,
                                 input_per_mtok=i, output_per_mtok=o, effective_from=EPOCH, source_id=source_id,
-                                status="seed", observed_at=None, run_id=None))
+                                status="seed", observed_at=None, run_id=None, **columns))
         db.commit()
+
+
+def _extras(row):
+    return {field: getattr(row, f"{field}_per_mtok") for field in EXTRA_FIELDS}
 
 
 def _rows(Session, model_id):
@@ -131,6 +161,7 @@ def _sync(Session, at=T0, active=None, **kw):
 
 def test_contract_constants():
     assert (CHANGE_THRESHOLD, SYNC_DEADLINE_S, SYNC_LOCK_KEY) == (Decimal("0.5"), 300.0, 917350004)
+    assert SOURCES == ("offers", "pricelist", "anthropic_doc", "openai_doc")
 
 
 @pytest.mark.parametrize(("current", "new", "expected"), [
@@ -146,7 +177,35 @@ def test_contract_constants():
     ((0.0, 5.0), P("1", "5"), "pending"),           # no ratio against a zero baseline
 ])
 def test_classify_change(current, new, expected):
+    assert classify_change(None if current is None else _current(*current), new) == expected
+
+
+@pytest.mark.parametrize(("current", "new", "expected"), [
+    (_current(4.0, 20.0), P(4, 20, cache_read="0.2", cache_write="5"), "enriched"),       # first-time values
+    (_current(4.0, 20.0, cache_read=0.2), P(4, 20, cache_read="0.2"), "unchanged"),
+    (_current(4.0, 20.0, cache_read=0.2), P(4, 20), "unchanged"),                        # missing = keep, not a change
+    (_current(4.0, 20.0, cache_read=0.2), P(4, 20, cache_read="0.3"), "changed"),         # +50 % (boundary)
+    (_current(4.0, 20.0, cache_read=0.2), P(4, 20, cache_read="0.31"), "pending"),        # just over 50 %
+    (_current(4.0, 20.0, cache_read=0.2), P(4, 20, cache_read="0.2", long_input="8"), "enriched"),
+    (_current(4.0, 20.0), P(5, 20, cache_read="0.2"), "changed"),                         # a change beats a fill
+    (_current(4.0, 20.0, cache_read=0.2), P(5, 20, cache_read="0.4"), "pending"),         # pending beats a change
+    (_current(0.33, 2.75, cache_write=0.0), P("0.33", "2.75", cache_write="0"), "unchanged"),
+    (_current(0.33, 2.75, cache_write=0.0), P("0.33", "2.75", cache_write="0.1"), "pending"),  # no ratio against 0
+    (_current(10.0, 50.0, long_input=20.0, long_output=75.0), P(10, 50, long_input="20", long_output="75.01"),
+     "changed"),
+])
+def test_classify_change_over_every_price_field(current, new, expected):
     assert classify_change(current, new) == expected
+
+
+def test_extra_fields_are_quantized_and_zero_is_kept():
+    got = pricing_sync._quantized(P("0.33", "2.75", cache_read="0.0825000000", cache_write="0E-10",
+                                    long_input="0.00000051"))
+    assert (got.cache_read, got.cache_write, got.long_input, got.long_output) == (
+        Decimal("0.082500"), Decimal("0"), Decimal("0.000001"), None)
+    for bad in ({"cache_read": "-0.1"}, {"cache_write": "0.0000004"}):
+        with pytest.raises(PriceParseError, match="negative or rounds to 0"):
+            pricing_sync._quantized(P(1, 5, **bad))
 
 
 def test_same_values_only_refresh_observed_at_and_run_id(Session):
@@ -157,12 +216,14 @@ def test_same_values_only_refresh_observed_at_and_run_id(Session):
     assert run.summary["channels"] == {m: "unchanged" for m in sorted(ALL)}
     assert run.summary["sources"] == {"offers": {"calls": 2, "ok": 2, "failed": 0},
                                       "pricelist": {"calls": 1, "ok": 1, "failed": 0},
-                                      "anthropic_doc": {"calls": 1, "ok": 1, "failed": 0}}
+                                      "anthropic_doc": {"calls": 1, "ok": 1, "failed": 0},
+                                      "openai_doc": {"calls": 1, "ok": 1, "failed": 0}}
     for model_id in ALL:
         (row,) = _rows(Session, model_id)
         assert row.status == "seed" and _utc(row.effective_from) == EPOCH
         assert _utc(row.observed_at) == T0 and row.run_id == run.id
         assert (row.input_per_mtok, row.output_per_mtok) == BASELINE[model_id][:2]
+        assert _extras(row) == {**dict.fromkeys(EXTRA_FIELDS), **BASELINE_EXTRAS.get(model_id, {})}
 
 
 def test_an_unchanged_value_from_a_new_offer_id_refreshes_the_source_id(Session):
@@ -306,6 +367,7 @@ def test_a_malformed_offers_response_skips_only_that_models_channels(Session, re
     ("parse_anthropic_pricing_md", {CP_HAIKU}),
     ("parse_pricelist", {NOVA}),
     ("select_offer_price", {OPUS_G, OPUS_US, SOL_G, SOL_E1}),
+    ("parse_openai_pricing_md", {OL_SOL}),
 ])
 def test_any_parser_exception_only_skips_that_sources_channels(Session, monkeypatch, parser, skipped):
     _seed(Session)
@@ -339,12 +401,12 @@ def test_the_deadline_skips_the_remaining_channels(Session, caplog):
 
     run = _run(Session, run_sync(Session, _active(*ALL), _fetchers(on_call=slow, calls=calls),
                                  now=lambda: clock["t"], deadline_s=300))
-    assert calls == ["anthropic_doc", "pricelist"]   # 400 s > 300 s before the first offer call
-    assert run.status == "partial" and run.summary["channels"][CP_HAIKU] == run.summary["channels"][NOVA] == "unchanged"
-    assert all(run.summary["channels"][m] == "skipped:deadline" for m in (OPUS_G, OPUS_US, SOL_G, SOL_E1))
-    assert run.summary["sources"]["offers"] == {"calls": 0, "ok": 0, "failed": 0}
+    assert calls == ["anthropic_doc", "openai_doc"]   # 400 s > 300 s before the Price List call
+    assert run.status == "partial" and run.summary["channels"][CP_HAIKU] == run.summary["channels"][OL_SOL] == "unchanged"
+    assert all(run.summary["channels"][m] == "skipped:deadline" for m in (NOVA, OPUS_G, OPUS_US, SOL_G, SOL_E1))
+    assert run.summary["sources"]["offers"] == run.summary["sources"]["pricelist"] == {"calls": 0, "ok": 0, "failed": 0}
     assert any(e.startswith("deadline: 300s exceeded") for e in run.summary["errors"])
-    assert "pricing sync: deadline: 300s exceeded before offers anthropic.claude-opus-5-5" in caplog.messages
+    assert "pricing sync: deadline: 300s exceeded before pricelist nova-2-lite" in caplog.messages
     assert _utc(run.finished_at) == T0 + timedelta(seconds=400) and _rows(Session, OPUS_US)[0].observed_at is None
 
 
@@ -362,7 +424,7 @@ def test_every_summary_error_is_also_a_warning_log_line(Session, caplog):
 
 def test_all_sources_failing_marks_the_run_failed(Session):
     _seed(Session)
-    run = _sync(Session, fail={"offers", "pricelist", "anthropic_doc"})
+    run = _sync(Session, fail={"offers", "pricelist", "anthropic_doc", "openai_doc"})
     assert (run.status, run.changes, run.pending) == ("failed", 0, 0) and _utc(run.finished_at) == T0
     assert set(run.summary["channels"].values()) == {"skipped:fetch_failed"}
     assert all(_rows(Session, m)[0].observed_at is None for m in ALL)
@@ -466,7 +528,7 @@ def test_default_offers_fetcher_asks_for_public_offers_and_strips_tokens():
     assert bedrock.calls == [{"modelId": "openai.gpt-6-astra", "offerType": "PUBLIC"}]
     assert not any(s in json.dumps(response) for s in ("offerToken", "legalTerm", "FAKE"))
     offer_id, card = single_public_offer(response)
-    assert offer_id == "offer-7epta7rbw5aws" and len(card) == 18
+    assert offer_id == "offer-7epta7rbw5aws" and len(card) == 40
 
 
 def test_default_pricelist_fetcher_filters_exact_usagetypes_and_follows_pages():
@@ -522,3 +584,211 @@ def test_default_fetchers_build_us_east_1_clients_without_sdk_retries(monkeypatc
     default_fetchers(http=httpx.Client(transport=httpx.MockTransport(lambda r: httpx.Response(599))))
     assert [(n, kw["region_name"], kw["config"].retries["max_attempts"]) for n, kw in made] == [
         ("bedrock", "us-east-1", 1), ("pricing", "us-east-1", 1)]
+
+
+# ---------------------------------------------------------------- v2.31.0: display-only fields, OpenAI doc
+
+
+def _nova_items_with(cache_write_usd):
+    items = [json.loads(s) for s in _nova_items()]
+    for item in items:
+        if item["product"]["attributes"]["usagetype"] == "USE1-Nova2.0Lite-cache-write-input-token-count":
+            (term,) = item["terms"]["OnDemand"].values()
+            (dim,) = term["priceDimensions"].values()
+            dim["pricePerUnit"]["USD"] = cache_write_usd
+    return items
+
+
+def test_seed_rows_without_extras_are_enriched_in_place(Session):
+    _seed(Session, extras={})                                         # v2.30.0 rows: every extra column NULL
+    run = _sync(Session)
+    assert (run.status, run.changes, run.pending) == ("completed", 0, 0)
+    assert run.summary["channels"] == {**{m: "enriched" for m in (OPUS_G, OPUS_US, NOVA, CP_HAIKU, OL_SOL)},
+                                       SOL_G: "unchanged", SOL_E1: "unchanged"}   # the fake Sol offer has no extras
+    for model_id in ALL:
+        (row,) = _rows(Session, model_id)                             # filled in place, no new history row
+        assert row.status == "seed" and _utc(row.effective_from) == EPOCH
+        assert _utc(row.observed_at) == T0 and row.run_id == run.id
+        assert (row.input_per_mtok, row.output_per_mtok) == BASELINE[model_id][:2]
+        assert _extras(row) == {**dict.fromkeys(EXTRA_FIELDS), **BASELINE_EXTRAS.get(model_id, {})}, model_id
+    (nova,) = _rows(Session, NOVA)
+    assert nova.cache_write_per_mtok == 0.0                           # an official $0 is stored as 0, not NULL
+    again = _sync(Session, at=T1)
+    assert set(again.summary["channels"].values()) == {"unchanged"} and all(len(_rows(Session, m)) == 1 for m in ALL)
+
+
+SOL_E1_EXTRAS = {"cache_read": 0.44, "cache_write": 5.5, "long_input": 8.8, "long_output": 33.0,
+                 "long_cache_read": 0.88, "long_cache_write": 11.0}
+
+
+def test_a_missing_extra_keeps_the_stored_value_and_a_change_within_fifty_percent_adds_merged_values(Session):
+    _seed(Session, extras={**BASELINE_EXTRAS, SOL_E1: SOL_E1_EXTRAS})
+    first = _sync(Session)                                            # the fake offer carries no extras for Sol
+    assert first.summary["channels"][SOL_E1] == "unchanged"
+    (row,) = _rows(Session, SOL_E1)
+    assert _extras(row) == {**dict.fromkeys(EXTRA_FIELDS), **SOL_E1_EXTRAS}
+    offer = _sol_offer("4.4", "22", "4", "20", extra=(("cache_read_tokens_standard", "0.5"),))  # 0.44 -> 0.5, +13.6 %
+    run = _sync(Session, at=T1, sol_response=offer)
+    assert run.summary["channels"][SOL_E1] == "changed" and run.summary["channels"][SOL_G] == "unchanged"
+    assert (run.changes, run.pending) == (1, 0)
+    seed, new = _rows(Session, SOL_E1)
+    assert seed.status == "seed" and seed.cache_read_per_mtok == 0.44
+    assert new.status == "verified" and _utc(new.effective_from) == T1 and _utc(new.observed_at) == T1
+    assert (new.input_per_mtok, new.output_per_mtok) == (4.4, 22.0)
+    assert _extras(new) == {**dict.fromkeys(EXTRA_FIELDS), **SOL_E1_EXTRAS, "cache_read": 0.5}  # merged
+
+
+def test_an_extra_change_over_fifty_percent_waits_for_review_and_held_rows_match_every_value(Session):
+    _seed(Session, extras={**BASELINE_EXTRAS, SOL_E1: {"cache_read": 0.2}})
+    offer = _sol_offer("4.4", "22", "4", "20", extra=(("cache_read_tokens_standard", "0.44"),))  # +120 %
+    run = _sync(Session, sol_response=offer)
+    assert run.summary["channels"][SOL_E1] == "pending" and (run.changes, run.pending) == (0, 1)
+    seed, pending = _rows(Session, SOL_E1)
+    assert seed.observed_at is None and seed.cache_read_per_mtok == 0.2   # the effective row is not re-confirmed
+    assert pending.status == "pending_review" and _utc(pending.effective_from) == T0
+    assert _extras(pending) == {**dict.fromkeys(EXTRA_FIELDS), "cache_read": 0.44}
+    again = _sync(Session, at=T1, sol_response=offer)
+    assert again.summary["channels"][SOL_E1] == "pending" and len(_rows(Session, SOL_E1)) == 2
+    assert _utc(_rows(Session, SOL_E1)[1].observed_at) == T1           # the same held row, observed again
+    more = _sol_offer("4.4", "22", "4", "20", extra=(("cache_read_tokens_standard", "0.44"),
+                                                     ("cache_write_tokens_30m_standard", "5.5")))
+    third = _sync(Session, at=T2, sol_response=more)                    # one more value: no longer the held row
+    assert third.summary["channels"][SOL_E1] == "pending"
+    _, _, newest = _rows(Session, SOL_E1)
+    assert newest.status == "pending_review" and (newest.cache_read_per_mtok, newest.cache_write_per_mtok) == (0.44, 5.5)
+
+
+def test_a_zero_extra_price_that_turns_positive_waits_for_review(Session):
+    _seed(Session)                                                      # Nova cache write stored as 0
+    run = _sync(Session, pricelist_items=_nova_items_with("0.0001000000"))  # $0.0001 per 1K = $0.1 per 1M
+    assert run.summary["channels"][NOVA] == "pending" and run.pending == 1
+    seed, pending = _rows(Session, NOVA)
+    assert seed.cache_write_per_mtok == 0.0 and pending.status == "pending_review"
+    assert (pending.input_per_mtok, pending.output_per_mtok, pending.cache_read_per_mtok, pending.cache_write_per_mtok) == (
+        0.33, 2.75, 0.0825, 0.1)
+
+
+def test_the_price_list_call_passes_the_nova_cache_usagetypes(Session):
+    _seed(Session, extras={})
+    seen: list[tuple] = []
+    run = _sync(Session, pricelist_args=seen)
+    assert seen == [("USE1-Nova2.0Lite-input-tokens", "USE1-Nova2.0Lite-output-tokens",
+                     "USE1-Nova2.0Lite-cache-read-input-token-count", "USE1-Nova2.0Lite-cache-write-input-token-count")]
+    assert run.summary["channels"][NOVA] == "enriched"
+    (row,) = _rows(Session, NOVA)
+    assert (row.cache_read_per_mtok, row.cache_write_per_mtok) == (0.0825, 0.0)
+
+
+def test_an_openai_doc_failure_skips_only_the_openai_list_channels(Session):
+    _seed(Session)
+    run = _sync(Session, fail={"openai_doc"})
+    assert run.status == "partial" and run.summary["channels"][OL_SOL] == "skipped:fetch_failed"
+    assert all(run.summary["channels"][m] == "unchanged" for m in ALL if m != OL_SOL)
+    assert run.summary["sources"]["openai_doc"] == {"calls": 1, "ok": 0, "failed": 1}
+    assert any(e.startswith("openai_doc pricing.md: ConnectionError") for e in run.summary["errors"])
+    (row,) = _rows(Session, OL_SOL)
+    assert row.observed_at is None and row.run_id is None
+
+
+def test_an_openai_list_model_missing_from_the_doc_is_skipped_not_found(Session):
+    _seed(Session)
+    text = (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+    without_sol = "\n".join(ln for ln in text.splitlines() if not ln.startswith("| gpt-5.6-sol |"))
+    run = _sync(Session, openai_md=without_sol)
+    assert run.status == "partial" and run.summary["channels"][OL_SOL] == "skipped:not_found"
+    assert "openai_doc: model 'gpt-5.6-sol' not in the table" in run.summary["errors"]
+    assert run.summary["sources"]["openai_doc"] == {"calls": 1, "ok": 1, "failed": 0}
+    assert all(run.summary["channels"][m] == "unchanged" for m in ALL if m != OL_SOL)
+
+
+def test_an_extra_price_that_rounds_to_zero_skips_that_models_channels(Session):
+    _seed(Session)
+    offer = _sol_offer("4.4", "22", "4", "20", extra=(("cache_read_tokens_standard", "0.0000004"),))
+    run = _sync(Session, sol_response=offer)
+    assert run.summary["channels"][SOL_G] == run.summary["channels"][SOL_E1] == "skipped:parse_failed"
+    assert any(e.startswith("offers openai.gpt-5.6-sol: cache_read price is negative or rounds to 0")
+               for e in run.summary["errors"])
+
+
+@pytest.mark.parametrize(("status", "result"), [("pending_review", "pending"), ("rejected", "rejected")])
+def test_a_v2_30_held_row_without_extras_is_matched_on_input_and_output(Session, status, result):
+    _seed(Session)
+    ident = price_identity(SOL_E1)
+    held_at = T0 - timedelta(hours=12)
+    with Session() as db:  # held under v2.30.0, before the extra columns existed: every extra column NULL
+        db.add(PriceHistory(model_id=SOL_E1, family_key=ident.family_key, channel=ident.channel,
+                            input_per_mtok=8.8, output_per_mtok=44.0, effective_from=held_at,
+                            source_id=f"offer:{SOL_OFFER_ID}", status=status, observed_at=held_at, run_id=None))
+        db.commit()
+    # The same input and output again (+100 %), now with a cache price the v2.30.0 row never had.
+    offer = _sol_offer("8.8", "44", "4", "20", extra=(("cache_read_tokens_standard", "0.88"),))
+    run = _sync(Session, sol_response=offer)
+    assert run.summary["channels"][SOL_E1] == result
+    seed, held = _rows(Session, SOL_E1)                  # no second pending_review row, a rejection stays rejected
+    assert seed.status == "seed" and held.status == status
+    assert _utc(held.observed_at) == T0 and held.cache_read_per_mtok is None
+
+
+def test_a_long_context_dimension_on_a_claude_offer_is_dropped(Session):
+    _seed(Session)
+    response = json.loads((FIXTURES / "offers_claude-opus-5-5.json").read_text(encoding="utf-8"))
+    term = response["offers"][0]["termDetails"]
+    term["usageBasedPricingTerm"]["rateCard"] += [
+        {"dimension": d, "price": p, "description": d, "unit": "Units"}
+        for d, p in (("APN2_input_tokens_long_ctx_global_standard", "8"),
+                     ("APN2_output_tokens_long_ctx_global_standard", "40"))]
+    run = _sync(Session, opus_extra={"termDetails": term})
+    assert run.summary["channels"][OPUS_G] == "unchanged"   # long context is GPT-only: nothing to fill ("enriched")
+    (row,) = _rows(Session, OPUS_G)
+    assert (row.long_input_per_mtok, row.long_output_per_mtok) == (None, None)
+
+
+def test_an_odd_untracked_openai_doc_row_never_skips_the_tracked_channels(Session):
+    _seed(Session)
+    text = (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+    odd = ("| gpt-free-preview | $0.00 | - | - | $0.00 | - | - | - | - |\n"             # input and output $0.00
+           "| gpt-tiny-preview | $0.10 | $0.0000001 | - | $0.40 | - | - | - | - |\n")  # cached input rounds to 0
+    run = _sync(Session, openai_md=text.replace("| gpt-6-astra |", odd + "| gpt-6-astra |", 1))
+    assert run.status == "completed" and run.summary["channels"][OL_SOL] == "unchanged"
+    assert not any("preview" in e for e in run.summary["errors"])
+
+
+def test_a_tracked_openai_doc_value_that_rounds_to_zero_skips_only_that_models_channel(Session):
+    ol_6sol = "openai-list:gpt-6-sol"             # a second tracked OpenAI official price from the same doc table
+    _seed(Session, values={**BASELINE, ol_6sol: (2.0, 10.0, "openai-pricing")},
+          extras={**BASELINE_EXTRAS, ol_6sol: {"cache_read": 0.2, "cache_write": 2.5, "long_input": 4.0,
+                                              "long_output": 15.0, "long_cache_read": 0.4, "long_cache_write": 5.0}})
+    text = (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+    row = "| gpt-5.6-sol | $4.00 | $0.40 |"
+    assert row in text
+    bad = text.replace(row, "| gpt-5.6-sol | $4.00 | $0.0000001 |", 1)   # short-context cached input rounds to 0
+    run = _run(Session, run_sync(Session, _active(*ALL, ol_6sol), _fetchers(openai_md=bad), now=lambda: T0))
+    assert run.status == "partial"
+    assert run.summary["channels"][OL_SOL] == "skipped:parse_failed"
+    assert all(run.summary["channels"][m] == "unchanged" for m in (*ALL, ol_6sol) if m != OL_SOL)
+    assert run.summary["sources"]["openai_doc"] == {"calls": 1, "ok": 1, "failed": 0}
+    (error,) = [e for e in run.summary["errors"] if e.startswith("openai_doc")]
+    assert error.startswith("openai_doc gpt-5.6-sol: cache_read price is negative or rounds to 0 at 6 decimals"), error
+    (stored,) = _rows(Session, OL_SOL)
+    assert stored.observed_at is None and stored.cache_read_per_mtok == 0.4    # the stored row is left alone
+
+
+def test_default_openai_fetcher_sends_a_user_agent_and_retries_5xx():
+    seen, sleeps = [], []
+
+    def handler(request):
+        seen.append((str(request.url), request.headers.get("user-agent")))
+        return httpx.Response(502) if len(seen) == 1 else httpx.Response(200, text="### Standard pricing data\n")
+
+    fetchers = _defaults(http=httpx.Client(transport=httpx.MockTransport(handler)), sleeps=sleeps)
+    assert fetchers.openai_doc() == "### Standard pricing data\n"
+    assert seen == [(OPENAI_PRICING_URL, pricing_sync.USER_AGENT)] * 2 and sleeps == [1.0]
+
+
+def test_default_pricelist_fetcher_queries_every_usagetype_in_order():
+    uts = ("USE1-Nova2.0Lite-input-tokens", "USE1-Nova2.0Lite-output-tokens",
+           "USE1-Nova2.0Lite-cache-read-input-token-count", "USE1-Nova2.0Lite-cache-write-input-token-count")
+    pricing = _FakePricing({uts[0]: [{"PriceList": ["a"]}], uts[1]: [{"PriceList": ["b"]}, {"PriceList": ["c"]}],
+                            uts[2]: [{"PriceList": ["d"]}], uts[3]: [{"PriceList": []}]})
+    assert _defaults(pricing=pricing).pricelist(*uts) == ["a", "b", "c", "d"]
+    assert [c["Filters"][0]["Value"] for c in pricing.calls] == list(uts)

@@ -1,0 +1,518 @@
+{
+ "modelId": "openai.gpt-5.6-luna",
+ "offers": [
+  {
+   "offerId": "offer-bklbyf2ewuawu",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "cached_input_tokens_batch",
+       "price": "0.055",
+       "description": "cached_input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_standard",
+       "price": "0.44",
+       "description": "input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_flex",
+       "price": "0.22",
+       "description": "input_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_batch",
+       "price": "0.22",
+       "description": "input_tokens_long_ctx_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_standard",
+       "price": "1.98",
+       "description": "output_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_flex",
+       "price": "0.99",
+       "description": "output_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_batch",
+       "price": "0.99",
+       "description": "output_tokens_long_ctx_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_long_ctx_standard",
+       "price": "0.22",
+       "description": "cached_input_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_long_ctx_flex",
+       "price": "0.11",
+       "description": "cached_input_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_long_ctx_batch",
+       "price": "0.11",
+       "description": "cached_input_tokens_long_ctx_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_long_ctx_standard",
+       "price": "2.75",
+       "description": "cache_writes_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_long_ctx_flex",
+       "price": "1.375",
+       "description": "cache_writes_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_long_ctx_batch",
+       "price": "1.375",
+       "description": "cache_writes_tokens_long_ctx_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_standard",
+       "price": "0.22",
+       "description": "input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_priority",
+       "price": "0.44",
+       "description": "input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_flex",
+       "price": "0.11",
+       "description": "input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_batch",
+       "price": "0.11",
+       "description": "input_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_standard",
+       "price": "1.32",
+       "description": "output_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_priority",
+       "price": "2.64",
+       "description": "output_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_flex",
+       "price": "0.66",
+       "description": "output_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_batch",
+       "price": "0.66",
+       "description": "output_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_standard",
+       "price": "0.11",
+       "description": "cached_input_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_priority",
+       "price": "0.22",
+       "description": "cached_input_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_flex",
+       "price": "0.055",
+       "description": "cached_input_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_standard",
+       "price": "1.375",
+       "description": "cache_writes_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_priority",
+       "price": "2.75",
+       "description": "cache_writes_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_flex",
+       "price": "0.6875",
+       "description": "cache_writes_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_batch",
+       "price": "0.6875",
+       "description": "cache_writes_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_global_standard",
+       "price": "0.4",
+       "description": "input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_global_flex",
+       "price": "0.2",
+       "description": "input_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_long_ctx_global_batch",
+       "price": "0.2",
+       "description": "input_tokens_long_ctx_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_global_standard",
+       "price": "1.8",
+       "description": "output_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_global_flex",
+       "price": "0.9",
+       "description": "output_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_long_ctx_global_batch",
+       "price": "0.9",
+       "description": "output_tokens_long_ctx_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_long_ctx_global_standard",
+       "price": "0.2",
+       "description": "cached_input_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_long_ctx_global_flex",
+       "price": "0.1",
+       "description": "cached_input_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_long_ctx_global_batch",
+       "price": "0.1",
+       "description": "cached_input_tokens_long_ctx_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_long_ctx_global_standard",
+       "price": "2.5",
+       "description": "cache_writes_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_long_ctx_global_flex",
+       "price": "1.25",
+       "description": "cache_writes_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_long_ctx_global_batch",
+       "price": "1.25",
+       "description": "cache_writes_tokens_long_ctx_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_standard",
+       "price": "0.2",
+       "description": "input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_priority",
+       "price": "0.4",
+       "description": "input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_flex",
+       "price": "0.1",
+       "description": "input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "input_tokens_global_batch",
+       "price": "0.1",
+       "description": "input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_standard",
+       "price": "1.2",
+       "description": "output_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_priority",
+       "price": "2.4",
+       "description": "output_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_flex",
+       "price": "0.6",
+       "description": "output_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "output_tokens_global_batch",
+       "price": "0.6",
+       "description": "output_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_global_standard",
+       "price": "0.1",
+       "description": "cached_input_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_global_priority",
+       "price": "0.2",
+       "description": "cached_input_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_global_flex",
+       "price": "0.05",
+       "description": "cached_input_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cached_input_tokens_global_batch",
+       "price": "0.05",
+       "description": "cached_input_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_global_standard",
+       "price": "1.25",
+       "description": "cache_writes_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_global_priority",
+       "price": "2.5",
+       "description": "cache_writes_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_global_flex",
+       "price": "0.625",
+       "description": "cache_writes_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_writes_tokens_global_batch",
+       "price": "0.625",
+       "description": "cache_writes_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_flex",
+       "price": "0.011",
+       "description": "cache_read_tokens_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_global_flex",
+       "price": "0.01",
+       "description": "cache_read_tokens_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_global_priority",
+       "price": "0.04",
+       "description": "cache_read_tokens_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_global_standard",
+       "price": "0.02",
+       "description": "cache_read_tokens_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_flex",
+       "price": "0.022",
+       "description": "cache_read_tokens_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_global_flex",
+       "price": "0.02",
+       "description": "cache_read_tokens_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_global_standard",
+       "price": "0.04",
+       "description": "cache_read_tokens_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_standard",
+       "price": "0.044",
+       "description": "cache_read_tokens_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_priority",
+       "price": "0.044",
+       "description": "cache_read_tokens_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_standard",
+       "price": "0.022",
+       "description": "cache_read_tokens_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_flex",
+       "price": "0.1375",
+       "description": "cache_write_tokens_30m_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_flex",
+       "price": "0.125",
+       "description": "cache_write_tokens_30m_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_priority",
+       "price": "0.5",
+       "description": "cache_write_tokens_30m_global_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_standard",
+       "price": "0.25",
+       "description": "cache_write_tokens_30m_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_flex",
+       "price": "0.275",
+       "description": "cache_write_tokens_30m_long_ctx_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_global_flex",
+       "price": "0.25",
+       "description": "cache_write_tokens_30m_long_ctx_global_flex",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_global_standard",
+       "price": "0.5",
+       "description": "cache_write_tokens_30m_long_ctx_global_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_standard",
+       "price": "0.55",
+       "description": "cache_write_tokens_30m_long_ctx_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_priority",
+       "price": "0.55",
+       "description": "cache_write_tokens_30m_priority",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_standard",
+       "price": "0.275",
+       "description": "cache_write_tokens_30m_standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_global_batch",
+       "price": "0.01",
+       "description": "cache_read_tokens_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_global_batch",
+       "price": "0.125",
+       "description": "cache_write_tokens_30m_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_global_batch",
+       "price": "0.02",
+       "description": "cache_read_tokens_long_ctx_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_global_batch",
+       "price": "0.25",
+       "description": "cache_write_tokens_30m_long_ctx_global_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_batch",
+       "price": "0.011",
+       "description": "cache_read_tokens_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_batch",
+       "price": "0.1375",
+       "description": "cache_write_tokens_30m_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_read_tokens_long_ctx_batch",
+       "price": "0.022",
+       "description": "cache_read_tokens_long_ctx_batch",
+       "unit": "Units"
+      },
+      {
+       "dimension": "cache_write_tokens_30m_long_ctx_batch",
+       "price": "0.275",
+       "description": "cache_write_tokens_30m_long_ctx_batch",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

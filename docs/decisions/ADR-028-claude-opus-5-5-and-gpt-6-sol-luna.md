@@ -205,3 +205,10 @@ US CRIS 3; 휴면 1P 5 포함 총계 51 → 60). reliability/cost/analysis/effic
 - Opus 5.5 US(`us.anthropic.claude-opus-5-5`)의 공식 단가는 $4.40 / $22(Global × 1.1)다. v2.29.1 코드는 Global과 같은 $4 / $20이었고
   v2.30.0 seed로 과거까지 교정했다(ADR-030).
 - GPT-5.6 Sol 프로모션의 "최소 2026-11-21까지"는 현재 공식 출처에 없어 `pricing_sources.PRICE_NOTES` 수동 메모로 관리한다.
+
+## 후속 (v2.31.0, 2026-09-27)
+
+- GPT-5.6 Sol 프로모션 기한("최소 2026-11-21까지")은 OpenAI 공식 요금 문서가 명시하고, `pricing_sources.PRICE_NOTES`가 그 문서를 출처로
+  인용한다(`source` `openai_doc`, `source_id` `openai-pricing`, ADR-030 v2.31.0 부록 §8). 위 v2.30.0 후속의 수동 메모 문장은 2026-09-26
+  기준 기록이다. 프로모션 종료 확인은 AWS 모델 카드가 아니라 OpenAI 요금 문서와 agreement offer로 한다(`docs/runbooks/troubleshooting.md`
+  "GPT-5.6 Sol 프로모션 종료 확인").

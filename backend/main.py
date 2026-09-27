@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import logging
 import threading
+import time
 from contextlib import asynccontextmanager
+from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
@@ -32,6 +34,10 @@ logging.basicConfig(
     format="%(asctime)s %(levelname)s %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# 단가 열 마이그레이션과 seed의 백그라운드 재시도 (v2.31.0, _retry_price_schema) — 테스트가 줄일 수 있게 모듈 상수로 둔다.
+PRICE_SCHEMA_RETRY_ATTEMPTS = 3
+PRICE_SCHEMA_RETRY_INTERVAL_S = 30.0
 
 
 @asynccontextmanager
@@ -159,21 +165,77 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Label repair failed (non-fatal)")
 
+    # 단가 열(v2.31.0)과 단가 seed(v2.30.0) — CP seed가 활성 CP model_id로 풀리므로 모델 등록 다음에 둔다.
+    # 실패하면 백그라운드 스레드가 다시 시도한다(기동은 기다리지 않는다).
+    _ensure_price_schema()
+
+    logger.info("Database tables ready.")
+
+    yield
+
+
+def _ensure_price_schema() -> Optional[threading.Thread]:
+    """lifespan의 단가 열 마이그레이션과 단가 seed. 둘 중 하나라도 실패하면 재시도 스레드를 띄우고 그 스레드를 돌려준다.
+
+    둘 다 성공하면 스레드 없이 None이다. 실패해도 기동은 계속하고, 여기서는 기다리지 않는다(재시도는 _retry_price_schema).
+    """
+    failed = False
+    # 단가 표시 전용 열 7개 (v2.31.0) — 운영 price_history는 이미 있어 create_all이 새 열을 더하지 않는다.
+    # 빠진 열이 없으면 DDL 없이 끝난다(ADD COLUMN은 no-op이어도 ACCESS EXCLUSIVE 락을 요청). 아래 seed가 새 열에 값을
+    # 넣으므로 seed 블록 바로 앞에 둔다. 실패해도 기동은 계속한다 — 아래 재시도 스레드가 다시 한다.
+    try:
+        from pricing_seed import ensure_price_columns
+        ensure_price_columns(engine)
+    except Exception:
+        failed = True
+        logger.exception("Price column migration failed (non-fatal, backend continues)")
+
     # 단가 seed (v2.30.0, ADR-030) — price_history에 행이 하나도 없는 활성 model_id에만 공식 단가 seed를 넣는다.
     # CP seed는 family_key 단위라 현재 활성 CP model_id로 풀어 넣어야 하므로 모델 등록 다음에 둔다.
     # 마이그레이션과 분리된 자체 트랜잭션 + pg_advisory_xact_lock(917350003) — 실패해도 기동은 계속한다.
+    active = None
     try:
         from pricing_seed import ensure_seed
         from pricing_sources import active_channels
         from prober import AVAILABLE_MODELS
         from visibility import hidden_patterns
-        ensure_seed(engine, active_channels(AVAILABLE_MODELS, hidden_patterns()))
+        active = active_channels(AVAILABLE_MODELS, hidden_patterns())
+        ensure_seed(engine, active)
     except Exception:
+        failed = True
         logger.exception("Price seed failed (non-fatal, backend continues)")
 
-    logger.info("Database tables ready.")
+    # 활성 채널 집합조차 만들지 못했으면(import나 코드 오류) 다시 해도 같으므로 스레드를 띄우지 않는다.
+    if not failed or active is None:
+        return None
+    thread = threading.Thread(target=_retry_price_schema, args=(active,), name="price-schema-retry", daemon=True)
+    thread.start()
+    return thread
 
-    yield
+
+def _retry_price_schema(active) -> bool:
+    """기동 때 실패한 단가 열 마이그레이션과 seed를 백그라운드에서 다시 시도한다 (v2.31.0).
+
+    ALTER TABLE은 ACCESS EXCLUSIVE 잠금이 필요해 price_history를 읽거나 쓰는 트랜잭션(롤링 배포 중 다른 backend 태스크의
+    /api/cost/*, /api/efficiency/score, /api/pricing 조회, 실행 중인 PricingSync)과 겹치면 lock_timeout 5초에 걸려 실패한다.
+    그대로 두면 새 열이 없어 /api/pricing이 다음 재기동이나 PricingSync까지 500이다. PRICE_SCHEMA_RETRY_INTERVAL_S초 간격으로
+    최대 PRICE_SCHEMA_RETRY_ATTEMPTS번 ensure_price_columns → ensure_seed(기동 때와 같은 활성 채널 집합)를 다시 하고, 처음
+    성공하면 멈춘다. 두 함수 모두 멱등이라 이미 끝난 단계는 no-op이다. 성공하면 True, 모두 실패하면 False.
+    """
+    for attempt in range(1, PRICE_SCHEMA_RETRY_ATTEMPTS + 1):
+        time.sleep(PRICE_SCHEMA_RETRY_INTERVAL_S)
+        try:
+            from pricing_seed import ensure_price_columns, ensure_seed
+            ensure_price_columns(engine)
+            ensure_seed(engine, active)
+        except Exception:
+            logger.exception("Price schema retry %d/%d failed", attempt, PRICE_SCHEMA_RETRY_ATTEMPTS)
+            continue
+        logger.info("Price schema retry %d/%d succeeded", attempt, PRICE_SCHEMA_RETRY_ATTEMPTS)
+        return True
+    logger.error("Price schema retries exhausted (%d); run PricingSync once or restart the backend",
+                 PRICE_SCHEMA_RETRY_ATTEMPTS)
+    return False
 
 
 def _seed_default_admin():
@@ -225,7 +287,7 @@ app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
     # OpenAPI(/docs)에 노출되는 런타임 버전 — 릴리스 시 CLAUDE.md "Version strings" 목록과 함께 범프.
-    version="2.30.0",
+    version="2.31.0",
     lifespan=lifespan,
 )
 

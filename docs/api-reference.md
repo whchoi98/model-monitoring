@@ -295,7 +295,8 @@ the totals, and channel-compare keeps adding a null as 0. Trend buckets use the 
 computed at query time from `backend/pricing.py` (removed), so a price change re-priced every past row (ADR-025 rule, now
 superseded). The time before the first PricingSync run is priced with the seed (`pricing_seed.py`, effective from
 1970-01-01): price changes made before v2.30.0 are not reconstructed, and the 11 channels whose code price was wrong (Bedrock
-Claude US, Nova 2.0 Lite) are corrected for all history. Response shapes are unchanged.
+Claude US, Nova 2.0 Lite) are corrected for all history. Response shapes are unchanged. The cache and long-context prices added
+in v2.31.0 are display-only and never enter `row_cost`, and the `openai-list:<family_key>` channels have no probe rows.
 
 ### GET /api/reliability/multi-channel
 Success rate + error buckets grouped by family/channel.
@@ -309,17 +310,23 @@ Stop-reason distribution + output-length histograms.
 
 ---
 
-## Unit Prices (Public) — v2.30.0, ADR-030
+## Unit Prices (Public) — v2.30.0, ADR-030 (cache, long-context and OpenAI official prices v2.31.0)
 
 Data source for `/pricing` (Unit Prices / 비용 단가), Model Explorer card prices and Comparison Lab costs. Prices are USD per
-1M tokens, Standard tier input and output only (no cache, batch, long-context, priority or flex prices). The PricingSync task
-(`python -m pricing_sync_runner --once`, every 12 hours) refreshes them from three official sources: the Bedrock agreement-offer
-rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 20 + OpenAI 25 channels), the AWS Price List API (`GetProducts`,
-Nova 2.0 Lite) and Anthropic's `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude Platform on AWS 9 channels).
-A change of more than 50% on input or output (the boundary itself is applied) is stored as `pending_review` and waits for admin
-approval (see Admin below). Observed prices are compared and stored at 6 decimals (a positive value that rounds to 0 counts as a
-parse failure), and a parser error of any type only skips that source's channels (`skipped:parse_failed`) without failing the
-run. Dormant 1P channels and labels matching `HIDDEN_MODEL_PATTERNS` are excluded.
+1M tokens, Standard tier. Every cell has the input and output price and, since v2.31.0, the prompt-caching prices (cache read,
+cache write, Claude 1-hour cache write) and, on GPT rows, the long-context prices; batch, flex and priority (fast) prices are not
+included. Costs use input and output only: the cache and long-context prices and the OpenAI official price are display-only.
+The PricingSync task (`python -m pricing_sync_runner --once`, every 12 hours) refreshes them from four official sources: the
+Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 20 + OpenAI 25 channels), the AWS Price
+List API (`GetProducts`, Nova 2.0 Lite), Anthropic's `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude
+Platform on AWS 9 channels) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 8
+active OpenAI families, stored as the display-only channels `openai-list:<family_key>`, v2.31.0). A change of more than 50% on
+any price field (the boundary itself is applied) is stored as `pending_review` and waits for admin approval (see Admin below); a
+field that was empty and is observed for the first time fills the current row in place (run result `enriched`, no new history
+row). Observed prices are compared and stored at 6 decimals (a positive value that rounds to 0 counts as a parse failure; a
+cache or long-context price may be exactly 0, as the Nova cache write is), and a parser error of any type only skips that
+source's channels (`skipped:parse_failed`) without failing the run. Dormant 1P channels and labels matching
+`HIDDEN_MODEL_PATTERNS` are excluded.
 
 ### GET /api/pricing
 Current price table. The backend keeps a 60 s in-process cache per task (no `lang` in the key — the body carries both languages).
@@ -329,63 +336,111 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
 {
   "currency": "USD",
   "unit": "per_1m_tokens",
-  "generated_at": "2026-09-26T16:00:00Z",
-  "last_sync": {"id": 12, "started_at": "2026-09-26T15:00:00Z", "finished_at": "2026-09-26T15:00:31Z", "status": "completed"},
+  "generated_at": "2026-09-27T16:00:00Z",
+  "last_sync": {"id": 14, "started_at": "2026-09-27T15:00:00Z", "finished_at": "2026-09-27T15:00:33Z", "status": "completed"},
   "pending_review": 0,
   "families": [
     {
       "family_key": "claude-opus-5-5", "family": "Claude Opus 5.5", "provider": "anthropic",
       "tiers": {
-        "cp":     {"input": 4,   "output": 20, "model_ids": ["anthropic:claude-opus-5-5"], "source_ids": ["anthropic-pricing"], "footnotes": [1], "verification": "verified", "observed_at": "2026-09-26T15:00:00Z", "pending": null},
-        "global": {"input": 4,   "output": 20, "model_ids": ["global.anthropic.claude-opus-5-5"], "source_ids": ["offer:offer-7sp77cpl4rveu"], "footnotes": [2], "verification": "verified", "observed_at": "2026-09-26T15:00:00Z", "pending": null},
-        "us":     {"input": 4.4, "output": 22, "model_ids": ["us.anthropic.claude-opus-5-5"], "source_ids": ["offer:offer-7sp77cpl4rveu"], "footnotes": [2], "verification": "verified", "observed_at": "2026-09-26T15:00:00Z", "pending": null},
+        "cp":          {"input": 4,   "output": 20, "cache_read": 0.2,  "cache_write": 5,   "cache_write_1h": 8,   "long": null, "model_ids": ["anthropic:claude-opus-5-5"], "source_ids": ["anthropic-pricing"], "footnotes": [1], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null},
+        "openai_list": null,
+        "global":      {"input": 4,   "output": 20, "cache_read": 0.2,  "cache_write": 5,   "cache_write_1h": 8,   "long": null, "model_ids": ["global.anthropic.claude-opus-5-5"], "source_ids": ["offer:offer-7sp77cpl4rveu"], "footnotes": [2], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null},
+        "us":          {"input": 4.4, "output": 22, "cache_read": 0.22, "cache_write": 5.5, "cache_write_1h": 8.8, "long": null, "model_ids": ["us.anthropic.claude-opus-5-5"], "source_ids": ["offer:offer-7sp77cpl4rveu"], "footnotes": [2], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null},
         "in_region": []
+      },
+      "notes": []
+    },
+    {
+      "family_key": "gpt-6-astra", "family": "GPT 6 Astra", "provider": "openai",
+      "tiers": {
+        "cp": null,
+        "openai_list": {"input": 10, "output": 50, "cache_read": 1,   "cache_write": 12.5,  "cache_write_1h": null, "long": {"input": 20, "output": 75,   "cache_read": 2,   "cache_write": 25},   "model_ids": ["openai-list:gpt-6-astra"], "source_ids": ["openai-pricing"], "footnotes": [3], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null},
+        "global":      {"input": 10, "output": 50, "cache_read": 1,   "cache_write": 12.5,  "cache_write_1h": null, "long": {"input": 20, "output": 75,   "cache_read": 2,   "cache_write": 25},   "model_ids": ["openai:global:global.openai.gpt-6-astra"], "source_ids": ["offer:offer-7epta7rbw5aws"], "footnotes": [4], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null},
+        "us":          {"input": 11, "output": 55, "cache_read": 1.1, "cache_write": 13.75, "cache_write_1h": null, "long": {"input": 22, "output": 82.5, "cache_read": 2.2, "cache_write": 27.5}, "model_ids": ["openai:us:us.openai.gpt-6-astra"], "source_ids": ["offer:offer-7epta7rbw5aws"], "footnotes": [4], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null},
+        "in_region": [
+          {"regions": ["us-west-2"], "input": 11, "output": 55, "cache_read": 1.1, "cache_write": 13.75, "cache_write_1h": null, "long": {"input": 22, "output": 82.5, "cache_read": 2.2, "cache_write": 27.5}, "model_ids": ["openai:us-west-2:openai.gpt-6-astra"], "source_ids": ["offer:offer-7epta7rbw5aws"], "footnotes": [4], "verification": "verified", "observed_at": "2026-09-27T15:00:00Z", "pending": null}
+        ]
       },
       "notes": []
     }
   ],
-  "models": {"us.anthropic.claude-opus-5-5": {"input": 4.4, "output": 22, "verification": "verified"}},
+  "models": {
+    "us.anthropic.claude-opus-5-5": {"input": 4.4, "output": 22, "verification": "verified"},
+    "openai:global:global.openai.gpt-6-astra": {"input": 10, "output": 50, "verification": "verified"}
+  },
   "references": [
-    {"n": 1, "id": "anthropic-pricing", "kind": "anthropic_doc", "title_en": "Anthropic API pricing (Claude Platform on AWS uses standard pricing)", "title_ko": "Anthropic API 요금 (Claude Platform on AWS는 표준 요금)", "url": "https://platform.claude.com/docs/en/about-claude/pricing#model-pricing", "as_of": "2026-09-26"}
+    {"n": 1, "id": "anthropic-pricing", "kind": "anthropic_doc", "title_en": "Anthropic API pricing (Claude Platform on AWS uses standard pricing)", "title_ko": "Anthropic API 요금 (Claude Platform on AWS는 표준 요금)", "url": "https://platform.claude.com/docs/en/about-claude/pricing#model-pricing", "as_of": "2026-09-27"},
+    {"n": 2, "id": "offer:offer-7sp77cpl4rveu", "kind": "agreement_offer", "title_en": "Amazon Bedrock agreement offer rate card, offer-7sp77cpl4rveu (Claude Opus 5.5)", "title_ko": "Amazon Bedrock 약정 오퍼 요금표, offer-7sp77cpl4rveu (Claude Opus 5.5)", "url": "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html", "as_of": "2026-09-27"},
+    {"n": 3, "id": "openai-pricing", "kind": "openai_doc", "title_en": "OpenAI API pricing (Standard)", "title_ko": "OpenAI API 요금 (Standard)", "url": "https://developers.openai.com/api/docs/pricing", "as_of": "2026-09-27"},
+    {"n": 4, "id": "offer:offer-7epta7rbw5aws", "kind": "agreement_offer", "title_en": "Amazon Bedrock agreement offer rate card, offer-7epta7rbw5aws (GPT 6 Astra)", "title_ko": "Amazon Bedrock 약정 오퍼 요금표, offer-7epta7rbw5aws (GPT 6 Astra)", "url": "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html", "as_of": "2026-09-27"}
   ],
   "disclaimer": {"en": "This price list is compiled automatically from public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing pages.", "ko": "이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요."}
 }
 ```
 
-- `families` come in display order (provider Anthropic Claude → Amazon Nova → OpenAI, then the family order of
-  `frontend/src/lib/sortModels.ts` `FAMILY_ORDER`, mirrored and pinned by `pricing_sources.FAMILY_ORDER`). Clients render that
-  order and the footnote numbers as sent; they never re-sort or renumber.
-- `tiers` always has the four keys `cp`, `global`, `us`, `in_region`. The first three are an object or `null`; `in_region` is
-  always an array whose elements add `regions` and group regions with the same price (sorted by region name).
-- Prices are JSON numbers with at most 6 decimals and no trailing zeros (`4`, `4.4`, `0.11`).
+- `families` come in display order: provider Anthropic Claude → OpenAI → Amazon Nova (`pricing_sources.PROVIDER_ORDER`, v2.31.0;
+  v2.30.0 put Amazon Nova second), then the family order of `frontend/src/lib/sortModels.ts` `FAMILY_ORDER`, mirrored and pinned
+  by `pricing_sources.FAMILY_ORDER`. Clients render that order and the footnote numbers as sent; they never re-sort or renumber.
+- `tiers` always has five keys in this order: `cp`, `openai_list`, `global`, `us` (an object or `null`) and `in_region` (always an
+  array whose elements add `regions` and group the regions whose nine price values, verification and pending values are all
+  equal, sorted by region name). `cp` is set only for Claude families and `openai_list` only for OpenAI families (v2.31.0).
+- Every cell (single tier or `in_region` element) has `input`, `output`, `cache_read`, `cache_write`, `cache_write_1h` and `long`.
+  `cache_read` is the cache hit (cached input) price; `cache_write` is the Claude 5-minute cache write, the OpenAI "cache writes"
+  price or the Nova cache write; `cache_write_1h` is the Claude 1-hour cache write. Each is `null` when the source has no such
+  price. `long` is `{input, output, cache_read, cache_write}` (the last two may be `null`) with the GPT long-context prices, which
+  apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5), when both long input and output are known,
+  else `null` (always `null` for Claude and Nova). Cache and long-context prices are display-only.
+- Prices are JSON numbers with at most 6 decimals and no trailing zeros (`4`, `4.4`, `0.11`, `0.0825`). A cache or long-context
+  price can be `0` (the Nova cache write); input and output are always above 0.
 - `verification` per cell: `verified` (observed by the latest finished run, whatever its status), `stale` (last observed
   earlier — `observed_at` tells when), `seed_only` (never observed by an official source yet). `pending` is the latest
-  `pending_review` row of that `model_id` (`{id, input, output, observed_at}`) or `null`.
+  `pending_review` row of that `model_id` (`{id, input, output, cache_read, cache_write, cache_write_1h, long, observed_at}`) or
+  `null`.
 - `pending_review` counts every active channel (distinct `model_id`s) that has any `pending_review` row, whichever run left it;
   the admin list below shows every pending row. It is not the same number as `price_sync_runs.pending`, which counts only the
   channels that one run classified as pending (a new `pending_review` row or a re-observed held value, `no_baseline` included),
   so the run's number can be lower.
 - `last_sync` is the latest finished run (any status) or `null` before the first run.
-- `models` maps each active `model_id` to its current price (used by Model Explorer and Comparison Lab).
-- `notes` holds manual notes that are not official-source facts (GPT-5.6 Sol promotional price, `min_until` 2026-11-21 with the
-  prior prices); a note disappears once a sync observes its `prior_price`.
-- `references[]`: `n` (1-based, in order of first citation, then fixed official pages, manual notes last), `id`
-  (`offer:<offerId>`, `pricelist:<usagetype>`, `anthropic-pricing`, `official:<slug>`, `note:<family_key>`), `kind`
-  (`agreement_offer`, `price_list`, `anthropic_doc`, `official_page`, `manual_note`), bilingual titles (a `manual_note` title
-  names the family, e.g. "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)"), `url`, `as_of` (UTC date
-  of the latest observation of that source, or the seed date 2026-09-26; `null` for `official_page` and `manual_note`, and a
-  `manual_note` has `url: null`).
+- `models` maps each active probe `model_id` to its current input and output price (used by Model Explorer and Comparison Lab).
+  The display-only `openai_list` channels (`openai-list:<family_key>`) are not in it.
+- `notes` holds price notes. Since v2.31.0 the GPT-5.6 Sol promotional price note (`kind` `promo`, `min_until` 2026-11-21,
+  `prior_price` for `openai_list`, `global` and `in_region`) cites the OpenAI pricing page, which states that the promotion runs
+  at least through November 21, 2026. The sync reads only that page's price table, so the note text is dated ("As of 2026-09-27,
+  the OpenAI pricing page states …"). Every note carries `source` (`openai_doc` or `manual_note`) and `source_id`, the reference
+  its footnote points to (`openai-pricing` here, `note:<family_key>` for a manual note), numbered right after that family's
+  cells when the source is official (a `manual_note` reference is numbered after the fixed official pages). A note
+  disappears once a sync observes its `prior_price` on one of those tiers.
+- `references[]`: `n` (1-based, in order of first citation, then fixed official pages, then the notes whose `source` is
+  `manual_note`), `id` (`offer:<offerId>`, `pricelist:<usagetype>`, `anthropic-pricing`, `openai-pricing`, `official:<slug>`,
+  `note:<family_key>`), `kind` (`agreement_offer`, `price_list`, `anthropic_doc`, `openai_doc`, `official_page`, `manual_note`),
+  bilingual titles (`openai-pricing` is "OpenAI API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title
+  names the family, e.g. "<family> promotion (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that
+  source, or the seed date 2026-09-27; `null` for `official_page` and `manual_note`, and a `manual_note` has `url: null`).
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
-  last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels.
+  last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels, plus one display-only
+  `openai-list:<family_key>` channel per active OpenAI family (8, v2.31.0).
 
 ### GET /api/pricing/export?format=csv|md|json&lang=ko|en
 Download the same table as a file: `Content-Disposition: attachment; filename="llm-monitor-unit-prices-YYYY-MM-DD.<csv|md|json>"`.
-`lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then one table per
-provider (model | Claude Platform on AWS | Global | US | In-Region, cells with `[^n]`), notes, the references as footnote
-definitions and the disclaimer again. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted field
-(`"# <disclaimer>"`, so the commas in the text never split it into columns), the header
-`provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,verification,observed_at,footnotes,source_ids`, one
-row per tier element (`channel` is `cp`, `global`, `us` or `in_region`; list columns are space-separated), a blank line, then
+`lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then the unit, generation
+time and last official price sync lines (`Last official price sync: <finished_at> (<status>)`, KO `마지막 공식 단가 동기화`, with the
+screen's status words "completed", "partial, some sources failed", "failed", "running", KO "완료", "일부 출처 실패", "실패",
+"진행 중"; an unknown status as is), then one table per provider with that provider's own columns: Anthropic Claude
+`model | Claude Platform on AWS | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region`, OpenAI `model | OpenAI official price | AWS Bedrock - Global CRIS |
+AWS Bedrock - US CRIS | AWS Bedrock - In Region` (KO "OpenAI 공식 가격"), Amazon Nova `model | AWS Bedrock - Global CRIS |
+AWS Bedrock - US CRIS | AWS Bedrock - In Region` (no blank column). A cell is the price pair, regions and badges with `[^n]`
+footnotes (a pending value lists only what changes, as the screen badge does: the pair when input or output changes, then the
+changed cache prices and the long-context line, e.g. `4 / 20 (Pending review cache read 0.3)`; when the first changed cache price is
+not the cache read it names the cache: `(Pending review cache 1h write 17.6)`, `cache write 11, 1h write 17.6`,
+KO `캐시 1시간 쓰기 17.6`), then `<br>` and the cache line (`cache read 0.2, write 5, 1h write 8`; KO `캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8`; only
+the fields that are set) and, on GPT rows, `<br>` and the long-context line (`long context 20 / 75, cache read 2, write 25`; KO
+`긴 컨텍스트 20 / 75, 캐시 읽기 2, 쓰기 25`); `in_region` elements are joined by `<br><br>`. Then come the notes, the references as
+footnote definitions and the disclaimer again. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted
+field (`"# <disclaimer>"`, so the commas in the text never split it into columns), the header
+`provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,cache_read_usd_per_1m,cache_write_usd_per_1m,cache_write_1h_usd_per_1m,long_input_usd_per_1m,long_output_usd_per_1m,long_cache_read_usd_per_1m,long_cache_write_usd_per_1m,verification,observed_at,footnotes,source_ids`,
+one row per tier element in the order `cp`, `openai_list`, `global`, `us`, `in_region` (`channel` is that key; list columns are
+space-separated; a price the source does not have is an empty field), a blank line, then
 `reference_n,reference_id,kind,title,url,as_of` and the references.
 
 ---
@@ -493,12 +548,17 @@ User management.
 ### POST /api/admin/reset-monitoring-data
 Purge stored probe data.
 
-### GET /api/admin/pricing/pending — v2.30.0
-Unit prices waiting for review (`status = 'pending_review'`): for each row the current effective price, the new price, the input
-and output change ratios, the source and the reason — `changed` (a change above 50%) or `no_baseline` (a `model_id` with no
+### GET /api/admin/pricing/pending — v2.30.0 (extra fields v2.31.0)
+Unit prices waiting for review (`status = 'pending_review'`): for each row the current effective price, the new price, the change
+ratios, the source and the reason — `changed` (a change above 50% on any price field) or `no_baseline` (a `model_id` with no
 seed or verified price; approving it applies the price to all history, `effective_from` 1970-01-01). Response
-`{"pending": [{id, model_id, family_key, channel, reason, current: {input, output} | null, new: {input, output}, change:
-{input, output} | null, source_id, effective_from, observed_at}]}`, ordered by `id`, pending rows of every `model_id`.
+`{"pending": [{id, model_id, family_key, channel, reason, current: {input, output, …} | null, new: {input, output, …}, change:
+{input, output, …} | null, source_id, effective_from, observed_at}]}`, ordered by `id`, pending rows of every `model_id`. Since
+v2.31.0 `current` and `new` also carry the optional `cache_read`, `cache_write`, `cache_write_1h`, `long_input`, `long_output`,
+`long_cache_read` and `long_cache_write` (`null` when not set), and `change` has a ratio for every field set on both sides
+(`input` and `output` are always there when a current price exists; an extra field whose current value is 0 has ratio `0` when
+the new value is also 0, else `null`). `channel` can be `openai_list` (`model_id`
+`openai-list:<family_key>`).
 
 ### POST /api/admin/pricing/pending/{row_id}/approve — v2.30.0
 Sets the row to `verified` and keeps its `effective_from` (the start of the run that observed it, or 1970-01-01 for
