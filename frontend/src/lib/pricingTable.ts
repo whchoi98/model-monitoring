@@ -51,12 +51,13 @@ export function headerParts(label: string): string[] {
 /**
  * "$4.00" — two to six decimals, zeros past the second trimmed: 12.5 -> "$12.50", 1.375 -> "$1.375",
  * 0.0825 -> "$0.0825". Official prices have at most six decimals (the backend's PRICE_QUANTUM).
- * Never throws: NaN, ±Infinity and values of 1e21 or more, which toFixed gives without a fraction part ("NaN",
- * "1e+21"), are shown as they are ("$NaN", "$1e+21").
+ * Never throws: NaN, ±Infinity and values of 1e21 or more (where toFixed gives "NaN" or exponent notation) are shown
+ * as they are ("$NaN", "$1e+21", "$1.5e+30").
  */
 export function formatUnitPrice(v: number): string {
+  // toFixed switches to exponent notation at 1e21 ("1.5e+30"), which the fraction split below would truncate.
+  if (!Number.isFinite(v) || Math.abs(v) >= 1e21) return `$${v}`;
   const [whole, fraction] = v.toFixed(6).split(".");
-  if (fraction === undefined) return `$${v}`;
   return `$${whole}.${fraction.replace(/0+$/, "").padEnd(2, "0")}`;
 }
 

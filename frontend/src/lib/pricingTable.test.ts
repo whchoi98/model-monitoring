@@ -108,6 +108,9 @@ describe("formatUnitPrice / formatPricePair — 소수 둘째 자리부터, 여�
     expect(formatUnitPrice(Number.POSITIVE_INFINITY)).toBe("$Infinity");
     expect(formatUnitPrice(Number.NEGATIVE_INFINITY)).toBe("$-Infinity");
     expect(formatUnitPrice(1e21)).toBe("$1e+21");
+    expect(formatUnitPrice(1.5e21)).toBe("$1.5e+21");
+    expect(formatUnitPrice(1.5e30)).toBe("$1.5e+30");
+    expect(formatUnitPrice(-2.5e100)).toBe("$-2.5e+100");
     // Just below 1e21 toFixed still has a fraction part, so the usual two decimals apply.
     expect(formatUnitPrice(1e20)).toBe("$100000000000000000000.00");
     expect(formatPricePair({ input: Number.NaN, output: 20 })).toBe("$NaN / $20.00");
