@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Docs
+- README Screenshots gallery: the Unit Prices captures (`docs/images/ui/pricing-{en,ko}.png`) are retaken from production on 2026-09-27 (v2.31.0: AWS Bedrock column names, the OpenAI official price column, prompt-caching lines).
+- README 스크린샷 갤러리의 비용 단가 화면(`docs/images/ui/pricing-{en,ko}.png`)을 2026-09-27 운영 환경에서 다시 캡처했다(v2.31.0: AWS Bedrock 열 이름, OpenAI 공식 가격 열, 프롬프트 캐싱 줄).
+
 ## v2.31.0 — 2026-09-27
 
 ### Added
