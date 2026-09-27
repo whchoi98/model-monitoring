@@ -428,7 +428,8 @@ AWS Bedrock - US CRIS | AWS Bedrock - In Region`, OpenAI `model | OpenAI officia
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (KO "OpenAI 공식 가격"), Amazon Nova `model | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (no blank column). A cell is the price pair, regions and badges with `[^n]`
 footnotes (a pending value lists only what changes, as the screen badge does: the pair when input or output changes, then the
-changed cache prices and the long-context line, e.g. `4 / 20 (Pending review cache read 0.3)`), then `<br>` and the cache line (`cache read 0.2, write 5, 1h write 8`; KO `캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8`; only
+changed cache prices and the long-context line, e.g. `4 / 20 (Pending review cache read 0.3)`; without the cache read the first
+cache price names the cache, e.g. `4.4 / 22 (Pending review cache 1h write 17.6)`, KO `(검토 대기 캐시 1시간 쓰기 17.6)`), then `<br>` and the cache line (`cache read 0.2, write 5, 1h write 8`; KO `캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8`; only
 the fields that are set) and, on GPT rows, `<br>` and the long-context line (`long context 20 / 75, cache read 2, write 25`; KO
 `긴 컨텍스트 20 / 75, 캐시 읽기 2, 쓰기 25`); `in_region` elements are joined by `<br><br>`. Then come the notes, the references as
 footnote definitions and the disclaimer again. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted

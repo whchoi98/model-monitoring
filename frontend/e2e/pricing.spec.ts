@@ -250,8 +250,8 @@ test("a 375px phone scrolls only the price table, with the model column pinned",
     expect(sticky.background).toMatch(/^rgb\(\d+, \d+, \d+\)$/);
   }
   await page.evaluate(() => document.documentElement.classList.remove("light"));
-  // No token wraps inside: region ids, price pairs, cache and long-context items, column-title parts, the sync time,
-  // short badges and the pending count stay whole.
+  // No token wraps inside: region ids, price pairs, cache and long-context items, the parts of two-part column titles,
+  // the sync time, short badges and the pending count stay whole.
   const split = await page.evaluate(() => {
     const inline = [...document.querySelectorAll(
       "[data-regions] > span, [data-price-line] > span:first-child, [data-cache-line] > span, [data-long-line] > span, thead th > span, [data-last-sync] time",
@@ -307,7 +307,11 @@ test("a 390px phone in English shows the new columns, cache and long-context lin
     })).toBe(true);
   }
   await page.evaluate(() => document.documentElement.classList.remove("light"));
-  const split = await page.evaluate(() => [...document.querySelectorAll("[data-cache-line] > span, [data-long-line] > span, thead th > span")]
+  // Only two-part column titles have unbreakable parts ("AWS Bedrock -" / "Global CRIS"); a title without " - "
+  // ("Claude Platform on AWS", "OpenAI official price") is plain text that wraps between words.
+  const titleParts = ["AWS Bedrock -", "Global CRIS", "AWS Bedrock -", "US CRIS", "AWS Bedrock -", "In Region"];
+  expect(await page.locator("main thead th > span").allTextContents()).toEqual([...titleParts, ...titleParts, ...titleParts]);
+  const split = await page.evaluate(() => [...document.querySelectorAll("[data-cache-line] > span, [data-long-line] > span, main thead th > span")]
     .filter((element) => element.getClientRects().length > 1)
     .map((element) => element.textContent));
   expect(split).toEqual([]);
@@ -315,6 +319,14 @@ test("a 390px phone in English shows the new columns, cache and long-context lin
     .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
     .map((cell) => cell.closest("tr")?.getAttribute("data-family") ?? cell.textContent));
   expect(spilled).toEqual([]);
+
+  // A larger text size (root font size 110%, as a browser font-size setting gives) while the table keeps its 800px
+  // minimum: no column title spills into the next column.
+  await page.evaluate(() => { document.documentElement.style.fontSize = "110%"; });
+  const titleSpilled = await page.locator("main thead th").evaluateAll((cells) => cells
+    .filter((cell) => cell.scrollWidth > cell.clientWidth + 1)
+    .map((cell) => `${cell.textContent} ${cell.scrollWidth}/${cell.clientWidth}`));
+  expect(titleSpilled).toEqual([]);
 });
 
 test("a failed price request offers a retry and is not shown as an empty table", async ({ page }) => {

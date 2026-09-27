@@ -11,8 +11,8 @@
 // 공식 단가는 12시간마다 자동 동기화되고, 면책 문구는 상단 안내 상자와 참고 자료 끝에 두 번 표기한다.
 // 배지 설명과 모델 ID는 title 툴팁에만 두지 않는다(터치, 키보드 사용자가 볼 수 없다). 배지 설명은 배지 옆 글자로,
 // 모델 ID는 "모델 ID 보기" 토글로 보여 준다. 폰에서는 표만 가로로 스크롤되므로 표 위 안내와 오른쪽 가장자리 흐림으로 알린다.
-// 한글 문장은 break-keep(어절 단위 줄바꿈), 리전 id, 날짜, 가격 쌍, 캐시 항목, 열 이름 조각, 배지, 각주는 토큰 중간에서
-// 줄이 바뀌지 않는다.
+// 한글 문장은 break-keep(어절 단위 줄바꿈), 리전 id, 날짜, 가격 쌍, 캐시 항목, 두 조각 열 이름의 조각, 배지, 각주는 토큰
+// 중간에서 줄이 바뀌지 않는다. " - "가 없는 열 이름(Claude Platform on AWS, OpenAI 공식 가격)은 단어 사이에서 줄이 바뀐다.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchPricing, pricingExportUrl } from "@/lib/api";
@@ -312,11 +312,17 @@ function PriceItems({ items, line }: { items: PriceItem[]; line: "cache" | "long
   );
 }
 
-/** A column title: headerParts keeps "AWS Bedrock -" and "Global CRIS" whole, so a title wraps only between them. */
+/**
+ * A column title. A two-part title keeps "AWS Bedrock -" and "Global CRIS" whole, so it wraps only between them. A title
+ * without " - " ("Claude Platform on AWS", "OpenAI 공식 가격") wraps between words as in v2.30.0: kept whole, it spills
+ * into the next column once the text size grows.
+ */
 function HeaderLabel({ text }: { text: string }) {
+  const parts = headerParts(text);
+  if (parts.length === 1) return <Runs text={text} />;
   return (
     <>
-      {headerParts(text).map((part, i) => (
+      {parts.map((part, i) => (
         <Fragment key={part}>
           {i > 0 && " "}
           <span className="whitespace-nowrap">{part}</span>

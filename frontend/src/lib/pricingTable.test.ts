@@ -188,8 +188,8 @@ describe("pendingDetail — 새 값은 바뀐 항목만", () => {
       ...base,
       pending: pendingOf(base, { input: 5.5, output: 33, cache_write: 6.875, long: { input: 11, output: 49.5, cache_read: 1.1, cache_write: 13.75 } }),
     };
-    expect(pendingDetail(pending, "ko")).toBe("새 값 $5.50 / $33.00, 쓰기 $6.875, 긴 컨텍스트 $11.00 / $49.50, 캐시 읽기 $1.10, 쓰기 $13.75");
-    expect(pendingDetail(pending, "en")).toBe("New value $5.50 / $33.00, write $6.875, long context $11.00 / $49.50, cache read $1.10, write $13.75");
+    expect(pendingDetail(pending, "ko")).toBe("새 값 $5.50 / $33.00, 캐시 쓰기 $6.875, 긴 컨텍스트 $11.00 / $49.50, 캐시 읽기 $1.10, 쓰기 $13.75");
+    expect(pendingDetail(pending, "en")).toBe("New value $5.50 / $33.00, cache write $6.875, long context $11.00 / $49.50, cache read $1.10, write $13.75");
   });
 
   test("캐시만 바뀌면 캐시 항목만, 처음 생긴 값도 바뀐 항목이다", () => {
@@ -197,7 +197,30 @@ describe("pendingDetail — 새 값은 바뀐 항목만", () => {
     expect(pendingDetail({ ...base, pending: pendingOf(base, { cache_read: 0.5 }) }, "ko")).toBe("새 값 캐시 읽기 $0.50");
     // EN item labels start lower case after "New value" (the cache line itself says "Cache read").
     expect(pendingDetail({ ...base, pending: pendingOf(base, { cache_read: 0.5 }) }, "en")).toBe("New value cache read $0.50");
-    expect(pendingDetail({ ...base, pending: pendingOf(base, { cache_write_1h: 8.8 }) }, "en")).toBe("New value 1h write $8.80");
+    expect(pendingDetail({ ...base, pending: pendingOf(base, { cache_write_1h: 8.8 }) }, "en")).toBe("New value cache 1h write $8.80");
+  });
+
+  test("캐시 읽기 없이 쓰기 항목이 먼저 나오면 그 첫 항목에 '캐시'를 붙이고, 셀의 캐시 줄은 그대로다", () => {
+    // Claude US: cache read $0.55, write $6.875, 1h write $11.
+    const base = tier({ input: 5.5, output: 27.5, cache_read: 0.55, cache_write: 6.875, cache_write_1h: 11, long: null });
+    const only1h = { ...base, pending: pendingOf(base, { cache_write_1h: 17.6 }) };
+    expect(pendingDetail(only1h, "ko")).toBe("새 값 캐시 1시간 쓰기 $17.60");
+    expect(pendingDetail(only1h, "en")).toBe("New value cache 1h write $17.60");
+    const writeAnd1h = { ...base, pending: pendingOf(base, { cache_write: 11, cache_write_1h: 17.6 }) };
+    expect(pendingDetail(writeAnd1h, "ko")).toBe("새 값 캐시 쓰기 $11.00, 1시간 쓰기 $17.60");
+    expect(pendingDetail(writeAnd1h, "en")).toBe("New value cache write $11.00, 1h write $17.60");
+    // A listed cache read comes first and already names the cache.
+    const readAndWrite = { ...base, pending: pendingOf(base, { cache_read: 1.1, cache_write: 11 }) };
+    expect(pendingDetail(readAndWrite, "ko")).toBe("새 값 캐시 읽기 $1.10, 쓰기 $11.00");
+    expect(pendingDetail(readAndWrite, "en")).toBe("New value cache read $1.10, write $11.00");
+    // Nova's official $0 cache write turning into a price.
+    const nova = tier({ input: 0.33, output: 2.75, cache_read: 0.0825, cache_write: 0, cache_write_1h: null, long: null });
+    expect(pendingDetail({ ...nova, pending: pendingOf(nova, { cache_write: 0.05 }) }, "ko")).toBe("새 값 캐시 쓰기 $0.05");
+    expect(tierBadges({ ...nova, pending: pendingOf(nova, { cache_write: 0.05 }) }, [], "en", SEPT_26)[0].detail)
+      .toBe("New value cache write $0.05");
+    // The cell's cache line keeps its short labels.
+    expect(cacheItems(only1h, "ko").map((item) => item.label)).toEqual(["캐시 읽기", "쓰기", "1시간 쓰기"]);
+    expect(cacheItems(only1h, "en").map((item) => item.label)).toEqual(["Cache read", "write", "1h write"]);
   });
 
   test("긴 컨텍스트 값 하나만 바뀌어도 긴 컨텍스트 항목 전체", () => {

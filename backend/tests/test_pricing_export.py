@@ -245,6 +245,34 @@ def test_pending_lists_only_the_changed_prices_like_the_screen():
     assert "캐시 읽기 0.3, 긴 컨텍스트" not in ko and "cache read 0.3, long context" not in en
 
 
+def test_pending_names_the_cache_when_a_cache_write_comes_first():
+    """Like the screen's pendingDetail: without the cache read, the first listed cache price says "캐시" / "cache"
+    ("검토 대기 캐시 1시간 쓰기 17.6", not "검토 대기 1시간 쓰기 17.6"); the cell's cache line keeps its short labels."""
+    payload = copy.deepcopy(EXPECTED_PAYLOAD)
+    cell = _family(payload, "claude-opus-5-5")["tiers"]["us"]  # cache read 0.22, write 5.5, 1h write 8.8
+    cell["pending"] = {"id": 97, "input": 4.4, "output": 22, "cache_read": 0.22, "cache_write": 5.5,
+                       "cache_write_1h": 17.6, "long": None, "observed_at": "2026-09-25T15:00:00Z"}
+    assert ("| 4.4 / 22 (검토 대기 캐시 1시간 쓰기 17.6)[^2]<br>캐시 읽기 0.22, 쓰기 5.5, 1시간 쓰기 8.8 |"
+            in to_markdown(payload, "ko"))
+    assert ("| 4.4 / 22 (Pending review cache 1h write 17.6)[^2]<br>cache read 0.22, write 5.5, 1h write 8.8 |"
+            in to_markdown(payload, "en"))
+    cell["pending"]["cache_write"] = 11
+    assert "(검토 대기 캐시 쓰기 11, 1시간 쓰기 17.6)" in to_markdown(payload, "ko")
+    assert "(Pending review cache write 11, 1h write 17.6)" in to_markdown(payload, "en")
+    cell["pending"].update(input=5.5, output=27.5)  # the pair first, then the cache write that needs the noun
+    assert "(검토 대기 5.5 / 27.5, 캐시 쓰기 11, 1시간 쓰기 17.6)" in to_markdown(payload, "ko")
+    cell["pending"]["cache_read"] = 0.5  # a listed cache read comes first and names the cache itself
+    assert "(검토 대기 5.5 / 27.5, 캐시 읽기 0.5, 쓰기 11, 1시간 쓰기 17.6)" in to_markdown(payload, "ko")
+    assert "(Pending review 5.5 / 27.5, cache read 0.5, write 11, 1h write 17.6)" in to_markdown(payload, "en")
+    # Nova's official $0 cache write turning into a price.
+    nova = _family(payload, "nova-2-lite")["tiers"]["us"]
+    nova["pending"] = {"id": 96, "input": 0.33, "output": 2.75, "cache_read": 0.0825, "cache_write": 0.05,
+                       "cache_write_1h": None, "long": None, "observed_at": "2026-09-25T15:00:00Z"}
+    assert ("| 0.33 / 2.75 (자동 확인 안 됨) (검토 대기 캐시 쓰기 0.05)[^8]<br>캐시 읽기 0.0825, 쓰기 0 |"
+            in to_markdown(payload, "ko"))
+    assert "(Pending review cache write 0.05)[^8]<br>cache read 0.0825, write 0 |" in to_markdown(payload, "en")
+
+
 def test_note_item_ends_with_the_footnote_of_its_source_id():
     payload = copy.deepcopy(EXPECTED_PAYLOAD)
     sol = _family(payload, "gpt-5.6-sol")

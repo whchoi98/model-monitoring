@@ -63,6 +63,7 @@ _TEXT = {
         "pending": "검토 대기",
         "model": "모델",
         "unverified": "자동 확인 안 됨",
+        "cache": "캐시",
         "cache_read": "캐시 읽기",
         "cache_write": "쓰기",
         "cache_write_1h": "1시간 쓰기",
@@ -93,6 +94,7 @@ _TEXT = {
         "pending": "Pending review",
         "model": "Model",
         "unverified": "not verified automatically",
+        "cache": "cache",
         "cache_read": "cache read",
         "cache_write": "write",
         "cache_write_1h": "1h write",
@@ -166,12 +168,17 @@ def _long_line(cell: dict, t: dict) -> Optional[str]:
 def _pending_text(cell: dict, t: dict) -> str:
     """What the pending row changes, by the screen's pendingDetail rule: the pair when input or output differs, then
     each cache price that differs (and is set on the pending row), then the pending value's whole long-context line
-    when `long` differs; the pair when nothing differs. "9 / 45, 캐시 읽기 0.9, 긴 컨텍스트 18 / 67.5"."""
+    when `long` differs; the pair when nothing differs. "9 / 45, 캐시 읽기 0.9, 긴 컨텍스트 18 / 67.5". Without the
+    cache read, the first cache price gets the cache noun: "캐시 1시간 쓰기 17.6", "cache write 11, 1h write 17.6"."""
     new = cell["pending"]
     pair = f"{price_text(new['input'])} / {price_text(new['output'])}"
     items = [pair] if (new["input"], new["output"]) != (cell["input"], cell["output"]) else []
-    items += [f"{t[key]} {price_text(new[key])}" for key in ("cache_read", "cache_write", "cache_write_1h")
-              if new.get(key) is not None and new.get(key) != cell.get(key)]
+    changed = [key for key in ("cache_read", "cache_write", "cache_write_1h")
+               if new.get(key) is not None and new.get(key) != cell.get(key)]
+    cache = [f"{t[key]} {price_text(new[key])}" for key in changed]
+    if changed and changed[0] != "cache_read":
+        cache[0] = f"{t['cache']} {cache[0]}"
+    items += cache
     if new.get("long") is not None and new.get("long") != cell.get("long"):
         items.append(_long_line(new, t))
     return ", ".join(items or [pair])
