@@ -20,7 +20,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   const nav = page.getByRole("navigation", { name: "주요 메뉴" });
   await expect(nav.getByRole("link", { name: "비용 단가", exact: true })).toHaveAttribute("aria-current", "page");
   const labels = await nav.getByRole("link").allTextContents();
-  expect(labels.indexOf("비용 단가")).toBe(labels.indexOf("비용") + 1);
+  expect(labels.indexOf("비용 단가")).toBe(labels.indexOf("대시보드") + 1);  // v2.31.2: right after the dashboard
 
   const disclaimer = page.getByRole("note", { name: "면책 안내" });
   await expect(disclaimer).toContainText(DISCLAIMER_KO);
@@ -142,6 +142,22 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.locator('[data-kind="official_page"]')).toHaveCount(0);
   // The top links box keeps the three official pricing pages.
   await expect(disclaimer.getByRole("link")).toHaveText(["Amazon Bedrock 요금 ↗", "Anthropic 요금 ↗", "OpenAI 요금 ↗"]);
+});
+
+test("Unit Prices sits right after the dashboard in the header menu (v2.31.2)", async ({ page }) => {
+  await page.setViewportSize({ width: 1280, height: 900 });
+  await page.goto("/pricing");
+  const nav = page.getByRole("navigation", { name: "주요 메뉴" });
+  await expect(nav.getByRole("link").nth(0)).toHaveText("대시보드");
+  await expect(nav.getByRole("link").nth(1)).toHaveText("비용 단가");
+  await expect(nav.getByRole("link").nth(1)).toHaveAttribute("aria-current", "page");
+  await expect(nav.getByRole("link").nth(2)).toHaveText("모델 탐색");
+
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.getByRole("button", { name: "메뉴 열기" }).click();
+  const mobile = page.getByRole("navigation", { name: "모바일 메뉴" });
+  await expect(mobile.getByRole("link").nth(0)).toHaveText("대시보드");
+  await expect(mobile.getByRole("link").nth(1)).toHaveText("비용 단가");
 });
 
 test("the model-ID toggle lists each price's model IDs, by keyboard too", async ({ page }) => {

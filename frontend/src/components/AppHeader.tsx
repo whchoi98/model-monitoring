@@ -21,10 +21,11 @@ export function useNavItems(currentKey: string): NavItem[] {
   const L = (en: string, ko: string) => lang === "en" ? en : ko;
   const items: NavItem[] = [
     { key: "dashboard", label: t.dashboardTab, href: "/" },
+    // 비용 단가는 대시보드 바로 옆 (v2.31.2 사용자 요청) — e2e/pricing.spec.ts가 순서를 고정한다.
+    { key: "pricing", label: L("Unit Prices", "비용 단가"), href: "/pricing" },
     { key: "models", label: L("Models", "모델 탐색"), href: "/models" },
     { key: "parity", label: L("Parity Run", "패리티 런"), href: "/parity" },
     { key: "cost", label: L("Cost", "비용"), href: "/cost" },
-    { key: "pricing", label: L("Unit Prices", "비용 단가"), href: "/pricing" },
     { key: "reliability", label: L("Reliability", "신뢰성"), href: "/reliability" },
     { key: "efficiency", label: L("Efficiency", "효율성"), href: "/efficiency" },
     { key: "analysis", label: L("Analysis", "분석"), href: "/analysis" },

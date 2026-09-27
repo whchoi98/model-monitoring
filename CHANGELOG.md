@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.31.2 — 2026-09-27
+
+### Changed
+- **Unit Prices moves next to the dashboard in the header menu** (user request 2026-09-27). The menu now runs Dashboard, Unit Prices, Models, Parity Run, Cost, … on desktop and in the mobile menu (it used to come right after Cost). `e2e/pricing.spec.ts` pins the order.
+- **헤더 메뉴에서 비용 단가를 대시보드 바로 옆으로 옮긴다**(2026-09-27 사용자 요청). 데스크톱과 모바일 메뉴 모두 대시보드, 비용 단가, 모델 탐색, 패리티 런, 비용 … 순서다(이전에는 비용 바로 뒤). `e2e/pricing.spec.ts`가 순서를 고정한다.
+
 ## v2.31.1 — 2026-09-27
 
 ### Fixed
