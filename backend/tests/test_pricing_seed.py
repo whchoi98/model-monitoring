@@ -22,7 +22,8 @@ from pricing_sources import (
 from tests.pricing_catalog import ACTIVE_MODELS, HIDDEN_1P_MODELS, OPENAI_LIST_IDS
 
 MAIN_SRC = (pathlib.Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
-SEED_CALL = "ensure_seed(engine, active_channels(AVAILABLE_MODELS, hidden_patterns()))"
+SEED_CALL = "ensure_seed(engine, active)"
+PRICE_SCHEMA_CALL = "    _ensure_price_schema()\n"  # the lifespan call (the def line has no bare newline after "()")
 ACTIVE = {mid: price_identity(mid) for mid in ACTIVE_MODELS}
 
 CORRECTED = {  # v2.29.1 값이 처음부터 틀린 11채널(US는 Global 값, Nova는 1세대 Nova Lite 값)
@@ -224,9 +225,11 @@ def test_ensure_seed_postgres_takes_transaction_advisory_lock_first():
 def test_lifespan_seeds_after_migration_and_registration_non_fatal():
     unlock = MAIN_SRC.index("SELECT pg_advisory_unlock(917350001)")
     register = re.search(r"^\s+_register_openai_models\(\)$", MAIN_SRC, re.M).start()
-    seed = MAIN_SRC.index(SEED_CALL)
-    assert unlock < register < seed < re.search(r"^\s{4}yield$", MAIN_SRC, re.M).start()
-    block = MAIN_SRC[MAIN_SRC.rindex("    try:\n", 0, seed):MAIN_SRC.index("    except Exception:\n", seed)]
+    call = MAIN_SRC.index(PRICE_SCHEMA_CALL)  # the seed runs inside _ensure_price_schema (v2.31.0)
+    assert unlock < register < call < re.search(r"^\s{4}yield$", MAIN_SRC, re.M).start()
+    fn = MAIN_SRC[MAIN_SRC.index("\ndef _ensure_price_schema("):MAIN_SRC.index("\ndef _retry_price_schema(")]
+    seed = fn.index(SEED_CALL)
+    block = fn[fn.rindex("    try:\n", 0, seed):fn.index("    except Exception:\n", seed)]
     assert "from pricing_seed import ensure_seed" in block and "yield" not in block
-    after = MAIN_SRC[MAIN_SRC.index("    except Exception:\n", seed):].splitlines()[1].strip()
-    assert after.startswith('logger.exception("Price seed failed')
+    after = [line.strip() for line in fn[fn.index("    except Exception:\n", seed):].splitlines()[1:3]]
+    assert after[0] == "failed = True" and after[1].startswith('logger.exception("Price seed failed')

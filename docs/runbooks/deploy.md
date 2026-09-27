@@ -486,7 +486,7 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=csv&lang=ko" | head -2
 빌드한다(`make build-frontend`, v2.30.0 `.dockerignore` 빌드 실패 사고). DB는 새 테이블이 없고 `price_history`에 nullable 열 7개
 (`cache_read_per_mtok`, `cache_write_per_mtok`, `cache_write_1h_per_mtok`, `long_input_per_mtok`, `long_output_per_mtok`,
 `long_cache_read_per_mtok`, `long_cache_write_per_mtok`)가 생긴다. backend 기동 시 `pricing_seed.ensure_price_columns`가 빠진 열만
-`ALTER TABLE price_history ADD COLUMN IF NOT EXISTS`로 추가하고(열이 다 있으면 DDL 없음), 같은 기동의 seed가 OpenAI 공식 가격
+`ALTER TABLE price_history ADD COLUMN IF NOT EXISTS`로 추가하고(열이 다 있으면 DDL 없음, 실패하면 백그라운드에서 30초 간격 최대 3번 재시도), 같은 기동의 seed가 OpenAI 공식 가격
 8채널(`openai-list:<family_key>`) seed 행을 넣고 기존 seed 행의 빈 캐시, 긴 컨텍스트 열을 채운다. PricingSync 러너도
 `create_tables()` 바로 뒤에서 같은 열 추가를 먼저 한다. 롤아웃 중 함께 도는 v2.30.0 태스크는 새 열을 모르지만 nullable이라 영향이 없다.
 
@@ -496,10 +496,10 @@ CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
 # 1. 열 마이그레이션 — 새 backend 태스크의 기동 로그에 실패 줄이 없고 /api/pricing이 200이다
 aws logs filter-log-events --log-group-name /ecs/backend --region $REGION \
   --start-time $(( ($(date +%s) - 3600) * 1000 )) \
-  --filter-pattern '"Price column migration failed"' --query 'events[].message' --output text
-# 기댓값: 빈 출력. 줄이 있어도 아래가 200이면 다른 backend 태스크가 먼저 열을 추가한 것이다.
+  --filter-pattern '?"Price column migration failed" ?"Price schema retry"' --query 'events[].message' --output text
+# 기댓값: 빈 출력. 실패 줄이 있으면 뒤에 "Price schema retry n/3 succeeded"가 있어야 한다(backend가 30초 간격으로 최대 3번 다시 시도한다).
 curl -s -o /dev/null -w '%{http_code}\n' "https://$CF_DOMAIN/api/pricing"
-# 기댓값: 200. 500이면 troubleshooting.md의 "단가 열 마이그레이션 실패"를 따른다.
+# 기댓값: 200. 재시도가 끝난 뒤(기동 후 약 2분)에도 500이면 troubleshooting.md의 "단가 열 마이그레이션 실패"를 따른다.
 
 # 2. 첫 스케줄 런을 기다리지 않고 PricingSync 1회 수동 실행 — 네트워크 설정은 스케줄 타깃에서 복사
 SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
@@ -551,9 +551,14 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=md&lang=ko" | grep -m1 'Op
 - 비용 화면(`/cost`)과 효율성 점수는 바뀌지 않는다(입력, 출력 단가만 쓴다). 배포 전후 같은 기간의 합계가 같으면 정상이다.
 - `pending_review`가 0보다 크면 `troubleshooting.md`의 "검토 대기 단가 승인"을 따른다. 관리자 목록의 `change`에 필드별 변화율이 있다.
   2번 결과에 `skipped:<reason>`이 있으면 같은 문서의 "비용 단가 동기화 실패"로 원인을 찾는다(OpenAI 문서는 "OpenAI 문서 형식 변경" 행).
-- **v2.30.0 이미지로 되돌리는 경우**: 새 열과 `openai-list:*` 행은 DB에 남지만 v2.30.0 코드는 둘 다 읽지 않는다(v2.30.0
-  `/api/pricing`과 PricingSync는 `AVAILABLE_MODELS`와 최근 CP 행만 활성 채널로 본다). 다시 v2.31.0으로 올리면 그사이 v2.30.0 동기화가
-  만든 행의 빈 확장 열은 다음 동기화에서 `enriched`로 채워진다.
+- **v2.30.0 이미지로 되돌리는 경우**: 새 열과 `openai-list:*` 행은 DB에 남는다. v2.30.0 `/api/pricing`과 PricingSync는
+  `openai-list` 행을 활성 채널로 보지 않는다(관리자 검토 대기 목록 `/api/admin/pricing/pending`에는 그 행의 `pending_review`가 그대로
+  보인다). 둘은 `AVAILABLE_MODELS`와 최근 CP 행만 활성 채널로 본다. 다시 v2.31.0으로 올리면 그사이 v2.30.0 동기화가 만든 행의 빈 확장
+  열은 다음 동기화에서 `enriched`로 채워진다.
+- v2.31.0으로 다시 올린 뒤에는 §5-5의 2번(PricingSync 1회 수동 실행)을 다시 실행한다. 그러지 않으면 다음 스케줄 런까지 OpenAI 공식 가격
+  8칸이 "자동 확인 안 됨"으로 보인다. 되돌린 사이 v2.30.0 런이 한 번이라도 돌면 그 런이 마지막으로 끝난 런이 되는데, v2.30.0은
+  `openai-list` 채널을 관측하지 않아 그 8칸의 관측 시각이 런 시작보다 이르기 때문이다. `troubleshooting.md`의 "OpenAI 문서 형식 변경"과
+  달리 로그에 `skipped:parse_failed`가 없다.
 - 배포 뒤 README 스크린샷 `docs/images/ui/pricing-{en,ko}.png`를 새 열 이름과 캐시 줄이 보이게 다시 캡처하고(운영, 다크 테마,
   1440x900), README 캡션의 캡처 날짜와 버전을 함께 고친다.
 

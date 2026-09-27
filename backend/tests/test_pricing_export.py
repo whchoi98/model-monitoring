@@ -25,7 +25,7 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 
 - 통화와 단위: USD, 1M 토큰당, 입력 / 출력. 둘째 줄은 프롬프트 캐싱, GPT 셋째 줄은 긴 컨텍스트 단가다
 - 생성 시각: 2026-09-25T16:00:00Z
-- 마지막 자동 확인: 2026-09-25T15:00:31Z (completed)
+- 마지막 공식 단가 동기화: 2026-09-25T15:00:31Z (완료)
 - 검토 대기: 1
 
 ## Anthropic Claude
@@ -85,7 +85,7 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 
 - Currency and unit: USD per 1M tokens, input / output. The second line is prompt caching, and the third line on GPT rows is long context
 - Generated: 2026-09-25T16:00:00Z
-- Last automatic check: 2026-09-25T15:00:31Z (completed)
+- Last official price sync: 2026-09-25T15:00:31Z (completed)
 - Pending review: 1
 
 ## Anthropic Claude
@@ -245,6 +245,45 @@ def test_pending_lists_only_the_changed_prices_like_the_screen():
     assert "캐시 읽기 0.3, 긴 컨텍스트" not in ko and "cache read 0.3, long context" not in en
 
 
+def test_pending_names_the_cache_when_the_first_changed_cache_price_is_a_write():
+    payload = copy.deepcopy(EXPECTED_PAYLOAD)
+    cell = _family(payload, "claude-opus-5-5")["tiers"]["global"]  # 4 / 20, cache read 0.2, write 5, 1h write 8
+    base = {"id": 99, "input": 4, "output": 20, "cache_read": 0.2, "cache_write": 5, "cache_write_1h": 8,
+            "long": None, "observed_at": "2026-09-25T15:00:00Z"}
+    line2 = {"ko": "<br>캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8 |", "en": "<br>cache read 0.2, write 5, 1h write 8 |"}
+    cases = [  # (changed fields, KO pending text, EN pending text)
+        ({"cache_write_1h": 17.6}, "캐시 1시간 쓰기 17.6", "cache 1h write 17.6"),
+        ({"cache_write": 11, "cache_write_1h": 17.6}, "캐시 쓰기 11, 1시간 쓰기 17.6", "cache write 11, 1h write 17.6"),
+        ({"cache_write": 11}, "캐시 쓰기 11", "cache write 11"),
+        ({"cache_read": 0.3, "cache_write": 11}, "캐시 읽기 0.3, 쓰기 11", "cache read 0.3, write 11"),  # read comes first
+        ({"input": 5, "output": 25, "cache_write_1h": 17.6}, "5 / 25, 캐시 1시간 쓰기 17.6", "5 / 25, cache 1h write 17.6"),
+    ]
+    for changed, ko, en in cases:
+        cell["pending"] = {**base, **changed}
+        # the cell's own cache line (line 2) keeps the short labels
+        assert f"| 4 / 20 (검토 대기 {ko})[^2]{line2['ko']}" in to_markdown(payload, "ko"), changed
+        assert f"| 4 / 20 (Pending review {en})[^2]{line2['en']}" in to_markdown(payload, "en"), changed
+    nova = _family(payload, "nova-2-lite")["tiers"]["us"]  # 0.33 / 2.75, cache read 0.0825, write 0
+    nova["pending"] = {"id": 97, "input": 0.33, "output": 2.75, "cache_read": 0.0825, "cache_write": 0.05,
+                       "cache_write_1h": None, "long": None, "observed_at": "2026-09-25T15:00:00Z"}
+    assert "(자동 확인 안 됨) (검토 대기 캐시 쓰기 0.05)[^8]<br>캐시 읽기 0.0825, 쓰기 0 |" in to_markdown(payload, "ko")
+    assert ("(not verified automatically) (Pending review cache write 0.05)[^8]<br>cache read 0.0825, write 0 |"
+            in to_markdown(payload, "en"))
+
+
+@pytest.mark.parametrize("status, ko, en", [
+    ("completed", "완료", "completed"),
+    ("partial", "일부 출처 실패", "partial, some sources failed"),
+    ("failed", "실패", "failed"),
+    ("running", "진행 중", "running"),
+    ("cancelled", "cancelled", "cancelled"),  # a status the screen does not know is shown as is
+])
+def test_the_sync_line_names_the_official_sync_and_translates_the_status_like_the_screen(status, ko, en):
+    payload = dict(EXPECTED_PAYLOAD, last_sync={**EXPECTED_PAYLOAD["last_sync"], "status": status})
+    assert f"\n- 마지막 공식 단가 동기화: 2026-09-25T15:00:31Z ({ko})\n" in to_markdown(payload, "ko")
+    assert f"\n- Last official price sync: 2026-09-25T15:00:31Z ({en})\n" in to_markdown(payload, "en")
+
+
 def test_note_item_ends_with_the_footnote_of_its_source_id():
     payload = copy.deepcopy(EXPECTED_PAYLOAD)
     sol = _family(payload, "gpt-5.6-sol")
@@ -315,5 +354,6 @@ def test_unknown_lang_is_rejected():
 def test_no_last_sync_and_no_pending_lines():
     payload = dict(EXPECTED_PAYLOAD, last_sync=None, pending_review=0)
     md = to_markdown(payload, "ko")
-    assert "- 마지막 자동 확인: 없음\n" in md
+    assert "- 마지막 공식 단가 동기화: 없음\n" in md
+    assert "- Last official price sync: none\n" in to_markdown(payload, "en")
     assert "- 검토 대기:" not in md
