@@ -57,7 +57,9 @@ def test_create_all_creates_price_tables():
     insp = inspect(engine)
     assert {c["name"] for c in insp.get_columns("price_history")} == {
         "id", "model_id", "family_key", "channel", "input_per_mtok", "output_per_mtok", "effective_from",
-        "source_id", "status", "observed_at", "run_id", "created_at"}
+        "source_id", "status", "observed_at", "run_id", "created_at",
+        "cache_read_per_mtok", "cache_write_per_mtok", "cache_write_1h_per_mtok", "long_input_per_mtok",
+        "long_output_per_mtok", "long_cache_read_per_mtok", "long_cache_write_per_mtok"}  # v2.31.0 표시 전용
     assert {c["name"] for c in insp.get_columns("price_sync_runs")} == {
         "id", "started_at", "finished_at", "status", "summary", "changes", "pending"}
     idx = {i["name"]: i["column_names"] for i in insp.get_indexes("price_history")}

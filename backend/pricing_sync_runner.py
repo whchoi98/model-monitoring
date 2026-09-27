@@ -4,7 +4,8 @@ ECS Task Definition CMD:
   python -m pricing_sync_runner --once
 
 순서 (spec "12시간 동기화" 1~2단계):
-  1. create_tables() — price_history / price_sync_runs 보장 (backend 재배포 전에 먼저 돌 수 있음)
+  1. create_tables() — price_history / price_sync_runs 보장 (backend 재배포 전에 먼저 돌 수 있음), 이어서
+     ensure_price_columns(engine) — v2.31.0 표시 전용 단가 열 7개(기존 테이블에 ALTER), 실패하면 exit 1
   2. 모델 등록 — prober._discover_anthropic_models() (CP on AWS /v1/models), prober._register_openai_models()
   3. active_channels(AVAILABLE_MODELS, hidden_patterns()) — 숨김 라벨(기본 "(1P)") 제외
   4. ensure_seed(engine, active) — 실패하면 동기화하지 않는다: seed 없이 돌면 seed 대상 채널이 전부
@@ -28,7 +29,7 @@ from sqlalchemy import text
 from database import SessionLocal, create_tables, engine
 from models import PriceSyncRun
 from prober import AVAILABLE_MODELS, _discover_anthropic_models, _register_openai_models
-from pricing_seed import ensure_seed
+from pricing_seed import ensure_price_columns, ensure_seed
 from pricing_sources import active_channels
 from pricing_sync import SYNC_LOCK_KEY, default_fetchers, run_sync
 from visibility import hidden_patterns
@@ -106,6 +107,14 @@ def main(argv: list[str] | None = None) -> int:
     except Exception:
         logger.exception("pricing_sync_runner: create_tables failed")
         return EXIT_FAILED
+
+    try:
+        added = ensure_price_columns(engine)
+    except Exception:
+        logger.exception("pricing_sync_runner: ensure_price_columns failed")
+        return EXIT_FAILED
+    if added:
+        logger.info("pricing_sync_runner: price_history columns added: %s", ", ".join(added))
 
     _register_models()
     active = active_channels(AVAILABLE_MODELS, hidden_patterns())

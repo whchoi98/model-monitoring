@@ -10,9 +10,11 @@ import logging
 from datetime import date, datetime, timezone
 from typing import Mapping
 
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import insert, select, text
 
 from models import PriceHistory
+from pricing_parsers import EXTRA_FIELDS
 from pricing_sources import (
     ANTHROPIC_SOURCE_ID, EPOCH, NOVA_USAGETYPES, OPENAI_SOURCE_ID, PriceIdentity, offer_source_id, pricelist_source_id,
 )
@@ -24,6 +26,8 @@ SEED_SOURCE_DATE = date(2026, 9, 26)  # seed만 있는 참고 자료의 확인�
 # 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
 _SEED_TIMEOUT_SQL = ("SET LOCAL statement_timeout = '30000'", "SET LOCAL lock_timeout = '5000'")
 _SEED_LOCK_SQL = "SELECT pg_advisory_xact_lock(917350003)"
+# v2.31.0 표시 전용 단가 필드 → price_history 열 이름(필드 f의 열은 f"{f}_per_mtok"), EXTRA_FIELDS 순서
+_EXTRA_COLUMN: dict[str, str] = {f: f"{f}_per_mtok" for f in EXTRA_FIELDS}
 
 # Bedrock Claude FM id → (offerId, Global in, Global out, US in, US out). US = USE1_*, Global = APN2_*_global.
 _CLAUDE: dict[str, tuple[str, float, float, float, float]] = {
@@ -139,3 +143,29 @@ def ensure_seed(engine, active: Mapping[str, PriceIdentity]) -> int:
     if values:
         logger.info("Price seed inserted %d rows (%d already had price history)", len(values), len(existing))
     return len(values)
+
+
+def ensure_price_columns(engine) -> list[str]:
+    """기존 price_history에 v2.31.0 표시 전용 단가 열 7개를 더하고, 더한 열 이름을 EXTRA_FIELDS 순서로 돌려준다.
+
+    새 DB는 create_all이 ORM 선언으로 만든다. 운영 DB는 테이블이 이미 있어 create_all이 열을 더하지 않으므로 여기서 더한다.
+    빠진 열이 없으면 DDL을 하나도 실행하지 않는다 — ADD COLUMN IF NOT EXISTS는 no-op이어도 ACCESS EXCLUSIVE 락을
+    요청하므로 기동마다 락 대기열에 서지 않게 한다. 빠진 열이 있으면 한 트랜잭션에서, PostgreSQL은 SET LOCAL
+    statement_timeout 30초와 lock_timeout 5초를 건 뒤 ADD COLUMN IF NOT EXISTS … DOUBLE PRECISION, 그 밖의 방언(SQLite)은
+    ADD COLUMN … FLOAT. 예외는 호출부(main.py lifespan, pricing_sync_runner)로 올린다.
+    """
+    present = {col["name"] for col in sa_inspect(engine).get_columns(PriceHistory.__tablename__)}
+    missing = [col for col in _EXTRA_COLUMN.values() if col not in present]
+    if not missing:
+        return []
+    with engine.begin() as conn:
+        if engine.dialect.name == "postgresql":
+            for sql in _SEED_TIMEOUT_SQL:
+                conn.execute(text(sql))
+            for col in missing:
+                conn.execute(text(f"ALTER TABLE price_history ADD COLUMN IF NOT EXISTS {col} DOUBLE PRECISION"))
+        else:
+            for col in missing:
+                conn.execute(text(f"ALTER TABLE price_history ADD COLUMN {col} FLOAT"))
+    logger.info("Price columns added to price_history: %s", ", ".join(missing))
+    return missing

@@ -29,7 +29,8 @@ def wired(monkeypatch):
     engine = create_engine("sqlite://", poolclass=StaticPool, connect_args={"check_same_thread": False})
     Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine, autoflush=False)
-    state = SimpleNamespace(calls=[], status="completed", seed_active=None, sync_active=None, engine=engine)
+    state = SimpleNamespace(calls=[], status="completed", seed_active=None, sync_active=None, engine=engine,
+                            columns_added=[])
     models = {"global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)"}
 
     def discover():
@@ -40,6 +41,10 @@ def wired(monkeypatch):
         state.calls.append("register_openai")
         models["openai:us-east-1:openai.gpt-6-sol"] = "OpenAI GPT 6 Sol (us-east-1)"
         models["openai:1p:gpt-5.4"] = "OpenAI GPT 5.4 (1P)"  # hidden by the default HIDDEN_MODEL_PATTERNS
+
+    def ensure_price_columns(bind):
+        state.calls.append("ensure_price_columns")
+        return list(state.columns_added)
 
     def ensure_seed(bind, active):
         state.calls.append("ensure_seed")
@@ -60,7 +65,8 @@ def wired(monkeypatch):
     for name, value in {
         "engine": engine, "SessionLocal": Session, "AVAILABLE_MODELS": models,
         "create_tables": lambda: state.calls.append("create_tables"), "_discover_anthropic_models": discover,
-        "_register_openai_models": register_openai, "ensure_seed": ensure_seed, "run_sync": run_sync,
+        "_register_openai_models": register_openai, "ensure_price_columns": ensure_price_columns,
+        "ensure_seed": ensure_seed, "run_sync": run_sync,
         "default_fetchers": lambda: "fetchers",
     }.items():
         monkeypatch.setattr(runner, name, value)
@@ -71,7 +77,8 @@ def wired(monkeypatch):
 
 def test_registration_runs_before_ensure_seed_before_run_sync(wired):
     assert runner.main(["--once"]) == 0
-    assert wired.calls == ["create_tables", "discover_cp", "register_openai", "ensure_seed", "run_sync"]
+    assert wired.calls == ["create_tables", "ensure_price_columns", "discover_cp", "register_openai", "ensure_seed",
+                           "run_sync"]
     assert set(wired.seed_active) == {"global.anthropic.claude-opus-5-5", "anthropic:claude-opus-5-5",
                                       "openai:us-east-1:openai.gpt-6-sol",
                                       "openai-list:gpt-6-sol"}  # registered ids in, (1P) hidden, OpenAI official price
@@ -96,6 +103,23 @@ def test_create_tables_failure_exits_one_before_seed_or_sync(wired, monkeypatch)
     assert wired.calls == ["create_tables"]  # not even model registration runs
 
 
+def test_price_column_migration_runs_after_create_tables_and_its_failure_exits_one(wired, monkeypatch, caplog):
+    wired.columns_added = ["cache_read_per_mtok", "cache_write_per_mtok"]
+    with caplog.at_level("INFO", logger="pricing_sync_runner"):
+        assert runner.main(["--once"]) == 0
+    assert wired.calls[:2] == ["create_tables", "ensure_price_columns"]
+    assert "price_history columns added: cache_read_per_mtok, cache_write_per_mtok" in caplog.text
+    wired.calls.clear()
+
+    def broken(bind):
+        wired.calls.append("ensure_price_columns")
+        raise RuntimeError("lock timeout")
+
+    monkeypatch.setattr(runner, "ensure_price_columns", broken)
+    assert runner.main(["--once"]) == 1
+    assert wired.calls == ["create_tables", "ensure_price_columns"]  # no registration, seed or sync
+
+
 def test_a_failing_registration_is_not_fatal(wired, monkeypatch):
     def broken():
         wired.calls.append("discover_cp")
@@ -103,7 +127,8 @@ def test_a_failing_registration_is_not_fatal(wired, monkeypatch):
 
     monkeypatch.setattr(runner, "_discover_anthropic_models", broken)
     assert runner.main(["--once"]) == 0
-    assert wired.calls == ["create_tables", "discover_cp", "register_openai", "ensure_seed", "run_sync"]
+    assert wired.calls == ["create_tables", "ensure_price_columns", "discover_cp", "register_openai", "ensure_seed",
+                           "run_sync"]
     assert "anthropic:claude-opus-5-5" not in wired.sync_active
 
 

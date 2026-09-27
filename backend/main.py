@@ -159,6 +159,15 @@ async def lifespan(app: FastAPI):
     except Exception:
         logger.exception("Label repair failed (non-fatal)")
 
+    # 단가 표시 전용 열 7개 (v2.31.0) — 운영 price_history는 이미 있어 create_all이 새 열을 더하지 않는다.
+    # 빠진 열이 없으면 DDL 없이 끝난다(ADD COLUMN은 no-op이어도 ACCESS EXCLUSIVE 락을 요청). 아래 seed가 새 열에 값을
+    # 넣으므로 seed 블록 바로 앞에 둔다. 실패해도 기동은 계속한다 — 다음 기동에 재시도.
+    try:
+        from pricing_seed import ensure_price_columns
+        ensure_price_columns(engine)
+    except Exception:
+        logger.exception("Price column migration failed (non-fatal, backend continues)")
+
     # 단가 seed (v2.30.0, ADR-030) — price_history에 행이 하나도 없는 활성 model_id에만 공식 단가 seed를 넣는다.
     # CP seed는 family_key 단위라 현재 활성 CP model_id로 풀어 넣어야 하므로 모델 등록 다음에 둔다.
     # 마이그레이션과 분리된 자체 트랜잭션 + pg_advisory_xact_lock(917350003) — 실패해도 기동은 계속한다.
