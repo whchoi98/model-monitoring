@@ -28,8 +28,8 @@ function cell(html: string, family: string, tier: string): string {
 describe("providerSections", () => {
   test("응답 순서 그대로 연속한 제공사끼리 묶는다 (다시 정렬하지 않는다)", () => {
     expect(providerSections(pricingFixture.families).map((s) => [s.provider, s.families.length]))
-      .toEqual([["anthropic", 2], ["amazon", 1], ["openai", 3]]);
-    const [fable, , nova, astra] = pricingFixture.families;
+      .toEqual([["anthropic", 2], ["openai", 3], ["amazon", 1]]);
+    const [fable, , astra, , , nova] = pricingFixture.families;
     expect(providerSections([astra, fable, nova, astra]).map((s) => s.provider)).toEqual(["openai", "anthropic", "amazon", "openai"]);
   });
 });
@@ -51,8 +51,8 @@ describe("tableScrollCue", () => {
 describe("PricingContent", () => {
   test("제공사 섹션 순서, 고정 열, 소수 둘째 자리 셀, 빈 셀", () => {
     const html = render("ko");
-    expect(html.indexOf(">Anthropic Claude</h2>")).toBeLessThan(html.indexOf(">Amazon Nova</h2>"));
-    expect(html.indexOf(">Amazon Nova</h2>")).toBeLessThan(html.indexOf(">OpenAI</h2>"));
+    expect(html.indexOf(">Anthropic Claude</h2>")).toBeLessThan(html.indexOf(">OpenAI</h2>"));
+    expect(html.indexOf(">OpenAI</h2>")).toBeLessThan(html.indexOf(">Amazon Nova</h2>"));
     expect(count(html, ">Claude Platform on AWS</th>")).toBe(3);
     expect(cell(html, "claude-opus-5-5", "us")).toContain("$4.40 / $22.00");
     expect(cell(html, "nova-2-lite", "cp")).toContain("—");
@@ -80,7 +80,7 @@ describe("PricingContent", () => {
     expect(cell(html, "gpt-5.6-sol", "in_region")).toMatch(/data-badge="promo"[^>]*break-keep[^>]*>프로모션\(최소 <span class="whitespace-nowrap">2026-11-21<\/span>/);
     expect(cell(html, "claude-fable-5-1", "us")).toMatch(/data-badge="unverified" class="[^"]*whitespace-nowrap/);
     expect(html).toMatch(/data-pending-count="true" class="whitespace-nowrap/);
-    expect(count(html, "수동 메모")).toBe(1); // only in the manual-note reference title, no duplicate chip
+    expect(html).not.toContain("수동 메모"); // the promotion cites the OpenAI pricing page, not a manual note
     expect(html).toContain('<span class="whitespace-nowrap">확인일 2026-09-26</span>');
   });
 
@@ -130,7 +130,8 @@ describe("PricingContent", () => {
     for (const ref of pricingFixture.references) expect(html).toContain(`id="ref-${ref.n}"`);
     expect(count(html, 'data-highlighted="true"')).toBe(1);
     expect(html).toMatch(/id="ref-7"[^>]*data-highlighted="true"/);
-    expect(html).toMatch(/id="ref-10"[^>]*data-kind="manual_note"[^>]*>.*?수동 메모/);
+    expect(html).toMatch(/id="ref-4" data-kind="openai_doc"/);
+    expect(plain(html)).toContain("OpenAI API 요금 (Standard) ↗");
   });
 
   test("다운로드 링크는 현재 언어의 export download 링크", () => {
@@ -163,7 +164,7 @@ describe("PricingContent", () => {
     expect(cell(html, "nova-2-lite", "us")).toMatch(/data-badge-detail="unverified"[^>]*><span[^>]*>초기값<\/span>/);
     const promo = cell(html, "gpt-5.6-sol", "in_region");
     expect(plain(promo)).toContain("프로모션 이전 단가 $5.50 / $33.00");
-    expect(promo).toMatch(/data-badge-detail="promo"[^>]*>.*href="#ref-10"/);
+    expect(promo).toMatch(/data-badge-detail="promo"[^>]*>.*href="#ref-4"/);
     expect(promo).not.toContain("CHANGELOG v2.28.1");
     expect(plain(cell(render("en"), "gpt-5.6-sol", "global"))).toContain("Price before the promotion $5.00 / $30.00");
   });

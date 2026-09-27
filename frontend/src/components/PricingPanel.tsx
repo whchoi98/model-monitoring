@@ -12,7 +12,7 @@ import { fetchPricing, pricingExportUrl } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n-context";
 import {
-  TIER_LABELS, formatPricePair, notesForTier, textRuns, tierBadges,
+  formatPricePair, notesForTier, textRuns, tierBadges, tierLabel,
   type PricingBadge, type PricingTierKey,
 } from "@/lib/pricingTable";
 import type {
@@ -431,7 +431,7 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
                     <th scope="col" className={`${STICKY} border-b border-gray-800 py-2 pr-3 text-left align-bottom font-medium`}>{L("Model", "모델")}</th>
                     {TIER_KEYS.map((key) => (
                       <th key={key} scope="col" className="break-keep border-b border-gray-800 px-2 py-2 text-left align-bottom font-medium">
-                        <Runs text={TIER_LABELS[key]} />
+                        <Runs text={tierLabel(key, lang)} />
                       </th>
                     ))}
                   </tr>
