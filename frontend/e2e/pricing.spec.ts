@@ -118,6 +118,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(notes).toHaveText([
     "단가는 USD, 1M 토큰당, Standard 등급 기준이다",
     "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
+    "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
     "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
     "GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다",
     "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
@@ -132,6 +133,15 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.locator("#ref-4")).toContainText("OpenAI API 요금 (Standard)");
   await expect(page.locator("#ref-4").getByRole("link")).toHaveAttribute("href", "https://developers.openai.com/api/docs/pricing");
   await expect(page.locator('[data-kind="manual_note"]')).toHaveCount(0);
+  // Every listed reference is cited by at least one footnote on the page, and the numbers run 1..N.
+  const listed = await references.evaluateAll((items) => items.map((item) => Number(item.id.replace("ref-", ""))));
+  expect(listed).toEqual(pricingFixture.references.map((_, i) => i + 1));
+  const cited = await page.locator('main a[href^="#ref-"]').evaluateAll((links) =>
+    [...new Set(links.map((link) => Number(link.getAttribute("href")!.replace("#ref-", ""))))]);
+  expect(listed.filter((n) => !cited.includes(n))).toEqual([]);
+  await expect(page.locator('[data-kind="official_page"]')).toHaveCount(0);
+  // The top links box keeps the three official pricing pages.
+  await expect(disclaimer.getByRole("link")).toHaveText(["Amazon Bedrock 요금 ↗", "Anthropic 요금 ↗", "OpenAI 요금 ↗"]);
 });
 
 test("the model-ID toggle lists each price's model IDs, by keyboard too", async ({ page }) => {
@@ -295,8 +305,10 @@ test("a 390px phone in English shows the new columns, cache and long-context lin
     .toHaveText("Long context $20.00 / $75.00, cache read $2.00, write $25.00");
   await expect(page.locator('section[aria-labelledby="pricing-amazon"] [data-scroll-hint]'))
     .toHaveText("→ Scroll the table sideways for the AWS Bedrock prices");
-  await expect(page.getByRole("region", { name: "Notes" }).getByRole("listitem")).toHaveCount(8);
-  await expect(page.getByRole("region", { name: "Notes" }).getByRole("listitem").nth(4))
+  await expect(page.getByRole("region", { name: "Notes" }).getByRole("listitem")).toHaveCount(9);
+  await expect(page.getByRole("region", { name: "Notes" }).getByRole("listitem").nth(2))
+    .toHaveText("GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price");
+  await expect(page.getByRole("region", { name: "Notes" }).getByRole("listitem").nth(5))
     .toHaveText("The OpenAI official price is OpenAI's direct API price and is not used for cost calculations");
 
   for (const theme of ["dark", "light"]) {

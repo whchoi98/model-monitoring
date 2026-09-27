@@ -53,7 +53,9 @@ export default function AppShell({
           </button>
         </div>
       )}
-      <main id="main-content" tabIndex={-1} className="min-w-0">{children}</main>
+      {/* Bottom padding: the page end never sits under the visible chat button (FloatingChat — 48px at bottom 1rem on
+          phones, 64px at 1.5rem from sm, plus 1rem). The iOS PWA safe-area inset is already the body's padding (globals.css). */}
+      <main id="main-content" tabIndex={-1} className="min-w-0 pb-24 sm:pb-28">{children}</main>
       <FloatingChat />
     </div>
   );
