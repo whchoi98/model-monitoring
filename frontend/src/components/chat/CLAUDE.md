@@ -15,7 +15,7 @@ The chatbot client for `POST /api/chat/stream` (Sonnet 4.6 + 4 tools, `backend/a
 ## Gotchas
 - Popup and page share auth only through same-origin `localStorage["auth_token"]` (`lib/api.ts`). Conversation state lives in each `ChatPanel`'s `useChatStream`: closing the modal unmounts it (`ChatModal` returns `null` when closed), so the messages and `session_id` are dropped and the next open starts a new AgentCore session
 - Keep the hidden button focusable: never add `aria-hidden`, `inert`, `tabIndex={-1}` or `display: none` to the hidden state — keyboard users reach it by Tab and focus is what shows it
-- If the button grows or moves up, grow `AppShell`'s `<main>` bottom padding with it (at least button height + bottom offset + 1rem per breakpoint); `e2e/chat-fab.spec.ts` checks the page end at 390px and 1440px
+- If the button grows or moves up, grow `AppShell`'s `<main>` bottom padding with it (at least button height + bottom offset + 1rem per breakpoint); `e2e/chat-fab.spec.ts` checks the page-end clearance at 390px (at 1440px it checks only that the button stays right of the tables, which holds for any padding)
 - `FloatingChat`'s mount-time interval never starts (`popupRef` is null at mount); a user-closed popup is detected in `showChat` via `popupRef.current.closed`
 - Keep raw-HTML rendering off: adding `rehype-raw` would render model output as HTML (XSS)
 - Mixed i18n: `ChatPanel`, `ChatInput` and `FloatingChat` use inline `lang === "en"` ternaries, not `src/lib/i18n.ts`

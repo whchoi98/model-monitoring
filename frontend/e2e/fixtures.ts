@@ -60,7 +60,7 @@ export const categories = [
 // prices and GPT long-context prices are the 2026-09-27 official values (plan Interface Contract C8), and
 // footnote numbers follow the backend's walk: cells in display order (a family's official-source note right after
 // its cells), then manual notes. Every reference is cited by a footnote and numbered 1..N; since v2.31.1 the backend
-// sends no uncited official pages (the Amazon Bedrock pricing page and model cards are only in the top links box).
+// sends no uncited official pages (the Amazon Bedrock pricing page is only in the top links box; the model cards are not linked).
 
 const OFFER_API = "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html";
 const PRICE_LIST_API = "https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html";
