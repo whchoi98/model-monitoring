@@ -102,7 +102,7 @@ describe("PricingContent", () => {
     expect(cell(html, "claude-opus-5-5", "in_region")).toContain("단가 없음");
   });
 
-  test("표마다 제공사별 열 머리글, 'AWS Bedrock -' 뒤에서만 줄이 바뀐다", () => {
+  test("표마다 제공사별 열 머리글, 두 조각 이름은 'AWS Bedrock -' 뒤에서만, 한 조각 이름은 단어 사이에서 줄이 바뀐다", () => {
     const bedrock = ["AWS Bedrock - Global CRIS", "AWS Bedrock - US CRIS", "AWS Bedrock - In Region"];
     const ko = render("ko");
     expect(headers(ko, "anthropic")).toEqual(["모델", "Claude Platform on AWS", ...bedrock]);
@@ -112,11 +112,14 @@ describe("PricingContent", () => {
     expect(headers(en, "anthropic")).toEqual(["Model", "Claude Platform on AWS", ...bedrock]);
     expect(headers(en, "openai")).toEqual(["Model", "OpenAI official price", ...bedrock]);
     expect(headers(en, "amazon")).toEqual(["Model", ...bedrock]);
-    // Each part never breaks inside; a space separates them.
+    // Each part of a two-part title never breaks inside; a space separates them.
     expect(count(ko, '<span class="whitespace-nowrap">AWS Bedrock -</span> <span class="whitespace-nowrap">Global CRIS</span></th>')).toBe(3);
     expect(count(ko, '<span class="whitespace-nowrap">AWS Bedrock -</span> <span class="whitespace-nowrap">In Region</span></th>')).toBe(3);
-    expect(count(ko, '<span class="whitespace-nowrap">Claude Platform on AWS</span></th>')).toBe(1);
-    expect(count(ko, '<span class="whitespace-nowrap">OpenAI 공식 가격</span></th>')).toBe(1);
+    // A title without " - " is plain text, as in v2.30.0, so it wraps between words when a larger text size needs it.
+    for (const [html, title] of [[ko, "Claude Platform on AWS"], [ko, "OpenAI 공식 가격"], [en, "Claude Platform on AWS"], [en, "OpenAI official price"]]) {
+      expect(count(html, `font-medium">${title}</th>`)).toBe(1);
+      expect(html).not.toContain(`<span class="whitespace-nowrap">${title}</span>`);
+    }
     // Each provider shows only its own first column.
     expect(section(ko, "anthropic")).not.toContain('data-tier="openai_list"');
     expect(section(ko, "openai")).not.toContain('data-tier="cp"');

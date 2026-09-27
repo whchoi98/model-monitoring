@@ -111,7 +111,9 @@ function sameLong(a: PricingPriceFields["long"] | undefined, b: PricingPriceFiel
  * Pending badge detail: "새 값 " / "New value " + what the pending row changes — the input / output pair when either
  * differs, then the cache items that differ, then every long-context item when `long` differs. When nothing differs
  * (or only to a missing value), the pair. The items follow "New value" mid-sentence, so EN labels start lower case
- * ("New value cache read $0.50"); the export's Markdown pending text uses the same rule.
+ * ("New value cache read $0.50"). Without the cache read, the first cache item gets the cache noun the cell's cache
+ * line takes from "캐시 읽기": "새 값 캐시 1시간 쓰기 $17.60", "New value cache write $11.00, 1h write $17.60". The
+ * export's Markdown pending text uses the same rule.
  */
 export function pendingDetail(tier: PricingTier, lang: "ko" | "en"): string {
   const prefix = lang === "en" ? "New value" : "새 값";
@@ -125,7 +127,11 @@ export function pendingDetail(tier: PricingTier, lang: "ko" | "en"): string {
   for (const field of CACHE_FIELDS) {
     if ((next[field] ?? null) === (tier[field] ?? null)) changedCache[field] = null;
   }
-  parts.push(...cacheItems(changedCache, lang).map(phrase));
+  const changed = cacheItems(changedCache, lang);
+  if (changed.length > 0 && !isSet(changedCache.cache_read)) {
+    changed[0] = { ...changed[0], label: `${lang === "en" ? "cache" : "캐시"} ${changed[0].label}` };
+  }
+  parts.push(...changed.map(phrase));
   if (!sameLong(next.long, tier.long)) parts.push(...longItems(next, lang).map(phrase));
   if (parts.length === 0) parts.push(formatPricePair(next));
   return `${prefix} ${parts.join(", ")}`;
