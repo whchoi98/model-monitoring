@@ -10,8 +10,10 @@ The backend decides every order and number; the frontend and the three export fo
   long_output are set, else null).
 - footnotes: walking the cells in display order, each source_id gets the next number the first time it is
   cited, and a family's official-source note (source != "manual_note") cites its source_id right after that
-  family's cells, so it always has a number; the fixed official pages follow, and manual notes come last,
-  titled "<family> <kind> (manual note, <basis>)" with the family's FAMILY_ORDER name.
+  family's cells, so it always has a number; manual notes come right after the cited sources, titled
+  "<family> <kind> (manual note, <basis>)" with the family's FAMILY_ORDER name.
+- references list only what a cell footnote or a family note cites, numbered 1..N without gaps (v2.31.1: the
+  fixed official pages are gone; the Markdown export links the official pricing pages in its header instead).
 - models (model_id -> input/output, the cost map) leaves out the display-only openai_list channels.
 """
 
@@ -29,8 +31,7 @@ from pricing_parsers import PRICE_FIELDS
 from pricing_seed import SEED_SOURCE_DATE
 from pricing_sources import (
     ANTHROPIC_REFERENCE_URL, ANTHROPIC_SOURCE_ID, FAMILY_ORDER, OFFER_REFERENCE_URL, OPENAI_REFERENCE_URL,
-    OPENAI_SOURCE_ID, PRICELIST_REFERENCE_URL, PROVIDER_ORDER, PriceIdentity, note_source_id, official_source_id,
-    region_of, tier_of,
+    OPENAI_SOURCE_ID, PRICELIST_REFERENCE_URL, PROVIDER_ORDER, PriceIdentity, note_source_id, region_of, tier_of,
 )
 
 ANTHROPIC_TITLE_EN = "Anthropic API pricing (Claude Platform on AWS uses standard pricing)"
@@ -128,7 +129,7 @@ def _source_reference(source_id: str, families: list[str]) -> dict:
     if source_id == OPENAI_SOURCE_ID:
         return {"kind": "openai_doc", "title_en": OPENAI_TITLE_EN, "title_ko": OPENAI_TITLE_KO,
                 "url": OPENAI_REFERENCE_URL}
-    # Unknown format: still listed so the footnote resolves, without a link.
+    # Unknown format: a cell cites it, so it is still listed and the footnote resolves, without a link.
     return {"kind": "official_page", "title_en": source_id, "title_ko": source_id, "url": None}
 
 
@@ -268,11 +269,6 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
         observed = [as_utc(r.observed_at) for r in current.values() if r.source_id == sid and r.observed_at is not None]
         as_of = max(observed).date().isoformat() if observed else SEED_SOURCE_DATE.isoformat()
         references.append({"n": n, "id": sid, **_source_reference(sid, cited_by[sid]), "as_of": as_of})
-    for page in pricing_sources.OFFICIAL_PAGES:
-        references.append({
-            "n": len(references) + 1, "id": official_source_id(page["slug"]), "kind": "official_page",
-            "title_en": page["title_en"], "title_ko": page["title_ko"], "url": page["url"], "as_of": None,
-        })
     for note, payload_note, family in manual_notes:
         references.append({
             "n": len(references) + 1, "id": payload_note["source_id"], **_note_reference(note, family),

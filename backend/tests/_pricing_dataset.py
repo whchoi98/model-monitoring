@@ -1,9 +1,9 @@
 """Shared golden dataset for the pricing payload and export tests (v2.30.0, extra price fields v2.31.0).
 
 load() writes a small price_history/price_sync_runs set; EXPECTED_PAYLOAD is the exact build_pricing_payload
-result for it with OFFICIAL_PAGES and PRICE_NOTES pinned to the copies below. Offer ids other than the
-spec's examples are fictional. Extra prices come from the 2026-09-27 official values (Contract C8) except the
-pending rows, whose values are fictional.
+result for it with PRICE_NOTES pinned to the copy below. Offer ids other than the spec's examples are
+fictional. Extra prices come from the 2026-09-27 official values (Contract C8) except the pending rows,
+whose values are fictional. References list only cited sources (v2.31.1): no official pages.
 
 Numbering on purpose: GPT 5.6 Sol has no openai_list channel here, so its OpenAI-doc note is what first cites
 "openai-pricing" (number 4, right after the Sol cells); GPT 5.4's openai_list cell later reuses that number.
@@ -44,14 +44,6 @@ ACTIVE_IDS = [
     "openai:us-west-2:openai.gpt-5.4",
     "openai:us-east-1:openai.gpt-5.4",
     "openai:us-east-2:openai.gpt-5.4",
-]
-
-OFFICIAL_PAGES = [
-    {"slug": "bedrock-pricing", "title_en": "Amazon Bedrock pricing", "title_ko": "Amazon Bedrock 요금",
-     "url": "https://aws.amazon.com/bedrock/pricing/"},
-    {"slug": "model-card-openai-gpt-54", "title_en": "Amazon Bedrock model card, OpenAI GPT 5.4",
-     "title_ko": "Amazon Bedrock 모델 카드, OpenAI GPT 5.4",
-     "url": "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html"},
 ]
 
 # The production note's shape (Contract C6): cites the OpenAI pricing doc, no basis fields.
@@ -298,11 +290,6 @@ EXPECTED_PAYLOAD = {
              "AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",
              "AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",
              PRICE_LIST_URL, "2026-09-24"),
-        _ref(9, "official:bedrock-pricing", "official_page", "Amazon Bedrock pricing", "Amazon Bedrock 요금",
-             "https://aws.amazon.com/bedrock/pricing/", None),
-        _ref(10, "official:model-card-openai-gpt-54", "official_page", "Amazon Bedrock model card, OpenAI GPT 5.4",
-             "Amazon Bedrock 모델 카드, OpenAI GPT 5.4",
-             "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html", None),
     ],
     "disclaimer": {
         "en": "This price list is compiled automatically from public sources for reference only and is not an "

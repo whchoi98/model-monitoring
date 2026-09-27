@@ -8,7 +8,8 @@ removed); the web screen shows 2 to 6 decimals (formatUnitPrice).
   when the cell has no such price).
 - Markdown: one table per provider with that provider's columns (PROVIDER_COLUMNS; each table stands alone, so
   Amazon Nova has no blank first column). A cell is up to three lines joined by <br>: the input / output pair
-  with its footnotes, the prompt-caching prices, the long-context prices.
+  with its footnotes, the prompt-caching prices, the long-context prices. The header links the official pricing
+  pages (pricing_sources.OFFICIAL_LINKS, no footnotes, v2.31.1); CSV and JSON carry no such links.
 """
 
 import csv
@@ -18,6 +19,7 @@ from datetime import date
 from typing import Optional
 
 from pricing_payload import price_text
+from pricing_sources import OFFICIAL_LINKS
 
 EXPORT_FORMATS = ("csv", "md", "json")
 BOM = chr(0xFEFF)  # UTF-8 BOM so Excel opens the Korean CSV correctly
@@ -62,6 +64,7 @@ _TEXT = {
         "sync_status": {"completed": "완료", "partial": "일부 출처 실패", "failed": "실패", "running": "진행 중"},
         "never": "없음",
         "pending": "검토 대기",
+        "official_links": "공식 요금 페이지",
         "model": "모델",
         "unverified": "자동 확인 안 됨",
         "cache": "캐시",
@@ -70,12 +73,13 @@ _TEXT = {
         "cache_write_1h": "1시간 쓰기",
         "long": "긴 컨텍스트",
         "notes": "참고 사항",
-        "official": "최종 가격은 공식 요금 페이지에서 확인한다",
         "references": "참고 자료",
         "checked": "확인일",
         "fixed_notes": [
             "단가는 USD, 1M 토큰당, Standard 등급 기준이다.",
             "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다.",
+            "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, "
+            "Global CRIS는 OpenAI 공식 가격과 같다.",
             "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, "
             "1시간 쓰기는 Claude의 1시간 캐시 단가다.",
             "GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다.",
@@ -95,6 +99,7 @@ _TEXT = {
                         "running": "running"},
         "never": "none",
         "pending": "Pending review",
+        "official_links": "Official pricing pages",
         "model": "Model",
         "unverified": "not verified automatically",
         "cache": "cache",
@@ -103,12 +108,13 @@ _TEXT = {
         "cache_write_1h": "1h write",
         "long": "long context",
         "notes": "Notes",
-        "official": "Confirm final prices on the official pricing pages",
         "references": "References",
         "checked": "checked",
         "fixed_notes": [
             "Prices are in USD per 1M tokens, Standard tier.",
             "AWS Bedrock - Global CRIS prices can differ from the same model's US CRIS and In Region prices.",
+            "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price "
+            "on both, and Global CRIS equals the OpenAI official price.",
             "Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write "
             "price, and 1h write is the Claude 1-hour cache price.",
             "GPT long-context prices apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5).",
@@ -218,6 +224,8 @@ def to_markdown(payload: dict, lang: str) -> str:
     lines.append(f"- {t['last_sync']}: " + (f"{sync['finished_at']} ({status})" if sync else t["never"]))
     if payload["pending_review"] > 0:
         lines.append(f"- {t['pending']}: {payload['pending_review']}")
+    lines.append(f"- {t['official_links']}: "
+                 + ", ".join(f"[{link[title_key]}]({link['url']})" for link in OFFICIAL_LINKS))
 
     provider = None
     columns: tuple[str, ...] = ()
@@ -231,14 +239,10 @@ def to_markdown(payload: dict, lang: str) -> str:
         row = [family["family"], *(_md_tier(family["tiers"], c, t) for c in columns)]
         lines.append("| " + " | ".join(row) + " |")
 
-    official = [r for r in payload["references"] if r["kind"] == "official_page"]
     notes = [(family, note) for family in payload["families"] for note in family["notes"]]
     ref_n = {r["id"]: r["n"] for r in payload["references"]}
     lines += ["", f"## {t['notes']}", ""]
     items = list(t["fixed_notes"])
-    if official:
-        # Referenced before the manual notes so Markdown renderers number footnotes in payload order.
-        items.append(t["official"] + "".join(f"[^{r['n']}]" for r in official) + ".")
     for family, note in notes:
         items.append(f"{family['family']}: {note[f'text_{lang}']}[^{ref_n[note['source_id']]}]")
     lines += [f"{i}. {item}" for i, item in enumerate(items, start=1)]

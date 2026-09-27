@@ -14,10 +14,10 @@ from sqlalchemy.pool import StaticPool
 
 import models
 from pricing_parsers import parse_openai_pricing_md
-from pricing_seed import CP_SEED, OPENAI_LIST_SEED, SEED, SEED_SOURCE_DATE, ensure_seed, seed_rows
+from pricing_seed import CP_SEED, OPENAI_LIST_SEED, SEED, SEED_SOURCE_DATE, ensure_seed, seed_extra, seed_rows
 from pricing_sources import (
     ANTHROPIC_SOURCE_ID, EPOCH, NOVA_USAGETYPES, OPENAI_SOURCE_ID, PriceIdentity, active_channels, price_identity,
-    pricelist_source_id,
+    pricelist_source_id, tier_of,
 )
 from tests.pricing_catalog import ACTIVE_MODELS, HIDDEN_1P_MODELS, OPENAI_LIST_IDS
 
@@ -95,6 +95,23 @@ def test_openai_list_seed_is_the_openai_standard_price_per_family():
         regional, global_ = OPENAI[fk]
         assert regional == (round(i * 1.1, 6), round(o * 1.1, 6)), fk
         assert global_ in (None, (i, o)), fk
+
+
+def test_gpt_us_cris_seed_equals_in_region_on_every_price():
+    """The export's fixed note 3 (v2.31.1): GPT US CRIS and In Region prices are the same (one offer dimension,
+    input_tokens_standard, for both), extra prices included."""
+    rows = seed_rows(ACTIVE)
+    by_family: dict[str, dict[str, list[str]]] = {}
+    for mid, ident in ACTIVE.items():
+        if ident.provider == "openai":
+            by_family.setdefault(ident.family_key, {}).setdefault(tier_of(ident.channel), []).append(mid)
+    with_us = {fk: tiers for fk, tiers in by_family.items() if "us" in tiers}
+    assert set(with_us) == {"gpt-6-astra", "gpt-6-sol", "gpt-6-luna"}
+    for fk, tiers in with_us.items():
+        (us,) = tiers["us"]
+        for regional in tiers["in_region"]:
+            assert rows[us][:2] == rows[regional][:2], (fk, regional)
+            assert seed_extra(us, ACTIVE[us]) == seed_extra(regional, ACTIVE[regional]), (fk, regional)
 
 
 def test_seed_rows_resolve_openai_list_channels_by_family_key():

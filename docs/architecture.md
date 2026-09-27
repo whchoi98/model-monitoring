@@ -257,7 +257,7 @@ See ADR-001 through ADR-030 in [`docs/decisions/`](./decisions/) (012, 014, 015,
 | 027 | GPT-6 Astra: inference-profile-only OpenAI model, US CRIS pseudo-region `us`, Mantle in-region us-west-2 only |
 | 028 | Claude Opus 5.5 and GPT-6 Sol, Luna: CP point-release guard `_is_point_release_of`, Sol and Luna Mantle in-region us-east-1 only, agreement-offer pricing |
 | 029 | Dashboard metric grades: per-category absolute thresholds from 48 h p90/p99, TPS graded on the low side only, `lib/metricGrade.ts` as the single source |
-| 030 | Official unit prices synced every 12 hours into a per-`model_id` price history, costs at the price in effect at each probe, 50% guard with admin approval (supersedes the ADR-025 retroactive re-pricing rule); v2.31.0 appendix: OpenAI pricing page as a fourth source, display-only cache and long-context prices, fill-in-place `enriched` |
+| 030 | Official unit prices synced every 12 hours into a per-`model_id` price history, costs at the price in effect at each probe, 50% guard with admin approval (supersedes the ADR-025 retroactive re-pricing rule); v2.31.0 appendix: OpenAI pricing page as a fourth source, display-only cache and long-context prices, fill-in-place `enriched`; v2.31.1 follow-up: references list only cited sources, official pricing links in the Markdown header, GPT US CRIS = In Region note |
 
 ## Operations
 
@@ -520,7 +520,7 @@ flowchart LR
 | 027 | GPT-6 Astra: 추론 프로파일 전용 OpenAI 모델, US CRIS 유사 리전 `us`, Mantle 인리전은 us-west-2만 |
 | 028 | Claude Opus 5.5와 GPT-6 Sol, Luna: CP 점 버전 가드 `_is_point_release_of`, Sol, Luna Mantle 인리전은 us-east-1만, agreement offer 단가 |
 | 029 | 대시보드 지표 등급: 48시간 p90/p99 기반 카테고리별 절대 임계치, TPS는 낮은 쪽만 판정, `lib/metricGrade.ts` 단일 출처 |
-| 030 | 공식 단가 12시간 자동 동기화와 `model_id` 단위 단가 이력, 프로브 시각 기준 단가로 비용 계산, 50% 안전장치와 관리자 승인 (ADR-025의 소급 재계산 규칙 대체), v2.31.0 부록: 네 번째 출처 OpenAI 요금 문서, 표시 전용 캐시와 긴 컨텍스트 단가, 빈 필드 제자리 채움 `enriched` |
+| 030 | 공식 단가 12시간 자동 동기화와 `model_id` 단위 단가 이력, 프로브 시각 기준 단가로 비용 계산, 50% 안전장치와 관리자 승인 (ADR-025의 소급 재계산 규칙 대체), v2.31.0 부록: 네 번째 출처 OpenAI 요금 문서, 표시 전용 캐시와 긴 컨텍스트 단가, 빈 필드 제자리 채움 `enriched`, v2.31.1 후속: 인용된 참고 자료만 표시, Markdown 머리말 공식 요금 링크, GPT US CRIS = In Region 안내 |
 
 ## 운영
 
