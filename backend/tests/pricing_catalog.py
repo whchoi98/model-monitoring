@@ -59,6 +59,9 @@ def _label(identity: tuple) -> str:
 
 ACTIVE_MODELS: dict[str, str] = {mid: _label(i) for mid, i in EXPECTED_IDENTITY.items()}  # prober 라벨 규약
 
+# v2.31.0: active_channels가 OpenAI 패밀리마다 끝에 덧붙이는 표시 전용 "OpenAI 공식 가격" 채널(ACTIVE_MODELS 순서)
+OPENAI_LIST_IDS: list[str] = [f"openai-list:{fk}" for _, fk, _, _ in _OPENAI]
+
 HIDDEN_1P_MODELS: dict[str, str] = {  # 휴면 1P — 기본 숨김 패턴 "(1P)"
     f"openai:1p:{fk}": f"OpenAI {fam} (1P)"
     for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"),

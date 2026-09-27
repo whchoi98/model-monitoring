@@ -1,13 +1,18 @@
-"""GET /api/pricing payload builder (v2.30.0, ADR-030) — pure function over price_history.
+"""GET /api/pricing payload builder (v2.30.0, extra price fields v2.31.0, ADR-030) — pure function over price_history.
 
 The backend decides every order and number; the frontend and the three export formats reuse them as-is:
-- families: PROVIDER_ORDER (Anthropic Claude, Amazon Nova, OpenAI), then FAMILY_ORDER.
-- tiers: always the four keys cp, global, us (object or null) and in_region (always a list). Channels of one
-  tier with equal values (price, verification, pending value) form one element; in_region elements are
-  ordered by region name.
+- families: PROVIDER_ORDER (Anthropic Claude, OpenAI, Amazon Nova), then FAMILY_ORDER.
+- tiers: always the five keys cp, openai_list, global, us (object or null) and in_region (always a list), in
+  that order. Channels of one tier with equal values (all nine prices, verification, the full pending value
+  set) form one element; in_region elements are ordered by region name.
+- every cell (and its pending object) carries input, output, cache_read, cache_write, cache_write_1h (null when
+  the source has no such price) and long ({input, output, cache_read, cache_write} when both long_input and
+  long_output are set, else null).
 - footnotes: walking the cells in display order, each source_id gets the next number the first time it is
-  cited; the fixed official pages follow, and manual notes come last, titled "<family> <kind> (manual note,
-  <basis>)" with the family's FAMILY_ORDER name.
+  cited, and a family's official-source note (source != "manual_note") cites its source_id right after that
+  family's cells, so it always has a number; the fixed official pages follow, and manual notes come last,
+  titled "<family> <kind> (manual note, <basis>)" with the family's FAMILY_ORDER name.
+- models (model_id -> input/output, the cost map) leaves out the display-only openai_list channels.
 """
 
 from datetime import datetime
@@ -20,20 +25,24 @@ from sqlalchemy.orm import Session
 import pricing_sources
 from models import PriceHistory
 from price_history import as_utc, current_rows, last_finished_run, pending_rows, verification_of
+from pricing_parsers import PRICE_FIELDS
 from pricing_seed import SEED_SOURCE_DATE
 from pricing_sources import (
-    ANTHROPIC_REFERENCE_URL, ANTHROPIC_SOURCE_ID, FAMILY_ORDER, OFFER_REFERENCE_URL, PRICELIST_REFERENCE_URL,
-    PROVIDER_ORDER, PriceIdentity, note_source_id, official_source_id, region_of, tier_of,
+    ANTHROPIC_REFERENCE_URL, ANTHROPIC_SOURCE_ID, FAMILY_ORDER, OFFER_REFERENCE_URL, OPENAI_REFERENCE_URL,
+    OPENAI_SOURCE_ID, PRICELIST_REFERENCE_URL, PROVIDER_ORDER, PriceIdentity, note_source_id, official_source_id,
+    region_of, tier_of,
 )
 
 ANTHROPIC_TITLE_EN = "Anthropic API pricing (Claude Platform on AWS uses standard pricing)"
 ANTHROPIC_TITLE_KO = "Anthropic API 요금 (Claude Platform on AWS는 표준 요금)"
+OPENAI_TITLE_EN = "OpenAI API pricing (Standard)"
+OPENAI_TITLE_KO = "OpenAI API 요금 (Standard)"
 
-SINGLE_TIERS = ("cp", "global", "us")
+SINGLE_TIERS = ("cp", "openai_list", "global", "us")
 _VERIFICATION_RANK = {"verified": 0, "stale": 1, "seed_only": 2, "none": 3}
 
 NOTE_KIND_TITLES = {"promo": {"en": "promotion", "ko": "프로모션"}}
-# Note fields that only build the reference title; families[].notes carries the rest (frontend PricingNote).
+# Note fields that only build a manual note's reference title; families[].notes carries the rest (frontend PricingNote).
 _NOTE_TITLE_FIELDS = ("basis_en", "basis_ko")
 
 
@@ -43,6 +52,11 @@ def price_number(v: float):
     if d == d.to_integral_value():
         return int(d)
     return float(d)
+
+
+def price_number_or_none(v: Optional[float]):
+    """price_number for an optional price: None (the source has no such price) stays None, 0 stays 0."""
+    return None if v is None else price_number(v)
 
 
 def price_text(v: float) -> str:
@@ -58,6 +72,31 @@ def iso_z(value: Optional[datetime]) -> Optional[str]:
     if value is None:
         return None
     return as_utc(value).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+
+def price_values(row: PriceHistory) -> tuple:
+    """The row's nine prices in PRICE_FIELDS order as price_number values (None where the row has none)."""
+    return tuple(price_number_or_none(getattr(row, f"{f}_per_mtok")) for f in PRICE_FIELDS)
+
+
+def price_fields(row: PriceHistory) -> dict:
+    """The price keys of a cell or pending object: input, output, cache_read, cache_write, cache_write_1h, long."""
+    long = None
+    if row.long_input_per_mtok is not None and row.long_output_per_mtok is not None:
+        long = {
+            "input": price_number(row.long_input_per_mtok),
+            "output": price_number(row.long_output_per_mtok),
+            "cache_read": price_number_or_none(row.long_cache_read_per_mtok),
+            "cache_write": price_number_or_none(row.long_cache_write_per_mtok),
+        }
+    return {
+        "input": price_number(row.input_per_mtok),
+        "output": price_number(row.output_per_mtok),
+        "cache_read": price_number_or_none(row.cache_read_per_mtok),
+        "cache_write": price_number_or_none(row.cache_write_per_mtok),
+        "cache_write_1h": price_number_or_none(row.cache_write_1h_per_mtok),
+        "long": long,
+    }
 
 
 def _same_price(row: PriceHistory, prior: Mapping) -> bool:
@@ -86,8 +125,20 @@ def _source_reference(source_id: str, families: list[str]) -> dict:
     if source_id == ANTHROPIC_SOURCE_ID:
         return {"kind": "anthropic_doc", "title_en": ANTHROPIC_TITLE_EN, "title_ko": ANTHROPIC_TITLE_KO,
                 "url": ANTHROPIC_REFERENCE_URL}
+    if source_id == OPENAI_SOURCE_ID:
+        return {"kind": "openai_doc", "title_en": OPENAI_TITLE_EN, "title_ko": OPENAI_TITLE_KO,
+                "url": OPENAI_REFERENCE_URL}
     # Unknown format: still listed so the footnote resolves, without a link.
     return {"kind": "official_page", "title_en": source_id, "title_ko": source_id, "url": None}
+
+
+def _note_payload(note: Mapping) -> dict:
+    """families[].notes entry: the note without its title-only fields, always with source and source_id
+    (a manual note without a source_id gets note_source_id(family_key))."""
+    out = {k: v for k, v in note.items() if k not in _NOTE_TITLE_FIELDS}
+    out["source"] = note.get("source", "manual_note")
+    out["source_id"] = note.get("source_id") or note_source_id(note["family_key"])
+    return out
 
 
 def _note_reference(note: Mapping, family: str) -> dict:
@@ -143,11 +194,10 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
         return out
 
     def group_key(mid: str):
-        row = current[mid]
         p = pending.get(mid)
         return (
-            price_number(row.input_per_mtok), price_number(row.output_per_mtok), verification_of(row, last_run),
-            None if p is None else (price_number(p.input_per_mtok), price_number(p.output_per_mtok)),
+            price_values(current[mid]), verification_of(current[mid], last_run),
+            None if p is None else price_values(p),
         )
 
     def groups(mids: list[str]) -> list[list[str]]:
@@ -166,23 +216,17 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
         observed = [as_utc(r.observed_at) for r in rows if r.observed_at is not None]
         p = pending.get(mids[0])
         return {
-            "input": price_number(first.input_per_mtok),
-            "output": price_number(first.output_per_mtok),
+            **price_fields(first),
             "model_ids": list(mids),
             "source_ids": source_ids,
             "footnotes": cite(source_ids, family),
             "verification": verification_of(first, last_run),
             "observed_at": iso_z(min(observed)) if observed else None,
-            "pending": None if p is None else {
-                "id": p.id,
-                "input": price_number(p.input_per_mtok),
-                "output": price_number(p.output_per_mtok),
-                "observed_at": iso_z(p.observed_at),
-            },
+            "pending": None if p is None else {"id": p.id, **price_fields(p), "observed_at": iso_z(p.observed_at)},
         }
 
     families = []
-    shown_notes: list[tuple[Mapping, str]] = []  # (note, family) in display order, for the manual_note references
+    manual_notes: list[tuple[Mapping, dict, str]] = []  # (note, payload note, family) in display order
     for family_key in sorted(by_family, key=family_order):
         mids = by_family[family_key]
         ident = active[mids[0]]
@@ -203,15 +247,20 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
             {"regions": [region_of(active[m].channel) for m in g], **cell(g, ident.family)}
             for g in groups(regional)
         ]
-        notes = [note for note in pricing_sources.PRICE_NOTES
+        shown = [note for note in pricing_sources.PRICE_NOTES
                  if note["family_key"] == family_key and not _note_resolved(note, mids, active, current)]
-        shown_notes.extend((note, ident.family) for note in notes)
+        notes = [_note_payload(note) for note in shown]
+        for note, payload_note in zip(shown, notes):
+            if payload_note["source"] == "manual_note":
+                manual_notes.append((note, payload_note, ident.family))
+            else:
+                cite([payload_note["source_id"]], ident.family)  # right after this family's cells
         families.append({
             "family_key": family_key,
             "family": ident.family,
             "provider": ident.provider,
             "tiers": tiers,
-            "notes": [{k: v for k, v in note.items() if k not in _NOTE_TITLE_FIELDS} for note in notes],
+            "notes": notes,
         })
 
     references = []
@@ -224,9 +273,9 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
             "n": len(references) + 1, "id": official_source_id(page["slug"]), "kind": "official_page",
             "title_en": page["title_en"], "title_ko": page["title_ko"], "url": page["url"], "as_of": None,
         })
-    for note, family in shown_notes:
+    for note, payload_note, family in manual_notes:
         references.append({
-            "n": len(references) + 1, "id": note_source_id(note["family_key"]), **_note_reference(note, family),
+            "n": len(references) + 1, "id": payload_note["source_id"], **_note_reference(note, family),
             "as_of": None,
         })
 
@@ -248,7 +297,7 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
                 "output": price_number(current[mid].output_per_mtok),
                 "verification": verification_of(current[mid], last_run),
             }
-            for mid in ids if mid in current
+            for mid in ids if mid in current and active[mid].channel != "openai_list"
         },
         "references": references,
         "disclaimer": {"en": pricing_sources.DISCLAIMER["en"], "ko": pricing_sources.DISCLAIMER["ko"]},

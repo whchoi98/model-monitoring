@@ -260,13 +260,22 @@ class PriceHistory(Base):
     )
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    model_id = Column(Text, nullable=False)          # probe_results.model_id와 같은 값
+    model_id = Column(Text, nullable=False)          # probe_results.model_id와 같은 값(openai_list는 합성 id openai-list:<family_key>, 프로브 행 없음)
     family_key = Column(Text, nullable=False)        # claude-opus-5-5 | gpt-6-sol | nova-2-lite ...
-    channel = Column(Text, nullable=False)           # cp | global | us | inregion:<aws-region>
+    channel = Column(Text, nullable=False)           # cp | openai_list | global | us | inregion:<aws-region>
     input_per_mtok = Column(Float, nullable=False)   # USD per 1M input tokens
     output_per_mtok = Column(Float, nullable=False)  # USD per 1M output tokens
+    # v2.31.0 표시 전용 단가(비용 계산은 입력, 출력만 쓴다). 출처에 없는 항목은 NULL, 공식 값이 $0이면 0(Nova 캐시 쓰기).
+    # 운영 DB의 기존 테이블에는 pricing_seed.ensure_price_columns가 ALTER TABLE로 더한다(create_all은 열을 더하지 않음).
+    cache_read_per_mtok = Column(Float, nullable=True)        # 캐시 읽기(cache hit, cached input)
+    cache_write_per_mtok = Column(Float, nullable=True)       # 캐시 쓰기(Claude 5분, OpenAI cache writes, Nova)
+    cache_write_1h_per_mtok = Column(Float, nullable=True)    # Claude 1시간 캐시 쓰기
+    long_input_per_mtok = Column(Float, nullable=True)        # GPT 긴 컨텍스트(짧은 컨텍스트 한도 초과) 입력
+    long_output_per_mtok = Column(Float, nullable=True)       # GPT 긴 컨텍스트 출력
+    long_cache_read_per_mtok = Column(Float, nullable=True)   # GPT 긴 컨텍스트 캐시 읽기
+    long_cache_write_per_mtok = Column(Float, nullable=True)  # GPT 긴 컨텍스트 캐시 쓰기
     effective_from = Column(DateTime(timezone=True), nullable=False)
-    source_id = Column(Text, nullable=False)         # offer:<offerId> | pricelist:<usagetype> | anthropic-pricing
+    source_id = Column(Text, nullable=False)         # offer:<offerId> | pricelist:<usagetype> | anthropic-pricing | openai-pricing
     status = Column(Text, nullable=False)            # seed | verified | pending_review | rejected
     observed_at = Column(DateTime(timezone=True), nullable=True)  # 출처에서 마지막으로 확인한 시각, seed는 NULL
     run_id = Column(Integer, nullable=True)          # 이 행을 만든(또는 마지막으로 관측한) price_sync_runs.id
