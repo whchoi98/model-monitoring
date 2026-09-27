@@ -81,7 +81,7 @@ def test_seed_covers_every_active_channel():
     rows = seed_rows(ACTIVE)
     assert set(rows) == set(ACTIVE)
     assert rows["anthropic:claude-haiku-4-5-20251001"] == (1.0, 5.0, ANTHROPIC_SOURCE_ID)  # CP 날짜 접미사 id
-    assert SEED_SOURCE_DATE.isoformat() == "2026-09-26"
+    assert SEED_SOURCE_DATE.isoformat() == "2026-09-27"
     assert set(OPENAI_LIST_SEED) == {i.family_key for i in ACTIVE.values() if i.provider == "openai"}
 
 

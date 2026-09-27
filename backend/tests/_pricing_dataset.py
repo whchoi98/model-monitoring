@@ -210,7 +210,7 @@ EXPECTED_PAYLOAD = {
         # only seed rows (observed_at NULL) cite it -> the seed check date
         _ref(6, G55, "agreement_offer",
              "Amazon Bedrock agreement offer rate card, offer-gpt55example (GPT 5.5)",
-             "Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)", OFFER_URL, "2026-09-26"),
+             "Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)", OFFER_URL, "2026-09-27"),
         _ref(7, G54, "agreement_offer",
              "Amazon Bedrock agreement offer rate card, offer-5l5a5izq5fbec (GPT 5.4)",
              "Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4)", OFFER_URL, "2026-09-25"),

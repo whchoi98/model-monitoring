@@ -63,7 +63,7 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 [^3]: AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite), https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html, 확인일 2026-09-24
 [^4]: Amazon Bedrock 약정 오퍼 요금표, offer-gnqokrqqvdbgw (GPT 5.6 Sol), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
 [^5]: Amazon Bedrock 약정 오퍼 요금표, offer-terra0example (GPT 5.6 Terra), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
-[^6]: Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-26
+[^6]: Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-27
 [^7]: Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
 [^8]: Amazon Bedrock 요금, https://aws.amazon.com/bedrock/pricing/
 [^9]: Amazon Bedrock 모델 카드, OpenAI GPT 5.4, https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html
@@ -120,7 +120,7 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 [^3]: AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite), https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html, checked 2026-09-24
 [^4]: Amazon Bedrock agreement offer rate card, offer-gnqokrqqvdbgw (GPT 5.6 Sol), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
 [^5]: Amazon Bedrock agreement offer rate card, offer-terra0example (GPT 5.6 Terra), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
-[^6]: Amazon Bedrock agreement offer rate card, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-26
+[^6]: Amazon Bedrock agreement offer rate card, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-27
 [^7]: Amazon Bedrock agreement offer rate card, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
 [^8]: Amazon Bedrock pricing, https://aws.amazon.com/bedrock/pricing/
 [^9]: Amazon Bedrock model card, OpenAI GPT 5.4, https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html
@@ -149,7 +149,7 @@ reference_n,reference_id,kind,title,url,as_of
 3,pricelist:USE1-Nova2.0Lite-input-tokens,price_list,"AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html,2026-09-24
 4,offer:offer-gnqokrqqvdbgw,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-gnqokrqqvdbgw (GPT 5.6 Sol)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
 5,offer:offer-terra0example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-terra0example (GPT 5.6 Terra)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
-6,offer:offer-gpt55example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-26
+6,offer:offer-gpt55example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-27
 7,offer:offer-5l5a5izq5fbec,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
 8,official:bedrock-pricing,official_page,Amazon Bedrock 요금,https://aws.amazon.com/bedrock/pricing/,
 9,official:model-card-openai-gpt-54,official_page,"Amazon Bedrock 모델 카드, OpenAI GPT 5.4",https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html,
