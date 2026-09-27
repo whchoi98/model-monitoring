@@ -753,6 +753,26 @@ def test_an_odd_untracked_openai_doc_row_never_skips_the_tracked_channels(Sessio
     assert not any("preview" in e for e in run.summary["errors"])
 
 
+def test_a_tracked_openai_doc_value_that_rounds_to_zero_skips_only_that_models_channel(Session):
+    ol_6sol = "openai-list:gpt-6-sol"             # a second tracked OpenAI official price from the same doc table
+    _seed(Session, values={**BASELINE, ol_6sol: (2.0, 10.0, "openai-pricing")},
+          extras={**BASELINE_EXTRAS, ol_6sol: {"cache_read": 0.2, "cache_write": 2.5, "long_input": 4.0,
+                                              "long_output": 15.0, "long_cache_read": 0.4, "long_cache_write": 5.0}})
+    text = (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+    row = "| gpt-5.6-sol | $4.00 | $0.40 |"
+    assert row in text
+    bad = text.replace(row, "| gpt-5.6-sol | $4.00 | $0.0000001 |", 1)   # short-context cached input rounds to 0
+    run = _run(Session, run_sync(Session, _active(*ALL, ol_6sol), _fetchers(openai_md=bad), now=lambda: T0))
+    assert run.status == "partial"
+    assert run.summary["channels"][OL_SOL] == "skipped:parse_failed"
+    assert all(run.summary["channels"][m] == "unchanged" for m in (*ALL, ol_6sol) if m != OL_SOL)
+    assert run.summary["sources"]["openai_doc"] == {"calls": 1, "ok": 1, "failed": 0}
+    (error,) = [e for e in run.summary["errors"] if e.startswith("openai_doc")]
+    assert error.startswith("openai_doc gpt-5.6-sol: cache_read price is negative or rounds to 0 at 6 decimals"), error
+    (stored,) = _rows(Session, OL_SOL)
+    assert stored.observed_at is None and stored.cache_read_per_mtok == 0.4    # the stored row is left alone
+
+
 def test_default_openai_fetcher_sends_a_user_agent_and_retries_5xx():
     seen, sleeps = [], []
 

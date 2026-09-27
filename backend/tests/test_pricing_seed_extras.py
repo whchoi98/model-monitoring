@@ -4,7 +4,7 @@ import logging
 from types import SimpleNamespace
 
 import pytest
-from sqlalchemy import create_engine, select
+from sqlalchemy import create_engine, event, select
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
@@ -162,6 +162,24 @@ def test_v230_seed_rows_get_only_their_null_extras_filled(engine, caplog):
     assert _extras_of(_rows(engine)[OPUS_US])["cache_read"] == 0.3
 
 
+def test_a_value_committed_between_the_snapshot_and_the_update_is_kept(engine):
+    """The fill writes COALESCE(column, seed) — a concurrent sync that fills a column after the SELECT wins."""
+    _add(engine, OPUS_G, 4.0, 20.0)                              # v2.30.0 seed row: every extra NULL in the snapshot
+    raced: list[str] = []
+
+    @event.listens_for(engine, "before_cursor_execute")
+    def concurrent_sync(conn, cursor, statement, parameters, context, executemany):
+        if statement.startswith("UPDATE price_history") and not raced:
+            raced.append(statement)
+            cursor.execute("UPDATE price_history SET cache_read_per_mtok = 0.3 WHERE model_id = ?", (OPUS_G,))
+
+    assert ensure_seed(engine, ACTIVE) == 63 - 1
+    event.remove(engine, "before_cursor_execute", concurrent_sync)
+    assert raced, "the fill UPDATE never ran"
+    row = _rows(engine)[OPUS_G]
+    assert (row.cache_read_per_mtok, row.cache_write_per_mtok, row.cache_write_1h_per_mtok) == (0.3, 5.0, 8.0)
+
+
 class _Begin:
     def __init__(self, conn):
         self.conn = conn
@@ -195,3 +213,5 @@ def test_postgres_fills_inside_the_seed_transaction_after_the_lock():
     assert [s.split()[0] + " " + s.split()[1] for s in log[3:]] == [
         "SELECT DISTINCT", "INSERT INTO", "SELECT price_history.id,", "UPDATE price_history"]
     assert "cache_read_per_mtok" in log[-1] and "cache_write_per_mtok" in log[-1] and "long_input" not in log[-1]
+    for col in ("cache_read_per_mtok", "cache_write_per_mtok"):      # never a bare overwrite of a concurrent value
+        assert f"{col}=coalesce(price_history.{col}, " in log[-1], log[-1]

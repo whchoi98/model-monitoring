@@ -259,11 +259,16 @@ def test_pending_list_long_context_ratios_and_zero_baseline(env):
         db.commit()
     nova_id = _pending(factory, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, effective_from=now, observed_at=now,
                        cache_read=0.0825, cache_write=0.1)
+    nova_same_zero_id = _pending(factory, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, effective_from=now,
+                                 observed_at=now, cache_read=0.165, cache_write=0.0)
     gpt_id = _pending(factory, "openai:us-east-1:openai.gpt-5.4", 2.75, 16.5, effective_from=now, observed_at=now,
                       long_input=11.0, long_output=24.75)
     listed = {p["id"]: p for p in client.get("/api/admin/pricing/pending", headers=_auth("admin")).json()["pending"]}
     # old cache write 0 -> no finite ratio for a new non-zero value
     assert listed[nova_id]["change"] == _value(0.0, 0.0, cache_read=0.0, cache_write=None)
+    # old cache write 0 and new 0 -> no change (0.0), not null; only the cache read moved
+    assert listed[nova_same_zero_id]["change"] == _value(0.0, 0.0, cache_read=1.0, cache_write=0.0)
+    assert listed[nova_same_zero_id]["current"] == _value(0.33, 2.75, cache_read=0.0825, cache_write=0.0)
     assert listed[gpt_id]["change"] == _value(0.0, 0.0, long_input=1.0, long_output=0.0)
     assert listed[gpt_id]["current"] == _value(2.75, 16.5, long_input=5.5, long_output=24.75)
 

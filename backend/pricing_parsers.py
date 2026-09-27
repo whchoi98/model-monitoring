@@ -8,7 +8,7 @@ prices into the optional UnitPrice fields. They are display-only; cost calculati
 
 import json
 import re
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from decimal import Decimal, InvalidOperation
 
 
@@ -366,13 +366,21 @@ def _rows(table: list[str], header: list[str]):
 
 
 def _unambiguous(pairs) -> dict[str, UnitPrice]:
-    """{name: price} from (name, price) pairs; a name seen twice with different values is dropped."""
+    """{name: price} from (name, price) pairs.
+
+    A name seen twice with a different input or output is dropped. When input and output agree, the name is kept
+    and every extra field whose values differ (one side None and the other set counts as different) becomes None.
+    """
     prices: dict[str, UnitPrice] = {}
     ambiguous: set[str] = set()
     for name, price in pairs:
-        if name in prices and prices[name] != price:
+        seen = prices.get(name)
+        if seen is None:
+            prices[name] = price
+        elif (seen.input, seen.output) != (price.input, price.output):
             ambiguous.add(name)
-        prices[name] = price
+        else:
+            prices[name] = replace(seen, **{f: None for f in EXTRA_FIELDS if getattr(seen, f) != getattr(price, f)})
     for name in ambiguous:
         prices.pop(name, None)
     return prices
@@ -385,7 +393,8 @@ def parse_anthropic_pricing_md(markdown: str) -> dict[str, UnitPrice]:
     "Cache hits and refreshes", "5m cache writes", "1h cache writes"), `<sup>` is removed from name and value
     cells, and the trailing parenthesis group (incl. a markdown link) is removed from the name. Rows whose
     input or output is not exactly "$<n> / MTok" are skipped; such an optional cell is None. A name that
-    appears twice with different prices is dropped. Callers look names up by exact match only.
+    appears twice with a different input or output is dropped; with the same input and output it is kept and a
+    cache price that differs between the rows is None. Callers look names up by exact match only.
     """
     table = _model_pricing_table(markdown)
     header = [_norm_header(c) for c in _cells(table[0])]
@@ -417,7 +426,8 @@ def parse_openai_pricing_md(markdown: str) -> dict[str, UnitPrice]:
     "Long context" columns. A value cell is exactly "$<n>" (e.g. "$0.125"); anything else ("-", blank) is None
     and a row without both short-context input and output is skipped. Names lose `<sup>` and the trailing
     parenthesis group ("gpt-5.5 (<272K context length)" -> "gpt-5.5"); lookups are exact ("gpt-5.4" is not
-    "gpt-5.4-mini"). A name seen twice with different values is dropped.
+    "gpt-5.4-mini"). A name seen twice with a different short-context input or output is dropped; with the same
+    input and output it is kept and an optional value that differs between the rows is None.
     """
     table = _first_table_after(markdown, lambda s: s == _OPENAI_STANDARD_HEADING, _OPENAI_STANDARD_HEADING)
     header = [_norm_header(c) for c in _cells(table[0])]

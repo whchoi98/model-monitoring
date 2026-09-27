@@ -516,13 +516,30 @@ def test_cache_columns_are_found_by_header_name_and_bad_cache_cells_are_none():
     assert parse_anthropic_pricing_md(doc) == {"Claude Opus 5": U(5, 25, cache_read="0.5", cache_write="6.25")}
 
 
-def test_names_with_the_same_input_output_but_different_cache_prices_are_dropped():
+def test_names_with_the_same_input_output_keep_them_and_lose_only_the_conflicting_cache_prices():
+    doc = _md("| Claude Opus 5 | $5 / MTok | $0.50 / MTok | $6.25 / MTok | $25 / MTok |",
+              "| Claude Opus 5 (legacy) | $5 / MTok | $1 / MTok | $6.25 / MTok | $25 / MTok |",
+              "| Claude Sonnet 5 | $2 / MTok | $0.20 / MTok | $2.50 / MTok | $10 / MTok |",
+              "| Claude Sonnet 5 (legacy) | $2 / MTok | $0.20 / MTok | TBD | $10 / MTok |",    # set vs None: None
+              "| Claude Haiku 4.5 | $1 / MTok | $0.10 / MTok | $1.25 / MTok | $5 / MTok |",
+              "| Claude Haiku 4.5 ([note](https://example.invalid)) | $1 / MTok | $0.10 / MTok | $1.25 / MTok | $5 / MTok |",
+              header="| Model | Base input tokens | Cache hits and refreshes | 5m cache writes | Output tokens |")
+    assert parse_anthropic_pricing_md(doc) == {
+        "Claude Opus 5": U(5, 25, cache_write="6.25"),                      # cache hits differ: only that is None
+        "Claude Sonnet 5": U(2, 10, cache_read="0.2"),                      # 5m write set once, missing once
+        "Claude Haiku 4.5": U(1, 5, cache_read="0.1", cache_write="1.25"),  # equal twice: kept whole
+    }
+
+
+def test_names_with_a_different_input_or_output_are_still_dropped_whatever_the_cache_prices():
     doc = _md("| Claude Opus 5 | $5 / MTok | $0.50 / MTok | $25 / MTok |",
-              "| Claude Opus 5 (legacy) | $5 / MTok | $1 / MTok | $25 / MTok |",
+              "| Claude Opus 5 (legacy) | $15 / MTok | $0.50 / MTok | $25 / MTok |",   # input differs
+              "| Claude Sonnet 5 | $2 / MTok | $0.20 / MTok | $10 / MTok |",
+              "| Claude Sonnet 5 (legacy) | $2 / MTok | $0.20 / MTok | $12 / MTok |",   # output differs
+              "| Claude Sonnet 5 (note) | $2 / MTok | $0.20 / MTok | $10 / MTok |",     # a third, matching row
               "| Claude Haiku 4.5 | $1 / MTok | $0.10 / MTok | $5 / MTok |",
-              "| Claude Haiku 4.5 ([note](https://example.invalid)) | $1 / MTok | $0.10 / MTok | $5 / MTok |",
               header="| Model | Base input tokens | Cache hits and refreshes | Output tokens |")
-    assert parse_anthropic_pricing_md(doc) == {"Claude Haiku 4.5": U(1, 5, cache_read="0.1")}  # equal twice: kept
+    assert parse_anthropic_pricing_md(doc) == {"Claude Haiku 4.5": U(1, 5, cache_read="0.1")}
 
 
 def test_only_the_first_table_under_the_heading_is_read():
@@ -645,13 +662,27 @@ def test_openai_columns_by_header_name_and_optional_columns():
         parse_openai_pricing_md(_oa("| gpt-6-astra | $10.00 | $50.00 |", header="| Model | Input | Output |"))
 
 
-def test_openai_duplicate_names_with_different_values_are_dropped():
+def test_openai_duplicate_names_with_a_different_input_or_output_are_dropped():
     prices = parse_openai_pricing_md(_oa(
         "| gpt-5.4 | $2.50 | $0.25 | - | $15.00 | $5.00 | $0.50 | - | $22.50 |",
-        "| gpt-5.4 (<272K context length) | $2.50 | $0.25 | - | $15.00 | $6.00 | $0.50 | - | $22.50 |",
+        "| gpt-5.4 (<272K context length) | $3.00 | $0.25 | - | $15.00 | $5.00 | $0.50 | - | $22.50 |",
+        "| gpt-5.5 | $5.00 | $0.50 | - | $30.00 | $10.00 | $1.00 | - | $45.00 |",
+        "| gpt-5.5 (<272K context length) | $5.00 | $0.50 | - | $31.00 | $10.00 | $1.00 | - | $45.00 |",
         "| gpt-6-sol | $2.00 | $0.20 | $2.50 | $10.00 | $4.00 | $0.40 | $5.00 | $15.00 |",
     ))
     assert prices == {"gpt-6-sol": OPENAI_EXPECTED["gpt-6-sol"]}
+
+
+def test_openai_duplicate_names_with_the_same_input_output_lose_only_the_conflicting_values():
+    prices = parse_openai_pricing_md(_oa(
+        "| gpt-5.4 | $2.50 | $0.25 | - | $15.00 | $5.00 | $0.50 | - | $22.50 |",
+        "| gpt-5.4 (<272K context length) | $2.50 | $0.30 | - | $15.00 | $6.00 | $0.50 | $1.00 | $22.50 |",
+        "| gpt-6-sol | $2.00 | $0.20 | $2.50 | $10.00 | $4.00 | $0.40 | $5.00 | $15.00 |",
+        "| gpt-6-sol | $2.00 | $0.20 | $2.50 | $10.00 | $4.00 | $0.40 | $5.00 | $15.00 |",
+    ))
+    # cached input 0.25/0.30, long input 5/6 and long cache writes None/1.00 differ: None; the rest is kept
+    assert prices == {"gpt-5.4": U("2.5", 15, long_output="22.5", long_cache_read="0.5"),
+                      "gpt-6-sol": OPENAI_EXPECTED["gpt-6-sol"]}
 
 
 @pytest.mark.parametrize("doc", [

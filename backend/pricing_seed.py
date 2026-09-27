@@ -4,6 +4,8 @@
 offerId 리전 무관), AWS Price List(Nova 2.0 Lite USE1, 1K tokens × 1000), Anthropic pricing.md(CP 9).
 v2.29.1 대비 교정 11채널(결정 8, 과거까지): Bedrock Claude US 10 = Global × 1.1, Nova 2.0 Lite 0.33 / 2.75.
 나머지 44채널은 v2.29.1 값과 같다. 새 모델은 pricing_sources.py 매핑과 함께 여기 표를 고친다.
+v2.31.0: 2026-09-27 공식 출처의 표시 전용 캐시, 긴 컨텍스트 단가 seed와 OpenAI 공식 가격 seed(openai-list 채널 8개,
+합계 63채널)를 더했고, v2.30.0 seed 행은 NULL인 확장 열만 seed 값으로 채운다.
 """
 
 import logging
@@ -11,7 +13,7 @@ from datetime import date, datetime, timezone
 from typing import Mapping
 
 from sqlalchemy import inspect as sa_inspect
-from sqlalchemy import insert, select, text
+from sqlalchemy import func, insert, select, text
 
 from models import PriceHistory
 from pricing_parsers import EXTRA_FIELDS
@@ -198,7 +200,8 @@ def seed_rows(active: Mapping[str, PriceIdentity]) -> dict[str, tuple[float, flo
 def _fill_seed_extras(conn, table, seeds: Mapping[str, tuple[float, float, str]],
                       extras: Mapping[str, dict[str, float | None]]) -> int:
     """seeds의 model_id에서 status='seed'이고 입력, 출력이 seed 값과 같은(소수 6자리) 행의 NULL 확장 열만 seed 값으로
-    채운다. 이미 값이 있는 열은 덮어쓰지 않는다. 채운 행 수를 돌려준다."""
+    채운다. 이미 값이 있는 열은 덮어쓰지 않는다 — 각 열은 COALESCE(열, seed 값)로 써서 SELECT 뒤 UPDATE 전에 동시
+    동기화가 커밋한 값도 그대로 둔다. 채운 행 수를 돌려준다."""
     found = conn.execute(
         select(table.c.id, table.c.model_id, table.c.input_per_mtok, table.c.output_per_mtok,
                *(table.c[col] for col in _EXTRA_COLUMN.values()))
@@ -211,7 +214,7 @@ def _fill_seed_extras(conn, table, seeds: Mapping[str, tuple[float, float, str]]
         if round(row.input_per_mtok, 6) != round(seed_in, 6) or round(row.output_per_mtok, 6) != round(seed_out, 6):
             continue
         values = {
-            _EXTRA_COLUMN[field]: value
+            _EXTRA_COLUMN[field]: func.coalesce(table.c[_EXTRA_COLUMN[field]], value)
             for field, value in extras[row.model_id].items()
             if value is not None and getattr(row, _EXTRA_COLUMN[field]) is None
         }

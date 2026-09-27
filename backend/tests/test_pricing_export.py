@@ -232,6 +232,17 @@ def test_pending_lists_only_the_changed_prices_like_the_screen():
         payload, "en")
     cell["pending"]["cache_read"] = 0.2  # nothing differs: the pair, as on the screen
     assert "| 4 / 20 (검토 대기 4 / 20)[^2]<br>" in to_markdown(payload, "ko")
+    # A GPT cell whose pending row repeats the same long context (an equal copy): only the cache read is listed.
+    terra = _family(payload, "gpt-5.6-terra")["tiers"]["global"]
+    terra["pending"] = {"id": 98, "input": 2, "output": 12, "cache_read": 0.3, "cache_write": 2.5,
+                        "cache_write_1h": None, "long": dict(terra["long"]), "observed_at": "2026-09-25T15:00:00Z"}
+    assert terra["pending"]["long"] == terra["long"] and terra["pending"]["long"] is not terra["long"]
+    ko, en = to_markdown(payload, "ko"), to_markdown(payload, "en")
+    assert ("| 2 / 12 (검토 대기 캐시 읽기 0.3)[^5]<br>캐시 읽기 0.2, 쓰기 2.5<br>긴 컨텍스트 4 / 18, 캐시 읽기 0.4, "
+            "쓰기 5 |") in ko
+    assert ("| 2 / 12 (Pending review cache read 0.3)[^5]<br>cache read 0.2, write 2.5<br>long context 4 / 18, "
+            "cache read 0.4, write 5 |") in en
+    assert "캐시 읽기 0.3, 긴 컨텍스트" not in ko and "cache read 0.3, long context" not in en
 
 
 def test_note_item_ends_with_the_footnote_of_its_source_id():
