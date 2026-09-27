@@ -181,7 +181,7 @@ def test_family_order_matches_frontend_sort_models():
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
     assert len(ps.FAMILY_ORDER) == 19
     assert {v[1] for v in EXPECTED_IDENTITY.values()} == set(ps.FAMILY_ORDER)
-    assert ps.PROVIDER_ORDER == ("anthropic", "amazon", "openai")
+    assert ps.PROVIDER_ORDER == ("anthropic", "openai", "amazon")
 
 
 def test_tier_of_and_region_of():
@@ -274,10 +274,13 @@ def test_official_pages_and_price_notes():
     assert all(set(p) == {"slug", "title_en", "title_ko", "url"} and "·" not in p["title_ko"] for p in ps.OFFICIAL_PAGES)
     assert len({p["slug"] for p in ps.OFFICIAL_PAGES}) == 9
     (note,) = ps.PRICE_NOTES
-    assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "basis_ko", "basis_en",
-                         "source"}
-    assert (note["family_key"], note["kind"], note["min_until"], note["source"]) == (
-        "gpt-5.6-sol", "promo", "2026-11-21", "manual_note")
-    assert note["prior_price"] == {"in_region": {"input": 5.5, "output": 33}, "global": {"input": 5, "output": 30}}
-    assert "2026-11-21" in note["text_ko"] and "·" not in note["text_ko"]
-    assert (note["basis_ko"], note["basis_en"]) == ("2026-09-23 AWS 모델 카드 기준", "2026-09-23 AWS model card")
+    assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source", "source_id"}
+    assert (note["family_key"], note["kind"], note["min_until"], note["source"], note["source_id"]) == (
+        "gpt-5.6-sol", "promo", "2026-11-21", "openai_doc", "openai-pricing")
+    assert note["source_id"] == ps.OPENAI_SOURCE_ID
+    assert note["prior_price"] == {"openai_list": {"input": 5, "output": 30}, "global": {"input": 5, "output": 30},
+                                   "in_region": {"input": 5.5, "output": 33}}
+    assert note["text_ko"] == "프로모션 단가다. OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다."
+    assert note["text_en"] == (
+        "Promotional price. The OpenAI pricing page states that it applies at least through 2026-11-21.")
+    assert "·" not in note["text_ko"]

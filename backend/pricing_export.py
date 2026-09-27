@@ -11,7 +11,6 @@ import json
 from datetime import date
 
 from pricing_payload import price_text
-from pricing_sources import note_source_id
 
 EXPORT_FORMATS = ("csv", "md", "json")
 BOM = chr(0xFEFF)  # UTF-8 BOM so Excel opens the Korean CSV correctly
@@ -131,14 +130,14 @@ def to_markdown(payload: dict, lang: str) -> str:
 
     official = [r for r in payload["references"] if r["kind"] == "official_page"]
     notes = [(family, note) for family in payload["families"] for note in family["notes"]]
-    note_n = {r["id"]: r["n"] for r in payload["references"] if r["kind"] == "manual_note"}
+    ref_n = {r["id"]: r["n"] for r in payload["references"]}
     lines += ["", f"## {t['notes']}", ""]
     items = list(t["fixed_notes"])
     if official:
         # Referenced before the manual notes so Markdown renderers number footnotes in payload order.
         items.append(t["official"] + "".join(f"[^{r['n']}]" for r in official) + ".")
     for family, note in notes:
-        items.append(f"{family['family']}: {note[f'text_{lang}']}[^{note_n[note_source_id(note['family_key'])]}]")
+        items.append(f"{family['family']}: {note[f'text_{lang}']}[^{ref_n[note['source_id']]}]")
     lines += [f"{i}. {item}" for i, item in enumerate(items, start=1)]
 
     lines += ["", f"## {t['references']}", ""]

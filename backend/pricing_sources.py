@@ -16,7 +16,7 @@ from typing import Mapping, Sequence
 logger = logging.getLogger(__name__)
 
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)  # seed, no_baseline 행의 effective_from
-PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "amazon", "openai")
+PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 표 순서 (v2.31.0)
 # frontend/src/lib/sortModels.ts FAMILY_ORDER와 바이트 단위로 같아야 한다(tests가 파일을 읽어 고정).
 FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
@@ -219,18 +219,18 @@ OFFICIAL_PAGES: list[dict] = [
     ),
 ]
 
-# 수동 메모(manual_note, 공식 출처 아님) — 근거: 2026-09-23 AWS 모델 카드 기재(현재 미게재), CHANGELOG v2.28.1
-# basis_en/basis_ko는 참고 자료 제목에만 쓴다(pricing_payload가 제목 앞에 패밀리 이름을 붙이고 families[].notes에서는 뺀다).
+# 패밀리 메모 — GPT-5.6 Sol 프로모션은 OpenAI 공식 요금 문서가 출처다(v2.31.0, source_id = OPENAI_SOURCE_ID):
+# "GPT-5.6 Sol's promotional pricing is available at least through November 21, 2026".
+# prior_price는 프로모션 이전 단가(tier 키별) — 동기화가 이 값을 관측하면 pricing_payload가 메모를 뺀다.
+# source "manual_note" 메모도 계속 지원한다: basis_ko/basis_en(참고 자료 제목)이 필요하고 source_id는 note_source_id(family_key).
 PRICE_NOTES: list[dict] = [{
     "family_key": "gpt-5.6-sol",
     "kind": "promo",
     "min_until": "2026-11-21",
-    "prior_price": {"in_region": {"input": 5.5, "output": 33}, "global": {"input": 5, "output": 30}},
-    "text_ko": "프로모션 단가다. 2026-09-23 AWS 모델 카드에 최소 2026-11-21까지 적용한다고 기재됐고, "
-               "지금은 공식 출처에 표시가 없어 수동 메모로 관리한다(CHANGELOG v2.28.1).",
-    "text_en": "Promotional price. The AWS model card stated on 2026-09-23 that it applies at least through "
-               "2026-11-21; no official source shows it now, so it is kept as a manual note (CHANGELOG v2.28.1).",
-    "basis_ko": "2026-09-23 AWS 모델 카드 기준",
-    "basis_en": "2026-09-23 AWS model card",
-    "source": "manual_note",
+    "prior_price": {"openai_list": {"input": 5, "output": 30}, "global": {"input": 5, "output": 30},
+                    "in_region": {"input": 5.5, "output": 33}},
+    "text_ko": "프로모션 단가다. OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.",
+    "text_en": "Promotional price. The OpenAI pricing page states that it applies at least through 2026-11-21.",
+    "source": "openai_doc",
+    "source_id": OPENAI_SOURCE_ID,
 }]
