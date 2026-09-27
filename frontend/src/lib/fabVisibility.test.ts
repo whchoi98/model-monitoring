@@ -97,7 +97,7 @@ describe("창 세로 스크롤", () => {
 });
 
 describe("가로 스크롤", () => {
-  test("페이지 안 요소가 가로로 스크롤되면 숨긴다 (맨 위에서도)", () => {
+  test("<main> 안 요소가 가로로 스크롤되면 숨긴다 (맨 위에서도)", () => {
     expect(visible(nextFabState(initialFabState(1000), horizontal(1000)))).toBe(false);
     expect(visible(nextFabState(initialFabState(0), horizontal(0)))).toBe(false);
   });

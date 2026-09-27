@@ -11,11 +11,17 @@ function windowMetrics(): WindowMetrics {
   return { scrollY: window.scrollY, innerHeight: window.innerHeight, scrollHeight: root.scrollHeight };
 }
 
+/** AppShell's `<main>`: the content the button can cover. */
+const CONTENT_SELECTOR = "#main-content";
+
 /**
  * Whether the floating chat button shows (rule: `lib/fabVisibility.ts`). One passive capture listener for `scroll` on
- * the document: an event aimed at the document is the window scrolling, an event aimed at an element whose scrollLeft
- * changed is a horizontal scroll (the price tables). Hidden, the button stays in the DOM and in the tab order; spread
- * `onFocus` / `onBlur` on it so focus always shows it. The state lives in a ref and re-renders only when `hidden` flips.
+ * the document: an event aimed at the document is the window scrolling, an event aimed at an element inside `<main>`
+ * whose scrollLeft changed is a horizontal scroll (the price tables). Elements outside `<main>` are ignored: the header
+ * menu scrolls itself sideways to show the active item when a page mounts (AppHeader), which is not the reader
+ * scrolling and must not hide the button at the page top, and ChatModal only scrolls while it is open, when the button
+ * shows anyway. Hidden, the button stays in the DOM and in the tab order; spread `onFocus` / `onBlur` on it so focus
+ * always shows it. The state lives in a ref and re-renders only when `hidden` flips.
  */
 export function useChatFabVisibility(modalOpen: boolean) {
   const stateRef = useRef<FabState | null>(null);
@@ -34,6 +40,7 @@ export function useChatFabVisibility(modalOpen: boolean) {
     const onScroll = (event: Event) => {
       const target = event.target;
       if (target instanceof Element) {
+        if (!target.closest(CONTENT_SELECTOR)) return;
         const left = target.scrollLeft;
         const previous = lefts.get(target);
         lefts.set(target, left);

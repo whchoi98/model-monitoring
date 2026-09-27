@@ -134,3 +134,56 @@ test("at 1440px the visible chat button stays clear of the price tables at the p
     expect(intersects(fab, await rect(section))).toBe(false);
   }
 });
+
+/** Counts scroll events aimed at the desktop header menu, so a test can wait until the button has seen one. */
+async function countMenuScrolls(page: Page) {
+  await page.addInitScript(() => {
+    const counter = window as unknown as { menuScrolls: number };
+    counter.menuScrolls = 0;
+    document.addEventListener("scroll", (event) => {
+      if (event.target instanceof Element && event.target.matches('nav[aria-label="주요 메뉴"]')) counter.menuScrolls += 1;
+    }, { capture: true, passive: true });
+  });
+}
+
+const menuScrolls = (page: Page) => page.evaluate(() => (window as unknown as { menuScrolls: number }).menuScrolls);
+
+/** Waits for a menu scroll event after `before`, then two frames and a task, so React has rendered what it did. */
+async function afterMenuScroll(page: Page, before: number) {
+  await expect.poll(() => menuScrolls(page)).toBeGreaterThan(before);
+  await page.evaluate(() => new Promise<void>((resolve) => {
+    requestAnimationFrame(() => requestAnimationFrame(() => setTimeout(resolve, 50)));
+  }));
+}
+
+test("at 820px a header link to a page whose menu item sits off to the right keeps the chat button at the page top", async ({ page }) => {
+  // The desktop menu scrolls sideways to bring the active item into view when the page mounts (AppHeader). That is not
+  // a scroll by the reader and the menu is outside <main>, so it must not hide the button at scrollY 0.
+  // 820px is an iPad in portrait. The height is lower than its 1180px so that the mocked page (about 1020px tall) can
+  // scroll: at the page bottom a horizontal scroll never hides the button, which would hide the bug.
+  await countMenuScrolls(page);
+  await page.setViewportSize({ width: 820, height: 800 });
+  await page.goto("/cost");
+  const button = page.getByRole("button", { name: "챗봇 열기", exact: true });
+  await expectShown(button);
+  const before = await menuScrolls(page);
+  await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "Claude API 기능", exact: true }).click();
+  await expect(page).toHaveURL(/\/claude-features$/);
+  const menu = page.getByRole("navigation", { name: "주요 메뉴" });
+  await expect(menu.locator('[aria-current="page"]')).toHaveAttribute("href", "/claude-features");
+  // The precondition of the bug: the menu really scrolled sideways, and the window did not.
+  await afterMenuScroll(page, before);
+  expect(await menu.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);
+  expect(await page.evaluate(() => window.scrollY)).toBe(0);
+  expect(await page.evaluate(() => document.documentElement.scrollHeight - window.innerHeight)).toBeGreaterThan(100);
+  expect(await button.getAttribute("data-visible")).toBe("true");
+  await expectShown(button);
+
+  // Scrolling the header menu sideways by hand does not hide it either.
+  const manual = await menuScrolls(page);
+  await menu.evaluate((element) => { element.scrollLeft = 0; });
+  await afterMenuScroll(page, manual);
+  expect(await menu.evaluate((element) => element.scrollLeft)).toBe(0);
+  expect(await button.getAttribute("data-visible")).toBe("true");
+  await expectShown(button);
+});

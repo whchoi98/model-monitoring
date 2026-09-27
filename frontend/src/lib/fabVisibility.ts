@@ -2,7 +2,9 @@
  * 우하단 챗봇 버튼 표시 규칙 (v2.31.1, 사용자 결정 "스크롤 시 숨김") — 순수 함수, vitest(fabVisibility.test.ts).
  * 버튼이 표 글자를 가리지 않게 한다(390px /pricing에서 GPT 5.6 Luna In Region 긴 컨텍스트 줄을 가린 신고).
  *
- * 숨김: 창을 아래로 FAB_SCROLL_DELTA_PX 이상 스크롤(방향이 바뀐 뒤 누적), 페이지 안 요소의 가로 스크롤(가격표).
+ * 숨김: 창을 아래로 FAB_SCROLL_DELTA_PX 이상 스크롤(방향이 바뀐 뒤 누적), AppShell <main> 안 요소의 가로 스크롤(가격표).
+ * <main> 밖의 가로 스크롤은 숨기지 않는다: 헤더 메뉴는 페이지가 열릴 때 활성 항목을 보이려고 스스로 가로 스크롤하는데,
+ * 이것은 사용자가 한 스크롤이 아니어서 맨 위에서 버튼이 사라지면 안 된다(iPad 세로 768~834px 실측).
  * 보임: 창을 위로 FAB_SCROLL_DELTA_PX 이상 스크롤, 맨 위(scrollY <= FAB_TOP_PX), 맨 아래 도달
  * (innerHeight + scrollY >= scrollHeight - FAB_BOTTOM_SLACK_PX), 버튼 포커스, 챗봇 창 열림.
  * 맨 아래에서는 가로 스크롤도 숨기지 않는다: AppShell <main>의 아래 여백 덕분에 버튼이 내용을 가리지 않고,
@@ -48,7 +50,7 @@ export function atPageBottom({ scrollY, innerHeight, scrollHeight }: WindowMetri
   return innerHeight + scrollY >= scrollHeight - FAB_BOTTOM_SLACK_PX;
 }
 
-/** The state after one event: a window scroll, a horizontal scroll inside the page, or a show (focus, chat window open or closed). */
+/** The state after one event: a window scroll, a horizontal scroll inside `<main>`, or a show (focus, chat window open or closed). */
 export function nextFabState(state: FabState, event: FabEvent): FabState {
   if (event.type === "show") return { ...state, hidden: false, direction: 0, distance: 0 };
   if (event.type === "horizontal") {
