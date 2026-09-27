@@ -1,19 +1,26 @@
 "use client";
 
-// 비용 단가 (v2.30.0) — GET /api/pricing 단일 출처. 제공사 섹션, 행 순서, 각주 번호는 응답 그대로 쓴다.
+// 비용 단가 (v2.30.0, v2.31.0) — GET /api/pricing 단일 출처. 제공사 섹션(Anthropic Claude, OpenAI, Amazon Nova), 행 순서,
+// 각주 번호는 응답 그대로 쓴다. 열은 제공사마다 PROVIDER_COLUMNS다: 첫 열은 Anthropic이 Claude Platform on AWS, OpenAI가
+// OpenAI 공식 가격(비용 계산에 쓰지 않는 참고 가격)이고, Amazon Nova는 머리글과 칸을 모두 비운다(aria-hidden,
+// data-tier="none"). 이어서 AWS Bedrock - Global CRIS, AWS Bedrock - US CRIS, AWS Bedrock - In Region이다.
+// 프런트가 모르는 제공사(새 백엔드)는 columnsFor의 기본 열(Nova와 같은 빈 첫 열)로 그리고 섹션 이름은 제공사 문자열이다.
+// 세 표는 같은 고정 열 폭(table-fixed, <col> 5개)이라 데스크톱에서 열 위치가 같다.
+// 단가 셀은 입력 / 출력 줄, 프롬프트 캐싱 줄(data-cache-line), GPT 긴 컨텍스트 줄(data-long-line), 모델 ID(토글), 배지 순서다.
+// 캐시와 긴 컨텍스트 단가는 표시만 하고, 비용 화면은 입력과 출력 단가로 계산한다.
 // 공식 단가는 12시간마다 자동 동기화되고, 면책 문구는 상단 안내 상자와 참고 자료 끝에 두 번 표기한다.
 // 배지 설명과 모델 ID는 title 툴팁에만 두지 않는다(터치, 키보드 사용자가 볼 수 없다). 배지 설명은 배지 옆 글자로,
 // 모델 ID는 "모델 ID 보기" 토글로 보여 준다. 폰에서는 표만 가로로 스크롤되므로 표 위 안내와 오른쪽 가장자리 흐림으로 알린다.
-// 한글 문장은 break-keep(어절 단위 줄바꿈), 리전 id, 날짜, 가격 쌍, 배지, 각주는 토큰 중간에서 줄이 바뀌지 않는다.
-// 세 제공사 표는 같은 고정 열 폭(table-fixed)이라 데스크톱에서 열 위치가 같다.
+// 한글 문장은 break-keep(어절 단위 줄바꿈), 리전 id, 날짜, 가격 쌍, 캐시 항목, 열 이름 조각, 배지, 각주는 토큰 중간에서
+// 줄이 바뀌지 않는다.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchPricing, pricingExportUrl } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n-context";
 import {
-  TIER_LABELS, formatPricePair, notesForTier, textRuns, tierBadges,
-  type PricingBadge, type PricingTierKey,
+  cacheItems, columnsFor, formatPricePair, headerParts, longItems, notesForTier, textRuns, tierBadges, tierLabel,
+  type PriceItem, type PricingBadge, type PricingTierKey,
 } from "@/lib/pricingTable";
 import type {
   PricingFamily, PricingInRegionTier, PricingReference, PricingResponse, PricingTier,
@@ -25,12 +32,19 @@ import RefreshControls from "./RefreshControls";
 type Lang = "ko" | "en";
 
 const HIGHLIGHT_MS = 1500;
-const TIER_KEYS: PricingTierKey[] = ["cp", "global", "us", "in_region"];
 const PROVIDER_LABELS: Record<PricingFamily["provider"], string> = {
   anthropic: "Anthropic Claude",
-  amazon: "Amazon Nova",
   openai: "OpenAI",
+  amazon: "Amazon Nova",
 };
+
+/** Section title of a provider; one the frontend does not know (a newer backend) is titled by its own name. */
+function providerLabel(provider: string): string {
+  return Object.prototype.hasOwnProperty.call(PROVIDER_LABELS, provider)
+    ? PROVIDER_LABELS[provider as PricingFamily["provider"]]
+    : provider;
+}
+
 const EXPORTS: { format: "csv" | "md" | "json"; label: string }[] = [
   { format: "csv", label: "CSV" },
   { format: "md", label: "Markdown" },
@@ -39,6 +53,7 @@ const EXPORTS: { format: "csv" | "md" | "json"; label: string }[] = [
 const OFFICIAL_LINKS: { url: string; en: string; ko: string }[] = [
   { url: "https://aws.amazon.com/bedrock/pricing/", en: "Amazon Bedrock pricing", ko: "Amazon Bedrock 요금" },
   { url: "https://platform.claude.com/docs/en/about-claude/pricing", en: "Anthropic pricing", ko: "Anthropic 요금" },
+  { url: "https://developers.openai.com/api/docs/pricing", en: "OpenAI pricing", ko: "OpenAI 요금" },
 ];
 const SYNC_STATUS: Record<string, { en: string; ko: string }> = {
   completed: { en: "completed", ko: "완료" },
@@ -46,14 +61,35 @@ const SYNC_STATUS: Record<string, { en: string; ko: string }> = {
   failed: { en: "failed", ko: "실패" },
   running: { en: "running", ko: "진행 중" },
 };
+// The export's fixed_notes carry the same sentences with a trailing period; the screen list has none.
 const NOTES: { en: string; ko: string }[] = [
-  { en: "Prices are in USD per 1M tokens, Standard tier input and output", ko: "단가는 USD, 1M 토큰당, Standard 등급 입력과 출력 기준이다" },
-  { en: "Global channel prices can differ from the same model's US and In-Region channels", ko: "Global 채널 단가는 같은 모델의 US, In-Region 채널과 다를 수 있다" },
-  { en: "OpenAI prices apply to inputs of 272K tokens or less", ko: "OpenAI는 입력 272K 이하 기준이다" },
-  { en: "Cache, batch, long-context and priority prices are not included", ko: "캐시, batch, long-context, priority 단가는 포함하지 않는다" },
+  { en: "Prices are in USD per 1M tokens, Standard tier", ko: "단가는 USD, 1M 토큰당, Standard 등급 기준이다" },
+  {
+    en: "AWS Bedrock - Global CRIS prices can differ from the same model's US CRIS and In Region prices",
+    ko: "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
+  },
+  {
+    en: "Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price",
+    ko: "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
+  },
+  {
+    en: "GPT long-context prices apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5)",
+    ko: "GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다",
+  },
+  {
+    en: "The OpenAI official price is OpenAI's direct API price and is not used for cost calculations",
+    ko: "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
+  },
+  {
+    en: "Cache and long-context prices are shown for reference, and the cost pages use input and output prices",
+    ko: "캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다",
+  },
+  { en: "Batch, flex and priority (fast) prices are not included", ko: "batch, flex, priority(fast) 단가는 포함하지 않는다" },
   { en: "The cost pages use the price in effect at each probe's time", ko: "비용 화면은 각 프로브 시각의 단가로 계산한다" },
 ];
 const UNIT = { en: "input / output, USD per 1M tokens", ko: "입력 / 출력, 1M 토큰당 USD" };
+// Emphasised terms of the unit legend.
+const LEGEND_TERM = "whitespace-nowrap font-medium text-gray-300";
 // Korean prose wraps between words; a token too long for its line may still break anywhere instead of overflowing.
 const PROSE = "break-keep [overflow-wrap:anywhere]";
 const CELL = "border-b border-gray-800/60 px-2 py-2.5 align-top break-keep";
@@ -140,9 +176,10 @@ function useTableScrollCue() {
 }
 
 /**
- * The scrolling box of one provider table. On a phone the first visible price column is Claude Platform on AWS, so a
- * row can look empty ("—") while its prices sit off screen. A hint above the table (hidden once scrolled, space kept
- * so the table does not jump) and a fade on the right edge say there is more.
+ * The scrolling box of one provider table. On a phone only the first price column fits (Claude Platform on AWS, OpenAI
+ * official price, or Nova's blank column), so the AWS Bedrock prices sit off screen and a Nova row looks empty. A hint
+ * above the table (hidden once scrolled, space kept so the table does not jump) and a fade on the right edge say there
+ * is more.
  */
 function PriceTableScroll({ label, lang, children }: { label: string; lang: Lang; children: ReactNode }) {
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
@@ -151,7 +188,7 @@ function PriceTableScroll({ label, lang, children }: { label: string; lang: Lang
     <>
       {cue.overflow && (
         <p aria-hidden="true" data-scroll-hint className={`mb-2 text-[11px] text-gray-500 ${PROSE} ${cue.scrolled ? "invisible" : ""}`}>
-          → <Runs text={L("Scroll the table sideways for Global, US and In-Region prices", "표를 옆으로 스크롤하면 Global, US, In-Region 단가가 보입니다")} />
+          → <Runs text={L("Scroll the table sideways for the AWS Bedrock prices", "표를 옆으로 스크롤하면 AWS Bedrock 단가가 보입니다")} />
         </p>
       )}
       <div className="relative">
@@ -218,7 +255,7 @@ function Badges({ badges, lang, refNumbers, onFootnote }: {
   );
 }
 
-/** One price line: the pair, then (In-Region) its regions. The footnote stays with the last token, each region whole. */
+/** One price line: the pair, then (AWS Bedrock - In Region cells) its regions. The footnote stays with the last token, each region whole. */
 function PriceLine({ entry, lang, onFootnote }: {
   entry: PricingTier | PricingInRegionTier;
   lang: Lang;
@@ -245,6 +282,46 @@ function PriceLine({ entry, lang, onFootnote }: {
           </span>
         </>
       )}
+    </>
+  );
+}
+
+/**
+ * The prompt-caching line (`data-cache-line`) or the GPT long-context line (`data-long-line`) under a price. Items are
+ * joined by ", " and never break inside, except that the long-context pair may wrap between its label and its value.
+ */
+function PriceItems({ items, line }: { items: PriceItem[]; line: "cache" | "long" }) {
+  if (items.length === 0) return null;
+  return (
+    <span
+      data-cache-line={line === "cache" ? true : undefined}
+      data-long-line={line === "long" ? true : undefined}
+      className="mt-0.5 block text-[11px] leading-snug text-gray-400"
+    >
+      {items.map((item, i) => (
+        <Fragment key={i}>
+          {i > 0 && ", "}
+          {line === "long" && i === 0 ? (
+            <><span className="whitespace-nowrap">{item.label}</span> <span className="whitespace-nowrap">{item.value}</span></>
+          ) : (
+            <span className="whitespace-nowrap">{`${item.label} ${item.value}`}</span>
+          )}
+        </Fragment>
+      ))}
+    </span>
+  );
+}
+
+/** A column title: headerParts keeps "AWS Bedrock -" and "Global CRIS" whole, so a title wraps only between them. */
+function HeaderLabel({ text }: { text: string }) {
+  return (
+    <>
+      {headerParts(text).map((part, i) => (
+        <Fragment key={part}>
+          {i > 0 && " "}
+          <span className="whitespace-nowrap">{part}</span>
+        </Fragment>
+      ))}
     </>
   );
 }
@@ -277,6 +354,8 @@ function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFo
         {entries.map((entry) => (
           <div key={entry.model_ids.join(" ")} data-price-line>
             <PriceLine entry={entry} lang={lang} onFootnote={onFootnote} />
+            <PriceItems items={cacheItems(entry, lang)} line="cache" />
+            <PriceItems items={longItems(entry, lang)} line="long" />
             {showModelIds && (
               <span data-model-ids className="mt-0.5 block break-all font-mono text-[10px] leading-snug text-gray-500">
                 {entry.model_ids.map((id) => <span key={id} className="block">{id}</span>)}
@@ -409,13 +488,16 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
       {data.families.length > 0 && (
         <p data-unit-legend className="break-keep text-xs text-gray-400">
           {L("Each price cell", "각 단가 셀")}:{" "}
-          <span className="whitespace-nowrap font-medium text-gray-300">{L("input / output", "입력 / 출력")}</span>,{" "}
-          <span className="whitespace-nowrap font-medium text-gray-300">{L("USD per 1M tokens", "1M 토큰당 USD")}</span>
+          <span className={LEGEND_TERM}>{L("input / output", "입력 / 출력")}</span>,{" "}
+          <span className={LEGEND_TERM}>{L("USD per 1M tokens", "1M 토큰당 USD")}</span>.{" "}
+          {L("Second line", "둘째 줄")}: <span className={LEGEND_TERM}>{L("prompt caching", "프롬프트 캐싱")}</span>.{" "}
+          {L("Third line on GPT rows", "GPT 셋째 줄")}: <span className={LEGEND_TERM}>{L("long context", "긴 컨텍스트")}</span>
         </p>
       )}
 
       {providerSections(data.families).map((section) => {
-        const label = PROVIDER_LABELS[section.provider];
+        const label = providerLabel(section.provider);
+        const columns = columnsFor(section.provider);
         return (
           <section key={section.provider} aria-labelledby={`pricing-${section.provider}`} className="min-w-0 rounded-xl border border-gray-800 bg-gray-900 p-4">
             <h2 id={`pricing-${section.provider}`} className="mb-3 break-keep text-sm font-semibold text-gray-200">{label}</h2>
@@ -424,16 +506,19 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
                 <caption className="sr-only">{L(`${label} prices (${UNIT.en})`, `${label} 단가 (${UNIT.ko})`)}</caption>
                 <colgroup>
                   <col className={MODEL_COL} />
-                  {TIER_KEYS.map((key) => <col key={key} className={PRICE_COL} />)}
+                  {columns.map((key, i) => <col key={key ?? `blank-${i}`} className={PRICE_COL} />)}
                 </colgroup>
                 <thead>
                   <tr className="text-gray-500">
                     <th scope="col" className={`${STICKY} border-b border-gray-800 py-2 pr-3 text-left align-bottom font-medium`}>{L("Model", "모델")}</th>
-                    {TIER_KEYS.map((key) => (
+                    {columns.map((key, i) => (key === null ? (
+                      // Nova's blank first column: no title, same width, so the three tables line up.
+                      <td key={`blank-${i}`} aria-hidden="true" data-tier="none" className="border-b border-gray-800 px-2 py-2" />
+                    ) : (
                       <th key={key} scope="col" className="break-keep border-b border-gray-800 px-2 py-2 text-left align-bottom font-medium">
-                        <Runs text={TIER_LABELS[key]} />
+                        <HeaderLabel text={tierLabel(key, lang)} />
                       </th>
-                    ))}
+                    )))}
                   </tr>
                 </thead>
                 <tbody>
@@ -442,12 +527,14 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
                       <th scope="row" className={`${STICKY} ${CELL} pl-0 pr-3 text-left font-semibold text-gray-200`}>
                         <Runs text={family.family} />
                       </th>
-                      {TIER_KEYS.map((key) => (
+                      {columns.map((key, i) => (key === null ? (
+                        <td key={`blank-${i}`} aria-hidden="true" data-tier="none" className={CELL} />
+                      ) : (
                         <TierCell
                           key={key} family={family} tierKey={key} lang={lang} today={today}
                           refNumbers={refNumbers} showModelIds={showModelIds} onFootnote={onFootnote}
                         />
-                      ))}
+                      )))}
                     </tr>
                   ))}
                 </tbody>

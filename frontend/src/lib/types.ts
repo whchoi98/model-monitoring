@@ -164,21 +164,38 @@ export interface Insight {
 }
 
 // ---------------------------------------------------------------------------
-// Unit prices (v2.30.0) — GET /api/pricing. The backend owns ordering and footnote numbers.
+// Unit prices (v2.30.0, v2.31.0) — GET /api/pricing. The backend owns ordering and footnote numbers.
 // ---------------------------------------------------------------------------
 
 export type PriceVerification = "verified" | "stale" | "seed_only" | "none";
 
-export interface PricingPending {
-  id: number;
+/** GPT long-context prices (requests above OpenAI's short-context limit), USD per 1M tokens (v2.31.0). */
+export interface PricingLongContext {
   input: number;
   output: number;
+  cache_read: number | null;
+  cache_write: number | null;
+}
+
+/**
+ * The price values of one cell, USD per 1M tokens (v2.31.0). `cache_*` and `long` are display-only (the cost pages
+ * use input and output) and null when the official source has no such price. `long` is set on GPT families only.
+ */
+export interface PricingPriceFields {
+  input: number;
+  output: number;
+  cache_read: number | null;
+  cache_write: number | null;
+  cache_write_1h: number | null;
+  long: PricingLongContext | null;
+}
+
+export interface PricingPending extends PricingPriceFields {
+  id: number;
   observed_at: string;
 }
 
-export interface PricingTier {
-  input: number;
-  output: number;
+export interface PricingTier extends PricingPriceFields {
   model_ids: string[];
   source_ids: string[];
   footnotes: number[];
@@ -198,7 +215,10 @@ export interface PricingNote {
   prior_price: Record<string, { input: number; output: number }>;
   text_ko: string;
   text_en: string;
-  source: "manual_note";
+  /** "openai_doc" cites the OpenAI pricing page; "manual_note" is a note kept by hand (v2.31.0: never both). */
+  source: "manual_note" | "openai_doc";
+  /** Reference id whose footnote carries the note's source (e.g. "openai-pricing", "note:<family_key>"). */
+  source_id: string;
 }
 
 export interface PricingFamily {
@@ -207,6 +227,8 @@ export interface PricingFamily {
   provider: "anthropic" | "amazon" | "openai";
   tiers: {
     cp: PricingTier | null;
+    /** OpenAI's own list price (display only, never used for costs), set on OpenAI families (v2.31.0). */
+    openai_list: PricingTier | null;
     global: PricingTier | null;
     us: PricingTier | null;
     in_region: PricingInRegionTier[];
@@ -217,7 +239,7 @@ export interface PricingFamily {
 export interface PricingReference {
   n: number;
   id: string;
-  kind: "agreement_offer" | "price_list" | "anthropic_doc" | "official_page" | "manual_note";
+  kind: "agreement_offer" | "price_list" | "anthropic_doc" | "openai_doc" | "official_page" | "manual_note";
   title_en: string;
   title_ko: string;
   url: string | null;
