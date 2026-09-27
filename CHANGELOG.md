@@ -13,6 +13,10 @@
 - **The frontend Docker image builds again.** `frontend/src/components/PricingPanel.test.tsx` imports `e2e/fixtures.ts` (`pricingFixture`), and `next build` type-checks test files, but `frontend/.dockerignore` excluded `e2e/`, so the v2.30.0 image build failed at `npm run build` (CI builds from the full checkout and did not see it). `e2e/` now stays in the build context; the runtime stage still copies only `.next/standalone`, `.next/static` and `public`, so the image contents are unchanged.
 - **frontend Docker 이미지 빌드를 고쳤다.** `frontend/src/components/PricingPanel.test.tsx`가 `e2e/fixtures.ts`(`pricingFixture`)를 import하고 `next build`는 테스트 파일도 타입 검사하는데, `frontend/.dockerignore`가 `e2e/`를 빼서 v2.30.0 이미지 빌드가 `npm run build`에서 실패했다(CI는 전체 체크아웃으로 빌드해 드러나지 않았다). 이제 `e2e/`를 빌드 컨텍스트에 남긴다. 런타임 단계는 여전히 `.next/standalone`, `.next/static`, `public`만 복사하므로 이미지 내용은 그대로다.
 
+### Docs
+- README Screenshots gallery adds the production Unit Prices page (`docs/images/ui/pricing-{en,ko}.png`, 2026-09-27, after the first official price sync: 55 channels verified).
+- README 스크린샷 갤러리에 운영 비용 단가 화면을 추가했다(`docs/images/ui/pricing-{en,ko}.png`, 2026-09-27, 첫 공식 단가 동기화 뒤 55채널 verified).
+
 ## v2.30.0 — 2026-09-26
 
 ### Added

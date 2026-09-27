@@ -47,10 +47,10 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 | ![GPT 6 and GPT 5.x TTFB, TTFT and GAP scorecards per channel](docs/images/ui/gpt-on-aws-en.png) | ![Per-endpoint health cards and the feature by endpoint evidence matrix](docs/images/ui/claude-features-en.png) |
 | **Parity Run** | **Cost** |
 | ![Provider health cards and the model by API surface parity matrix](docs/images/ui/parity-en.png) | ![24-hour cost, 30-day projection and channel comparison](docs/images/ui/cost-en.png) |
-| **Reliability** |  |
-| ![Per-family success rate and latency across channels](docs/images/ui/reliability-en.png) |  |
+| **Reliability** | **Unit Prices** |
+| ![Per-family success rate and latency across channels](docs/images/ui/reliability-en.png) | ![Unit Prices: per-model input and output prices by channel with footnoted official sources](docs/images/ui/pricing-en.png) |
 
-Captured from production on 2026-09-26 (v2.29.0, dark theme, 1440x900). The Claude Platform on AWS column in Claude API Features and Reliability still reflects the monthly usage-cap 429 period that v2.29.0 stopped retrying, and the dashboard collection line still shows "Claude Platform on AWS every 10 min", which v2.29.1 removed with the return to every-cycle probing. Korean UI captures use the `-ko.png` suffix in the same directory.
+Captured from production on 2026-09-26 (v2.29.0, dark theme, 1440x900). The Claude Platform on AWS column in Claude API Features and Reliability still reflects the monthly usage-cap 429 period that v2.29.0 stopped retrying, and the dashboard collection line still shows "Claude Platform on AWS every 10 min", which v2.29.1 removed with the return to every-cycle probing. The Unit Prices capture is from 2026-09-27 (v2.30.0, after the first official price sync). Korean UI captures use the `-ko.png` suffix in the same directory.
 
 ## Prerequisites
 
@@ -383,10 +383,10 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 | ![채널별 GPT 6, GPT 5.x TTFB, TTFT, GAP 스코어 카드](docs/images/ui/gpt-on-aws-ko.png) | ![엔드포인트별 헬스 카드와 피처 × 엔드포인트 증거 매트릭스](docs/images/ui/claude-features-ko.png) |
 | **패리티 런** | **비용** |
 | ![프로바이더별 헬스 카드와 모델 × API surface 패리티 매트릭스](docs/images/ui/parity-ko.png) | ![24시간 비용, 30일 예측, 채널 비교](docs/images/ui/cost-ko.png) |
-| **신뢰성** |  |
-| ![family별 채널 성공률과 지연 비교](docs/images/ui/reliability-ko.png) |  |
+| **신뢰성** | **비용 단가** |
+| ![family별 채널 성공률과 지연 비교](docs/images/ui/reliability-ko.png) | ![비용 단가: 채널별 모델 입력, 출력 단가와 각주로 연결된 공식 출처](docs/images/ui/pricing-ko.png) |
 
-2026-09-26 운영 환경에서 캡처했습니다(v2.29.0, 다크 테마, 1440x900). Claude API 기능과 신뢰성 화면의 Claude Platform on AWS 열은 v2.29.0에서 재시도를 멈춘 월간 사용 한도 429 기간의 결과가 남아 있고, 대시보드 수집 상태 줄의 "Claude Platform on AWS 10분 주기" 표시는 v2.29.1에서 매 사이클 수집으로 돌아가며 사라졌습니다. 영문 UI 캡처는 같은 디렉터리의 `-en.png` 파일입니다.
+2026-09-26 운영 환경에서 캡처했습니다(v2.29.0, 다크 테마, 1440x900). Claude API 기능과 신뢰성 화면의 Claude Platform on AWS 열은 v2.29.0에서 재시도를 멈춘 월간 사용 한도 429 기간의 결과가 남아 있고, 대시보드 수집 상태 줄의 "Claude Platform on AWS 10분 주기" 표시는 v2.29.1에서 매 사이클 수집으로 돌아가며 사라졌습니다. 비용 단가 화면은 2026-09-27(v2.30.0, 첫 공식 단가 동기화 이후)에 캡처했습니다. 영문 UI 캡처는 같은 디렉터리의 `-en.png` 파일입니다.
 
 ## 사전 요구 사항
 
