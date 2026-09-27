@@ -41,6 +41,7 @@ aws logs filter-log-events --log-group-name /ecs/backend --region $REGION \
    재기동되고 코드는 바뀌지 않는다.
 
    ```bash
+   REGION=ap-northeast-2
    aws ecs update-service --cluster bedrock-monitor --service backend --force-new-deployment --region $REGION
    ```
 

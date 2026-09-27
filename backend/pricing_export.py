@@ -2,7 +2,7 @@
 
 Every format keeps the payload's order and footnote numbers (never re-sorted or renumbered) and carries
 the disclaimer. Markdown and CSV prices use pricing_payload.price_text (at most 6 decimals, trailing zeros
-removed); only the web screen fixes two decimals.
+removed); the web screen shows 2 to 6 decimals (formatUnitPrice).
 
 - CSV: one row per cell (tier element) in TIER_KEYS order, the seven extra prices as their own columns (empty
   when the cell has no such price).
