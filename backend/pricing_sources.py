@@ -221,6 +221,7 @@ OFFICIAL_PAGES: list[dict] = [
 
 # 패밀리 메모 — GPT-5.6 Sol 프로모션은 OpenAI 공식 요금 문서가 출처다(v2.31.0, source_id = OPENAI_SOURCE_ID):
 # "GPT-5.6 Sol's promotional pricing is available at least through November 21, 2026".
+# 동기화는 표 단가만 읽고 이 문장은 확인하지 않는다. 각주의 확인일은 단가 확인일이므로 문구에 문장을 확인한 날짜(2026-09-27)를 넣는다.
 # prior_price는 프로모션 이전 단가(tier 키별) — 동기화가 이 값을 관측하면 pricing_payload가 메모를 뺀다.
 # source "manual_note" 메모도 계속 지원한다: basis_ko/basis_en(참고 자료 제목)이 필요하고 source_id는 note_source_id(family_key).
 PRICE_NOTES: list[dict] = [{
@@ -229,8 +230,9 @@ PRICE_NOTES: list[dict] = [{
     "min_until": "2026-11-21",
     "prior_price": {"openai_list": {"input": 5, "output": 30}, "global": {"input": 5, "output": 30},
                     "in_region": {"input": 5.5, "output": 33}},
-    "text_ko": "프로모션 단가다. OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.",
-    "text_en": "Promotional price. The OpenAI pricing page states that it applies at least through 2026-11-21.",
+    "text_ko": "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.",
+    "text_en": "Promotional price. As of 2026-09-27, the OpenAI pricing page states that it applies at least through "
+               "2026-11-21.",
     "source": "openai_doc",
     "source_id": OPENAI_SOURCE_ID,
 }]

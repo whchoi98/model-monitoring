@@ -280,7 +280,8 @@ def test_official_pages_and_price_notes():
     assert note["source_id"] == ps.OPENAI_SOURCE_ID
     assert note["prior_price"] == {"openai_list": {"input": 5, "output": 30}, "global": {"input": 5, "output": 30},
                                    "in_region": {"input": 5.5, "output": 33}}
-    assert note["text_ko"] == "프로모션 단가다. OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다."
+    # dated: the sync never re-reads this sentence, so the note says when it was read (2026-09-27)
+    assert note["text_ko"] == "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다."
     assert note["text_en"] == (
-        "Promotional price. The OpenAI pricing page states that it applies at least through 2026-11-21.")
+        "Promotional price. As of 2026-09-27, the OpenAI pricing page states that it applies at least through 2026-11-21.")
     assert "·" not in note["text_ko"]

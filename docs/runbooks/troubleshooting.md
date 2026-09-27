@@ -6,18 +6,29 @@
 
 **배경**: v2.31.0은 이미 있는 `price_history` 테이블에 캐시와 긴 컨텍스트 단가 열 7개(`cache_read_per_mtok`,
 `cache_write_per_mtok`, `cache_write_1h_per_mtok`, `long_input_per_mtok`, `long_output_per_mtok`, `long_cache_read_per_mtok`,
-`long_cache_write_per_mtok`)를 추가한다. backend 기동(lifespan, price seed 바로 앞의 자체 `try` 블록)과 PricingSync 러너(`create_tables()`
-바로 뒤)가 `pricing_seed.ensure_price_columns`를 부른다. 이 함수는 빠진 열이 있을 때만 한 트랜잭션에서
-`SET LOCAL statement_timeout = '30000'`, `SET LOCAL lock_timeout = '5000'` 뒤 `ALTER TABLE price_history ADD COLUMN IF NOT EXISTS …`를
-실행한다. ALTER는 테이블의 ACCESS EXCLUSIVE 잠금이 필요하므로, 그 순간 `price_history`를 쓰는 트랜잭션(예: 실행 중인 PricingSync 런)이
-있으면 5초 안에 잠금을 못 잡고 실패할 수 있다. backend는 이 실패를 non-fatal로 넘기고 기동을 계속한다.
+`long_cache_write_per_mtok`)를 추가한다. backend 기동(lifespan `_ensure_price_schema`, price seed 바로 앞의 자체 `try` 블록)과
+PricingSync 러너(`create_tables()` 바로 뒤)가 `pricing_seed.ensure_price_columns`를 부른다. 이 함수는 빠진 열이 있을 때만 한
+트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `SET LOCAL lock_timeout = '5000'` 뒤 `ALTER TABLE price_history ADD COLUMN IF NOT
+EXISTS …`를 실행한다. ALTER는 테이블의 ACCESS EXCLUSIVE 잠금이 필요하고, 이 잠금은 읽기가 잡는 ACCESS SHARE와도 충돌한다. 그래서
+그 순간 `price_history`를 읽거나 쓰는 트랜잭션이 있으면 5초 안에 잠금을 못 잡고 실패한다. 롤링 배포 중 다른 backend 태스크(v2.30.0 또는
+v2.31.0)의 `/api/cost/*`, `/api/efficiency/score`(`with_row_cost` 조인), `/api/pricing` 조회가 가장 흔한 원인이고(2026-09-27 운영 실측
+5~17초, 비용과 효율성 화면은 30초마다 자동 새로고침한다), 실행 중인 PricingSync 런도 원인이 된다. ALTER가 잠금을 기다리는 최대 5초 동안에는 뒤따르는
+`price_history` 조회(비용 화면 포함)도 그 뒤에 줄을 선다. backend는 이 실패를 non-fatal로 넘기고 기동을 계속한다. 같은 기동의 seed도
+새 열에 값을 넣으므로 함께 실패한다.
+
+v2.31.0 backend는 열 추가나 seed가 실패하면 백그라운드 스레드(`price-schema-retry`)에서 30초 간격으로 최대 3번 `ensure_price_columns` →
+`ensure_seed`(기동 때와 같은 활성 채널 집합)를 다시 하고, 처음 성공하면 멈춘다. 기동과 `/api/health`는 이 재시도를 기다리지 않는다.
 
 ### 증상
 
-- `/pricing` 화면이 불러오기 오류이고 `/api/pricing`이 HTTP 500이다. 관리자 검토 대기 목록(`/api/admin/pricing/pending`)도 500이다.
+- `/pricing` 화면이 불러오기 오류이고 `/api/pricing`, `/api/pricing/export`가 HTTP 500이다. 관리자 검토 대기 목록
+  (`/api/admin/pricing/pending`)도 500이다.
+- `/models` 모델 카드와 상세의 단가가 "단가 정보 없음"이고 비용 단가 불러오기 오류 안내가 뜬다(단가는 `/api/pricing` `models`에서 읽는다).
 - `/ecs/backend` 로그에 기동 때 `Price column migration failed (non-fatal, backend continues)`와 traceback(대개
   `canceling statement due to lock timeout`)이 있고, 요청마다 `UndefinedColumn`(`column price_history.cache_read_per_mtok does not
   exist` 등)이 찍힌다. 같은 기동의 `Price seed failed (non-fatal, backend continues)`도 함께 있을 수 있다(seed가 새 열에 값을 넣는다).
+  재시도 스레드는 `Price schema retry n/3 failed`(traceback 포함)나 `Price schema retry n/3 succeeded`를 남기고, 3번 모두 실패하면
+  `Price schema retries exhausted (3); …`로 끝난다.
 - 비용 화면(`/api/cost/*`)과 효율성 점수(`/api/efficiency/score`)는 정상이다. 비용 조인은 입력, 출력 열만 고른다.
 - PricingSync 런은 열 추가 단계에서 exit 1로 끝난다. `/ecs/pricingsync`에 `pricing_sync_runner: ensure_price_columns failed`와
   traceback이 있고, 그 뒤 모델 등록과 `pricing_sync_runner: … active channels` 줄이 없으며, 새 런 행이 없다(`last_sync`가 그대로).
@@ -28,27 +39,40 @@
 REGION=ap-northeast-2
 CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
 curl -s -o /dev/null -w '%{http_code}\n' "https://$CF_DOMAIN/api/pricing"
-# 최근 6시간의 열 추가 실패와 UndefinedColumn
+# 최근 6시간의 열 추가 실패, 재시도 결과, UndefinedColumn
 aws logs filter-log-events --log-group-name /ecs/backend --region $REGION \
   --start-time $(( ($(date +%s) - 6 * 3600) * 1000 )) \
-  --filter-pattern '?"Price column migration failed" ?UndefinedColumn' --query 'events[].message' --output text | head -40
+  --filter-pattern '?"Price column migration failed" ?"Price schema retry" ?"Price schema retries exhausted" ?UndefinedColumn' \
+  --query 'events[].message' --output text | head -40
+```
+
+잠금을 쥔 세션은 DB에서 `price_history` 관계의 잠금으로 찾는다(psql로 RDS에 접속할 수 있을 때).
+
+```sql
+SELECT a.pid, l.mode, l.granted, a.state, now() - a.xact_start AS xact_age, left(a.query, 120) AS query
+FROM pg_locks l JOIN pg_stat_activity a ON a.pid = l.pid
+WHERE l.relation = 'price_history'::regclass
+ORDER BY l.granted DESC, xact_age DESC;
 ```
 
 ### 조치
 
-1. 겹친 트랜잭션이 원인이면(`lock timeout`) 그 트랜잭션이 끝나기를 기다린다. PricingSync 런은 보통 1분 안에 끝난다.
-2. backend 서비스 태스크를 다시 기동한다. 새 태스크의 lifespan이 빠진 열을 다시 확인하고 추가한다. digest 고정 태스크 정의라 같은 이미지로
-   재기동되고 코드는 바뀌지 않는다.
+1. 먼저 재시도 결과를 본다. backend가 30초 간격으로 3번 다시 시도하므로, 위 로그에 `Price schema retry n/3 succeeded`가 있고
+   `/api/pricing`이 200이면 끝이다. 재시도가 아직 도는 중이면(기동 뒤 약 2분 안) 끝나기를 기다린다. 실패 줄이 이어지면 위 SQL로
+   `price_history` 잠금을 쥔 세션(granted true, 오래된 `xact_age`)을 확인한다. 대개 다른 backend 태스크의 비용, 효율성, 단가 조회나
+   실행 중인 PricingSync 런이다.
+2. 재시도도 모두 실패했으면(`Price schema retries exhausted`) PricingSync를 1회 수동 실행한다(`deploy.md` §5-5의 2번 명령). 러너는
+   `create_tables()` 바로 뒤에 같은 열 추가를 먼저 하고, 이어서 seed와 동기화를 한다. 또는 backend 서비스 태스크를 다시 기동한다. 새
+   태스크의 lifespan이 빠진 열을 다시 확인하고 추가한다(실패하면 다시 재시도 스레드가 돈다). digest 고정 태스크 정의라 같은 이미지로
+   재기동되고 코드는 바뀌지 않는다. 롤아웃이 끝난 뒤, 비용과 효율성 화면을 열어 둔 창이 적을 때 실행한다.
 
    ```bash
    REGION=ap-northeast-2
    aws ecs update-service --cluster bedrock-monitor --service backend --force-new-deployment --region $REGION
    ```
 
-   또는 PricingSync를 1회 수동 실행한다(`deploy.md` §5-5의 2번 명령). 러너도 `create_tables()` 바로 뒤에 같은 열 추가를 먼저 하고,
-   이어서 seed와 동기화를 한다.
-3. `/api/pricing`이 200이면 끝이다. 같은 기동에서 seed가 실패했어도 재기동한 태스크나 러너가 seed를 다시 넣는다(model_id 단위 멱등, 기존
-   seed 행의 빈 확장 열 채우기).
+3. `/api/pricing`이 200이면 끝이다. 같은 기동에서 seed가 실패했어도 재시도, 재기동한 태스크나 러너가 seed를 다시 넣는다(model_id 단위
+   멱등, 기존 seed 행의 빈 확장 열 채우기).
 4. DB에서 열을 직접 추가하지 않는다. 열은 타임아웃을 건 멱등 경로(`ensure_price_columns`)로만 추가한다.
 
 ## 비용 단가 동기화 실패 — "자동 확인 안 됨" 배지 (v2.30.0, ADR-030)
@@ -166,9 +190,10 @@ curl -s "https://$CF_DOMAIN/api/admin/pricing/pending" -H "Authorization: Bearer
 
 **배경**: GPT-5.6 Sol 단가 OpenAI 공식 가격과 Global $4 / $20, In-Region, Geo $4.40 / $22는 프로모션 단가다(v2.28.1). OpenAI 공식 요금
 문서가 "GPT-5.6 Sol’s promotional pricing is available at least through November 21, 2026."라고 명시한다. 그래서 v2.31.0부터
-`pricing_sources.PRICE_NOTES`의 Sol 메모는 이 문서를 출처로 인용한다(`source` `openai_doc`, `source_id` `openai-pricing`). v2.30.0에서는
-공식 출처에 표시가 없어 수동 메모였다. `/pricing`의 Sol 셀(OpenAI 공식 가격, Global, In Region)에는 "프로모션(최소 2026-11-21까지)" 배지와
-OpenAI 참고 자료 각주가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인 필요"로 바뀐다.
+`pricing_sources.PRICE_NOTES`의 Sol 메모는 이 문서를 출처로 인용한다(`source` `openai_doc`, `source_id` `openai-pricing`). 동기화는 표 단가만
+읽고 이 문장은 다시 읽지 않으므로(각주의 확인일은 단가 확인일이다), 메모 문구에 문장을 확인한 날짜를 적는다("2026-09-27 기준 OpenAI 공식
+요금 문서에 …"). v2.30.0에서는 공식 출처에 표시가 없어 수동 메모였다. `/pricing`의 Sol 셀(OpenAI 공식 가격, Global, In Region)에는
+"프로모션(최소 2026-11-21까지)" 배지와 OpenAI 참고 자료 각주가 붙고, 날짜가 지나면 "프로모션 종료 여부 확인 필요"로 바뀐다.
 
 ### 확인
 
@@ -194,6 +219,7 @@ aws bedrock list-foundation-model-agreement-offers --model-id openai.gpt-5.6-sol
 
 - 문서와 오퍼가 여전히 4 / 20(OpenAI 공식 가격, Global), 4.4 / 22(In-Region, Geo)이고 문서에 프로모션 문장이 있으면 프로모션이 계속되는
   것이다. 문장의 날짜가 바뀌었으면 `pricing_sources.PRICE_NOTES`의 `min_until`, `text_ko`, `text_en`을 고쳐 다음 릴리스로 배포한다.
+  문구 앞의 기준일("2026-09-27 기준", "As of 2026-09-27")도 문장을 다시 확인한 날짜로 바꾼다.
 - 프로모션이 끝나 이전 단가(OpenAI 공식 가격과 Global $5 / $30, In-Region, Geo $5.50 / $33)로 돌아가면 입력 +25%, 출력 +50%라 경계 포함
   규칙으로 **자동 적용**된다(`verified`, 관측한 런의 시작 시각부터). 캐시와 긴 컨텍스트 필드도 필드마다 같은 규칙이라, 어느 한 필드라도
   50%를 넘게 바뀌면 그 채널은 검토 대기로 간다. 동기화가 어느 티어에서든 `prior_price`와 같은 값을 관측하면 메모는 응답에서 빠진다.

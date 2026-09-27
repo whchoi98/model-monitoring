@@ -4,7 +4,7 @@
 - **Date**: 2026-09-26
 - **Supersedes**: ADR-025의 "비용은 조회 시점 계산이라 단가를 바꾸면 과거 행도 소급 재계산된다" 정책(ADR-027, ADR-028이 같은 정책을 인용한 문장 포함)
 - **Related**: ADR-011 (Scheduler IAM family `:*`), ADR-018 (digest 고정 배포), ADR-019, ADR-020 (OpenAI Mantle, 1P), ADR-025 (채널별 단가), ADR-027, ADR-028 (agreement offer 단가 출처), v2.30.0, v2.31.0, 설계 문서 `docs/superpowers/specs/2026-09-26-pricing-menu-design.md`(v2.31.0 부록은 `docs/superpowers/specs/2026-09-27-pricing-v2-31-design.md`)
-- **Code**: `backend/pricing_sources.py`, `backend/pricing_seed.py`, `backend/pricing_parsers.py`, `backend/pricing_sync.py`, `backend/pricing_sync_runner.py`, `backend/price_history.py`, `backend/pricing_payload.py`, `backend/pricing_export.py`, `backend/routers/pricing.py`, `backend/models.py`(`PriceHistory`, `PriceSyncRun`), `backend/routers/cost.py`, `backend/routers/efficiency.py`, `frontend/src/components/PricingPanel.tsx`, `frontend/src/lib/pricingTable.ts`, `cdk/lib/stacks/scheduler-stack.ts`(`PricingSync*`), `backend/main.py`(v2.31.0 `ensure_price_columns` 호출)
+- **Code**: `backend/pricing_sources.py`, `backend/pricing_seed.py`, `backend/pricing_parsers.py`, `backend/pricing_sync.py`, `backend/pricing_sync_runner.py`, `backend/price_history.py`, `backend/pricing_payload.py`, `backend/pricing_export.py`, `backend/routers/pricing.py`, `backend/models.py`(`PriceHistory`, `PriceSyncRun`), `backend/routers/cost.py`, `backend/routers/efficiency.py`, `frontend/src/components/PricingPanel.tsx`, `frontend/src/lib/pricingTable.ts`, `cdk/lib/stacks/scheduler-stack.ts`(`PricingSync*`), `backend/main.py`(v2.31.0 `_ensure_price_schema`, `_retry_price_schema`)
 
 ## Context
 
@@ -348,7 +348,8 @@ $0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. �
   그대로이고, 이 채우기와 OpenAI 공식 가격 seed(`OPENAI_LIST_SEED`, §1)가 더해진다.
 - Decision 4의 관리자 검토 대기 목록(`GET /api/admin/pricing/pending`)은 `current`와 `new`에 확장 필드 7개(선택, 없으면 `null`)를 싣고,
   `change`는 양쪽에 값이 있는 필드마다 변화율을 준다(현재 값이 있으면 입력과 출력 변화율은 항상 있다). 화면 배지와 Markdown 다운로드의
-  검토 대기 표기는 바뀐 항목만 보여 준다(입력이나 출력이 바뀌면 쌍, 이어서 바뀐 캐시 항목과 긴 컨텍스트 줄).
+  검토 대기 표기는 바뀐 항목만 보여 준다(입력이나 출력이 바뀌면 쌍, 이어서 바뀐 캐시 항목과 긴 컨텍스트 줄). 첫 캐시 항목이 캐시 읽기가
+  아니면 그 항목에 "캐시" / "cache"를 붙인다("캐시 1시간 쓰기 17.6", "캐시 쓰기 11, 1시간 쓰기 17.6"). 셀의 캐시 줄은 그대로다.
 
 ### 6. 저장과 마이그레이션
 
@@ -357,8 +358,10 @@ $0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. �
   요청하지 않는다). 빠진 열이 있으면 한 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `SET LOCAL lock_timeout = '5000'` 뒤
   `ALTER TABLE price_history ADD COLUMN IF NOT EXISTS <col> DOUBLE PRECISION`을 실행한다.
 - 호출 위치는 두 곳이다.
-  1. backend lifespan: price seed 바로 앞의 자체 `try` 블록. 실패하면 `Price column migration failed (non-fatal, backend continues)`를
-     남기고 기동을 계속한다.
+  1. backend lifespan(`_ensure_price_schema`): price seed 바로 앞의 자체 `try` 블록. 실패하면 `Price column migration failed (non-fatal,
+     backend continues)`를 남기고 기동을 계속한다. 열 추가나 seed가 실패하면 데몬 스레드 `price-schema-retry`가 30초 간격으로 최대 3번
+     `ensure_price_columns` → `ensure_seed`(같은 활성 채널 집합)를 다시 하고 처음 성공하면 멈춘다(롤링 배포 중 다른 태스크의
+     `price_history` 조회가 ALTER 잠금을 막는 경우 대비, 기동은 기다리지 않는다).
   2. `pricing_sync_runner`: `create_tables()` 바로 뒤. 실패하면 동기화하지 않고 exit 1이다.
 - Decision 1의 "lifespan ALTER 블록에는 넣지 않는다"는 그대로다. 이 ALTER는 lifespan 마이그레이션 블록(`pg_advisory_lock(917350001)`)
   밖의 자체 트랜잭션이다.
@@ -376,7 +379,8 @@ $0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. �
   Region이고, OpenAI 표는 첫 열이 OpenAI 공식 가격(EN "OpenAI official price")이다. Amazon Nova 표는 첫 열의 머리글과 칸을 모두 비워
   세 표의 열 위치를 맞춘다. 셀 둘째 줄은 캐시 단가, GPT 셋째 줄은 긴 컨텍스트 단가다.
 - CSV에 `cache_read_usd_per_1m`부터 `long_cache_write_usd_per_1m`까지 7열이 붙고 `channel`에 `openai_list`가 생긴다. Markdown은 제공사
-  표마다 자기 열 머리글을 쓰고, 셀 안에서 `<br>`로 둘째 줄과 셋째 줄을 잇는다.
+  표마다 자기 열 머리글을 쓰고, 셀 안에서 `<br>`로 둘째 줄과 셋째 줄을 잇는다. Markdown 머리 줄은 화면과 같은 이름 "마지막 공식 단가
+  동기화" / "Last official price sync"와 화면과 같은 상태 번역(완료, 일부 출처 실패, 실패, 진행 중, 모르는 상태는 그대로)을 쓴다.
 - 범위는 USD, Standard 등급이다. batch, flex, priority(fast) 단가는 여전히 넣지 않는다. Decision 6 범위 문장 "Standard 입력과
   출력만(캐시, batch, long-context, priority, flex 제외)"에서 캐시와 long-context 제외는 이 절이 대체한다.
 
@@ -384,8 +388,11 @@ $0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. �
 
 - OpenAI 문서가 "GPT-5.6 Sol’s promotional pricing is available at least through November 21, 2026."라고 적는다. 그래서 `PRICE_NOTES`의
   Sol 메모는 수동 메모가 아니라 이 문서를 출처로 인용한다(`source` `openai_doc`, `source_id` `openai-pricing`, `basis_*` 없음). 문구는
-  KO "프로모션 단가다. OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.", EN "Promotional price. The OpenAI pricing
-  page states that it applies at least through 2026-11-21."이다.
+  KO "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.", EN "Promotional price. As
+  of 2026-09-27, the OpenAI pricing page states that it applies at least through 2026-11-21."이다.
+- 동기화(`parse_openai_pricing_md`)는 Standard 표만 읽고 이 문장은 다시 읽지 않는다. 각주 참고 자료의 확인일은 단가 행의 최신 관측일이라
+  문장까지 확인한 것처럼 보일 수 있으므로, 문구에 문장을 확인한 날짜(2026-09-27)를 넣는다. OpenAI가 표 단가는 그대로 두고 문장만 바꾸면
+  메모는 바뀌지 않는다. `min_until`(2026-11-21)이 지나면 화면 배지가 "프로모션 종료 여부 확인 필요"로 바뀐다.
 - `prior_price`에 `openai_list` 5 / 30이 더해진다(Global 5 / 30, In Region 5.5 / 33은 그대로). 동기화가 어느 티어에서든 이전 단가를
   관측하면 메모는 응답에서 빠진다.
 - 메모의 각주는 그 패밀리 셀 바로 뒤에 같은 번호 매기기(`cite`)로 OpenAI 참고 자료 번호를 받으므로 `manual_note` 참고 자료는 생기지

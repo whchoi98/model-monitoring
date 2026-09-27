@@ -1,15 +1,17 @@
-"""price_history 표시 전용 단가 열 7개 (v2.31.0) — ensure_price_columns, lifespan 훅 위치."""
+"""price_history 표시 전용 단가 열 7개 (v2.31.0) — ensure_price_columns, lifespan 훅 위치, 실패 시 백그라운드 재시도."""
 
+import logging
 import pathlib
 import re
 from types import SimpleNamespace
 
 import pytest
 from sqlalchemy import create_engine, event, insert, inspect, select, text
-from sqlalchemy.exc import NoSuchTableError
+from sqlalchemy.exc import NoSuchTableError, OperationalError
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import main
 import models
 import pricing_seed
 from pricing_seed import ensure_price_columns
@@ -32,7 +34,8 @@ V230_DDL = (
 )
 MAIN_SRC = (pathlib.Path(__file__).resolve().parents[1] / "main.py").read_text(encoding="utf-8")
 COLUMNS_CALL = "ensure_price_columns(engine)"
-SEED_CALL = "ensure_seed(engine, active_channels(AVAILABLE_MODELS, hidden_patterns()))"
+SEED_CALL = "ensure_seed(engine, active)"
+PRICE_SCHEMA_CALL = "    _ensure_price_schema()\n"  # the lifespan call (the def line has no bare newline after "()")
 
 
 def _engine():
@@ -154,15 +157,131 @@ def test_postgres_sets_transaction_timeouts_then_adds_if_not_exists(monkeypatch)
     assert ensure_price_columns(SimpleNamespace(dialect=pg.dialect, begin=None)) == []
 
 
+def _function_src(name: str) -> str:
+    start = MAIN_SRC.index(f"\ndef {name}(")
+    return MAIN_SRC[start:MAIN_SRC.index("\ndef ", start + 1)]
+
+
 def test_lifespan_adds_price_columns_in_its_own_block_right_before_the_seed_block():
-    columns = MAIN_SRC.index(COLUMNS_CALL)
-    seed = MAIN_SRC.index(SEED_CALL)
     repair = MAIN_SRC.index("repair_model_labels(engine, AVAILABLE_MODELS)")
-    assert repair < columns < seed < re.search(r"^\s{4}yield$", MAIN_SRC, re.M).start()
-    start = MAIN_SRC.rindex("    try:\n", 0, columns)
-    handler = MAIN_SRC.index("    except Exception:\n", columns)
-    block = MAIN_SRC[start:handler]
+    call = MAIN_SRC.index(PRICE_SCHEMA_CALL)
+    assert repair < call < re.search(r"^\s{4}yield$", MAIN_SRC, re.M).start()
+    fn = _function_src("_ensure_price_schema")
+    columns, seed = fn.index(COLUMNS_CALL), fn.index(SEED_CALL)
+    assert columns < seed
+    start = fn.rindex("    try:\n", 0, columns)
+    handler = fn.index("    except Exception:\n", columns)
+    block = fn[start:handler]
     assert "from pricing_seed import ensure_price_columns" in block and "ensure_seed" not in block
-    assert MAIN_SRC[handler:].splitlines()[1].strip() == (
-        'logger.exception("Price column migration failed (non-fatal, backend continues)")')
-    assert MAIN_SRC.index("    try:\n", handler) == MAIN_SRC.rindex("    try:\n", 0, seed)  # the seed block is next
+    assert [line.strip() for line in fn[handler:].splitlines()[1:3]] == [
+        "failed = True", 'logger.exception("Price column migration failed (non-fatal, backend continues)")']
+    assert fn.index("    try:\n", handler) == fn.rindex("    try:\n", 0, seed)  # the seed block is next
+
+
+# ── 실패 시 백그라운드 재시도 (lifespan은 기다리지 않는다) ──
+
+def _lock_timeout() -> OperationalError:
+    return OperationalError("ALTER TABLE price_history", {}, Exception("canceling statement due to lock timeout"))
+
+
+class _Recorder:
+    """Stands in for ensure_price_columns or ensure_seed: raises the queued errors in turn, then succeeds."""
+
+    def __init__(self, *errors):
+        self.errors = list(errors)
+        self.calls: list[tuple] = []
+
+    def __call__(self, *args):
+        self.calls.append(args)
+        if self.errors:
+            raise self.errors.pop(0)
+        return []
+
+
+class _FakeThread:
+    created: list["_FakeThread"] = []
+
+    def __init__(self, target=None, args=(), name=None, daemon=None):
+        self.target, self.args, self.name, self.daemon, self.started = target, args, name, daemon, False
+        _FakeThread.created.append(self)
+
+    def start(self):
+        self.started = True
+
+
+@pytest.fixture()
+def schema(monkeypatch):
+    """_ensure_price_schema and _retry_price_schema with the two functions, Thread and the sleep replaced."""
+    columns, seed, slept = _Recorder(), _Recorder(), []
+    monkeypatch.setattr(pricing_seed, "ensure_price_columns", columns)
+    monkeypatch.setattr(pricing_seed, "ensure_seed", seed)
+    monkeypatch.setattr(main.threading, "Thread", _FakeThread)
+    monkeypatch.setattr(main.time, "sleep", slept.append)
+    _FakeThread.created = []
+    return SimpleNamespace(columns=columns, seed=seed, slept=slept, threads=_FakeThread.created)
+
+
+def test_the_retry_defaults_are_three_attempts_thirty_seconds_apart():
+    assert (main.PRICE_SCHEMA_RETRY_ATTEMPTS, main.PRICE_SCHEMA_RETRY_INTERVAL_S) == (3, 30)
+
+
+def test_a_first_attempt_success_starts_no_thread(schema):
+    from pricing_sources import active_channels
+    from prober import AVAILABLE_MODELS
+    from visibility import hidden_patterns
+
+    assert main._ensure_price_schema() is None
+    assert schema.threads == [] and schema.slept == []
+    assert schema.columns.calls == [(main.engine,)]
+    ((engine, active),) = schema.seed.calls
+    assert engine is main.engine and active == active_channels(AVAILABLE_MODELS, hidden_patterns())
+
+
+@pytest.mark.parametrize("failing", ["columns", "seed"])
+def test_a_startup_failure_starts_the_retry_thread_without_waiting(schema, failing, caplog):
+    getattr(schema, failing).errors.append(_lock_timeout())
+    with caplog.at_level(logging.ERROR, logger="main"):
+        thread = main._ensure_price_schema()
+    assert schema.threads == [thread] and thread.started
+    assert (thread.target, thread.name, thread.daemon) == (main._retry_price_schema, "price-schema-retry", True)
+    ((_, active),) = schema.seed.calls  # the seed still runs after a column failure
+    assert thread.args == (active,) and thread.args[0] is active
+    assert schema.slept == []  # startup never sleeps: the retries run in the thread
+    message = {"columns": "Price column migration failed", "seed": "Price seed failed"}[failing]
+    assert [r.getMessage() for r in caplog.records] == [f"{message} (non-fatal, backend continues)"]
+
+
+def test_the_retry_reruns_both_steps_with_the_same_active_set_and_stops_at_the_first_success(schema, monkeypatch,
+                                                                                            caplog):
+    monkeypatch.setattr(main, "PRICE_SCHEMA_RETRY_INTERVAL_S", 0.5)
+    schema.columns.errors.append(_lock_timeout())
+    active = {"global.anthropic.claude-opus-5-5": object()}
+    with caplog.at_level(logging.INFO, logger="main"):
+        assert main._retry_price_schema(active) is True
+    assert schema.slept == [0.5, 0.5]  # waits before each attempt, the second attempt succeeds
+    assert schema.columns.calls == [(main.engine,)] * 2
+    ((engine, seeded),) = schema.seed.calls  # the seed never runs after a failed column step
+    assert engine is main.engine and seeded is active
+    records = [r for r in caplog.records if r.name == "main"]
+    assert [(r.levelno, r.getMessage()) for r in records] == [
+        (logging.ERROR, "Price schema retry 1/3 failed"), (logging.INFO, "Price schema retry 2/3 succeeded")]
+    assert records[0].exc_info is not None  # logger.exception keeps the traceback
+
+
+def test_a_seed_failure_is_retried_too(schema, monkeypatch):
+    monkeypatch.setattr(main, "PRICE_SCHEMA_RETRY_INTERVAL_S", 0)
+    schema.seed.errors.append(RuntimeError("seed failed"))
+    assert main._retry_price_schema({}) is True
+    assert len(schema.columns.calls) == 2 and len(schema.seed.calls) == 2 and schema.slept == [0, 0]
+
+
+def test_the_retry_gives_up_after_the_last_attempt(schema, monkeypatch, caplog):
+    monkeypatch.setattr(main, "PRICE_SCHEMA_RETRY_ATTEMPTS", 2)
+    schema.columns.errors.extend([_lock_timeout(), _lock_timeout(), _lock_timeout()])
+    with caplog.at_level(logging.INFO, logger="main"):
+        assert main._retry_price_schema({}) is False
+    assert schema.slept == [30, 30] and len(schema.columns.calls) == 2 and schema.seed.calls == []
+    records = [r for r in caplog.records if r.name == "main"]
+    assert [r.getMessage() for r in records[:2]] == ["Price schema retry 1/2 failed", "Price schema retry 2/2 failed"]
+    assert all(r.exc_info is not None for r in records[:2])
+    assert records[2].levelno == logging.ERROR and records[2].getMessage().startswith("Price schema retries exhausted")

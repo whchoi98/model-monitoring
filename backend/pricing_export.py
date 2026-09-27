@@ -58,11 +58,13 @@ _TEXT = {
         "title": "비용 단가",
         "unit": "통화와 단위: USD, 1M 토큰당, 입력 / 출력. 둘째 줄은 프롬프트 캐싱, GPT 셋째 줄은 긴 컨텍스트 단가다",
         "generated": "생성 시각",
-        "last_sync": "마지막 자동 확인",
+        "last_sync": "마지막 공식 단가 동기화",
+        "sync_status": {"completed": "완료", "partial": "일부 출처 실패", "failed": "실패", "running": "진행 중"},
         "never": "없음",
         "pending": "검토 대기",
         "model": "모델",
         "unverified": "자동 확인 안 됨",
+        "cache": "캐시",
         "cache_read": "캐시 읽기",
         "cache_write": "쓰기",
         "cache_write_1h": "1시간 쓰기",
@@ -88,11 +90,14 @@ _TEXT = {
         "unit": "Currency and unit: USD per 1M tokens, input / output. The second line is prompt caching, "
                 "and the third line on GPT rows is long context",
         "generated": "Generated",
-        "last_sync": "Last automatic check",
+        "last_sync": "Last official price sync",
+        "sync_status": {"completed": "completed", "partial": "partial, some sources failed", "failed": "failed",
+                        "running": "running"},
         "never": "none",
         "pending": "Pending review",
         "model": "Model",
         "unverified": "not verified automatically",
+        "cache": "cache",
         "cache_read": "cache read",
         "cache_write": "write",
         "cache_write_1h": "1h write",
@@ -166,12 +171,18 @@ def _long_line(cell: dict, t: dict) -> Optional[str]:
 def _pending_text(cell: dict, t: dict) -> str:
     """What the pending row changes, by the screen's pendingDetail rule: the pair when input or output differs, then
     each cache price that differs (and is set on the pending row), then the pending value's whole long-context line
-    when `long` differs; the pair when nothing differs. "9 / 45, 캐시 읽기 0.9, 긴 컨텍스트 18 / 67.5"."""
+    when `long` differs; the pair when nothing differs. "9 / 45, 캐시 읽기 0.9, 긴 컨텍스트 18 / 67.5".
+    When the first listed cache price is not the cache read, its label gets the "캐시" / "cache" noun, so the pending
+    text never reads "쓰기 11" alone: "캐시 1시간 쓰기 17.6", "캐시 쓰기 11, 1시간 쓰기 17.6" (the cell's cache line is unchanged)."""
     new = cell["pending"]
     pair = f"{price_text(new['input'])} / {price_text(new['output'])}"
     items = [pair] if (new["input"], new["output"]) != (cell["input"], cell["output"]) else []
-    items += [f"{t[key]} {price_text(new[key])}" for key in ("cache_read", "cache_write", "cache_write_1h")
-              if new.get(key) is not None and new.get(key) != cell.get(key)]
+    changed = [key for key in ("cache_read", "cache_write", "cache_write_1h")
+               if new.get(key) is not None and new.get(key) != cell.get(key)]
+    labels = {key: t[key] for key in changed}
+    if changed and changed[0] != "cache_read":
+        labels[changed[0]] = f"{t['cache']} {t[changed[0]]}"
+    items += [f"{labels[key]} {price_text(new[key])}" for key in changed]
     if new.get("long") is not None and new.get("long") != cell.get("long"):
         items.append(_long_line(new, t))
     return ", ".join(items or [pair])
@@ -203,7 +214,8 @@ def to_markdown(payload: dict, lang: str) -> str:
     title_key = f"title_{lang}"
     lines = [f"> {disclaimer}", "", f"# {t['title']}", "", f"- {t['unit']}", f"- {t['generated']}: {payload['generated_at']}"]
     sync = payload["last_sync"]
-    lines.append(f"- {t['last_sync']}: " + (f"{sync['finished_at']} ({sync['status']})" if sync else t["never"]))
+    status = t["sync_status"].get(sync["status"], sync["status"]) if sync else None  # an unknown status as is
+    lines.append(f"- {t['last_sync']}: " + (f"{sync['finished_at']} ({status})" if sync else t["never"]))
     if payload["pending_review"] > 0:
         lines.append(f"- {t['pending']}: {payload['pending_review']}")
 

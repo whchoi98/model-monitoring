@@ -406,7 +406,8 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   The display-only `openai_list` channels (`openai-list:<family_key>`) are not in it.
 - `notes` holds price notes. Since v2.31.0 the GPT-5.6 Sol promotional price note (`kind` `promo`, `min_until` 2026-11-21,
   `prior_price` for `openai_list`, `global` and `in_region`) cites the OpenAI pricing page, which states that the promotion runs
-  at least through November 21, 2026. Every note carries `source` (`openai_doc` or `manual_note`) and `source_id`, the reference
+  at least through November 21, 2026. The sync reads only that page's price table, so the note text is dated ("As of 2026-09-27,
+  the OpenAI pricing page states …"). Every note carries `source` (`openai_doc` or `manual_note`) and `source_id`, the reference
   its footnote points to (`openai-pricing` here, `note:<family_key>` for a manual note), numbered right after that family's
   cells when the source is official (a `manual_note` reference is numbered after the fixed official pages). A note
   disappears once a sync observes its `prior_price` on one of those tiers.
@@ -422,13 +423,17 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
 
 ### GET /api/pricing/export?format=csv|md|json&lang=ko|en
 Download the same table as a file: `Content-Disposition: attachment; filename="llm-monitor-unit-prices-YYYY-MM-DD.<csv|md|json>"`.
-`lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then one table per
-provider with that provider's own columns: Anthropic Claude `model | Claude Platform on AWS | AWS Bedrock - Global CRIS |
-AWS Bedrock - US CRIS | AWS Bedrock - In Region`, OpenAI `model | OpenAI official price | AWS Bedrock - Global CRIS |
+`lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then the unit, generation
+time and last official price sync lines (`Last official price sync: <finished_at> (<status>)`, KO `마지막 공식 단가 동기화`, with the
+screen's status words "completed", "partial, some sources failed", "failed", "running", KO "완료", "일부 출처 실패", "실패",
+"진행 중"; an unknown status as is), then one table per provider with that provider's own columns: Anthropic Claude
+`model | Claude Platform on AWS | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region`, OpenAI `model | OpenAI official price | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (KO "OpenAI 공식 가격"), Amazon Nova `model | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (no blank column). A cell is the price pair, regions and badges with `[^n]`
 footnotes (a pending value lists only what changes, as the screen badge does: the pair when input or output changes, then the
-changed cache prices and the long-context line, e.g. `4 / 20 (Pending review cache read 0.3)`), then `<br>` and the cache line (`cache read 0.2, write 5, 1h write 8`; KO `캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8`; only
+changed cache prices and the long-context line, e.g. `4 / 20 (Pending review cache read 0.3)`; when the first changed cache price is
+not the cache read it names the cache: `(Pending review cache 1h write 17.6)`, `cache write 11, 1h write 17.6`,
+KO `캐시 1시간 쓰기 17.6`), then `<br>` and the cache line (`cache read 0.2, write 5, 1h write 8`; KO `캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8`; only
 the fields that are set) and, on GPT rows, `<br>` and the long-context line (`long context 20 / 75, cache read 2, write 25`; KO
 `긴 컨텍스트 20 / 75, 캐시 읽기 2, 쓰기 25`); `in_region` elements are joined by `<br><br>`. Then come the notes, the references as
 footnote definitions and the disclaimer again. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted
