@@ -449,7 +449,8 @@ curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync, pending_review, famil
   models: (.models | length), references: (.references | length),
   verification: ([.models[] | .verification] | group_by(.) | map({(.[0]): length}) | add)}'
 # 기댓값: last_sync.status "completed", pending_review 0, families 19, models 55, verification {"verified": 55},
-#   references 약 30(오퍼 18, Price List 1~2, Anthropic 1, 공식 페이지 9, 수동 메모 1)
+#   references 21(v2.31.1 이후 이미지 — 오퍼 18, Price List 1, Anthropic 1, OpenAI 1, 인용된 출처만).
+#   v2.30.0 이미지는 약 30(오퍼 18, Price List 1~2, Anthropic 1, 공식 페이지 9, 수동 메모 1)이었다.
 
 # 4. 교정 11채널 — 비용이 seed 단가와 맞는지 (첫 동기화가 값을 바꾸지 않았으면 과거 전체가 이 단가다)
 curl -s "https://$CF_DOMAIN/api/cost/summary?window=24h" | jq '[.rows[]
@@ -534,13 +535,20 @@ curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pe
 #   astra_global {"input": 10, "output": 50, "cache_read": 1, "cache_write": 12.5,
 #     "long": {"input": 20, "output": 75, "cache_read": 2, "cache_write": 25}},
 #   nova_us {"input": 0.33, "output": 2.75, "cache_read": 0.0825, "cache_write": 0},
-#   references 30(오퍼 18, Price List 1, Anthropic 1, OpenAI 1, 공식 페이지 9 — 수동 메모 참고 자료는 없다)
+#   references 21(오퍼 18, Price List 1, Anthropic 1, OpenAI 1 — 수동 메모 참고 자료는 없다).
+#   v2.31.1부터 셀 각주나 패밀리 메모가 인용한 출처만 싣는다. v2.31.0 이미지는 인용되지 않는 공식 페이지 9개를 더해 30이었다.
+curl -s "https://$CF_DOMAIN/api/pricing" | jq -c '[.references[].kind] | group_by(.) | map({(.[0]): length}) | add'
+# 기댓값: {"agreement_offer":18,"anthropic_doc":1,"openai_doc":1,"price_list":1} (official_page 없음)
 
 # 4. 다운로드 — CSV 머리글 18열, Markdown OpenAI 표 머리글
 curl -s "https://$CF_DOMAIN/api/pricing/export?format=csv&lang=en" | sed -n 2p
 # 기댓값: provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,cache_read_usd_per_1m,cache_write_usd_per_1m,cache_write_1h_usd_per_1m,long_input_usd_per_1m,long_output_usd_per_1m,long_cache_read_usd_per_1m,long_cache_write_usd_per_1m,verification,observed_at,footnotes,source_ids
 curl -s "https://$CF_DOMAIN/api/pricing/export?format=md&lang=ko" | grep -m1 'OpenAI 공식 가격'
 # 기댓값: | 모델 | OpenAI 공식 가격 | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region |
+curl -s "https://$CF_DOMAIN/api/pricing/export?format=md&lang=ko" | grep -E '^- 공식 요금 페이지:|^3\. GPT의'
+# 기댓값(v2.31.1): 머리말 링크 한 줄(각주 없음)과 고정 안내 3번째 항목
+#   - 공식 요금 페이지: [Amazon Bedrock 요금](https://aws.amazon.com/bedrock/pricing/), [Anthropic 요금](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI 요금](https://developers.openai.com/api/docs/pricing)
+#   3. GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다.
 ```
 
 - 화면 확인: `/pricing` 표가 Anthropic Claude → OpenAI → Amazon Nova 순서이고, 열 머리글이 "AWS Bedrock - Global CRIS",
@@ -548,6 +556,8 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=md&lang=ko" | grep -m1 'Op
   칸이 모두 비어 있다. 셀 둘째 줄에 캐시 단가(예 Opus 5.5 Global "캐시 읽기 $0.20, 쓰기 $5.00, 1시간 쓰기 $8.00"), GPT 셋째 줄에 긴
   컨텍스트 단가(예 GPT 6 Astra Global "긴 컨텍스트 $20.00 / $75.00, 캐시 읽기 $2.00, 쓰기 $25.00")가 보인다. GPT 5.6 Sol 프로모션
   배지의 각주를 누르면 참고 자료 "OpenAI API 요금 (Standard)"로 이동한다. 상단 안내 상자에 "OpenAI 요금" 링크가 있다.
+  v2.31.1부터 참고 자료 목록에 공식 페이지(Amazon Bedrock 요금, OpenAI 모델 카드) 항목이 없고, 참고 사항에 "GPT의 AWS Bedrock - US
+  CRIS와 In Region 단가는 같다…" 항목이 있다.
 - 비용 화면(`/cost`)과 효율성 점수는 바뀌지 않는다(입력, 출력 단가만 쓴다). 배포 전후 같은 기간의 합계가 같으면 정상이다.
 - `pending_review`가 0보다 크면 `troubleshooting.md`의 "검토 대기 단가 승인"을 따른다. 관리자 목록의 `change`에 필드별 변화율이 있다.
   2번 결과에 `skipped:<reason>`이 있으면 같은 문서의 "비용 단가 동기화 실패"로 원인을 찾는다(OpenAI 문서는 "OpenAI 문서 형식 변경" 행).

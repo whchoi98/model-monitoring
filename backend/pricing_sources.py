@@ -180,10 +180,6 @@ def pricelist_source_id(usagetype: str) -> str:
     return f"pricelist:{usagetype}"
 
 
-def official_source_id(slug: str) -> str:
-    return f"official:{slug}"
-
-
 def note_source_id(family_key: str) -> str:
     return f"note:{family_key}"
 
@@ -203,20 +199,15 @@ DISCLAIMER: dict[str, str] = {
           "an official AWS statement. Always confirm final prices on the official pricing pages.",
 }
 
-# 고정 안내 항목(official_page, source_id official:<slug>) — 하드코딩, 런타임 존재 확인 없음
-OFFICIAL_PAGES: list[dict] = [
-    {"slug": "bedrock-pricing", "title_en": "Amazon Bedrock pricing", "title_ko": "Amazon Bedrock 요금",
+# 공식 요금 페이지 링크 — Markdown 내보내기 머리말 한 줄(각주 없음). 화면 상단 상자
+# (frontend/src/components/PricingPanel.tsx OFFICIAL_LINKS)와 같은 세 개, 같은 순서다(pytest 고정).
+# 참고 자료(references)가 아니다: references에는 셀 각주나 패밀리 메모가 인용한 출처만 싣는다(v2.31.1).
+OFFICIAL_LINKS: list[dict] = [
+    {"title_en": "Amazon Bedrock pricing", "title_ko": "Amazon Bedrock 요금",
      "url": "https://aws.amazon.com/bedrock/pricing/"},
-    *(
-        {"slug": f"model-card-openai-{slug}", "title_en": f"Amazon Bedrock model card: OpenAI {name}",
-         "title_ko": f"Amazon Bedrock 모델 카드: OpenAI {name}",
-         "url": f"https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-{slug}.html"}
-        for slug, name in (
-            ("gpt-54", "GPT-5.4"), ("gpt-55", "GPT-5.5"), ("gpt-56-sol", "GPT-5.6 Sol"),
-            ("gpt-56-terra", "GPT-5.6 Terra"), ("gpt-56-luna", "GPT-5.6 Luna"), ("gpt-6-astra", "GPT-6 Astra"),
-            ("gpt-6-sol", "GPT-6 Sol"), ("gpt-6-luna", "GPT-6 Luna"),
-        )
-    ),
+    {"title_en": "Anthropic pricing", "title_ko": "Anthropic 요금",
+     "url": "https://platform.claude.com/docs/en/about-claude/pricing"},
+    {"title_en": "OpenAI pricing", "title_ko": "OpenAI 요금", "url": "https://developers.openai.com/api/docs/pricing"},
 ]
 
 # 패밀리 메모 — GPT-5.6 Sol 프로모션은 OpenAI 공식 요금 문서가 출처다(v2.31.0, source_id = OPENAI_SOURCE_ID):

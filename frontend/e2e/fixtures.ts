@@ -58,7 +58,9 @@ export const categories = [
 // Offer ids other than the three real ones quoted in the design (Opus 5.5, GPT 6 Astra, GPT 5.4) are
 // synthetic. Offer tokens, legal-term links and presigned URLs never belong in a fixture. Prices, cache
 // prices and GPT long-context prices are the 2026-09-27 official values (plan Interface Contract C8), and
-// footnote numbers follow the backend's walk: cells in display order, then the official pages.
+// footnote numbers follow the backend's walk: cells in display order (a family's official-source note right after
+// its cells), then manual notes. Every reference is cited by a footnote and numbered 1..N; since v2.31.1 the backend
+// sends no uncited official pages (the Amazon Bedrock pricing page is only in the top links box; the model cards are not linked).
 
 const OFFER_API = "https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html";
 const PRICE_LIST_API = "https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html";
@@ -223,16 +225,6 @@ const pricingReferences: PricingReference[] = [
     title_en: "AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",
     title_ko: "AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",
     url: PRICE_LIST_API, as_of: "2026-09-26",
-  },
-  {
-    n: 9, id: "official:bedrock-pricing", kind: "official_page",
-    title_en: "Amazon Bedrock pricing", title_ko: "Amazon Bedrock 요금",
-    url: "https://aws.amazon.com/bedrock/pricing/", as_of: null,
-  },
-  {
-    n: 10, id: "official:model-card-openai-gpt-6-astra", kind: "official_page",
-    title_en: "Amazon Bedrock model card: OpenAI GPT-6 Astra", title_ko: "Amazon Bedrock 모델 카드: OpenAI GPT-6 Astra",
-    url: "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-6-astra.html", as_of: null,
   },
 ];
 

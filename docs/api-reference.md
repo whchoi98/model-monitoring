@@ -409,14 +409,20 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   at least through November 21, 2026. The sync reads only that page's price table, so the note text is dated ("As of 2026-09-27,
   the OpenAI pricing page states …"). Every note carries `source` (`openai_doc` or `manual_note`) and `source_id`, the reference
   its footnote points to (`openai-pricing` here, `note:<family_key>` for a manual note), numbered right after that family's
-  cells when the source is official (a `manual_note` reference is numbered after the fixed official pages). A note
+  cells when the source is official (a `manual_note` reference is numbered right after the cited sources). A note
   disappears once a sync observes its `prior_price` on one of those tiers.
-- `references[]`: `n` (1-based, in order of first citation, then fixed official pages, then the notes whose `source` is
-  `manual_note`), `id` (`offer:<offerId>`, `pricelist:<usagetype>`, `anthropic-pricing`, `openai-pricing`, `official:<slug>`,
-  `note:<family_key>`), `kind` (`agreement_offer`, `price_list`, `anthropic_doc`, `openai_doc`, `official_page`, `manual_note`),
-  bilingual titles (`openai-pricing` is "OpenAI API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title
-  names the family, e.g. "<family> promotion (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that
-  source, or the seed date 2026-09-27; `null` for `official_page` and `manual_note`, and a `manual_note` has `url: null`).
+- `references[]` lists only what a cell footnote or a family note cites (v2.31.1). v2.31.0 also appended nine fixed official
+  pages (Amazon Bedrock pricing and eight OpenAI model cards) that nothing cited; they are gone, so production went from 30
+  references to 21 (18 agreement offers, 1 Price List usage type, the Anthropic doc and the OpenAI doc). The reference numbers are
+  exactly the numbers used in cell `footnotes` plus the note references, 1..N without gaps. Fields: `n` (1-based, in order of first
+  citation, then the notes whose `source` is `manual_note`), `id` (`offer:<offerId>`, `pricelist:<usagetype>`,
+  `anthropic-pricing`, `openai-pricing`, `note:<family_key>`), `kind` (`agreement_offer`, `price_list`, `anthropic_doc`,
+  `openai_doc`, `manual_note`; `official_page` appears only as the fallback for a cited `source_id` of unknown format, which is
+  listed with the id as its title and `url: null` so the footnote still resolves), bilingual titles (`openai-pricing` is "OpenAI
+  API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title names the family, e.g. "<family> promotion
+  (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source, or the seed date 2026-09-27;
+  `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
+  box and the Markdown export header carry them.
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
   last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels, plus one display-only
   `openai-list:<family_key>` channel per active OpenAI family (8, v2.31.0).
@@ -426,7 +432,12 @@ Download the same table as a file: `Content-Disposition: attachment; filename="l
 `lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then the unit, generation
 time and last official price sync lines (`Last official price sync: <finished_at> (<status>)`, KO `마지막 공식 단가 동기화`, with the
 screen's status words "completed", "partial, some sources failed", "failed", "running", KO "완료", "일부 출처 실패", "실패",
-"진행 중"; an unknown status as is), then one table per provider with that provider's own columns: Anthropic Claude
+"진행 중"; an unknown status as is), the pending review count when it is above 0, and one line that links the official pricing
+pages without footnotes (v2.31.1, `pricing_sources.OFFICIAL_LINKS`, the same three links as the screen's top box, pinned by
+pytest against `frontend/src/components/PricingPanel.tsx`): `- Official pricing pages: [Amazon Bedrock
+pricing](https://aws.amazon.com/bedrock/pricing/), [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing),
+[OpenAI pricing](https://developers.openai.com/api/docs/pricing)`, KO `- 공식 요금 페이지: [Amazon Bedrock 요금](…), [Anthropic
+요금](…), [OpenAI 요금](…)`. Then one table per provider with that provider's own columns: Anthropic Claude
 `model | Claude Platform on AWS | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region`, OpenAI `model | OpenAI official price | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (KO "OpenAI 공식 가격"), Amazon Nova `model | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (no blank column). A cell is the price pair, regions and badges with `[^n]`
@@ -435,13 +446,18 @@ changed cache prices and the long-context line, e.g. `4 / 20 (Pending review cac
 not the cache read it names the cache: `(Pending review cache 1h write 17.6)`, `cache write 11, 1h write 17.6`,
 KO `캐시 1시간 쓰기 17.6`), then `<br>` and the cache line (`cache read 0.2, write 5, 1h write 8`; KO `캐시 읽기 0.2, 쓰기 5, 1시간 쓰기 8`; only
 the fields that are set) and, on GPT rows, `<br>` and the long-context line (`long context 20 / 75, cache read 2, write 25`; KO
-`긴 컨텍스트 20 / 75, 캐시 읽기 2, 쓰기 25`); `in_region` elements are joined by `<br><br>`. Then come the notes, the references as
-footnote definitions and the disclaimer again. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted
+`긴 컨텍스트 20 / 75, 캐시 읽기 2, 쓰기 25`); `in_region` elements are joined by `<br><br>`. Then come the notes (9 fixed notes,
+then one item per family note ending with its footnote), the references as footnote definitions and the disclaimer again. The
+third fixed note (v2.31.1) reads "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI
+official price on both, and Global CRIS equals the OpenAI official price." (KO "GPT의 AWS Bedrock - US CRIS와 In Region 단가는
+같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다."); v2.31.0's notes item that
+cited the official pages ("Confirm final prices on the official pricing pages[^n]…") is gone. `csv` is UTF-8 with a BOM, a first line that holds `# <disclaimer>` as one quoted
 field (`"# <disclaimer>"`, so the commas in the text never split it into columns), the header
 `provider,family,channel,regions,model_ids,input_usd_per_1m,output_usd_per_1m,cache_read_usd_per_1m,cache_write_usd_per_1m,cache_write_1h_usd_per_1m,long_input_usd_per_1m,long_output_usd_per_1m,long_cache_read_usd_per_1m,long_cache_write_usd_per_1m,verification,observed_at,footnotes,source_ids`,
 one row per tier element in the order `cp`, `openai_list`, `global`, `us`, `in_region` (`channel` is that key; list columns are
 space-separated; a price the source does not have is an empty field), a blank line, then
-`reference_n,reference_id,kind,title,url,as_of` and the references.
+`reference_n,reference_id,kind,title,url,as_of` and the references. CSV and JSON carry no official pricing links; they follow
+the payload.
 
 ---
 

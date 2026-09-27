@@ -69,6 +69,10 @@ const NOTES: { en: string; ko: string }[] = [
     ko: "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
   },
   {
+    en: "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price",
+    ko: "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
+  },
+  {
     en: "Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price",
     ko: "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
   },

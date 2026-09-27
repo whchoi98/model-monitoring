@@ -4,8 +4,10 @@ Dataset (tests/_pricing_dataset.py): Claude Opus 5.5 on three channels with prom
 row whose cache write is exactly 0, GPT 6 Luna with no price rows, GPT 5.6 Sol with two pending rows on its
 Global channel, a seed-only in-region row and an OpenAI-doc promo note, GPT 5.6 Terra whose us-west-2 price
 differs from us-east-1/us-east-2, GPT 5.5 seed-only, GPT 5.4 on three equal regions plus its OpenAI official
-price (openai_list), and rows for inactive model_ids that must never appear. OFFICIAL_PAGES and PRICE_NOTES are
-pinned to test copies so the golden does not depend on their production wording; DISCLAIMER is the spec text.
+price (openai_list), and rows for inactive model_ids that must never appear. PRICE_NOTES is pinned to a test
+copy so the golden does not depend on its production wording; DISCLAIMER is the spec text. References list only
+cited sources (v2.31.1): the invariant test at the bottom builds the payload on the real seeds of the 55 active
+channels (tests/pricing_catalog.py) and checks that every reference is cited.
 """
 
 from datetime import timedelta
@@ -16,11 +18,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import models
+import pricing_seed
 import pricing_sources
 from pricing_payload import build_pricing_payload, price_number, price_number_or_none, price_text
-from pricing_sources import price_identity
+from pricing_sources import active_channels, price_identity
 from tests import _pricing_dataset as ds
 from tests._pricing_dataset import EXPECTED_PAYLOAD, G54, G55, NOVA, OPUS, SOL, TERRA
+from tests.pricing_catalog import ACTIVE_MODELS
 
 TIER_ORDER = ["cp", "openai_list", "global", "us", "in_region"]
 CELL_PRICE_KEYS = {"input", "output", "cache_read", "cache_write", "cache_write_1h", "long"}
@@ -28,7 +32,6 @@ CELL_PRICE_KEYS = {"input", "output", "cache_read", "cache_write", "cache_write_
 
 @pytest.fixture()
 def db(monkeypatch):
-    monkeypatch.setattr(pricing_sources, "OFFICIAL_PAGES", ds.OFFICIAL_PAGES)
     monkeypatch.setattr(pricing_sources, "PRICE_NOTES", [ds.SOL_NOTE])
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
@@ -179,15 +182,15 @@ def test_promo_note_drops_once_the_openai_list_tier_shows_the_prior_price(db):
     assert sol["notes"] == []
 
 
-def test_manual_note_keeps_its_reference_after_the_official_pages(db, monkeypatch):
+def test_manual_note_keeps_its_reference_right_after_the_cited_sources(db, monkeypatch):
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
     monkeypatch.setattr(pricing_sources, "PRICE_NOTES", [note])
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
     assert payload["references"][-1] == {
-        "n": 11, "id": "note:gpt-5.4", "kind": "manual_note",
+        "n": 9, "id": "note:gpt-5.4", "kind": "manual_note",
         "title_en": "GPT 5.4 promotion (manual note, 2026-09-23 AWS model card)",
         "title_ko": "GPT 5.4 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)", "url": None, "as_of": None}
-    assert [r["kind"] for r in payload["references"]][-3:] == ["official_page", "official_page", "manual_note"]
+    assert [r["kind"] for r in payload["references"]][-2:] == ["price_list", "manual_note"]  # Nova (8) is last cited
     (payload_note,) = _family(payload, "gpt-5.4")["notes"]
     assert payload_note == {
         "family_key": "gpt-5.4", "kind": "promo", "min_until": "2026-11-21", "prior_price": {},
@@ -208,23 +211,68 @@ def test_price_rows_effective_after_now_are_not_current_yet(db):
 def test_empty_active_set_still_returns_the_fixed_sections(db):
     payload = build_pricing_payload(db, {}, now=ds.NOW)
     assert payload["families"] == [] and payload["models"] == {} and payload["pending_review"] == 0
-    assert [r["kind"] for r in payload["references"]] == ["official_page", "official_page"]
+    assert payload["references"] == []  # nothing cited, nothing listed
+    assert payload["disclaimer"] == {"en": pricing_sources.DISCLAIMER["en"], "ko": pricing_sources.DISCLAIMER["ko"]}
 
 
-def test_production_official_pages_and_note_are_listed_after_the_cited_sources(db, monkeypatch):
-    monkeypatch.undo()  # production OFFICIAL_PAGES and PRICE_NOTES
+def test_an_unknown_source_id_is_still_listed_so_its_footnote_resolves(db):
+    ds.add_price(db, "openai:us-east-1:openai.gpt-5.5", 5.5, 33.0, effective_from=ds.RUN2, status="verified",
+                 observed_at=ds.RUN2, source_id="mystery-source")
+    db.commit()
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
-    kinds = [r["kind"] for r in payload["references"]]
-    cited = sum(kinds.count(k) for k in ("agreement_offer", "price_list", "anthropic_doc", "openai_doc"))
-    assert kinds[cited:] == ["official_page"] * 9
-    assert {r["url"] for r in payload["references"] if r["kind"] == "official_page"} == {
-        "https://aws.amazon.com/bedrock/pricing/",
-        *(f"https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-{slug}.html" for slug in (
-            "gpt-54", "gpt-55", "gpt-56-sol", "gpt-56-terra", "gpt-56-luna", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna")),
-    }
+    (element,) = _family(payload, "gpt-5.5")["tiers"]["in_region"]
+    (ref,) = [r for r in payload["references"] if r["n"] == element["footnotes"][0]]
+    assert ref == {"n": 6, "id": "mystery-source", "kind": "official_page", "title_en": "mystery-source",
+                   "title_ko": "mystery-source", "url": None, "as_of": "2026-09-25"}
+
+
+def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
+    monkeypatch.undo()  # production PRICE_NOTES
+    payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
+    assert "official_page" not in [r["kind"] for r in payload["references"]]
     sol = _family(payload, "gpt-5.6-sol")
     (note,) = sol["notes"]
     assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source", "source_id"}
     assert (note["source"], note["source_id"]) == ("openai_doc", "openai-pricing")
     ref = next(r for r in payload["references"] if r["id"] == "openai-pricing")
     assert (ref["n"], ref["kind"], ref["url"]) == (4, "openai_doc", "https://developers.openai.com/api/docs/pricing")
+
+
+def _production_payload(notes):
+    """build_pricing_payload on the real seeds of the 55 active channels plus the 8 OpenAI official prices."""
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    models.Base.metadata.create_all(engine)
+    active = active_channels(ACTIVE_MODELS, [])
+    assert len(active) == 63
+    assert pricing_seed.ensure_seed(engine, active) == 63
+    try:
+        with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
+            mp.setattr(pricing_sources, "PRICE_NOTES", notes)
+            return build_pricing_payload(session, active, now=ds.NOW)
+    finally:
+        engine.dispose()
+
+
+def _assert_every_reference_is_cited(payload):
+    refs = payload["references"]
+    ref_n = {r["id"]: r["n"] for r in refs}
+    cited = {n for f in payload["families"] for c in _cells(f) for n in c["footnotes"]}
+    cited |= {ref_n[note["source_id"]] for f in payload["families"] for note in f["notes"]}
+    assert {r["n"] for r in refs} == cited
+    assert [r["n"] for r in refs] == list(range(1, len(refs) + 1))  # 1..N, no gaps, in order
+
+
+def test_production_references_list_only_cited_sources():
+    payload = _production_payload(pricing_sources.PRICE_NOTES)
+    _assert_every_reference_is_cited(payload)
+    kinds = [r["kind"] for r in payload["references"]]
+    assert len(kinds) == 21
+    assert {k: kinds.count(k) for k in set(kinds)} == {
+        "agreement_offer": 18, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+
+
+def test_production_manual_note_is_numbered_right_after_the_cited_sources():
+    note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
+    payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
+    _assert_every_reference_is_cited(payload)
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(22, "note:gpt-5.4", "manual_note")]

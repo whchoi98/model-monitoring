@@ -1,6 +1,6 @@
 /** 비용 단가 화면 정적 렌더 (v2.30.0, v2.31.0) — 응답 순서 그대로의 제공사 섹션(Anthropic Claude, OpenAI, Amazon Nova),
  * 제공사별 열 머리글(AWS Bedrock - Global CRIS 등), Nova의 빈 첫 열, 모르는 제공사의 기본 열, 캐시 줄과 GPT 긴 컨텍스트 줄, #ref-n 각주,
- * In Region 여러 줄 셀, 빈 셀 "—", 다운로드 링크, 참고 사항 8개, 면책 문구 두 번, 줄바꿈 단위(break-keep, nowrap 토큰),
+ * In Region 여러 줄 셀, 빈 셀 "—", 다운로드 링크, 참고 사항 9개, 모든 참고 자료가 각주로 인용됨, 면책 문구 두 번, 줄바꿈 단위(break-keep, nowrap 토큰),
  * 같은 고정 열 폭. 브라우저 동작은 e2e/pricing.spec.ts가 맡는다.
  */
 import { renderToStaticMarkup } from "react-dom/server";
@@ -48,6 +48,7 @@ function line(html: string, kind: "cache" | "long"): string | null {
 const NOTES_KO = [
   "단가는 USD, 1M 토큰당, Standard 등급 기준이다",
   "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
+  "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
   "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
   "GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다",
   "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
@@ -58,6 +59,7 @@ const NOTES_KO = [
 const NOTES_EN = [
   "Prices are in USD per 1M tokens, Standard tier",
   "AWS Bedrock - Global CRIS prices can differ from the same model's US CRIS and In Region prices",
+  "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price",
   "Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price",
   "GPT long-context prices apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5)",
   "The OpenAI official price is OpenAI's direct API price and is not used for cost calculations",
@@ -288,6 +290,15 @@ describe("PricingContent", () => {
     expect(html).toContain('href="https://developers.openai.com/api/docs/pricing" target="_blank" rel="noopener noreferrer"');
   });
 
+  test("참고 자료는 1..N 연속 번호이고 모두 페이지의 각주가 인용한다 (인용되지 않는 공식 페이지는 없다)", () => {
+    const html = render("ko");
+    const listed = [...html.matchAll(/<li id="ref-(\d+)"/g)].map((match) => Number(match[1]));
+    expect(listed).toEqual(pricingFixture.references.map((_, i) => i + 1));
+    const cited = new Set([...html.matchAll(/href="#ref-(\d+)"/g)].map((match) => Number(match[1])));
+    expect(listed.filter((n) => !cited.has(n))).toEqual([]);
+    expect(pricingFixture.references.map((reference) => reference.kind)).not.toContain("official_page");
+  });
+
   test("다운로드 링크는 현재 언어의 export download 링크", () => {
     for (const format of ["csv", "md", "json"]) {
       expect(render("ko")).toContain(`href="/api/pricing/export?format=${format}&amp;lang=ko" download=""`);
@@ -295,7 +306,7 @@ describe("PricingContent", () => {
     expect(render("en")).toContain('href="/api/pricing/export?format=csv&amp;lang=en" download=""');
   });
 
-  test("면책 문구 두 번, 참고 사항 8개(마침표 없음), 동기화 상태와 검토 대기 수", () => {
+  test("면책 문구 두 번, 참고 사항 9개(마침표 없음), 동기화 상태와 검토 대기 수", () => {
     const html = render("ko");
     expect(count(html, pricingFixture.disclaimer.ko)).toBe(2);
     expect(count(render("en"), pricingFixture.disclaimer.en)).toBe(2);
@@ -305,6 +316,9 @@ describe("PricingContent", () => {
     };
     expect(notes(html)).toEqual(NOTES_KO);
     expect(notes(render("en"))).toEqual(NOTES_EN);
+    expect(NOTES_KO).toHaveLength(9);
+    // The GPT channel note comes right after the Global CRIS note.
+    expect(notes(html)[2]).toMatch(/^GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다\./);
     expect(html).toContain("완료");
     expect(html).toContain("검토 대기 1건");
     expect(html).toContain("마지막 공식 단가 동기화: ");

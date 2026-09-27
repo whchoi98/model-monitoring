@@ -4,6 +4,8 @@ The exports are pure functions of the /api/pricing payload: same order, same foo
 first (and last in Markdown). tests/_pricing_dataset.EXPECTED_PAYLOAD is the input; its correctness against
 the database is pinned by test_pricing_payload.py. Markdown tables are per provider (Anthropic Claude, OpenAI,
 Amazon Nova) with that provider's columns; a cell's second line is prompt caching, the third long context.
+v2.31.1: references list only cited sources, the Markdown header links the three official pricing pages
+(pricing_sources.OFFICIAL_LINKS, no footnotes), and the fixed notes gain the GPT US CRIS = In Region note (9 items).
 """
 
 import copy
@@ -15,9 +17,17 @@ from datetime import date
 import pytest
 
 from pricing_export import (
-    BOM, CSV_HEADER, PROVIDER_COLUMNS, TIER_KEYS, TIER_TITLES, export_filename, to_csv, to_json, to_markdown,
+    _TEXT, BOM, CSV_HEADER, PROVIDER_COLUMNS, TIER_KEYS, TIER_TITLES, export_filename, to_csv, to_json, to_markdown,
 )
+from pricing_sources import OFFICIAL_LINKS
 from tests._pricing_dataset import EXPECTED_PAYLOAD
+
+KO_OFFICIAL_LINKS = ("- 공식 요금 페이지: [Amazon Bedrock 요금](https://aws.amazon.com/bedrock/pricing/), "
+                     "[Anthropic 요금](https://platform.claude.com/docs/en/about-claude/pricing), "
+                     "[OpenAI 요금](https://developers.openai.com/api/docs/pricing)")
+EN_OFFICIAL_LINKS = ("- Official pricing pages: [Amazon Bedrock pricing](https://aws.amazon.com/bedrock/pricing/), "
+                     "[Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing), "
+                     "[OpenAI pricing](https://developers.openai.com/api/docs/pricing)")
 
 GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.
 
@@ -27,6 +37,7 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 - 생성 시각: 2026-09-25T16:00:00Z
 - 마지막 공식 단가 동기화: 2026-09-25T15:00:31Z (완료)
 - 검토 대기: 1
+- 공식 요금 페이지: [Amazon Bedrock 요금](https://aws.amazon.com/bedrock/pricing/), [Anthropic 요금](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI 요금](https://developers.openai.com/api/docs/pricing)
 
 ## Anthropic Claude
 
@@ -54,13 +65,13 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 
 1. 단가는 USD, 1M 토큰당, Standard 등급 기준이다.
 2. AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다.
-3. 캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다.
-4. GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다.
-5. OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다.
-6. 캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다.
-7. batch, flex, priority(fast) 단가는 포함하지 않는다.
-8. 비용 화면은 각 프로브 시각의 단가로 계산한다.
-9. 최종 가격은 공식 요금 페이지에서 확인한다[^9][^10].
+3. GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다.
+4. 캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다.
+5. GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다.
+6. OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다.
+7. 캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다.
+8. batch, flex, priority(fast) 단가는 포함하지 않는다.
+9. 비용 화면은 각 프로브 시각의 단가로 계산한다.
 10. GPT 5.6 Sol: 프로모션 단가, 최소 2026-11-21까지[^4]
 
 ## 참고 자료
@@ -73,8 +84,6 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 [^6]: Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-27
 [^7]: Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
 [^8]: AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite), https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html, 확인일 2026-09-24
-[^9]: Amazon Bedrock 요금, https://aws.amazon.com/bedrock/pricing/
-[^10]: Amazon Bedrock 모델 카드, OpenAI GPT 5.4, https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html
 
 > 이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.
 """
@@ -87,6 +96,7 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 - Generated: 2026-09-25T16:00:00Z
 - Last official price sync: 2026-09-25T15:00:31Z (completed)
 - Pending review: 1
+- Official pricing pages: [Amazon Bedrock pricing](https://aws.amazon.com/bedrock/pricing/), [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing), [OpenAI pricing](https://developers.openai.com/api/docs/pricing)
 
 ## Anthropic Claude
 
@@ -114,13 +124,13 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 
 1. Prices are in USD per 1M tokens, Standard tier.
 2. AWS Bedrock - Global CRIS prices can differ from the same model's US CRIS and In Region prices.
-3. Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price.
-4. GPT long-context prices apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5).
-5. The OpenAI official price is OpenAI's direct API price and is not used for cost calculations.
-6. Cache and long-context prices are shown for reference, and the cost pages use input and output prices.
-7. Batch, flex and priority (fast) prices are not included.
-8. The cost pages use the price in effect at each probe's time.
-9. Confirm final prices on the official pricing pages[^9][^10].
+3. GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price.
+4. Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price.
+5. GPT long-context prices apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5).
+6. The OpenAI official price is OpenAI's direct API price and is not used for cost calculations.
+7. Cache and long-context prices are shown for reference, and the cost pages use input and output prices.
+8. Batch, flex and priority (fast) prices are not included.
+9. The cost pages use the price in effect at each probe's time.
 10. GPT 5.6 Sol: Promotional price, at least until 2026-11-21[^4]
 
 ## References
@@ -133,8 +143,6 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 [^6]: Amazon Bedrock agreement offer rate card, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-27
 [^7]: Amazon Bedrock agreement offer rate card, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
 [^8]: AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite), https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html, checked 2026-09-24
-[^9]: Amazon Bedrock pricing, https://aws.amazon.com/bedrock/pricing/
-[^10]: Amazon Bedrock model card, OpenAI GPT 5.4, https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html
 
 > This price list is compiled automatically from public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing pages.
 """
@@ -163,8 +171,6 @@ reference_n,reference_id,kind,title,url,as_of
 6,offer:offer-gpt55example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-27
 7,offer:offer-5l5a5izq5fbec,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
 8,pricelist:USE1-Nova2.0Lite-input-tokens,price_list,"AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html,2026-09-24
-9,official:bedrock-pricing,official_page,Amazon Bedrock 요금,https://aws.amazon.com/bedrock/pricing/,
-10,official:model-card-openai-gpt-54,official_page,"Amazon Bedrock 모델 카드, OpenAI GPT 5.4",https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-gpt-54.html,
 """
 
 
@@ -288,13 +294,13 @@ def test_note_item_ends_with_the_footnote_of_its_source_id():
     payload = copy.deepcopy(EXPECTED_PAYLOAD)
     sol = _family(payload, "gpt-5.6-sol")
     sol["notes"][0].update(source="manual_note", source_id="note:gpt-5.6-sol")
-    payload["references"].append({"n": 11, "id": "note:gpt-5.6-sol", "kind": "manual_note",
+    payload["references"].append({"n": 9, "id": "note:gpt-5.6-sol", "kind": "manual_note",
                                   "title_en": "GPT 5.6 Sol promotion (manual note, 2026-09-23 AWS model card)",
                                   "title_ko": "GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)",
                                   "url": None, "as_of": None})
     md = to_markdown(payload, "ko")
-    assert "10. GPT 5.6 Sol: 프로모션 단가, 최소 2026-11-21까지[^11]\n" in md
-    assert "[^11]: GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)\n" in md
+    assert "10. GPT 5.6 Sol: 프로모션 단가, 최소 2026-11-21까지[^9]\n" in md
+    assert "[^9]: GPT 5.6 Sol 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)\n" in md
 
 
 def test_csv_en_changes_only_the_disclaimer_and_reference_titles():
@@ -326,7 +332,7 @@ def test_csv_parses_back_into_two_tables():
         "0.0825", "0", "")
     assert [r["channel"] for r in rows if r["family"] == "GPT 5.4"] == ["openai_list", "in_region"]
     refs = list(csv.DictReader(io.StringIO(references)))
-    assert [int(r["reference_n"]) for r in refs] == list(range(1, 11))
+    assert [int(r["reference_n"]) for r in refs] == list(range(1, 9))
 
 
 def test_json_is_the_payload():
@@ -354,6 +360,40 @@ def test_unknown_lang_is_rejected():
 def test_no_last_sync_and_no_pending_lines():
     payload = dict(EXPECTED_PAYLOAD, last_sync=None, pending_review=0)
     md = to_markdown(payload, "ko")
-    assert "- 마지막 공식 단가 동기화: 없음\n" in md
-    assert "- Last official price sync: none\n" in to_markdown(payload, "en")
+    assert "- 마지막 공식 단가 동기화: 없음\n" + KO_OFFICIAL_LINKS + "\n\n## Anthropic Claude" in md
+    assert "- Last official price sync: none\n" + EN_OFFICIAL_LINKS + "\n\n## Anthropic Claude" in to_markdown(
+        payload, "en")
     assert "- 검토 대기:" not in md
+
+
+@pytest.mark.parametrize("lang, links", [("ko", KO_OFFICIAL_LINKS), ("en", EN_OFFICIAL_LINKS)])
+def test_markdown_header_links_the_official_pricing_pages_without_footnotes(lang, links):
+    md = to_markdown(EXPECTED_PAYLOAD, lang)
+    assert md.count(links + "\n") == 1 and "[^" not in links
+    assert links == ({"ko": "- 공식 요금 페이지: ", "en": "- Official pricing pages: "}[lang] + ", ".join(
+        f"[{link[f'title_{lang}']}]({link['url']})" for link in OFFICIAL_LINKS))
+    header = md.split("\n## ", 1)[0]
+    assert header.index("- " + {"ko": "검토 대기", "en": "Pending review"}[lang]) < header.index(links)
+    # the notes no longer cite the official pages, and no reference lists them
+    assert "공식 요금 페이지에서 확인한다" not in md and "Confirm final prices on the official pricing pages[" not in md
+    assert "official_page" not in to_csv(EXPECTED_PAYLOAD, lang)
+
+
+def test_csv_and_json_carry_no_official_links():
+    """They follow the payload: the header links are Markdown only (the OpenAI page stays a cited reference)."""
+    for text in (to_csv(EXPECTED_PAYLOAD, "ko"), to_csv(EXPECTED_PAYLOAD, "en"), to_json(EXPECTED_PAYLOAD)):
+        assert OFFICIAL_LINKS[0]["url"] not in text and "](" not in text
+
+
+@pytest.mark.parametrize("lang, note", [
+    ("ko", "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, "
+           "Global CRIS는 OpenAI 공식 가격과 같다."),
+    ("en", "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price "
+           "on both, and Global CRIS equals the OpenAI official price."),
+])
+def test_nine_fixed_notes_with_the_gpt_us_cris_in_region_note_third(lang, note):
+    fixed = _TEXT[lang]["fixed_notes"]
+    assert len(fixed) == 9 and fixed[2] == note
+    assert fixed[1].startswith("AWS Bedrock - Global CRIS")
+    assert "official" not in _TEXT[lang]
+    assert f"\n3. {note}\n" in to_markdown(EXPECTED_PAYLOAD, lang)

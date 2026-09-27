@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.31.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.31.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -74,14 +74,14 @@ model-monitoring/
 │   ├── visibility.py        # 조회 노출 필터 — HIDDEN_MODEL_PATTERNS (기본 `(1P)`) (v2.19.1)
 │   ├── tests/               # pytest (python3.12)
 │   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P), AVAILABLE_MODELS (55개 활성 + 1P 5개 휴면), retry, stop_reason capture
-│   ├── pricing_sources.py   # 단가 순수 데이터 — price_identity(model_id → family/채널/출처), 오퍼 FM id, Anthropic 문서 모델명, Price List usagetype 매핑(NOVA_CACHE_USAGETYPES 포함), OpenAI 공식 가격 합성 채널(`openai-list:<family_key>`, channel `openai_list`, OPENAI_PRICING_URL), PROVIDER_ORDER(Anthropic → OpenAI → Amazon, v2.31.0), FAMILY_ORDER(프런트와 동일, pytest 고정), DISCLAIMER, OFFICIAL_PAGES, PRICE_NOTES(GPT-5.6 Sol 프로모션, OpenAI 문서 인용) (v2.30.0)
+│   ├── pricing_sources.py   # 단가 순수 데이터 — price_identity(model_id → family/채널/출처), 오퍼 FM id, Anthropic 문서 모델명, Price List usagetype 매핑(NOVA_CACHE_USAGETYPES 포함), OpenAI 공식 가격 합성 채널(`openai-list:<family_key>`, channel `openai_list`, OPENAI_PRICING_URL), PROVIDER_ORDER(Anthropic → OpenAI → Amazon, v2.31.0), FAMILY_ORDER(프런트와 동일, pytest 고정), DISCLAIMER, OFFICIAL_LINKS(Markdown 머리말 공식 요금 링크 3개, `PricingPanel.tsx` `OFFICIAL_LINKS`와 같은 순서, pytest 고정 — v2.31.1에서 인용되지 않던 OFFICIAL_PAGES 대체), PRICE_NOTES(GPT-5.6 Sol 프로모션, OpenAI 문서 인용) (v2.30.0)
 │   ├── pricing_seed.py      # 활성 55채널 + OpenAI 공식 가격 8채널 공식 단가 seed(SEED, CP는 CP_SEED family_key 단위, OPENAI_LIST_SEED, 확장 필드는 seed_extra) + ensure_price_columns(v2.31.0, price_history에 빠진 캐시, 긴 컨텍스트 열만 ALTER ADD COLUMN IF NOT EXISTS) + ensure_seed(model_id 단위 멱등, 기존 seed 행의 빈 확장 열 채움(열마다 COALESCE, 동시 동기화 값은 덮어쓰지 않음), SET LOCAL statement_timeout 30초와 lock_timeout 5초 뒤 pg_advisory_xact_lock(917350003))
 │   ├── pricing_parsers.py   # 출처별 순수 파서, UnitPrice(입력, 출력 + 확장 7필드) — offers rateCard(DIMENSION_RE 허용 목록, 캐시와 `_long_ctx` 차원, cache_read_tokens가 cached_input_tokens보다 우선), Price List(1K → 1M, 캐시 usagetype fail-soft), Anthropic markdown(헤더 이름, <sup> 제거, 정확 일치, 캐시 열), OpenAI markdown(`### Standard pricing data` 첫 표, v2.31.0). 문서 표 중복 모델 이름은 입력이나 출력이 다를 때만 버리고, 같으면 서로 다른 확장 필드만 None
 │   ├── pricing_sync.py      # 12시간 동기화 — 가져오기, 관측 값 소수 6자리 정규화, 비교(classify_change — 9필드 필드별, CHANGE_THRESHOLD 0.5 경계 포함, 빈 필드 첫 관측은 새 행 없이 현재 행 채움 `enriched`), pending_review, price_sync_runs 기록, 상한 300초. 파서 예외는 종류와 상관없이 그 출처 채널만 skipped:parse_failed(v2.31.0: 문서 표는 찾는 모델 행만 하나씩 정규화해 값이 이상한 추적 모델은 자기 채널만 skipped:parse_failed, 긴 컨텍스트 필드는 OpenAI 채널만 저장)
 │   ├── pricing_sync_runner.py # CLI entry: `python -m pricing_sync_runner --once` (PricingSync Fargate task) — create_tables → ensure_price_columns(v2.31.0) → CP/OpenAI 등록 → ensure_seed → run_sync(pg_try_advisory_lock(917350004) — 점유 중이면 즉시 exit 1) → os._exit
 │   ├── price_history.py     # 유효 단가 조회, 행 단위 비용 서브쿼리(with_row_cost — /api/cost/*, /api/efficiency/score), verification(seed_only/verified/stale)
-│   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료) + 숫자 직렬화
-│   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄, 확장 단가 7열), Markdown(제공사별 열 머리글, 셀 안 `<br>` 캐시와 긴 컨텍스트 줄), JSON 내보내기 순수 함수
+│   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료 — 셀 각주나 메모가 인용한 출처만, 1..N 빈칸 없음, 운영 21개, v2.31.1) + 숫자 직렬화
+│   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄, 확장 단가 7열), Markdown(머리말 공식 요금 페이지 링크 한 줄 v2.31.1, 제공사별 열 머리글, 셀 안 `<br>` 캐시와 긴 컨텍스트 줄, 고정 안내 9개 — 3번째 GPT US CRIS = In Region v2.31.1), JSON 내보내기 순수 함수
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
 │   ├── schemas.py           # Pydantic; ProbeResultResponse.stop_reason Optional

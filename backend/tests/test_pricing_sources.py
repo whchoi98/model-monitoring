@@ -1,6 +1,7 @@
 """단가 식별과 출처 메타데이터 (v2.30.0, ADR-030) — 55채널 정확 분류, 점 버전 안전성(2026-09-23 Opus 5.5 CP
 오등록 실사고 유형), prober 등록 결과와 일치, FAMILY_ORDER = frontend sortModels.ts.
-v2.31.0: OpenAI 공식 가격 합성 채널(openai-list:<family_key>) 8개, OpenAI 문서 출처 상수, Nova 캐시 usagetype."""
+v2.31.0: OpenAI 공식 가격 합성 채널(openai-list:<family_key>) 8개, OpenAI 문서 출처 상수, Nova 캐시 usagetype.
+v2.31.1: OFFICIAL_PAGES 삭제(인용되지 않는 참고 자료), OFFICIAL_LINKS = frontend PricingPanel.tsx 상단 공식 요금 링크."""
 
 import json
 import logging
@@ -22,6 +23,7 @@ from tests.pricing_catalog import (
 )
 
 SORT_MODELS_TS = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "sortModels.ts"
+PRICING_PANEL_TSX = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "components" / "PricingPanel.tsx"
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "pricing"
 OPENAI_FAMILIES = {fk: fam for fk, fam, provider, *_ in EXPECTED_IDENTITY.values() if provider == "openai"}
 
@@ -232,7 +234,6 @@ def test_active_channels_appends_one_openai_list_channel_per_visible_openai_fami
 def test_source_metadata_constants():
     assert ps.offer_source_id("offer-7sp77cpl4rveu") == "offer:offer-7sp77cpl4rveu"
     assert ps.pricelist_source_id("USE1-Nova2.0Lite-input-tokens") == "pricelist:USE1-Nova2.0Lite-input-tokens"
-    assert ps.official_source_id("bedrock-pricing") == "official:bedrock-pricing"
     assert ps.note_source_id("gpt-5.6-sol") == "note:gpt-5.6-sol"
     assert ps.ANTHROPIC_SOURCE_ID == "anthropic-pricing"
     assert ps.ANTHROPIC_PRICING_URL == "https://platform.claude.com/docs/en/about-claude/pricing.md"
@@ -266,13 +267,25 @@ def test_nova_cache_usagetypes_read_the_price_list_fixture():
     assert set(ps.NOVA_CACHE_USAGETYPES) == set(ps.NOVA_USAGETYPES)
 
 
-def test_official_pages_and_price_notes():
-    card = "https://docs.aws.amazon.com/bedrock/latest/userguide/model-card-openai-{}.html"
-    assert [p["url"] for p in ps.OFFICIAL_PAGES] == ["https://aws.amazon.com/bedrock/pricing/"] + [
-        card.format(s) for s in ("gpt-54", "gpt-55", "gpt-56-sol", "gpt-56-terra", "gpt-56-luna",
-                                 "gpt-6-astra", "gpt-6-sol", "gpt-6-luna")]
-    assert all(set(p) == {"slug", "title_en", "title_ko", "url"} and "·" not in p["title_ko"] for p in ps.OFFICIAL_PAGES)
-    assert len({p["slug"] for p in ps.OFFICIAL_PAGES}) == 9
+def test_official_links_matches_frontend_pricing_panel():
+    """The Markdown header links = the screen's top box (PricingPanel.tsx OFFICIAL_LINKS), same order."""
+    m = re.search(r"const OFFICIAL_LINKS[^=]*= \[(.*?)\];", PRICING_PANEL_TSX.read_text(encoding="utf-8"), re.S)
+    assert m
+    entries = re.findall(r'\{\s*url: "([^"]+)",\s*en: "([^"]+)",\s*ko: "([^"]+)"\s*\}', m.group(1))
+    assert len(entries) == 3
+    assert [(link["url"], link["title_en"], link["title_ko"]) for link in ps.OFFICIAL_LINKS] == entries
+
+
+def test_official_links_and_price_notes():
+    assert ps.OFFICIAL_LINKS == [
+        {"title_en": "Amazon Bedrock pricing", "title_ko": "Amazon Bedrock 요금",
+         "url": "https://aws.amazon.com/bedrock/pricing/"},
+        {"title_en": "Anthropic pricing", "title_ko": "Anthropic 요금",
+         "url": "https://platform.claude.com/docs/en/about-claude/pricing"},
+        {"title_en": "OpenAI pricing", "title_ko": "OpenAI 요금", "url": "https://developers.openai.com/api/docs/pricing"},
+    ]
+    # v2.31.1: references list only cited sources — the fixed official pages are gone
+    assert not hasattr(ps, "OFFICIAL_PAGES") and not hasattr(ps, "official_source_id")
     (note,) = ps.PRICE_NOTES
     assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source", "source_id"}
     assert (note["family_key"], note["kind"], note["min_until"], note["source"], note["source_id"]) == (
