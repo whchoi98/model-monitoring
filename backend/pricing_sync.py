@@ -1,9 +1,13 @@
 """Official unit-price sync (v2.30.0, ADR-030) — one run every 12 hours in the PricingSync task.
 
-Order: running row first -> Anthropic pricing.md -> Price List (Nova) -> agreement offers (one call per FM id;
-cheap sources first so a slow offers API cannot starve them) -> per-channel compare -> run closed as
-completed / partial / failed. offerToken and presigned legalTerm URLs are stripped by `default_fetchers`
+Order: running row first -> Anthropic pricing.md -> OpenAI pricing.md -> Price List (Nova) -> agreement offers
+(one call per FM id; cheap sources first so a slow offers API cannot starve them) -> per-channel compare over
+every price field (input, output and, from v2.31.0, the display-only cache and long-context fields) -> run closed
+as completed / partial / failed. offerToken and presigned legalTerm URLs are stripped by `default_fetchers`
 right after the call; no response body is ever logged.
+
+A display-only field seen for the first time fills the effective row in place ("enriched", no new history row);
+a value change follows the 50 % gate per field.
 
 A parser exception of any type only skips that source's (or FM id's) channels as skipped:parse_failed; it
 never fails the run. Observed prices are quantized to 6 decimals before they are compared or stored.
@@ -12,7 +16,7 @@ never fails the run. Observed prices are quantized to 6 decimals before they are
 import logging
 import time
 from collections import defaultdict
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Callable, Mapping
@@ -22,9 +26,12 @@ from botocore.exceptions import ClientError, ConnectionError as BotoConnectionEr
 
 from models import PriceHistory, PriceSyncRun
 from pricing_parsers import (
+    EXTRA_FIELDS,
+    PRICE_FIELDS,
     PriceParseError,
     UnitPrice,
     parse_anthropic_pricing_md,
+    parse_openai_pricing_md,
     parse_pricelist,
     select_offer_price,
     single_public_offer,
@@ -33,7 +40,10 @@ from pricing_sources import (
     ANTHROPIC_PRICING_URL,
     ANTHROPIC_SOURCE_ID,
     EPOCH,
+    NOVA_CACHE_USAGETYPES,
     NOVA_USAGETYPES,
+    OPENAI_PRICING_URL,
+    OPENAI_SOURCE_ID,
     PriceIdentity,
     offer_source_id,
     pricelist_source_id,
@@ -51,8 +61,9 @@ USER_AGENT = "bedrock-llm-monitor-pricing-sync (+https://github.com/whchoi98/mod
 FETCH_RETRIES = 3            # retries after the first attempt (ThrottlingException, 5xx, connection errors)
 FETCH_BACKOFF_BASE_S = 1.0   # 1 s, 2 s, 4 s
 
-SOURCES = ("offers", "pricelist", "anthropic_doc")
-_SOURCE_OF_KIND = {"offer": "offers", "pricelist": "pricelist", "anthropic_doc": "anthropic_doc"}
+SOURCES = ("offers", "pricelist", "anthropic_doc", "openai_doc")
+_SOURCE_OF_KIND = {"offer": "offers", "pricelist": "pricelist", "anthropic_doc": "anthropic_doc", "openai_doc": "openai_doc"}
+_PRICE_COLUMN: dict[str, str] = {f: f"{f}_per_mtok" for f in PRICE_FIELDS}  # price_history column of each field
 _EFFECTIVE_STATUSES = ("seed", "verified")
 _HELD_STATUSES = ("pending_review", "rejected")
 _RETRYABLE_AWS_CODES = frozenset({
@@ -64,9 +75,10 @@ _MAX_ERRORS = 50
 
 @dataclass
 class Fetchers:
-    offers: Callable[[str], dict]            # FM id -> list_foundation_model_agreement_offers response
-    pricelist: Callable[[str, str], list]    # (input_usagetype, output_usagetype) -> PriceList items
-    anthropic_doc: Callable[[], str]         # markdown text
+    offers: Callable[[str], dict]           # FM id -> list_foundation_model_agreement_offers response
+    pricelist: Callable[..., list]          # (*usagetypes) -> PriceList items for all of them
+    anthropic_doc: Callable[[], str]        # markdown text
+    openai_doc: Callable[[], str]           # markdown text (OPENAI_PRICING_URL)
 
 
 # ---------------------------------------------------------------- default fetchers (network)
@@ -126,7 +138,7 @@ def _get_products(pricing, usagetype: str) -> list:
 
 
 def default_fetchers(*, bedrock=None, pricing=None, http=None, sleep: Callable[[float], None] = time.sleep) -> Fetchers:
-    """Real sources: boto3 bedrock + pricing (us-east-1) and httpx for the Anthropic doc.
+    """Real sources: boto3 bedrock + pricing (us-east-1) and httpx for the Anthropic and OpenAI docs.
 
     SDK-level retries are off (botocore max_attempts=1); `_with_retries` is the only retry loop.
     The keyword arguments exist for tests (fake clients, no sleeping).
@@ -150,21 +162,27 @@ def default_fetchers(*, bedrock=None, pricing=None, http=None, sleep: Callable[[
         )
         return _sanitize_offers(raw)
 
-    def pricelist(input_usagetype: str, output_usagetype: str) -> list:
+    def pricelist(*usagetypes: str) -> list:
         items: list = []
-        for usagetype in (input_usagetype, output_usagetype):
+        for usagetype in usagetypes:  # one exact-usagetype query each, in order, pages concatenated
             items.extend(_with_retries(lambda ut=usagetype: _get_products(pricing, ut), sleep=sleep))
         return items
 
-    def anthropic_doc() -> str:
+    def markdown(url: str) -> str:
         def get() -> str:
-            resp = http.get(ANTHROPIC_PRICING_URL, headers={"User-Agent": USER_AGENT})
+            resp = http.get(url, headers={"User-Agent": USER_AGENT})
             resp.raise_for_status()
             return resp.text
 
         return _with_retries(get, sleep=sleep)
 
-    return Fetchers(offers=offers, pricelist=pricelist, anthropic_doc=anthropic_doc)
+    def anthropic_doc() -> str:
+        return markdown(ANTHROPIC_PRICING_URL)
+
+    def openai_doc() -> str:
+        return markdown(OPENAI_PRICING_URL)
+
+    return Fetchers(offers=offers, pricelist=pricelist, anthropic_doc=anthropic_doc, openai_doc=openai_doc)
 
 
 # ---------------------------------------------------------------- comparison
@@ -175,12 +193,30 @@ def _dec(v: float) -> Decimal:
 
 
 def _quantized(price: UnitPrice) -> UnitPrice:
-    """Both sides at 6 decimals. A value that cannot be quantized raises decimal.InvalidOperation, and a positive
-    value that rounds to 0 raises PriceParseError (both are parse failures: a zero price is never stored)."""
-    quantized = UnitPrice(input=price.input.quantize(PRICE_QUANTUM), output=price.output.quantize(PRICE_QUANTUM))
-    if quantized.input <= 0 or quantized.output <= 0:
+    """Every set field at 6 decimals. A value that cannot be quantized raises decimal.InvalidOperation. Input or
+    output at or below 0 after rounding, and an extra field that is negative or positive but 0 at 6 decimals, raise
+    PriceParseError (parse failures: a zero input/output price is never stored). An extra field of exactly 0 stays 0
+    (the Nova cache write is officially $0.00)."""
+    values = {f: None if getattr(price, f) is None else getattr(price, f).quantize(PRICE_QUANTUM) for f in PRICE_FIELDS}
+    if values["input"] <= 0 or values["output"] <= 0:
         raise PriceParseError(f"price rounds to 0 at 6 decimals: {price.input}/{price.output}")
-    return quantized
+    for field in EXTRA_FIELDS:
+        raw = getattr(price, field)
+        if raw is not None and (raw < 0 or (raw > 0 and values[field] == 0)):
+            raise PriceParseError(f"{field} price is negative or rounds to 0 at 6 decimals: {raw}")
+    return UnitPrice(**values)
+
+
+_LONG_FIELDS = ("long_input", "long_output", "long_cache_read", "long_cache_write")
+
+
+def _gpt_long_only(price: UnitPrice, ident: PriceIdentity) -> UnitPrice:
+    """Long-context prices are GPT-only. The offer allow-list accepts `_long_ctx` names on any FM, so a non-OpenAI
+    channel's long_* fields are dropped here, before _quantized, and never reach price_history, /api/pricing or the
+    exports (the doc parsers and the Price List never produce long_* for Claude or Nova)."""
+    if ident.provider == "openai":
+        return price
+    return replace(price, **dict.fromkeys(_LONG_FIELDS))
 
 
 def _parse_message(exc: Exception) -> str:
@@ -188,17 +224,33 @@ def _parse_message(exc: Exception) -> str:
     return str(exc) if isinstance(exc, PriceParseError) else _short(exc)
 
 
-def classify_change(current: tuple[float, float] | None, new: UnitPrice) -> str:
-    """"unchanged" | "changed" (both |new-old|/old <= 0.5, boundary inclusive) | "pending" | "no_baseline"."""
+def classify_change(current: Mapping[str, float | None] | None, new: UnitPrice) -> str:
+    """"no_baseline" | "unchanged" | "enriched" | "changed" | "pending" over PRICE_FIELDS.
+
+    `current` maps each field to the stored float or None. Per field: observed None -> ignored (the stored value
+    stays); stored None and observed set -> fill; both set and different -> differs, and pending when the stored
+    value is <= 0 or |new - old| / old > 0.5 (boundary inclusive). Any pending -> "pending", else any differs ->
+    "changed", else any fill -> "enriched", else "unchanged".
+    """
     if current is None:
         return "no_baseline"
-    old_in, old_out = _dec(current[0]), _dec(current[1])
-    if old_in == new.input and old_out == new.output:
-        return "unchanged"
-    for old, value in ((old_in, new.input), (old_out, new.output)):
+    fill = differs = False
+    for field in PRICE_FIELDS:
+        stored, value = current.get(field), getattr(new, field)
+        if value is None:
+            continue
+        if stored is None:
+            fill = True
+            continue
+        old = _dec(stored)
+        if old == value:
+            continue
+        differs = True
         if old <= 0 or abs(value - old) / old > CHANGE_THRESHOLD:
             return "pending"
-    return "changed"
+    if differs:
+        return "changed"
+    return "enriched" if fill else "unchanged"
 
 
 # ---------------------------------------------------------------- run
@@ -273,6 +325,22 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
             else:
                 observed[model_id] = _Observed(price, source_id)
 
+    def settle_doc(source: str, doc_groups, table: dict[str, UnitPrice], reason: str | None, source_id: str) -> None:
+        """A doc table's prices are quantized per looked-up model only: an untracked row with an odd value (a $0.00
+        input, an extra that rounds to 0) never skips the tracked channels, and a bad tracked row skips only its own."""
+        for doc_name in sorted(doc_groups):
+            price, why = table.get(doc_name), reason
+            if why is None and price is None:
+                error(f"{source}: model {doc_name!r} not in the table")
+                why = "not_found"
+            elif price is not None:
+                try:
+                    price = _quantized(price)
+                except Exception as exc:  # noqa: BLE001 — a bad value only skips this model's channels
+                    error(f"{source} {doc_name}: {_parse_message(exc)}")
+                    price, why = None, "parse_failed"
+            settle(doc_groups[doc_name], price, why, source_id)
+
     # 1) Anthropic pricing.md — Claude Platform on AWS
     doc_groups = groups["anthropic_doc"]
     if doc_groups:
@@ -280,17 +348,26 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
         table: dict[str, UnitPrice] = {}
         if reason is None:
             try:
-                table = {name: _quantized(p) for name, p in parse_anthropic_pricing_md(text).items()}
+                table = parse_anthropic_pricing_md(text)
             except Exception as exc:  # noqa: BLE001 — any parser error only skips the CP channels
                 reason = "parse_failed"
                 error(f"anthropic_doc: {_parse_message(exc)}")
-        for doc_name in sorted(doc_groups):
-            price = table.get(doc_name)
-            if reason is None and price is None:
-                error(f"anthropic_doc: model {doc_name!r} not in the table")
-            settle(doc_groups[doc_name], price, reason or "not_found", ANTHROPIC_SOURCE_ID)
+        settle_doc("anthropic_doc", doc_groups, table, reason, ANTHROPIC_SOURCE_ID)
 
-    # 2) AWS Price List — Nova
+    # 2) OpenAI pricing.md — OpenAI official price (display only, openai-list:<family_key>)
+    openai_groups = groups["openai_doc"]
+    if openai_groups:
+        text, reason = fetch("openai_doc", "pricing.md", fetchers.openai_doc)
+        openai_table: dict[str, UnitPrice] = {}
+        if reason is None:
+            try:
+                openai_table = parse_openai_pricing_md(text)
+            except Exception as exc:  # noqa: BLE001 — any parser error only skips the OpenAI official price channels
+                reason = "parse_failed"
+                error(f"openai_doc: {_parse_message(exc)}")
+        settle_doc("openai_doc", openai_groups, openai_table, reason, OPENAI_SOURCE_ID)
+
+    # 3) AWS Price List — Nova (input, output, then the optional cache read and cache write usagetypes)
     for family_key in sorted(groups["pricelist"]):
         members = groups["pricelist"][family_key]
         usagetypes = NOVA_USAGETYPES.get(family_key)
@@ -298,17 +375,18 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
             error(f"pricelist: no usagetypes for {family_key}")
             settle(members, None, "unmapped", None)
             continue
-        items, reason = fetch("pricelist", family_key, lambda ut=usagetypes: fetchers.pricelist(ut[0], ut[1]))
+        wanted = (*usagetypes, *NOVA_CACHE_USAGETYPES.get(family_key, ()))
+        items, reason = fetch("pricelist", family_key, lambda ut=wanted: fetchers.pricelist(*ut))
         price = None
         if reason is None:
             try:
-                price = _quantized(parse_pricelist(items, usagetypes[0], usagetypes[1]))
+                price = _quantized(parse_pricelist(items, *wanted))
             except Exception as exc:  # noqa: BLE001 — any parser error only skips this family's channels
                 reason = "parse_failed"
                 error(f"pricelist {family_key}: {_parse_message(exc)}")
         settle(members, price, reason, pricelist_source_id(usagetypes[0]))
 
-    # 3) Bedrock agreement offers — Bedrock Claude + OpenAI (one call per FM id)
+    # 4) Bedrock agreement offers — Bedrock Claude + OpenAI (one call per FM id)
     for fm_id in sorted(groups["offers"]):
         members = groups["offers"][fm_id]
         response, reason = fetch("offers", fm_id, lambda fm=fm_id: fetchers.offers(fm))
@@ -318,7 +396,7 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
                 offer_id, rate_card = single_public_offer(response)
                 for model_id, ident in members:
                     price = select_offer_price(rate_card, ident.channel)
-                    prices[model_id] = None if price is None else _quantized(price)
+                    prices[model_id] = None if price is None else _quantized(_gpt_long_only(price, ident))
             except Exception as exc:  # noqa: BLE001 — any parser error only skips this FM's channels
                 offers_list = response.get("offers") if isinstance(response, dict) else None
                 reason = "offer_count" if isinstance(offers_list, list) and len(offers_list) != 1 else "parse_failed"
@@ -349,33 +427,67 @@ def _effective_row(db, model_id: str, at: datetime) -> PriceHistory | None:
     )
 
 
-def _held_row_with_value(db, model_id: str, price: UnitPrice) -> PriceHistory | None:
+def _stored(row: PriceHistory) -> dict[str, float | None]:
+    return {field: getattr(row, column) for field, column in _PRICE_COLUMN.items()}
+
+
+def _merged(price: UnitPrice, current: Mapping[str, float | None] | None) -> dict[str, Decimal | None]:
+    """The observed value where it is set, else the current row's value (an observation that lacks a field keeps it)."""
+    merged: dict[str, Decimal | None] = {}
+    for field in PRICE_FIELDS:
+        value = getattr(price, field)
+        if value is None and current is not None and current.get(field) is not None:
+            value = _dec(current[field])
+        merged[field] = value
+    return merged
+
+
+def _same_values(row: PriceHistory, values: Mapping[str, Decimal | None]) -> bool:
+    """All nine stored values equal `values` at 6 decimals, None == None.
+
+    A held row whose seven extra columns are all NULL was held under v2.30.0, before the columns existed: it is
+    compared on input and output only, so it is not duplicated and a value an admin rejected stays rejected instead
+    of coming back as a new pending_review row with the extras filled in.
+    """
+    legacy = all(getattr(row, _PRICE_COLUMN[field]) is None for field in EXTRA_FIELDS)
+    for field, want in values.items():
+        if legacy and field in EXTRA_FIELDS:
+            continue
+        stored = getattr(row, _PRICE_COLUMN[field])
+        if (stored is None) != (want is None) or (stored is not None and _dec(stored) != want):
+            return False
+    return True
+
+
+def _held_row_with_value(db, model_id: str, values: Mapping[str, Decimal | None]) -> PriceHistory | None:
     rows = (
         db.query(PriceHistory)
         .filter(PriceHistory.model_id == model_id, PriceHistory.status.in_(_HELD_STATUSES))
         .order_by(PriceHistory.id.desc())
         .all()
     )
-    return next(
-        (r for r in rows if _dec(r.input_per_mtok) == price.input and _dec(r.output_per_mtok) == price.output),
-        None,
-    )
+    return next((r for r in rows if _same_values(r, values)), None)
 
 
 def _apply(db, model_id: str, ident: PriceIdentity, got: _Observed, started_at: datetime, run_id: int) -> str:
     current = _effective_row(db, model_id, started_at)
-    result = classify_change(
-        None if current is None else (current.input_per_mtok, current.output_per_mtok), got.price
-    )
-    if result == "unchanged":
+    stored = None if current is None else _stored(current)
+    result = classify_change(stored, got.price)
+    if result in ("unchanged", "enriched"):
         current.observed_at = started_at
         current.run_id = run_id
         current.source_id = got.source_id
+        if result == "enriched":  # a first-time display-only value fills the effective row, no new history row
+            for field in EXTRA_FIELDS:
+                value = getattr(got.price, field)
+                if value is not None and stored[field] is None:
+                    setattr(current, _PRICE_COLUMN[field], float(value))
         return result
+    values = _merged(got.price, stored)
     if result == "changed":
         status, effective_from = "verified", started_at
     else:  # "pending" | "no_baseline"
-        held = _held_row_with_value(db, model_id, got.price)
+        held = _held_row_with_value(db, model_id, values)
         if held is not None:
             held.observed_at = started_at
             held.run_id = run_id
@@ -387,13 +499,12 @@ def _apply(db, model_id: str, ident: PriceIdentity, got: _Observed, started_at: 
             model_id=model_id,
             family_key=ident.family_key,
             channel=ident.channel,
-            input_per_mtok=float(got.price.input),
-            output_per_mtok=float(got.price.output),
             effective_from=effective_from,
             source_id=got.source_id,
             status=status,
             observed_at=started_at,
             run_id=run_id,
+            **{_PRICE_COLUMN[field]: None if value is None else float(value) for field, value in values.items()},
         )
     )
     return result
