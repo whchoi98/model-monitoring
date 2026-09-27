@@ -7,11 +7,25 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
-## Unreleased
+## v2.31.1 — 2026-09-27
+
+### Fixed
+- **The chat button no longer covers page content** (user request 2026-09-27; reported on `/pricing` at 390 px, where it hid the GPT 5.6 Luna In Region long-context line). The button hides while the page scrolls down or a table scrolls sideways, and comes back when the page scrolls up, reaches the top or the bottom, the button gets keyboard focus, or the chat is open (`lib/fabVisibility.ts`, `hooks/useChatFabVisibility.ts`; it stays in the DOM and focusable while hidden). It is smaller on phones (48 px at 16 px from the corner, 64 px at 24 px from sm up, both above the iOS safe area, instead of 64 px at 96 px from the bottom), and every page ends with bottom padding so the visible button never sits on the last content. `e2e/chat-fab.spec.ts` checks it at 390 px and 1440 px.
+- **챗봇 버튼이 페이지 내용을 가리지 않는다**(2026-09-27 사용자 요청, `/pricing` 390 px에서 GPT 5.6 Luna In Region 긴 컨텍스트 줄을 가렸다). 페이지를 아래로 스크롤하거나 표를 옆으로 스크롤하는 동안 버튼이 숨고, 위로 스크롤하거나 페이지 맨 위나 맨 아래에 닿거나 키보드 포커스를 받거나 챗봇이 열려 있으면 다시 보인다(`lib/fabVisibility.ts`, `hooks/useChatFabVisibility.ts`, 숨은 동안에도 DOM에 남고 포커스를 받을 수 있다). 폰에서는 버튼이 작아지고(48 px, 모서리에서 16 px, sm 이상은 64 px, 24 px, 둘 다 iOS safe area 위. 이전에는 64 px, 아래에서 96 px), 모든 페이지 끝에 여백을 둬서 보이는 버튼이 마지막 내용 위에 놓이지 않는다. `e2e/chat-fab.spec.ts`가 390 px과 1440 px에서 확인한다.
+
+### Removed
+- **Uncited references on `/pricing` and in the downloads** (user request: "인용되지 않으면 삭제"). The Amazon Bedrock pricing page and the eight OpenAI model cards were listed as references 22 to 30, but no price cell cited them. `references` now holds only the sources that a cell footnote or a note cites (production: 21 = 18 agreement offers, 1 Price List, the Anthropic and the OpenAI pricing docs; a manual note would be numbered right after them). `pricing_sources.OFFICIAL_PAGES` and `official_source_id` are gone. The Markdown download drops its "Confirm final prices on the official pricing pages[^22]…[^30]" note and instead lists the screen's three official pricing links in its header ("Official pricing pages: Amazon Bedrock, Anthropic, OpenAI", `pricing_sources.OFFICIAL_LINKS`, pinned to the screen's links by pytest).
+- **`/pricing`와 다운로드에서 인용되지 않는 참고 자료를 뺀다**("인용되지 않으면 삭제" 사용자 요청). Amazon Bedrock 요금 페이지와 OpenAI 모델 카드 8개가 참고 자료 22~30으로 나열됐지만 어떤 단가 셀도 인용하지 않았다. `references`는 이제 셀 각주나 메모가 인용하는 출처만 담는다(운영 21건 = 약정 오퍼 18, Price List 1, Anthropic 문서, OpenAI 문서. 수동 메모가 있으면 그 바로 뒤 번호). `pricing_sources.OFFICIAL_PAGES`와 `official_source_id`는 삭제했다. Markdown 다운로드는 "최종 가격은 공식 요금 페이지에서 확인한다[^22]…[^30]" 참고 사항을 빼고, 대신 화면과 같은 공식 요금 링크 3개를 머리말에 둔다("공식 요금 페이지: Amazon Bedrock, Anthropic, OpenAI", `pricing_sources.OFFICIAL_LINKS`, pytest가 화면 링크와 같은지 고정).
+
+### Changed
+- **A note says why GPT's US CRIS and In Region prices are equal** (user check 2026-09-27). The AWS model cards price both with a 10% premium over OpenAI's first-party rates, and Global CRIS at those rates (GPT-6 Sol card; GPT-6 Astra table In-Region $11 / $55 = Geo CRIS $11 / $55, Global $10 / $50); the offer rate cards have one `*_standard` dimension for both. New notes item 3 (9 items, screen and Markdown): "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price." A pytest pins the equality in the seed.
+- **GPT의 US CRIS와 In Region 단가가 같은 이유를 참고 사항에 적는다**(2026-09-27 사용자 확인). AWS 모델 카드는 두 채널 모두 OpenAI 정가에 10%를 더하고 Global CRIS는 정가 그대로다(GPT-6 Sol 카드, GPT-6 Astra 표 In-Region $11 / $55 = Geo CRIS $11 / $55, Global $10 / $50). offer rate card도 두 채널에 `*_standard` 차원 하나를 쓴다. 참고 사항 3번(9항목, 화면과 Markdown): "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다." seed에서 이 동일성을 pytest로 고정한다.
 
 ### Docs
 - README Screenshots gallery: the Unit Prices captures (`docs/images/ui/pricing-{en,ko}.png`) are retaken from production on 2026-09-27 (v2.31.0: AWS Bedrock column names, the OpenAI official price column, prompt-caching lines).
 - README 스크린샷 갤러리의 비용 단가 화면(`docs/images/ui/pricing-{en,ko}.png`)을 2026-09-27 운영 환경에서 다시 캡처했다(v2.31.0: AWS Bedrock 열 이름, OpenAI 공식 가격 열, 프롬프트 캐싱 줄).
+- ADR-030 v2.31.1 follow-up, api-reference (cited references only, 21 in production, the Markdown header links, 9 notes), deploy.md §5-5 (21 references).
+- ADR-030 v2.31.1 후속, api-reference(인용된 참고 자료만, 운영 21건, Markdown 머리말 링크, 참고 사항 9항목), deploy.md §5-5(참고 자료 21건).
 
 ## v2.31.0 — 2026-09-27
 
