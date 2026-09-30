@@ -29,6 +29,6 @@ Framework-light modules shared by components: the API client, auth/language prov
 
 ## Commands
 ```bash
-cd frontend && npm test        # vitest run — src/**/*.test.{ts,tsx}: lib tests + components GptOnAwsPanel, PricingPanel, ComparePanel, StreamingView
+cd frontend && npm test        # vitest run — src/**/*.test.{ts,tsx}: lib tests + components GptOnAwsPanel, PricingPanel, ComparePanel, StreamingView, TrendChart, ModelName
 npm run typecheck              # next typegen && tsc --noEmit
 ```

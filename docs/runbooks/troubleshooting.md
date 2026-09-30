@@ -275,7 +275,7 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/anomalies?hours=1" \
   상한 기간에 호출을 줄여야 하면 AutoProber task env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`(초, 5분 단위로 반올림)을 CDK에서
   넣고 backend 서비스에도 같은 값을 넣은 뒤(`/api/auto-probe/status` `channel_intervals` 표시용) digest 고정
   AppServices + Scheduler 경로로 배포한다. 그러면 v2.29.0처럼 CP만 두 사이클에 한 번, 카테고리를 따로 순환하며 시간당
-  54회가 된다(확인은 `deploy.md` §5-2의 3~4번). 상한이 풀리면 300으로 되돌린다. 600 모드에서는 대시보드가 `/status`를
+  60회가 된다(v2.32.0, 10채널. v2.29.0 당시 9채널은 54회. 확인은 `deploy.md` §5-2의 3~4번). 상한이 풀리면 300으로 되돌린다. 600 모드에서는 대시보드가 `/status`를
   받기 전에(첫 `/status` 요청이 실패하면 다음 새로고침에서 성공할 때까지) 10분을 넘긴 CP 카드를 잠시 "수집 지연"으로 표시할
   수 있다. v2.29.1 대시보드는 `/status` 전에 600을 가정하지 않기 때문이며, `/status`가 오면 600 기준으로 돌아온다.
 - 로그에 `usage cap reached` 대신 `Retryable error for anthropic:`가 계속 보이면 상한 메시지 문구가 바뀐 것이다 —

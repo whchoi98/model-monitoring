@@ -358,11 +358,12 @@ FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedu
 aws ecs describe-task-definition --task-definition "$FAM" --region $REGION \
   --query 'taskDefinition.containerDefinitions[0].environment[?name==`ANTHROPIC_CP_PROBE_INTERVAL_S`]'
 
-# 3. CP 채널이 두 사이클에 한 번만 프로빙되는지 — 사이클마다 한 줄, "9 due"와 "0 due … 9 not due"가 번갈아 나온다
+# 3. CP 채널이 두 사이클에 한 번만 프로빙되는지 — 사이클마다 한 줄, "10 due"와 "0 due … 10 not due"가 번갈아 나온다
+#    (v2.32.0부터 CP 10채널, v2.29.0 당시는 9)
 aws logs tail /ecs/autoprober --since 30m --region $REGION | grep "Claude Platform on AWS 600s cadence"
-# 예: … 600s cadence - 9 due ['code-gen'], 0 not due   /   … 600s cadence - 0 due [], 9 not due
+# 예: … 600s cadence - 10 due ['code-gen'], 0 not due   /   … 600s cadence - 0 due [], 10 not due
 
-# 4. CP를 건너뛴 사이클에도 /latest에 CP 9행이 남는다(직전 run의 행, run_id가 다름)
+# 4. CP를 건너뛴 사이클에도 /latest에 CP 10행이 남는다(직전 run의 행, run_id가 다름, v2.29.0 당시 9행)
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id|startswith("anthropic:")) | {model_name, run_id, category, timestamp}]'
 curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, channel_intervals, channel_category_intervals}'
 # 기댓값: channel_intervals {"anthropic": 600}, channel_category_intervals {"anthropic": 3600}
