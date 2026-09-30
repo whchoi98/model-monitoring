@@ -42,7 +42,8 @@ def _parse_window(spec: str) -> timedelta:
 
 
 def _channel(model_id: str) -> str:
-    """Bedrock global / Bedrock us / Anthropic CP on AWS / Bedrock Nova / OpenAI."""
+    """Bedrock global / Bedrock us / Bedrock <aws-region>(in-region, bedrock:<region>:*) / Anthropic CP on AWS /
+    Bedrock Nova / OpenAI."""
     if model_id.startswith("anthropic:"):
         return "Anthropic (CP on AWS)"
     if model_id.startswith("openai:"):
@@ -53,6 +54,9 @@ def _channel(model_id: str) -> str:
         return "Bedrock Global"
     if model_id.startswith("us."):
         return "Bedrock US"
+    if model_id.startswith("bedrock:"):  # in-region 온디맨드 bedrock:<region>:<FM id> (v2.32.0) — reliability와 같은 채널 이름
+        parts = model_id.split(":", 2)
+        return f"Bedrock {parts[1]}" if len(parts) == 3 and parts[1] and parts[2] else "Other"
     return "Other"
 
 
@@ -155,7 +159,7 @@ def get_channel_compare(
     window: str = Query("24h"),
     db: Session = Depends(get_db),
 ):
-    """채널별 (Bedrock Global / US / Nova / Anthropic CP) 합계."""
+    """채널별 (Bedrock Global / US / in-region(<aws-region>) / Nova / Anthropic CP / OpenAI) 합계."""
     since = datetime.now(timezone.utc) - _parse_window(window)
     query, row_cost = with_row_cost(
         db.query(

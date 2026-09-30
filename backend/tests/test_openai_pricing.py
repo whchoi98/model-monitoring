@@ -80,6 +80,12 @@ def test_channel_openai():
     assert _channel("openai:us:us.openai.gpt-6-astra") == "OpenAI"
     assert _channel("us.anthropic.claude-opus-4-8") == "Bedrock US"
     assert _channel("anthropic:claude-fable-5") == "Anthropic (CP on AWS)"
+    assert _channel("bedrock:ap-northeast-2:anthropic.claude-opus-5") == "Bedrock ap-northeast-2"  # v2.32.0
+    assert _channel("bedrock:ap-northeast-2:anthropic.claude-sonnet-5") == "Bedrock ap-northeast-2"
+    assert _channel("global.anthropic.claude-sonnet-5-5") == "Bedrock Global"
+    assert _channel("anthropic:claude-sonnet-5-5") == "Anthropic (CP on AWS)"
+    assert _channel("openai:us-east-1:openai.gpt-6.1-sol") == "OpenAI"
+    assert _channel("bedrock:") == "Other"
 
 
 def test_gpt61_sol_seed_per_channel():
