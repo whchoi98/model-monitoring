@@ -183,3 +183,102 @@ def test_optimize_prompt_target_normalizes_inregion_key():
     assert _normalize_target_model_id("global.anthropic.claude-opus-4-7") == "anthropic.claude-opus-4-7"
     assert _normalize_target_model_id("us.amazon.nova-2-lite-v1:0") == "amazon.nova-2-lite-v1:0"
     assert _normalize_target_model_id("anthropic.claude-sonnet-5") == "anthropic.claude-sonnet-5"
+
+
+# ---------------------------------------------------------------- Claude Sonnet 5.5
+
+# 2026-09-30 CP on AWS /v1/models 실측 순서 그대로 — 점 버전(sonnet-5-5, opus-5-5, fable-5-1)이 먼저 온다.
+_CP_MODEL_IDS_20260930 = [
+    "claude-sonnet-5-5", "claude-opus-5-5", "claude-fable-5-1", "claude-opus-5", "claude-sonnet-5",
+    "claude-fable-5", "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
+    "claude-opus-4-5-20251101", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929",
+]
+
+
+def test_bedrock_sonnet55_global_only():
+    assert prober.AVAILABLE_MODELS["global.anthropic.claude-sonnet-5-5"] == "Bedrock Claude Sonnet 5.5 (Global)"
+    # us. 프로파일 없음("The provided model identifier is invalid"), Seoul in-region은 ON_DEMAND 미지원
+    assert "us.anthropic.claude-sonnet-5-5" not in prober.AVAILABLE_MODELS
+    assert "bedrock:ap-northeast-2:anthropic.claude-sonnet-5-5" not in prober.AVAILABLE_MODELS
+    assert prober._is_reasoning_model("global.anthropic.claude-sonnet-5-5") is True  # temperature 400
+    # 정적 순서: Sonnet 5.5는 Sonnet 5 바로 앞
+    keys = list(prober.AVAILABLE_MODELS)
+    assert keys.index("global.anthropic.claude-sonnet-5-5") + 1 == keys.index("global.anthropic.claude-sonnet-5")
+
+
+def test_cp_target_sonnet55_listed_right_before_sonnet5():
+    substrings = [s for s, _ in prober._ANTHROPIC_TARGETS]
+    assert substrings.index("sonnet-5-5") + 1 == substrings.index("sonnet-5")
+    assert dict(prober._ANTHROPIC_TARGETS)["sonnet-5-5"] == "Anthropic Claude Sonnet 5.5 (US)"
+
+
+def test_cp_discovery_with_20260930_model_order_labels_every_id_correctly():
+    """claude-sonnet-5-5가 맨 앞에 와도 Sonnet 5 라벨은 claude-sonnet-5에 붙어야 한다."""
+    matched = {s: prober._match_anthropic_model(s, _CP_MODEL_IDS_20260930) for s, _ in prober._ANTHROPIC_TARGETS}
+    assert matched["sonnet-5-5"] == "claude-sonnet-5-5"
+    assert matched["sonnet-5"] == "claude-sonnet-5"
+    assert matched["opus-5"] == "claude-opus-5"
+    assert matched["opus-5-5"] == "claude-opus-5-5"
+    assert matched["fable-5"] == "claude-fable-5"
+    assert None not in matched.values()
+    assert len(set(matched.values())) == len(matched)
+    # 날짜 서픽스가 붙은 미래 id도 자기 타깃에 매칭된다
+    assert prober._match_anthropic_model("sonnet-5-5", ["claude-sonnet-5-5-20261001"]) == "claude-sonnet-5-5-20261001"
+
+
+# ---------------------------------------------------------------- OpenAI GPT 6.1 Sol
+
+_GPT61_SOL_KEYS = [
+    "openai:global:global.openai.gpt-6.1-sol",
+    "openai:us:us.openai.gpt-6.1-sol",
+    "openai:us-east-1:openai.gpt-6.1-sol",
+]
+
+
+def test_gpt61_sol_is_the_first_openai_spec():
+    assert prober._OPENAI_MODEL_SPECS[0] == (
+        "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1"))
+
+
+def test_gpt61_sol_registers_exactly_three_channels(monkeypatch):
+    """Global CRIS + US CRIS + Mantle us-east-1 — us-east-2/us-west-2는 env가 있어도 미등록(404)."""
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
+    monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
+    for env, url in (
+        ("OPENAI_GLOBAL_BASE_URL", "https://gl/openai/v1"),
+        ("OPENAI_US_BASE_URL", "https://us/openai/v1"),
+        ("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1"),
+        ("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1"),
+        ("OPENAI_US_WEST_2_BASE_URL", "https://w2/openai/v1"),
+    ):
+        monkeypatch.setenv(env, url)
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "openai.gpt-6.1-sol")
+    prober._register_openai_models()
+
+    keys = sorted(k for k in prober.AVAILABLE_MODELS if "gpt-6.1-sol" in k)
+    assert keys == sorted(_GPT61_SOL_KEYS)
+    # 라벨은 DB model_name에 영구 기록 — frontend MODEL_COLORS 키와 바이트 단위로 일치해야 함.
+    assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-6.1-sol"] == "OpenAI GPT 6.1 Sol (Global)"
+    assert prober.AVAILABLE_MODELS["openai:us:us.openai.gpt-6.1-sol"] == "OpenAI GPT 6.1 Sol (US)"
+    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-6.1-sol"] == "OpenAI GPT 6.1 Sol (us-east-1)"
+    for region in ("us-east-2", "us-west-2"):
+        assert f"openai:{region}:openai.gpt-6.1-sol" not in prober.AVAILABLE_MODELS
+
+
+def test_gpt61_sol_is_skipped_without_its_model_id_env(monkeypatch):
+    # env 누락이면 3채널이 조용히 빠진다 — CDK가 두 스택 모두에 주입해야 하는 이유(계획 위험 2).
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
+    monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
+    monkeypatch.setenv("OPENAI_GLOBAL_BASE_URL", "https://gl/openai/v1")
+    monkeypatch.delenv("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", raising=False)
+    prober._register_openai_models()
+    assert not [k for k in prober.AVAILABLE_MODELS if "gpt-6.1-sol" in k]
+
+
+def test_gpt61_sol_does_not_collide_with_gpt6_sol_or_gpt5_markers():
+    from parity.catalog import is_reasoning_capable
+
+    for key in _GPT61_SOL_KEYS:
+        assert "gpt-6-sol" not in key and "gpt-5" not in key
+        assert is_reasoning_capable(key) is False  # reasoning_tokens 0 (2026-09-30)

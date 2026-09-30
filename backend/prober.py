@@ -113,6 +113,9 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
+    # Sonnet 5.5 (v2.32.0, 2026-09-30 실측): Global CRIS(Seoul 호출) 200, us. 프로파일 없음("model identifier is invalid").
+    # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "sonnet-5"가 substring으로 포함.
+    "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
     "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
@@ -125,6 +128,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
+    # us.anthropic.claude-sonnet-5-5는 없음(2026-09-30 네 US 리전 프로파일 목록 부재, "model identifier is invalid") — 의도적 미등록.
     "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
     "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
@@ -143,9 +147,10 @@ AVAILABLE_MODELS: dict[str, str] = {
 # vendor-hosted endpoint: aws-external-anthropic.<region>.api.aws
 # Key prefix "anthropic:<actual-anthropic-model-id>" 형태로 저장.
 # 시작 시 _discover_anthropic_models()가 /v1/models 응답에서 substring 매칭해 자동 등록.
-# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1, opus-5 ⊂ opus-5-5)가 될 수 있음 —
+# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1, opus-5 ⊂ opus-5-5, sonnet-5 ⊂ sonnet-5-5)가 될 수 있음 —
 #    _match_anthropic_model()이 더 긴 타깃을 포함하는 id와, 아직 타깃이 없는 점 버전 id
-#    (예: sonnet-5에 대한 claude-sonnet-5-5)를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0, v2.27.0).
+#    (예: sonnet-5에 대한 claude-sonnet-5-6)를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0, v2.27.0).
+#    sonnet-5-5는 v2.32.0부터 자기 타깃이 있다 — CP /v1/models가 2026-09-30 claude-sonnet-5-5를 맨 앞에 반환(가드가 Sonnet 5 오등록을 막음).
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("fable-5-1", "Anthropic Claude Fable 5.1 (US)"),  # v2.22.0 — CP 서빙 시 자동 발견
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
@@ -153,6 +158,7 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
     ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
+    ("sonnet-5-5", "Anthropic Claude Sonnet 5.5 (US)"),  # v2.32.0 — CP /v1/models 첫 항목(2026-09-30)
     ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
     ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
     ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
@@ -345,7 +351,9 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
 # (model-id env var, display family, 제공 리전 튜플)
 # "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
-# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23 라이브 200) — 5.x는 미검증이라 미기재.
+# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30 라이브 200) — 5.x는 미검증이라 미기재.
+# GPT 6.1 Sol(2026-09-30)의 Mantle 인리전은 us-east-1만 — us-east-2/us-west-2 404 not_found_error → 제외(스펙 미기재).
+# us-east-1 첫 호출은 401 "subscription is being set up"(Marketplace 구독 자동 개시, 과도 상태).
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
 # GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 현재 미지원
 # (404 not_found_error, 2026-09-09·2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재).
@@ -355,6 +363,7 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 정기 재확인 대상 아님. us-east-1 첫 호출은 401 "subscription is being set up"
 # (Marketplace 구독 자동 개시)이었다가 수 분 뒤 200.
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", "GPT 6 Luna", ("global", "us", "us-east-1")),
