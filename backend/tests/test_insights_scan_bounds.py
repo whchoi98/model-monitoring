@@ -12,8 +12,12 @@ run_once는 ProbeRun 엔티티도 읽었는데 ProbeRun.results가 lazy="selecti
   probe_results.prompt, output_text, error_message와 probe_runs.prompt는 SELECT하지 않는다.
 - 같은 출력: tests/_read_dataset.py 데이터셋에서 _build_prompt가 만드는 프롬프트(KO, EN), run_once가 Bedrock에 보내는
   프롬프트와 저장하는 model_breakdown, stream-regenerate가 보내는 프롬프트가 v2.32.0(엔티티 조회) 코드의 결과와
-  바이트 단위로 같다. 골든은 fixtures/insights_prompts_v2320.json이고 바꾸기 전 코드로 만들었다(다시 만들 때:
-  FREEZE_INSIGHTS_GOLDENS=1 python3.12 -m pytest tests/test_insights_scan_bounds.py -k freeze).
+  바이트 단위로 같다. 골든은 fixtures/insights_prompts_v2320.json이고 바꾸기 전 코드(98af18e)로 Python 3.11(운영 이미지
+  python:3.11-slim, CI)에서 만들었다. 3.12부터 내장 sum()이 float을 Neumaier 보정 합산으로 더해 통계 JSON의 avg가
+  0.01씩 갈라지므로(PR #70 CI — 1506.23과 1506.22), 3.11에서는 바이트 단위로, 다른 버전에서는 tests/_golden_compare.py가
+  JSON 블록 밖 텍스트와 숫자를 가린 블록 텍스트를 정확히, 블록의 숫자는 float 마지막 자리 한 단위까지 비교한다.
+  다시 만들 때는 3.11에서(3.12에서 FREEZE하면 실패한다): docker run --rm -v "$PWD":/w -w /w python:3.11-slim sh -c
+  'pip install -q -r requirements.txt && FREEZE_INSIGHTS_GOLDENS=1 python -m pytest tests/test_insights_scan_bounds.py -k freeze'.
 - API 창 상한: body window는 최대 24h다(인사이트 패널은 6h를 보낸다). 넘거나, 0 이하이거나, 읽을 수 없으면 422이고
   스레드, 스트림, DB 조회를 시작하지 않는다. 스케줄 태스크의 CLI(python -m insights_runner --window 6h)에는 상한이 없다.
 - 시간 상한: 두 통계 조회는 streamed_read.stream_rows로 전체 경과 시간이 statement_timeout과 같은 상한에 묶인다(서버 측
@@ -44,6 +48,13 @@ import streamed_read
 from auth import get_current_user
 from routers import insights as insights_router
 from streamed_read import StreamedReadTimeout
+from tests._golden_compare import (
+    GOLDEN_PYTHON_LABEL,
+    ON_GOLDEN_PYTHON,
+    assert_calls_match_golden,
+    assert_matches_golden,
+    assert_prompt_matches_golden,
+)
 from tests._read_dataset import FrozenDatetime, seed
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "insights_prompts_v2320.json"
@@ -126,10 +137,6 @@ def _run_once_outputs(factory, calls: list) -> dict:
     return {"calls": list(calls), "model_breakdown": breakdown}
 
 
-def _canonical(value) -> str:
-    return json.dumps(value, ensure_ascii=False, separators=(",", ":"))
-
-
 def _load_goldens() -> dict:
     return json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
 
@@ -160,6 +167,8 @@ def _assert_stats_columns_only(statements, *, runs_query: bool):
 
 @pytest.mark.skipif(not FREEZE, reason="FREEZE_INSIGHTS_GOLDENS=1일 때만 골든을 다시 만든다")
 def test_freeze_goldens(db_env, bedrock_calls):
+    assert ON_GOLDEN_PYTHON, (
+        f"골든은 Python {GOLDEN_PYTHON_LABEL}(운영 런타임)에서만 다시 만든다 — 3.12의 sum()은 결과가 다르다")
     factory, _ = db_env
     out = {
         "build_prompt": {f"{w}:{lang}": _prompt_texts(factory, w, lang) for w, lang in PROMPT_CASES},
@@ -184,7 +193,7 @@ def test_build_prompt_from_window_stats_matches_v2320(db_env, window, lang):
     got = _prompt_texts(factory, window, lang)
     golden = _load_goldens()["build_prompt"][f"{window}:{lang}"]
     assert got["system"] == golden["system"]
-    assert got["user"] == golden["user"]  # 통계 JSON의 모델 순서와 키 순서까지
+    assert_prompt_matches_golden(got["user"], golden["user"])  # 통계 JSON의 모델 순서와 키 순서까지
 
 
 @pytest.mark.skipif(FREEZE, reason="골든을 다시 만드는 중")
@@ -192,8 +201,8 @@ def test_run_once_prompts_and_saved_breakdown_match_v2320(db_env, bedrock_calls)
     factory, _ = db_env
     got = _run_once_outputs(factory, bedrock_calls)
     golden = _load_goldens()[f"run_once_{RUN_ONCE_WINDOW}"]
-    assert got["calls"] == golden["calls"]
-    assert _canonical(got["model_breakdown"]) == _canonical(golden["model_breakdown"])
+    assert_calls_match_golden(got["calls"], golden["calls"])
+    assert_matches_golden(got["model_breakdown"], golden["model_breakdown"])
 
 
 @pytest.mark.skipif(FREEZE, reason="골든을 다시 만드는 중")
@@ -203,7 +212,7 @@ def test_stream_regenerate_sends_the_v2320_prompt(api, db_env, bedrock_calls, la
     resp = api.post("/api/insights/stream-regenerate", json={"window": "6h", "lang": lang})
     assert resp.status_code == 200
     assert "event: final" in resp.text and '"ok": true' in resp.text
-    assert bedrock_calls == [_load_goldens()["build_prompt"][f"6h:{lang}"]]
+    assert_calls_match_golden(bedrock_calls, [_load_goldens()["build_prompt"][f"6h:{lang}"]])
     with factory() as db:
         saved = db.query(models.Insight).one()
     assert saved.summary_md == "부분 1부분 2"
