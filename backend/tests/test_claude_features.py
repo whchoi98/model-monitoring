@@ -1433,3 +1433,23 @@ def test_acceptance_only_rows_state_why_in_desc():
         assert "수락만 검증" in f["desc_ko"], fid
         assert "acceptance only" in f["desc_en"], fid
         assert "·" not in f["desc_ko"], fid  # 한글 UI 문장부호 규칙: 가운데 점 대신 쉼표
+
+
+# ==================================================================== v2.32.1 — adaptive thinking probe prompt
+
+def test_adaptive_thinking_probe_sends_a_multi_constraint_problem_at_high_effort():
+    """adaptive 사고는 모델이 필요할 때만 한다 — Sonnet 5.5는 effort high여도 "100보다 큰 세 번째 소수" 같은 쉬운 문제에서
+    사고를 생략했다(2026-09-30 run 30, CP·Messages·InvokeModel·Converse 4셀 broken, 라이브 재현 3/3 thinking_tokens 0).
+    조건 세 개를 모두 따져야 하는 문제는 같은 effort에서 대표 6모델 모두 사고 블록을 냈다(CP, Bedrock, 203~1144 토큰, 3/3).
+    프롬프트를 쉬운 문제로 되돌리면 false-broken이 다시 생긴다."""
+    resp = T.NormalizedResponse(content=[{"type": "thinking", "thinking": "a+b+c=17 ...", "signature": "s"},
+                                         {"type": "text", "text": "836, 935"}], usage={"output_tokens": 240})
+    t = _FakeT(resp=resp)
+    ok, ev = P.probe_adaptive_thinking(t, "claude-sonnet-5-5", "sonnet-5-5")
+    (_, body, _, _), = t.calls
+    prompt = body["messages"][0]["content"]
+    assert ok is True
+    assert body["thinking"] == {"type": "adaptive", "display": "summarized"} and body["output_config"] == {"effort": "high"}
+    assert prompt == P.ADAPTIVE_THINKING_PROMPT
+    assert "third prime number" not in prompt
+    assert all(k in prompt for k in ("a + b + c = 17", "divisible by 11", "a > c"))
