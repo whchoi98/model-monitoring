@@ -492,6 +492,41 @@ def test_results_stats_with_run_id_keeps_an_old_start_time(env):
     assert body["models"]
 
 
+# run_id는 1 이상만 받는다. 예전 stats는 기본 24h 창과 31일 하한을 "run_id is None"으로 골랐지만 run_id 필터는
+# "if run_id"로 걸어, run_id=0이 두 상한을 모두 건너뛰고 보존 중인 success 행 전체를 읽었다(2026-09-30 통합 리뷰).
+# 프런트엔드는 run_id를 참일 때만 보낸다(frontend/src/lib/api.ts fetchResults, fetchStats는 run_id를 보내지 않는다).
+_BAD_RUN_IDS = [{"run_id": 0}, {"run_id": -1}, {"run_id": 0, "start_time": "1970-01-01T00:00:00Z"}]
+
+
+@pytest.mark.parametrize("path", ["/api/results/stats", "/api/results"])
+@pytest.mark.parametrize("params", _BAD_RUN_IDS, ids=["zero", "negative", "zero-with-1970-start"])
+def test_results_run_id_below_1_is_422_before_any_scan(env, path, params):
+    client, statements = env
+    statements.clear()
+    resp = client.get(path, params=params)
+    assert resp.status_code == 422
+    (error,) = resp.json()["detail"]
+    assert error["loc"] == ["query", "run_id"] and error["type"] == "greater_than_equal"
+    assert _probe_result_selects(statements) == []
+
+
+def test_results_run_id_1_still_reads_the_whole_run(env):
+    """run_id=1은 예전 그대로 그 run 하나를 창 없이 읽는다 — stats 행 수는 목록 엔드포인트의 run 1 success 행 수와 같다."""
+    client, _ = env
+    listed = client.get("/api/results", params={"run_id": 1, "limit": 1000})
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert rows and {r["run_id"] for r in rows} == {1}
+    expected: dict[str, int] = {}
+    for r in rows:
+        if r["status"] == "success":
+            expected[r["model_id"]] = expected.get(r["model_id"], 0) + 1
+    body = _stats(client, run_id=1)
+    assert body["start_time"] is None  # 기본 24h 창을 걸지 않는다
+    assert {m["model_id"]: m["count"] for m in body["models"]} == expected
+    assert sum(expected.values()) > sum(m["count"] for m in _stats(client)["models"])  # 24h 창보다 넓다
+
+
 def test_parse_window_keeps_the_no_unit_fallback_and_accepts_long_windows_without_a_cap():
     assert window_spec.parse_window("") == timedelta(hours=24)
     assert window_spec.parse_window("abc") == timedelta(hours=24)  # 단위가 없으면 예전처럼 24h

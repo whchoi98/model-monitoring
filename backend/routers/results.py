@@ -24,6 +24,9 @@ _DEFAULT_STATS_WINDOW = timedelta(hours=24)
 # (기본 24h 창처럼 실제로 쓴 하한을 돌려준다). start_time=1970-01-01이 보존 테이블 전체를 읽던 경로(2026-09-30 점검).
 _MAX_STATS_LOOKBACK = timedelta(days=31)
 _YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서)
+# run_id는 1 이상만 받는다(0, 음수 → 422). stats는 기본 창과 31일 하한을 run_id is None으로 고르고 run_id 필터는 값이
+# 참일 때만 걸었으므로, run_id=0이 두 상한을 모두 건너뛰고 보존 중인 success 행 전체를 읽었다(2026-09-30 통합 리뷰).
+# 목록(list_results)에도 같은 규칙을 둔다. 프런트엔드는 run_id를 참일 때만 보낸다(frontend/src/lib/api.ts).
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/results", tags=["results"])
@@ -47,7 +50,7 @@ def _percentile(values: list[float], pct: float) -> float | None:
 @router.get("", response_model=list[ProbeResultResponse])
 def list_results(
     model_id: Optional[str] = Query(None),
-    run_id: Optional[int] = Query(None),
+    run_id: Optional[int] = Query(None, ge=1),
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
     limit: int = Query(100, ge=1, le=1000),
@@ -59,7 +62,7 @@ def list_results(
 
     if model_id:
         query = query.filter(ProbeResult.model_id == model_id)
-    if run_id:
+    if run_id is not None:
         query = query.filter(ProbeResult.run_id == run_id)
     if start_time:
         query = query.filter(ProbeResult.timestamp >= start_time)
@@ -75,7 +78,7 @@ def list_results(
 def get_stats(
     start_time: Optional[datetime] = Query(None),
     end_time: Optional[datetime] = Query(None),
-    run_id: Optional[int] = Query(None),
+    run_id: Optional[int] = Query(None, ge=1),
     category: Optional[str] = Query(None),
     db: Session = Depends(get_db),
 ):
@@ -112,7 +115,7 @@ def get_stats(
         query = query.filter(ProbeResult.timestamp >= start_time)
     if end_time:
         query = query.filter(ProbeResult.timestamp <= end_time)
-    if run_id:
+    if run_id is not None:  # 창 분기(run_id is None)와 같은 판정 — ge=1이라 0은 여기까지 오지 않는다
         query = query.filter(ProbeResult.run_id == run_id)
     if category:
         query = query.filter(ProbeResult.category == category)
