@@ -24,6 +24,8 @@
 - **Claude API Features가 Claude Sonnet 5.5 adaptive thinking을 broken으로 보고하지 않는다.** 2026-09-30 17:30 UTC 런(#30, Sonnet 5.5가 든 첫 런)은 CP, Messages API, InvokeModel, Converse의 `adaptive_thinking`을 broken으로 판정했다. 요청은 수락됐지만 Sonnet 5.5가 effort high에서도 쉬운 프로브 문제("100보다 큰 세 번째 소수")의 사고를 생략했고(라이브 재시도 3/3, 사고 토큰 0), 증거 검사는 사고 블록을 요구한다. 이제 프로브는 조건 세 개를 따져야 하는 문제(`probes.ADAPTIVE_THINKING_PROMPT`)를 보낸다. 대표 6모델 모두 CP와 Bedrock에서 사고 블록을 냈다(사고 토큰 203~1,144, Sonnet 5.5 3/3). 카탈로그 규칙과 `CATALOG_VERSION`은 그대로다.
 
 ### Docs
+- Tests: the read and insights goldens are frozen from the v2.32.0 code under Python 3.11 (the production and CI runtime; 3.12's `sum()` uses compensated summation and shifts some averages by 0.01) and compared byte for byte on 3.11 through `tests/_golden_compare.py`. The v2.32.0 production image and the new code produce byte-identical responses and prompts for every golden case under 3.11.
+- 테스트: 조회와 insights 골든을 v2.32.0 코드로 Python 3.11(운영과 CI 런타임, 3.12의 `sum()`은 보정 합산이라 일부 평균이 0.01 달라진다)에서 고정하고, 3.11에서는 `tests/_golden_compare.py`로 바이트 단위 비교한다. v2.32.0 운영 이미지와 새 코드는 3.11에서 모든 골든 케이스의 응답과 프롬프트가 바이트 단위로 같다.
 - Troubleshooting runbook: backend OOM entry (exit 137, how to read the stopped task and service events, the cause and the fix) and the per-host bench lanes; ADR-031 follow-up for the lane split; API reference window caps; deploy runbook §5-7. Version bumped to **v2.32.1** in the six places.
 - 장애 대응 런북에 backend OOM 절(exit 137, 중지된 태스크와 서비스 이벤트 읽는 법, 원인과 수정)과 호스트별 벤치 갈래를 적었다. ADR-031에 갈래 분할 후속, API 레퍼런스에 창 상한, 배포 런북에 §5-7을 더했다. 버전을 여섯 곳에서 **v2.32.1**로 범프했다.
 
