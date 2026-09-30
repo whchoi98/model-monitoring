@@ -18,7 +18,11 @@ timeout)을 더해도 success만 세는 응답(분석, 비용 추이, 결과 통
 스캔 상한: SQL 캡처(before_cursor_execute)로 probe_results의 Text 열(prompt, output_text)을 SELECT하지 않는지
 확인한다. 분석 두 엔드포인트는 GROUP BY로 센 값만, 신뢰성, 효율성, 비용 추이, 결과 통계는 쓰는 열만 stream_results로
 읽는다. 창 상한(분석과 비용 추이 30d, 신뢰성과 효율성 7d)을 넘거나 읽을 수 없는 window는 DB를 읽기 전에 422이고,
-결과 통계는 run_id 없이 31일보다 이른 start_time을 31일 전으로 당긴다.
+결과 통계는 run_id 없이 31일보다 이른 start_time을 31일 전으로 당긴다. 결과 통계와 목록은 run_id가 1보다 작으면 DB를
+읽기 전에 422다(run_id=0이 두 상한을 건너뛰던 경로).
+
+시간 상한: statement_timeout은 서버 측 커서의 FETCH마다 따로 걸리므로 stream_results로 읽는 네 엔드포인트는
+streamed_read.stream_rows_or_503이 같은 상한으로 전체 경과 시간을 잰다 — 가짜 시계로 넘기면 행 중간에서 503이다.
 """
 
 import json
@@ -34,7 +38,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import database
 import models
+import streamed_read
 import window_spec
 from database import get_db
 from routers import analysis as analysis_router
@@ -396,6 +402,59 @@ def test_reliability_reads_error_message_only_for_failed_rows(env):
     assert "CASE WHEN (probe_results.status != ?) THEN probe_results.error_message END" in sql, sql
 
 
+# 나눠 읽는 조회의 전체 시간 상한. statement_timeout은 문장 하나의 상한이라 서버 측 커서(yield_per)에는 FETCH마다 따로
+# 걸린다 — 네 엔드포인트는 streamed_read.stream_rows_or_503이 같은 상한(database._STATEMENT_TIMEOUT_MS)으로 전체 경과
+# 시간을 재고, 넘으면 커서를 닫고 503이다(2026-09-30 v2.32.1 통합 리뷰). 가짜 시계는 부를 때마다 1초씩 가고 상한은 5초다 —
+# 시작 시각을 한 번 잰 뒤 행마다 재므로 여섯 번째 행(경과 6초)에서 멈춘다.
+_STREAMED_DEFAULT_GOLDENS = {
+    "/api/reliability/multi-channel": "reliability_default",
+    "/api/efficiency/score": "efficiency_default",
+    "/api/cost/trend": "cost_trend_default",
+    "/api/results/stats": "results_stats_default",
+}
+
+
+@pytest.fixture()
+def slow_clock(monkeypatch):
+    ticks = {"now": 0.0, "calls": 0}
+
+    def clock() -> float:
+        ticks["calls"] += 1
+        ticks["now"] += 1.0
+        return ticks["now"]
+
+    monkeypatch.setattr(streamed_read, "_clock", clock)
+    monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", 5000)
+    return ticks
+
+
+@pytest.mark.parametrize("path", STREAMED_PATHS)
+def test_streamed_read_past_the_statement_timeout_is_503_mid_stream(env, slow_clock, caplog, monkeypatch, path):
+    client, statements = env
+    statements.clear()
+    with caplog.at_level("WARNING", logger="streamed_read"):
+        resp = client.get(path)
+    assert resp.status_code == 503
+    assert _canonical(resp.json()) == _canonical(
+        {"detail": "DB 조회가 5초 안에 끝나지 않아 중단했습니다. 잠시 후 다시 시도해 주세요."}
+    )
+    (record,) = [r for r in caplog.records if r.name == "streamed_read"]
+    assert record.levelname == "WARNING"
+    message = record.getMessage()
+    assert message.startswith(f"streamed read over the 5s limit, aborted: GET {path} "), message
+    assert message.endswith("(elapsed 6.0s, 5 rows)"), message
+    assert len(_probe_result_selects(statements)) == 1
+    assert slow_clock["calls"] == 7  # 시작 1 + 행 6 — 여섯 번째 행에서 멈췄다
+
+    # 같은 요청을 상한 안에서 — 창 안의 행이 5행보다 훨씬 많고(중간에서 멈춘 것이다), 응답은 골든 그대로다.
+    monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", 10**9)
+    slow_clock["calls"] = 0
+    resp = client.get(path)
+    assert resp.status_code == 200
+    assert _canonical(resp.json()) == _canonical(_load_goldens()[_STREAMED_DEFAULT_GOLDENS[path]]["body"])
+    assert slow_clock["calls"] - 1 > 6 * 5
+
+
 @pytest.mark.parametrize(("path", "window"), [(p, w) for p, (_, over, _) in WINDOW_CAPS.items() for w in over])
 def test_window_over_the_cap_is_rejected_before_any_scan(env, path, window):
     client, statements = env
@@ -490,6 +549,41 @@ def test_results_stats_with_run_id_keeps_an_old_start_time(env):
     body = _stats(client, run_id=1, start_time="1970-01-01T00:00:00Z")
     assert body["start_time"] == "1970-01-01T00:00:00Z"
     assert body["models"]
+
+
+# run_id는 1 이상만 받는다. 예전 stats는 기본 24h 창과 31일 하한을 "run_id is None"으로 골랐지만 run_id 필터는
+# "if run_id"로 걸어, run_id=0이 두 상한을 모두 건너뛰고 보존 중인 success 행 전체를 읽었다(2026-09-30 통합 리뷰).
+# 프런트엔드는 run_id를 참일 때만 보낸다(frontend/src/lib/api.ts fetchResults, fetchStats는 run_id를 보내지 않는다).
+_BAD_RUN_IDS = [{"run_id": 0}, {"run_id": -1}, {"run_id": 0, "start_time": "1970-01-01T00:00:00Z"}]
+
+
+@pytest.mark.parametrize("path", ["/api/results/stats", "/api/results"])
+@pytest.mark.parametrize("params", _BAD_RUN_IDS, ids=["zero", "negative", "zero-with-1970-start"])
+def test_results_run_id_below_1_is_422_before_any_scan(env, path, params):
+    client, statements = env
+    statements.clear()
+    resp = client.get(path, params=params)
+    assert resp.status_code == 422
+    (error,) = resp.json()["detail"]
+    assert error["loc"] == ["query", "run_id"] and error["type"] == "greater_than_equal"
+    assert _probe_result_selects(statements) == []
+
+
+def test_results_run_id_1_still_reads_the_whole_run(env):
+    """run_id=1은 예전 그대로 그 run 하나를 창 없이 읽는다 — stats 행 수는 목록 엔드포인트의 run 1 success 행 수와 같다."""
+    client, _ = env
+    listed = client.get("/api/results", params={"run_id": 1, "limit": 1000})
+    assert listed.status_code == 200
+    rows = listed.json()
+    assert rows and {r["run_id"] for r in rows} == {1}
+    expected: dict[str, int] = {}
+    for r in rows:
+        if r["status"] == "success":
+            expected[r["model_id"]] = expected.get(r["model_id"], 0) + 1
+    body = _stats(client, run_id=1)
+    assert body["start_time"] is None  # 기본 24h 창을 걸지 않는다
+    assert {m["model_id"]: m["count"] for m in body["models"]} == expected
+    assert sum(expected.values()) > sum(m["count"] for m in _stats(client)["models"])  # 24h 창보다 넓다
 
 
 def test_parse_window_keeps_the_no_unit_fallback_and_accepts_long_windows_without_a_cap():

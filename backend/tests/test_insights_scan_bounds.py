@@ -16,12 +16,16 @@ run_once는 ProbeRun 엔티티도 읽었는데 ProbeRun.results가 lazy="selecti
   FREEZE_INSIGHTS_GOLDENS=1 python3.12 -m pytest tests/test_insights_scan_bounds.py -k freeze).
 - API 창 상한: body window는 최대 24h다(인사이트 패널은 6h를 보낸다). 넘거나, 0 이하이거나, 읽을 수 없으면 422이고
   스레드, 스트림, DB 조회를 시작하지 않는다. 스케줄 태스크의 CLI(python -m insights_runner --window 6h)에는 상한이 없다.
+- 시간 상한: 두 통계 조회는 streamed_read.stream_rows로 전체 경과 시간이 statement_timeout과 같은 상한에 묶인다(서버 측
+  커서에는 statement_timeout이 FETCH마다 따로 걸린다). 넘으면 run_once는 Bedrock을 부르기 전에 -1(CLI exit 1),
+  stream-regenerate는 error 이벤트 하나, regenerate 스레드는 -1 뒤 잠금을 푼다.
 """
 
 import json
 import os
 import sys
 import threading
+import time
 from pathlib import Path
 from types import SimpleNamespace
 
@@ -33,10 +37,13 @@ from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import agent.bedrock
+import database
 import insights_runner
 import models
+import streamed_read
 from auth import get_current_user
 from routers import insights as insights_router
+from streamed_read import StreamedReadTimeout
 from tests._read_dataset import FrozenDatetime, seed
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "insights_prompts_v2320.json"
@@ -352,3 +359,96 @@ def test_cli_window_stays_uncapped_for_the_scheduled_task(db_env, bedrock_calls,
         monkeypatch.setattr(sys, "argv", argv)
         assert insights_runner.main() == 0
         assert started.pop() == expected
+
+
+# ───────────────────────────────────────────────────────────────────────
+# 전체 시간 상한 — streamed_read.stream_rows
+# ───────────────────────────────────────────────────────────────────────
+# statement_timeout(database.py)은 문장 하나의 상한이라 서버 측 커서(yield_per)에는 FETCH마다 따로 걸린다. 두 통계 조회는
+# streamed_read.stream_rows가 같은 상한(database._STATEMENT_TIMEOUT_MS)으로 전체 경과 시간을 재고, 넘으면 커서를 닫고
+# StreamedReadTimeout을 던진다(2026-09-30 v2.32.1 통합 리뷰). 기존 호출자가 처리한다: run_once는 except에서 -1(스케줄
+# 태스크는 exit 1), stream-regenerate는 error 이벤트, regenerate 스레드는 run_once의 -1 뒤 잠금을 푼다.
+# 가짜 시계는 부를 때마다 1초씩 가고 상한은 5초다 — 시작 시각을 한 번 잰 뒤 행마다 재므로 여섯 번째 행에서 멈춘다.
+
+
+@pytest.fixture()
+def slow_clock(monkeypatch):
+    ticks = {"now": 0.0, "calls": 0}
+
+    def clock() -> float:
+        ticks["calls"] += 1
+        ticks["now"] += 1.0
+        return ticks["now"]
+
+    monkeypatch.setattr(streamed_read, "_clock", clock)
+    monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", 5000)
+    return ticks
+
+
+def test_collect_stats_past_the_statement_timeout_raises_mid_stream(db_env, slow_clock, caplog):
+    factory, statements = db_env
+    with factory() as db:
+        statements.clear()
+        with caplog.at_level("WARNING", logger="streamed_read"):
+            with pytest.raises(StreamedReadTimeout) as exc:
+                insights_runner.collect_stats_for_window(db, "24h")
+    assert exc.value.what == "insights_runner.collect_stats_for_window window='24h'"
+    assert exc.value.rows == 5 and slow_clock["calls"] == 7  # 시작 1 + 행 6 — 창 안의 행은 5행보다 훨씬 많다
+    assert "insights_runner.collect_stats_for_window window='24h' (elapsed 6.0s, 5 rows)" in caplog.text
+    assert len([s for s, _ in _probe_selects(statements) if "FROM probe_results" in s]) == 1
+
+
+def test_run_once_past_the_statement_timeout_returns_minus_1_before_bedrock(db_env, bedrock_calls, slow_clock, caplog):
+    factory, _ = db_env
+    with caplog.at_level("WARNING"):
+        assert insights_runner.run_once(RUN_ONCE_WINDOW) == -1
+    assert bedrock_calls == []
+    with factory() as db:
+        assert db.query(models.Insight).count() == 0
+    assert "insights_runner.run_once window='6h' (elapsed 6.0s, 5 rows)" in caplog.text
+    assert "insights_runner 실패" in caplog.text  # run_once의 기존 except가 처리했다
+
+
+def test_cli_exits_1_when_the_stats_read_times_out(db_env, bedrock_calls, slow_clock, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["insights_runner", "--window", "6h"])
+    assert insights_runner.main() == 1
+    assert bedrock_calls == []
+
+
+def test_stream_regenerate_reports_the_timeout_as_one_sse_error_event(api, db_env, bedrock_calls, slow_clock):
+    factory, _ = db_env
+    resp = api.post("/api/insights/stream-regenerate", json={"window": "6h", "lang": "ko"})
+    assert resp.status_code == 200
+    blocks = [b for b in resp.text.split("\n\n") if b]
+    assert len(blocks) == 1 and blocks[0].startswith("event: error\ndata: "), resp.text
+    message = json.loads(blocks[0].split("data: ", 1)[1])["message"]
+    assert message == ("DB 조회가 5초 상한을 넘어 중단했습니다: insights_runner.collect_stats_for_window window='6h' "
+                       "(6.0초, 5행)")
+    assert bedrock_calls == []
+    with factory() as db:
+        assert db.query(models.Insight).count() == 0
+
+
+def test_regenerate_thread_times_out_and_releases_the_lock(api, db_env, bedrock_calls, slow_clock, monkeypatch):
+    factory, _ = db_env
+    done = threading.Event()
+    results: list[int] = []
+    real_run_once = insights_runner.run_once
+
+    def run_once(window_spec="6h"):
+        try:
+            results.append(real_run_once(window_spec))
+        finally:
+            done.set()
+
+    monkeypatch.setattr(insights_runner, "run_once", run_once)
+    resp = api.post("/api/insights/regenerate", json={"window": "6h"})
+    assert resp.status_code == 200 and resp.json()["triggered"] is True
+    assert done.wait(10) and results == [-1]
+    deadline = time.monotonic() + 5
+    while insights_router._is_regenerating and time.monotonic() < deadline:
+        time.sleep(0.01)
+    assert insights_router._is_regenerating is False  # 다음 재생성을 받을 수 있다
+    assert bedrock_calls == []
+    with factory() as db:
+        assert db.query(models.Insight).count() == 0
