@@ -7,6 +7,7 @@ Endpoints:
   GET /api/cost/summary?window=24h     - 모델별 비용 합계 + total
   GET /api/cost/channel-compare?window=24h - Bedrock vs Anthropic CP on AWS 채널 비교
   GET /api/cost/trend?window=24h        - 시간 단위 bucketing trend
+  window는 세 엔드포인트 모두 최대 30d — 넘거나, 0 이하이거나, 읽을 수 없으면 422 (window_spec.parse_window).
 """
 
 from __future__ import annotations
@@ -25,20 +26,18 @@ from database import get_db
 from models import ProbeResult
 from visibility import hidden_patterns
 from price_history import as_utc, with_row_cost
+from streamed_read import stream_rows_or_503
+from window_spec import parse_window
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/cost", tags=["cost"])
 
-
-def _parse_window(spec: str) -> timedelta:
-    s = spec.strip().lower()
-    if s.endswith("d"):
-        return timedelta(days=int(s[:-1]))
-    if s.endswith("h"):
-        return timedelta(hours=int(s[:-1]))
-    if s.endswith("m"):
-        return timedelta(minutes=int(s[:-1]))
-    return timedelta(hours=24)
+# 세 엔드포인트의 창 상한 30d — 비용 화면(1h, 6h, 24h, 7d, 30d)의 가장 긴 창. 공개 엔드포인트라 상한이 곧 요청 하나의
+# 스캔 상한이다 — 넘는 창은 422 (window_spec, 2026-09-30 /analysis OOM). summary, channel-compare는 DB에서 GROUP BY로
+# 합친 모델별 행만 받아 메모리는 O(모델)이지만, 창만큼 probe_results와 price_history 조인을 훑으므로 같은 상한을 둔다.
+# trend는 화면 호출자가 없다.
+_MAX_WINDOW = timedelta(days=30)
+_YIELD_PER = 2000  # trend가 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read, 넘으면 503)
 
 
 def _channel(model_id: str) -> str:
@@ -86,7 +85,7 @@ def get_cost_summary(
     db: Session = Depends(get_db),
 ):
     """모델별 비용 합계."""
-    since = datetime.now(timezone.utc) - _parse_window(window)
+    since = datetime.now(timezone.utc) - parse_window(window, max_window=_MAX_WINDOW)
     query, row_cost = with_row_cost(
         db.query(
             ProbeResult.model_id,
@@ -160,7 +159,7 @@ def get_channel_compare(
     db: Session = Depends(get_db),
 ):
     """채널별 (Bedrock Global / US / in-region(<aws-region>) / Nova / Anthropic CP / OpenAI) 합계."""
-    since = datetime.now(timezone.utc) - _parse_window(window)
+    since = datetime.now(timezone.utc) - parse_window(window, max_window=_MAX_WINDOW)
     query, row_cost = with_row_cost(
         db.query(
             ProbeResult.model_id,
@@ -224,11 +223,12 @@ def get_cost_trend(
     db: Session = Depends(get_db),
 ):
     """시간 단위 bucketing — window가 24h 이상이면 1시간 bucket, 작으면 5분 bucket."""
-    delta = _parse_window(window)
+    delta = parse_window(window, max_window=_MAX_WINDOW)
     since = datetime.now(timezone.utc) - delta
     bucket_min = 60 if delta >= timedelta(hours=12) else 5
 
     # date_trunc를 사용하지 않고 Python으로 bucket 계산 (DB-portable). 비용은 행 단위 시점 단가.
+    # 행을 모아 두지 않고 나눠 읽으면서 bucket에 바로 더한다 — 메모리는 bucket × 모델.
     query, row_cost = with_row_cost(
         db.query(
             ProbeResult.model_name,
@@ -240,8 +240,9 @@ def get_cost_trend(
         .filter(ProbeResult.timestamp >= since)
         .filter(ProbeResult.status == "success")
         .filter(*[~ProbeResult.model_name.contains(p) for p in hidden_patterns()])
-        .all()
+        .yield_per(_YIELD_PER)
     )
+    rows = stream_rows_or_503(rows, route=f"GET /api/cost/trend window={window!r}")
 
     bucket_seconds = bucket_min * 60
     points_map: dict[tuple[str, str], float] = {}

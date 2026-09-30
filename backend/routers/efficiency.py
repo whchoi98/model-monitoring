@@ -25,20 +25,17 @@ from database import get_db
 from models import ProbeResult
 from visibility import visible_only
 from price_history import with_row_cost
+from streamed_read import stream_rows_or_503
+from window_spec import parse_window
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/efficiency", tags=["efficiency"])
 
 
-def _parse_window(spec: str) -> timedelta:
-    s = spec.strip().lower()
-    if s.endswith("d"):
-        return timedelta(days=int(s[:-1]))
-    if s.endswith("h"):
-        return timedelta(hours=int(s[:-1]))
-    if s.endswith("m"):
-        return timedelta(minutes=int(s[:-1]))
-    return timedelta(hours=24)
+# 창 상한 = /efficiency 화면의 가장 긴 창(1h, 6h, 24h, 7d 중 7d). 넘는 창은 422 (window_spec).
+# 공개 엔드포인트라 상한이 곧 요청 하나의 스캔 상한이다 — 2026-09-30 /analysis OOM과 같은 경로.
+_MAX_WINDOW = timedelta(days=7)
+_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read, 넘으면 503)
 
 
 WEIGHTS = {
@@ -108,21 +105,36 @@ def get_efficiency_score(
 
     category 미지정 시 전체. 지정 시 그 카테고리만 (공정 비교 권장: 같은 prompt 기준).
     """
-    since = datetime.now(timezone.utc) - _parse_window(window)
-    q, row_cost = with_row_cost(visible_only(db.query(ProbeResult), ProbeResult.model_name))
+    since = datetime.now(timezone.utc) - parse_window(window, max_window=_MAX_WINDOW)
+    # 집계에 쓰는 열만 나눠 읽는다. ORM 엔티티는 prompt, output_text까지 담아 7d에서 요청 하나가 0.4~0.6 GB였다.
+    # 합산은 예전처럼 Python에서 행 순서대로 한다(SQL AVG로 바꾸면 합산 순서가 달라져 round 경계 값이 흔들리고,
+    # model_name은 model_id별로 처음 본 행의 값이라 GROUP BY에 넣으면 라벨이 여러 개인 모델이 갈라진다).
+    q, row_cost = with_row_cost(visible_only(
+        db.query(
+            ProbeResult.model_id,
+            ProbeResult.model_name,
+            ProbeResult.status,
+            ProbeResult.output_tokens,
+            ProbeResult.input_tokens,
+            ProbeResult.total_latency_ms,
+            ProbeResult.tps,
+        ),
+        ProbeResult.model_name,
+    ))
     q = q.add_columns(row_cost.label("row_cost")).filter(ProbeResult.timestamp >= since)
     if category:
         q = q.filter(ProbeResult.category == category)
-    rows = q.all()
+    rows = stream_rows_or_503(q.yield_per(_YIELD_PER),
+                              route=f"GET /api/efficiency/score window={window!r} category={category!r}")
 
     # Aggregate per model — 비용은 각 프로브 시각의 단가(row_cost, 단가 없으면 None)
     agg: dict[str, dict] = {}
-    for r, cost in rows:
+    for model_id, model_name, status, output_tokens, input_tokens, total_latency_ms, tps, cost in rows:
         a = agg.setdefault(
-            r.model_id,
+            model_id,
             {
-                "model_id": r.model_id,
-                "model_name": r.model_name,
+                "model_id": model_id,
+                "model_name": model_name,
                 "samples": 0,
                 "success": 0,
                 "out_tok": [],
@@ -133,16 +145,16 @@ def get_efficiency_score(
             },
         )
         a["samples"] += 1
-        if r.status == "success":
+        if status == "success":
             a["success"] += 1
-            if r.output_tokens is not None:
-                a["out_tok"].append(float(r.output_tokens))
-            if r.input_tokens is not None:
-                a["in_tok"].append(float(r.input_tokens))
-            if r.total_latency_ms is not None:
-                a["latency"].append(float(r.total_latency_ms))
-            if r.tps is not None:
-                a["tps"].append(float(r.tps))
+            if output_tokens is not None:
+                a["out_tok"].append(float(output_tokens))
+            if input_tokens is not None:
+                a["in_tok"].append(float(input_tokens))
+            if total_latency_ms is not None:
+                a["latency"].append(float(total_latency_ms))
+            if tps is not None:
+                a["tps"].append(float(tps))
             if cost is not None:
                 a["costs"].append(float(cost))
 

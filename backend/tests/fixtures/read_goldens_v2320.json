@@ -1,0 +1,8574 @@
+{
+ "stop_reasons_default": {
+  "url": "/api/analysis/stop-reasons",
+  "status": 200,
+  "body": {
+   "window": "7d",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 2,
+     "counts": {
+      "unknown": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "unknown": 50.0,
+      "end_turn": 50.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "end_turn": 22.2,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 11,
+     "counts": {
+      "end_turn": 5,
+      "max_tokens": 2,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "end_turn": 45.5,
+      "max_tokens": 18.2,
+      "tool_use": 9.1,
+      "content_filtered": 9.1,
+      "stop_sequence": 9.1,
+      "unknown": 9.1
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 12,
+     "counts": {
+      "end_turn": 3,
+      "max_tokens": 2,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "end_turn": 25.0,
+      "max_tokens": 16.7,
+      "other": 8.3,
+      "tool_use": 8.3,
+      "content_filtered": 8.3,
+      "stop_sequence": 8.3,
+      "unknown": 16.7,
+      "guardrail_intervened": 8.3
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 12,
+     "counts": {
+      "end_turn": 4,
+      "max_tokens": 3,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "end_turn": 33.3,
+      "max_tokens": 25.0,
+      "tool_use": 8.3,
+      "content_filtered": 8.3,
+      "stop_sequence": 8.3,
+      "guardrail_intervened": 8.3,
+      "unknown": 8.3
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 12,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "unknown": 2,
+      "end_turn": 3,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "max_tokens": 25.0,
+      "other": 8.3,
+      "tool_use": 8.3,
+      "content_filtered": 8.3,
+      "unknown": 16.7,
+      "end_turn": 25.0,
+      "guardrail_intervened": 8.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "total": 7,
+     "counts": {
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2,
+      "end_turn": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "content_filtered": 14.3,
+      "stop_sequence": 14.3,
+      "unknown": 28.6,
+      "end_turn": 28.6,
+      "guardrail_intervened": 14.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 5,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "max_tokens": 60.0,
+      "other": 20.0,
+      "tool_use": 20.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 11,
+     "counts": {
+      "end_turn": 5,
+      "unknown": 1,
+      "max_tokens": 2,
+      "other": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "end_turn": 45.5,
+      "unknown": 9.1,
+      "max_tokens": 18.2,
+      "other": 9.1,
+      "content_filtered": 9.1,
+      "stop_sequence": 9.1
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 12,
+     "counts": {
+      "guardrail_intervened": 1,
+      "unknown": 2,
+      "end_turn": 3,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "guardrail_intervened": 8.3,
+      "unknown": 16.7,
+      "end_turn": 25.0,
+      "max_tokens": 25.0,
+      "other": 8.3,
+      "tool_use": 8.3,
+      "stop_sequence": 8.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 11,
+     "counts": {
+      "end_turn": 5,
+      "guardrail_intervened": 1,
+      "max_tokens": 2,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1
+     },
+     "percentages": {
+      "end_turn": 45.5,
+      "guardrail_intervened": 9.1,
+      "max_tokens": 18.2,
+      "other": 9.1,
+      "tool_use": 9.1,
+      "content_filtered": 9.1
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_24h": {
+  "url": "/api/analysis/stop-reasons?window=24h",
+  "status": 200,
+  "body": {
+   "window": "24h",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "end_turn": 22.2,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 7,
+     "counts": {
+      "max_tokens": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "max_tokens": 14.3,
+      "tool_use": 14.3,
+      "end_turn": 28.6,
+      "content_filtered": 14.3,
+      "stop_sequence": 14.3,
+      "unknown": 14.3
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2,
+      "end_turn": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "other": 11.1,
+      "tool_use": 11.1,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1,
+      "unknown": 22.2,
+      "end_turn": 22.2,
+      "guardrail_intervened": 11.1
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 8,
+     "counts": {
+      "max_tokens": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "max_tokens": 12.5,
+      "tool_use": 12.5,
+      "end_turn": 25.0,
+      "content_filtered": 12.5,
+      "stop_sequence": 12.5,
+      "guardrail_intervened": 12.5,
+      "unknown": 12.5
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 8,
+     "counts": {
+      "tool_use": 1,
+      "content_filtered": 1,
+      "unknown": 2,
+      "end_turn": 3,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "tool_use": 12.5,
+      "content_filtered": 12.5,
+      "unknown": 25.0,
+      "end_turn": 37.5,
+      "guardrail_intervened": 12.5
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "total": 3,
+     "counts": {
+      "guardrail_intervened": 1,
+      "unknown": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "guardrail_intervened": 33.3,
+      "unknown": 33.3,
+      "end_turn": 33.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 5,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "max_tokens": 60.0,
+      "other": 20.0,
+      "tool_use": 20.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 8,
+     "counts": {
+      "end_turn": 3,
+      "max_tokens": 2,
+      "other": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "end_turn": 37.5,
+      "max_tokens": 25.0,
+      "other": 12.5,
+      "content_filtered": 12.5,
+      "stop_sequence": 12.5
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 9,
+     "counts": {
+      "end_turn": 2,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "stop_sequence": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "end_turn": 22.2,
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "stop_sequence": 11.1,
+      "unknown": 11.1
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 9,
+     "counts": {
+      "end_turn": 4,
+      "max_tokens": 2,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1
+     },
+     "percentages": {
+      "end_turn": 44.4,
+      "max_tokens": 22.2,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "content_filtered": 11.1
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_30d": {
+  "url": "/api/analysis/stop-reasons?window=30d",
+  "status": 200,
+  "body": {
+   "window": "30d",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 6,
+     "counts": {
+      "stop_sequence": 1,
+      "unknown": 2,
+      "end_turn": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "stop_sequence": 16.7,
+      "unknown": 33.3,
+      "end_turn": 33.3,
+      "guardrail_intervened": 16.7
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "end_turn": 22.2,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 15,
+     "counts": {
+      "unknown": 3,
+      "end_turn": 6,
+      "guardrail_intervened": 1,
+      "max_tokens": 2,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "unknown": 20.0,
+      "end_turn": 40.0,
+      "guardrail_intervened": 6.7,
+      "max_tokens": 13.3,
+      "tool_use": 6.7,
+      "content_filtered": 6.7,
+      "stop_sequence": 6.7
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 15,
+     "counts": {
+      "guardrail_intervened": 2,
+      "end_turn": 5,
+      "max_tokens": 2,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2
+     },
+     "percentages": {
+      "guardrail_intervened": 13.3,
+      "end_turn": 33.3,
+      "max_tokens": 13.3,
+      "other": 6.7,
+      "tool_use": 6.7,
+      "content_filtered": 6.7,
+      "stop_sequence": 6.7,
+      "unknown": 13.3
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 14,
+     "counts": {
+      "unknown": 2,
+      "end_turn": 5,
+      "max_tokens": 3,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "unknown": 14.3,
+      "end_turn": 35.7,
+      "max_tokens": 21.4,
+      "tool_use": 7.1,
+      "content_filtered": 7.1,
+      "stop_sequence": 7.1,
+      "guardrail_intervened": 7.1
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 13,
+     "counts": {
+      "end_turn": 4,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "unknown": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "end_turn": 30.8,
+      "max_tokens": 23.1,
+      "other": 7.7,
+      "tool_use": 7.7,
+      "content_filtered": 7.7,
+      "unknown": 15.4,
+      "guardrail_intervened": 7.7
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (global)",
+     "total": 2,
+     "counts": {
+      "unknown": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "unknown": 50.0,
+      "end_turn": 50.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "total": 10,
+     "counts": {
+      "max_tokens": 1,
+      "other": 1,
+      "end_turn": 3,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "max_tokens": 10.0,
+      "other": 10.0,
+      "end_turn": 30.0,
+      "content_filtered": 10.0,
+      "stop_sequence": 10.0,
+      "unknown": 20.0,
+      "guardrail_intervened": 10.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 5,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "max_tokens": 60.0,
+      "other": 20.0,
+      "tool_use": 20.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 15,
+     "counts": {
+      "end_turn": 6,
+      "content_filtered": 2,
+      "stop_sequence": 2,
+      "unknown": 2,
+      "max_tokens": 2,
+      "other": 1
+     },
+     "percentages": {
+      "end_turn": 40.0,
+      "content_filtered": 13.3,
+      "stop_sequence": 13.3,
+      "unknown": 13.3,
+      "max_tokens": 13.3,
+      "other": 6.7
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 15,
+     "counts": {
+      "content_filtered": 1,
+      "stop_sequence": 2,
+      "end_turn": 4,
+      "guardrail_intervened": 1,
+      "unknown": 2,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "content_filtered": 6.7,
+      "stop_sequence": 13.3,
+      "end_turn": 26.7,
+      "guardrail_intervened": 6.7,
+      "unknown": 13.3,
+      "max_tokens": 20.0,
+      "other": 6.7,
+      "tool_use": 6.7
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 15,
+     "counts": {
+      "tool_use": 2,
+      "end_turn": 6,
+      "content_filtered": 2,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1,
+      "max_tokens": 2,
+      "other": 1
+     },
+     "percentages": {
+      "tool_use": 13.3,
+      "end_turn": 40.0,
+      "content_filtered": 13.3,
+      "stop_sequence": 6.7,
+      "guardrail_intervened": 6.7,
+      "max_tokens": 13.3,
+      "other": 6.7
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_720h": {
+  "url": "/api/analysis/stop-reasons?window=720h",
+  "status": 200,
+  "body": {
+   "window": "720h",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 6,
+     "counts": {
+      "stop_sequence": 1,
+      "unknown": 2,
+      "end_turn": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "stop_sequence": 16.7,
+      "unknown": 33.3,
+      "end_turn": 33.3,
+      "guardrail_intervened": 16.7
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "end_turn": 22.2,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 15,
+     "counts": {
+      "unknown": 3,
+      "end_turn": 6,
+      "guardrail_intervened": 1,
+      "max_tokens": 2,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "unknown": 20.0,
+      "end_turn": 40.0,
+      "guardrail_intervened": 6.7,
+      "max_tokens": 13.3,
+      "tool_use": 6.7,
+      "content_filtered": 6.7,
+      "stop_sequence": 6.7
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 15,
+     "counts": {
+      "guardrail_intervened": 2,
+      "end_turn": 5,
+      "max_tokens": 2,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2
+     },
+     "percentages": {
+      "guardrail_intervened": 13.3,
+      "end_turn": 33.3,
+      "max_tokens": 13.3,
+      "other": 6.7,
+      "tool_use": 6.7,
+      "content_filtered": 6.7,
+      "stop_sequence": 6.7,
+      "unknown": 13.3
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 14,
+     "counts": {
+      "unknown": 2,
+      "end_turn": 5,
+      "max_tokens": 3,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "unknown": 14.3,
+      "end_turn": 35.7,
+      "max_tokens": 21.4,
+      "tool_use": 7.1,
+      "content_filtered": 7.1,
+      "stop_sequence": 7.1,
+      "guardrail_intervened": 7.1
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 13,
+     "counts": {
+      "end_turn": 4,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "unknown": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "end_turn": 30.8,
+      "max_tokens": 23.1,
+      "other": 7.7,
+      "tool_use": 7.7,
+      "content_filtered": 7.7,
+      "unknown": 15.4,
+      "guardrail_intervened": 7.7
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (global)",
+     "total": 2,
+     "counts": {
+      "unknown": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "unknown": 50.0,
+      "end_turn": 50.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "total": 10,
+     "counts": {
+      "max_tokens": 1,
+      "other": 1,
+      "end_turn": 3,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "max_tokens": 10.0,
+      "other": 10.0,
+      "end_turn": 30.0,
+      "content_filtered": 10.0,
+      "stop_sequence": 10.0,
+      "unknown": 20.0,
+      "guardrail_intervened": 10.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 5,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "max_tokens": 60.0,
+      "other": 20.0,
+      "tool_use": 20.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 15,
+     "counts": {
+      "end_turn": 6,
+      "content_filtered": 2,
+      "stop_sequence": 2,
+      "unknown": 2,
+      "max_tokens": 2,
+      "other": 1
+     },
+     "percentages": {
+      "end_turn": 40.0,
+      "content_filtered": 13.3,
+      "stop_sequence": 13.3,
+      "unknown": 13.3,
+      "max_tokens": 13.3,
+      "other": 6.7
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 15,
+     "counts": {
+      "content_filtered": 1,
+      "stop_sequence": 2,
+      "end_turn": 4,
+      "guardrail_intervened": 1,
+      "unknown": 2,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "content_filtered": 6.7,
+      "stop_sequence": 13.3,
+      "end_turn": 26.7,
+      "guardrail_intervened": 6.7,
+      "unknown": 13.3,
+      "max_tokens": 20.0,
+      "other": 6.7,
+      "tool_use": 6.7
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 15,
+     "counts": {
+      "tool_use": 2,
+      "end_turn": 6,
+      "content_filtered": 2,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1,
+      "max_tokens": 2,
+      "other": 1
+     },
+     "percentages": {
+      "tool_use": 13.3,
+      "end_turn": 40.0,
+      "content_filtered": 13.3,
+      "stop_sequence": 6.7,
+      "guardrail_intervened": 6.7,
+      "max_tokens": 13.3,
+      "other": 6.7
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_6h_reasoning": {
+  "url": "/api/analysis/stop-reasons?window=6h&category=reasoning",
+  "status": 200,
+  "body": {
+   "window": "6h",
+   "category": "reasoning",
+   "rows": [
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 1,
+     "counts": {
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "stop_sequence": 100.0
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 1,
+     "counts": {
+      "unknown": 1
+     },
+     "percentages": {
+      "unknown": 100.0
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 1,
+     "counts": {
+      "end_turn": 1
+     },
+     "percentages": {
+      "end_turn": 100.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 1,
+     "counts": {
+      "max_tokens": 1
+     },
+     "percentages": {
+      "max_tokens": 100.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 1,
+     "counts": {
+      "content_filtered": 1
+     },
+     "percentages": {
+      "content_filtered": 100.0
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 1,
+     "counts": {
+      "unknown": 1
+     },
+     "percentages": {
+      "unknown": 100.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 1,
+     "counts": {
+      "tool_use": 1
+     },
+     "percentages": {
+      "tool_use": 100.0
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_30d_chat_short": {
+  "url": "/api/analysis/stop-reasons?window=30d&category=chat-short",
+  "status": 200,
+  "body": {
+   "window": "30d",
+   "category": "chat-short",
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 1,
+     "counts": {
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "stop_sequence": 100.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 2,
+     "counts": {
+      "other": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "other": 50.0,
+      "end_turn": 50.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 3,
+     "counts": {
+      "end_turn": 1,
+      "max_tokens": 1,
+      "content_filtered": 1
+     },
+     "percentages": {
+      "end_turn": 33.3,
+      "max_tokens": 33.3,
+      "content_filtered": 33.3
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 3,
+     "counts": {
+      "end_turn": 1,
+      "tool_use": 1,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "end_turn": 33.3,
+      "tool_use": 33.3,
+      "guardrail_intervened": 33.3
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 2,
+     "counts": {
+      "unknown": 1,
+      "max_tokens": 1
+     },
+     "percentages": {
+      "unknown": 50.0,
+      "max_tokens": 50.0
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 3,
+     "counts": {
+      "max_tokens": 1,
+      "content_filtered": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "max_tokens": 33.3,
+      "content_filtered": 33.3,
+      "end_turn": 33.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "total": 2,
+     "counts": {
+      "max_tokens": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "max_tokens": 50.0,
+      "unknown": 50.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 3,
+     "counts": {
+      "unknown": 1,
+      "end_turn": 2
+     },
+     "percentages": {
+      "unknown": 33.3,
+      "end_turn": 66.7
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 3,
+     "counts": {
+      "guardrail_intervened": 1,
+      "max_tokens": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "guardrail_intervened": 33.3,
+      "max_tokens": 33.3,
+      "stop_sequence": 33.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 3,
+     "counts": {
+      "content_filtered": 1,
+      "end_turn": 1,
+      "other": 1
+     },
+     "percentages": {
+      "content_filtered": 33.3,
+      "end_turn": 33.3,
+      "other": 33.3
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_no_unit": {
+  "url": "/api/analysis/stop-reasons?window=abc",
+  "status": 200,
+  "body": {
+   "window": "abc",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "end_turn": 22.2,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "total": 7,
+     "counts": {
+      "max_tokens": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "max_tokens": 14.3,
+      "tool_use": 14.3,
+      "end_turn": 28.6,
+      "content_filtered": 14.3,
+      "stop_sequence": 14.3,
+      "unknown": 14.3
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 9,
+     "counts": {
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "unknown": 2,
+      "end_turn": 2,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "other": 11.1,
+      "tool_use": 11.1,
+      "content_filtered": 11.1,
+      "stop_sequence": 11.1,
+      "unknown": 22.2,
+      "end_turn": 22.2,
+      "guardrail_intervened": 11.1
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 8,
+     "counts": {
+      "max_tokens": 1,
+      "tool_use": 1,
+      "end_turn": 2,
+      "content_filtered": 1,
+      "stop_sequence": 1,
+      "guardrail_intervened": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "max_tokens": 12.5,
+      "tool_use": 12.5,
+      "end_turn": 25.0,
+      "content_filtered": 12.5,
+      "stop_sequence": 12.5,
+      "guardrail_intervened": 12.5,
+      "unknown": 12.5
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 8,
+     "counts": {
+      "tool_use": 1,
+      "content_filtered": 1,
+      "unknown": 2,
+      "end_turn": 3,
+      "guardrail_intervened": 1
+     },
+     "percentages": {
+      "tool_use": 12.5,
+      "content_filtered": 12.5,
+      "unknown": 25.0,
+      "end_turn": 37.5,
+      "guardrail_intervened": 12.5
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "total": 3,
+     "counts": {
+      "guardrail_intervened": 1,
+      "unknown": 1,
+      "end_turn": 1
+     },
+     "percentages": {
+      "guardrail_intervened": 33.3,
+      "unknown": 33.3,
+      "end_turn": 33.3
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 5,
+     "counts": {
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1
+     },
+     "percentages": {
+      "max_tokens": 60.0,
+      "other": 20.0,
+      "tool_use": 20.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 8,
+     "counts": {
+      "end_turn": 3,
+      "max_tokens": 2,
+      "other": 1,
+      "content_filtered": 1,
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "end_turn": 37.5,
+      "max_tokens": 25.0,
+      "other": 12.5,
+      "content_filtered": 12.5,
+      "stop_sequence": 12.5
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 9,
+     "counts": {
+      "end_turn": 2,
+      "max_tokens": 3,
+      "other": 1,
+      "tool_use": 1,
+      "stop_sequence": 1,
+      "unknown": 1
+     },
+     "percentages": {
+      "end_turn": 22.2,
+      "max_tokens": 33.3,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "stop_sequence": 11.1,
+      "unknown": 11.1
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 9,
+     "counts": {
+      "end_turn": 4,
+      "max_tokens": 2,
+      "other": 1,
+      "tool_use": 1,
+      "content_filtered": 1
+     },
+     "percentages": {
+      "end_turn": 44.4,
+      "max_tokens": 22.2,
+      "other": 11.1,
+      "tool_use": 11.1,
+      "content_filtered": 11.1
+     }
+    }
+   ]
+  }
+ },
+ "stop_reasons_45m": {
+  "url": "/api/analysis/stop-reasons?window=45m",
+  "status": 200,
+  "body": {
+   "window": "45m",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "total": 1,
+     "counts": {
+      "end_turn": 1
+     },
+     "percentages": {
+      "end_turn": 100.0
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "total": 1,
+     "counts": {
+      "end_turn": 1
+     },
+     "percentages": {
+      "end_turn": 100.0
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "total": 1,
+     "counts": {
+      "unknown": 1
+     },
+     "percentages": {
+      "unknown": 100.0
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "total": 1,
+     "counts": {
+      "end_turn": 1
+     },
+     "percentages": {
+      "end_turn": 100.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "total": 1,
+     "counts": {
+      "tool_use": 1
+     },
+     "percentages": {
+      "tool_use": 100.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "total": 1,
+     "counts": {
+      "stop_sequence": 1
+     },
+     "percentages": {
+      "stop_sequence": 100.0
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "total": 1,
+     "counts": {
+      "unknown": 1
+     },
+     "percentages": {
+      "unknown": 100.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "total": 1,
+     "counts": {
+      "content_filtered": 1
+     },
+     "percentages": {
+      "content_filtered": 100.0
+     }
+    }
+   ]
+  }
+ },
+ "output_length_default": {
+  "url": "/api/analysis/output-length",
+  "status": 200,
+  "body": {
+   "window": "7d",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 1,
+     "mean": 1999.0,
+     "median": 1999.0,
+     "p50": 1999.0,
+     "p95": 1999.0,
+     "std": 0.0,
+     "min": 1999,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 980.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3920.0,
+     "std": 1599.3,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 10,
+     "mean": 1276.8,
+     "median": 644.5,
+     "p50": 644.5,
+     "p95": 3595.0,
+     "std": 1254.4,
+     "min": 100,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 12,
+     "mean": 1142.4,
+     "median": 512.0,
+     "p50": 512.0,
+     "p95": 4045.0,
+     "std": 1506.2,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 10,
+     "mean": 583.2,
+     "median": 300.0,
+     "p50": 300.0,
+     "p95": 1775.0,
+     "std": 662.3,
+     "min": 0,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 4
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 10,
+     "mean": 1378.1,
+     "median": 999.5,
+     "p50": 999.5,
+     "p95": 3595.0,
+     "std": 1238.3,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 3
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "n": 7,
+     "mean": 1447.6,
+     "median": 512.0,
+     "p50": 512.0,
+     "p95": 3730.0,
+     "std": 1481.7,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "n": 4,
+     "mean": 132.2,
+     "median": 139.5,
+     "p50": 139.5,
+     "p95": 239.5,
+     "std": 93.2,
+     "min": 0,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 10,
+     "mean": 521.1,
+     "median": 325.0,
+     "p50": 325.0,
+     "p95": 1549.4,
+     "std": 558.3,
+     "min": 42,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 3
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "n": 11,
+     "mean": 974.5,
+     "median": 500.0,
+     "p50": 500.0,
+     "p95": 2999.5,
+     "std": 1115.6,
+     "min": 80,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 10,
+     "mean": 964.6,
+     "median": 505.5,
+     "p50": 505.5,
+     "p95": 3099.4,
+     "std": 1187.5,
+     "min": 0,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_24h": {
+  "url": "/api/analysis/output-length?window=24h",
+  "status": 200,
+  "body": {
+   "window": "24h",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 980.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3920.0,
+     "std": 1599.3,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 7,
+     "mean": 1684.0,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 3730.0,
+     "std": 1297.3,
+     "min": 400,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 899.8,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3520.0,
+     "std": 1553.9,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 6,
+     "mean": 856.8,
+     "median": 749.5,
+     "p50": 749.5,
+     "p95": 1875.0,
+     "std": 719.3,
+     "min": 42,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 7,
+     "mean": 1557.4,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 3730.0,
+     "std": 1411.8,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "n": 3,
+     "mean": 3033.0,
+     "median": 3100.0,
+     "p50": 3100.0,
+     "p95": 3910.0,
+     "std": 818.3,
+     "min": 1999,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "n": 4,
+     "mean": 132.2,
+     "median": 139.5,
+     "p50": 139.5,
+     "p95": 239.5,
+     "std": 93.2,
+     "min": 0,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 7,
+     "mean": 645.7,
+     "median": 499.0,
+     "p50": 499.0,
+     "p95": 1699.3,
+     "std": 619.9,
+     "min": 80,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "n": 8,
+     "mean": 766.0,
+     "median": 450.0,
+     "p50": 450.0,
+     "p95": 1825.0,
+     "std": 630.5,
+     "min": 100,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 8,
+     "mean": 1046.2,
+     "median": 346.0,
+     "p50": 346.0,
+     "p95": 3299.3,
+     "std": 1313.2,
+     "min": 0,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_30d": {
+  "url": "/api/analysis/output-length?window=30d",
+  "status": 200,
+  "body": {
+   "window": "30d",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 4,
+     "mean": 1727.8,
+     "median": 1255.5,
+     "p50": 1255.5,
+     "p95": 3699.8,
+     "std": 1455.8,
+     "min": 400,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 980.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3920.0,
+     "std": 1599.3,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 14,
+     "mean": 1519.0,
+     "median": 999.5,
+     "p50": 999.5,
+     "p95": 3999.3,
+     "std": 1281.0,
+     "min": 100,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 4
+      },
+      {
+       "bin": "1000-2000",
+       "count": 3
+      },
+      {
+       "bin": "2000-4000",
+       "count": 3
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 15,
+     "mean": 952.6,
+     "median": 400.0,
+     "p50": 400.0,
+     "p95": 3730.0,
+     "std": 1401.2,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 4
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 12,
+     "mean": 521.8,
+     "median": 215.0,
+     "p50": 215.0,
+     "p95": 1725.0,
+     "std": 620.2,
+     "min": 0,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 4
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 11,
+     "mean": 1434.6,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 3550.0,
+     "std": 1194.1,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 3
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (global)",
+     "n": 2,
+     "mean": 2856.0,
+     "median": 2856.0,
+     "p50": 2856.0,
+     "p95": 4965.6,
+     "std": 2344.0,
+     "min": 512,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "n": 10,
+     "mean": 1111.3,
+     "median": 450.0,
+     "p50": 450.0,
+     "p95": 3595.0,
+     "std": 1345.0,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "n": 4,
+     "mean": 132.2,
+     "median": 139.5,
+     "p50": 139.5,
+     "p95": 239.5,
+     "std": 93.2,
+     "min": 0,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 13,
+     "mean": 545.4,
+     "median": 400.0,
+     "p50": 400.0,
+     "p95": 1399.6,
+     "std": 508.2,
+     "min": 42,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 4
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "n": 14,
+     "mean": 796.4,
+     "median": 390.0,
+     "p50": 390.0,
+     "p95": 2699.6,
+     "std": 1047.1,
+     "min": 0,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 3
+      },
+      {
+       "bin": "250-500",
+       "count": 3
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 13,
+     "mean": 1327.5,
+     "median": 512.0,
+     "p50": 512.0,
+     "p95": 3999.4,
+     "std": 1424.2,
+     "min": 0,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 3
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_720h": {
+  "url": "/api/analysis/output-length?window=720h",
+  "status": 200,
+  "body": {
+   "window": "720h",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 4,
+     "mean": 1727.8,
+     "median": 1255.5,
+     "p50": 1255.5,
+     "p95": 3699.8,
+     "std": 1455.8,
+     "min": 400,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 980.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3920.0,
+     "std": 1599.3,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 14,
+     "mean": 1519.0,
+     "median": 999.5,
+     "p50": 999.5,
+     "p95": 3999.3,
+     "std": 1281.0,
+     "min": 100,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 4
+      },
+      {
+       "bin": "1000-2000",
+       "count": 3
+      },
+      {
+       "bin": "2000-4000",
+       "count": 3
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 15,
+     "mean": 952.6,
+     "median": 400.0,
+     "p50": 400.0,
+     "p95": 3730.0,
+     "std": 1401.2,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 4
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 12,
+     "mean": 521.8,
+     "median": 215.0,
+     "p50": 215.0,
+     "p95": 1725.0,
+     "std": 620.2,
+     "min": 0,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 4
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 11,
+     "mean": 1434.6,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 3550.0,
+     "std": 1194.1,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 3
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (global)",
+     "n": 2,
+     "mean": 2856.0,
+     "median": 2856.0,
+     "p50": 2856.0,
+     "p95": 4965.6,
+     "std": 2344.0,
+     "min": 512,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "n": 10,
+     "mean": 1111.3,
+     "median": 450.0,
+     "p50": 450.0,
+     "p95": 3595.0,
+     "std": 1345.0,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "n": 4,
+     "mean": 132.2,
+     "median": 139.5,
+     "p50": 139.5,
+     "p95": 239.5,
+     "std": 93.2,
+     "min": 0,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 13,
+     "mean": 545.4,
+     "median": 400.0,
+     "p50": 400.0,
+     "p95": 1399.6,
+     "std": 508.2,
+     "min": 42,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 4
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "n": 14,
+     "mean": 796.4,
+     "median": 390.0,
+     "p50": 390.0,
+     "p95": 2699.6,
+     "std": 1047.1,
+     "min": 0,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 3
+      },
+      {
+       "bin": "250-500",
+       "count": 3
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 13,
+     "mean": 1327.5,
+     "median": 512.0,
+     "p50": 512.0,
+     "p95": 3999.4,
+     "std": 1424.2,
+     "min": 0,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 3
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 3
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_6h_reasoning": {
+  "url": "/api/analysis/output-length?window=6h&category=reasoning",
+  "status": 200,
+  "body": {
+   "window": "6h",
+   "category": "reasoning",
+   "rows": [
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 1,
+     "mean": 1999.0,
+     "median": 1999.0,
+     "p50": 1999.0,
+     "p95": 1999.0,
+     "std": 0.0,
+     "min": 1999,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 1,
+     "mean": 512.0,
+     "median": 512.0,
+     "p50": 512.0,
+     "p95": 512.0,
+     "std": 0.0,
+     "min": 512,
+     "max": 512,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 1,
+     "mean": 250.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 250.0,
+     "std": 0.0,
+     "min": 250,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 1,
+     "mean": 2000.0,
+     "median": 2000.0,
+     "p50": 2000.0,
+     "p95": 2000.0,
+     "std": 0.0,
+     "min": 2000,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_30d_chat_short": {
+  "url": "/api/analysis/output-length?window=30d&category=chat-short",
+  "status": 200,
+  "body": {
+   "window": "30d",
+   "category": "chat-short",
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 1,
+     "mean": 400.0,
+     "median": 400.0,
+     "p50": 400.0,
+     "p95": 400.0,
+     "std": 0.0,
+     "min": 400,
+     "max": 400,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 2,
+     "mean": 1049.5,
+     "median": 1049.5,
+     "p50": 1049.5,
+     "p95": 1905.0,
+     "std": 950.5,
+     "min": 99,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 3,
+     "mean": 1733.3,
+     "median": 2000.0,
+     "p50": 2000.0,
+     "p95": 2990.0,
+     "std": 1239.2,
+     "min": 100,
+     "max": 3100,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 3,
+     "mean": 312.3,
+     "median": 80.0,
+     "p50": 80.0,
+     "p95": 707.3,
+     "std": 328.6,
+     "min": 80,
+     "max": 777,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 1,
+     "mean": 250.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 250.0,
+     "std": 0.0,
+     "min": 250,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 3,
+     "mean": 1180.3,
+     "median": 1500.0,
+     "p50": 1500.0,
+     "p95": 1949.1,
+     "std": 830.3,
+     "min": 42,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "n": 2,
+     "mean": 290.0,
+     "median": 290.0,
+     "p50": 290.0,
+     "p95": 479.0,
+     "std": 210.0,
+     "min": 80,
+     "max": 500,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 3,
+     "mean": 463.7,
+     "median": 499.0,
+     "p50": 499.0,
+     "p95": 510.7,
+     "std": 59.4,
+     "min": 380,
+     "max": 512,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "n": 3,
+     "mean": 493.0,
+     "median": 400.0,
+     "p50": 400.0,
+     "p95": 939.1,
+     "std": 380.9,
+     "min": 80,
+     "max": 999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 3,
+     "mean": 2426.3,
+     "median": 3100.0,
+     "p50": 3100.0,
+     "p95": 3909.1,
+     "std": 1630.2,
+     "min": 180,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_no_unit": {
+  "url": "/api/analysis/output-length?window=abc",
+  "status": 200,
+  "body": {
+   "window": "abc",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 980.0,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3920.0,
+     "std": 1599.3,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "n": 7,
+     "mean": 1684.0,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 3730.0,
+     "std": 1297.3,
+     "min": 400,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 9,
+     "mean": 899.8,
+     "median": 250.0,
+     "p50": 250.0,
+     "p95": 3520.0,
+     "std": 1553.9,
+     "min": 0,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 6,
+     "mean": 856.8,
+     "median": 749.5,
+     "p50": 749.5,
+     "p95": 1875.0,
+     "std": 719.3,
+     "min": 42,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 7,
+     "mean": 1557.4,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 3730.0,
+     "std": 1411.8,
+     "min": 42,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "n": 3,
+     "mean": 3033.0,
+     "median": 3100.0,
+     "p50": 3100.0,
+     "p95": 3910.0,
+     "std": 818.3,
+     "min": 1999,
+     "max": 4000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "n": 4,
+     "mean": 132.2,
+     "median": 139.5,
+     "p50": 139.5,
+     "p95": 239.5,
+     "std": 93.2,
+     "min": 0,
+     "max": 250,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 2
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 1
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 7,
+     "mean": 645.7,
+     "median": 499.0,
+     "p50": 499.0,
+     "p95": 1699.3,
+     "std": 619.9,
+     "min": 80,
+     "max": 1999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 2
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "n": 8,
+     "mean": 766.0,
+     "median": 450.0,
+     "p50": 450.0,
+     "p95": 1825.0,
+     "std": 630.5,
+     "min": 100,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 2
+      },
+      {
+       "bin": "250-500",
+       "count": 2
+      },
+      {
+       "bin": "500-1000",
+       "count": 2
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "n": 8,
+     "mean": 1046.2,
+     "median": 346.0,
+     "p50": 346.0,
+     "p95": 3299.3,
+     "std": 1313.2,
+     "min": 0,
+     "max": 3999,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 3
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 1
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 2
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "output_length_45m": {
+  "url": "/api/analysis/output-length?window=45m",
+  "status": 200,
+  "body": {
+   "window": "45m",
+   "category": null,
+   "rows": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "n": 1,
+     "mean": 2000.0,
+     "median": 2000.0,
+     "p50": 2000.0,
+     "p95": 2000.0,
+     "std": 0.0,
+     "min": 2000,
+     "max": 2000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 1
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "n": 1,
+     "mean": 5200.0,
+     "median": 5200.0,
+     "p50": 5200.0,
+     "p95": 5200.0,
+     "std": 0.0,
+     "min": 5200,
+     "max": 5200,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 1
+      }
+     ]
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "n": 1,
+     "mean": 42.0,
+     "median": 42.0,
+     "p50": 42.0,
+     "p95": 42.0,
+     "std": 0.0,
+     "min": 42,
+     "max": 42,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "n": 1,
+     "mean": 1000.0,
+     "median": 1000.0,
+     "p50": 1000.0,
+     "p95": 1000.0,
+     "std": 0.0,
+     "min": 1000,
+     "max": 1000,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 1
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "n": 1,
+     "mean": 0.0,
+     "median": 0.0,
+     "p50": 0.0,
+     "p95": 0.0,
+     "std": 0.0,
+     "min": 0,
+     "max": 0,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 1
+      },
+      {
+       "bin": "100-250",
+       "count": 0
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "n": 1,
+     "mean": 180.0,
+     "median": 180.0,
+     "p50": 180.0,
+     "p95": 180.0,
+     "std": 0.0,
+     "min": 180,
+     "max": 180,
+     "histogram": [
+      {
+       "bin": "0-100",
+       "count": 0
+      },
+      {
+       "bin": "100-250",
+       "count": 1
+      },
+      {
+       "bin": "250-500",
+       "count": 0
+      },
+      {
+       "bin": "500-1000",
+       "count": 0
+      },
+      {
+       "bin": "1000-2000",
+       "count": 0
+      },
+      {
+       "bin": "2000-4000",
+       "count": 0
+      },
+      {
+       "bin": "4000+",
+       "count": 0
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "reliability_default": {
+  "url": "/api/reliability/multi-channel",
+  "status": 200,
+  "body": {
+   "window": "24h",
+   "since": "2026-09-29T16:00:00+00:00",
+   "families": [
+    {
+     "family": "Claude Haiku 4.5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 10,
+       "success": 9,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.9,
+       "avg_ttft_ms": 574.64,
+       "p95_ttft_ms": 824.19,
+       "avg_latency_ms": 1533.68,
+       "p95_latency_ms": 1759.64,
+       "avg_tps": 65.22,
+       "error_buckets": {
+        "other": 1
+       }
+      },
+      {
+       "channel": "Bedrock US",
+       "samples": 10,
+       "success": 9,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.9,
+       "avg_ttft_ms": 687.09,
+       "p95_ttft_ms": 962.59,
+       "avg_latency_ms": 1661.89,
+       "p95_latency_ms": 1990.16,
+       "avg_tps": 63.47,
+       "error_buckets": {
+        "network": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Opus 5",
+     "channels": [
+      {
+       "channel": "Bedrock ap-northeast-2",
+       "samples": 10,
+       "success": 8,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 671.95,
+       "p95_ttft_ms": 944.42,
+       "avg_latency_ms": 1665.79,
+       "p95_latency_ms": 1994.92,
+       "avg_tps": 62.55,
+       "error_buckets": {
+        "network": 1,
+        "overloaded": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Sonnet 5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 10,
+       "success": 7,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7,
+       "avg_ttft_ms": 618.81,
+       "p95_ttft_ms": 862.25,
+       "avg_latency_ms": 1629.1,
+       "p95_latency_ms": 1911.17,
+       "avg_tps": 69.33,
+       "error_buckets": {
+        "model": 2,
+        "overloaded": 1
+       }
+      },
+      {
+       "channel": "Bedrock Global",
+       "samples": 10,
+       "success": 8,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 617.89,
+       "p95_ttft_ms": 897.71,
+       "avg_latency_ms": 1606.81,
+       "p95_latency_ms": 1878.12,
+       "avg_tps": 58.39,
+       "error_buckets": {
+        "overloaded": 2
+       }
+      }
+     ]
+    },
+    {
+     "family": "GPT 6.1 Sol",
+     "channels": [
+      {
+       "channel": "OpenAI Global",
+       "samples": 10,
+       "success": 8,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 665.77,
+       "p95_ttft_ms": 931.45,
+       "avg_latency_ms": 1627.29,
+       "p95_latency_ms": 1976.96,
+       "avg_tps": 57.46,
+       "error_buckets": {
+        "overloaded": 1,
+        "throttle": 1
+       }
+      },
+      {
+       "channel": "OpenAI us-east-1",
+       "samples": 10,
+       "success": 9,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.9,
+       "avg_ttft_ms": 607.08,
+       "p95_ttft_ms": 884.74,
+       "avg_latency_ms": 1630.39,
+       "p95_latency_ms": 1870.39,
+       "avg_tps": 54.89,
+       "error_buckets": {
+        "server": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 3,
+       "success": 3,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 524.9,
+       "p95_ttft_ms": 711.74,
+       "avg_latency_ms": 1499.63,
+       "p95_latency_ms": 1694.77,
+       "avg_tps": 58.85,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8b",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 7,
+       "success": 5,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.7143,
+       "avg_ttft_ms": 749.8,
+       "p95_ttft_ms": 979.02,
+       "avg_latency_ms": 1739.57,
+       "p95_latency_ms": 2044.58,
+       "avg_tps": 77.35,
+       "error_buckets": {
+        "overloaded": 2
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "reliability_6h": {
+  "url": "/api/reliability/multi-channel?window=6h",
+  "status": 200,
+  "body": {
+   "window": "6h",
+   "since": "2026-09-30T10:00:00+00:00",
+   "families": [
+    {
+     "family": "Claude Haiku 4.5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 5,
+       "success": 4,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 498.95,
+       "p95_ttft_ms": 757.58,
+       "avg_latency_ms": 1474.77,
+       "p95_latency_ms": 1704.59,
+       "avg_tps": 58.85,
+       "error_buckets": {
+        "other": 1
+       }
+      },
+      {
+       "channel": "Bedrock US",
+       "samples": 5,
+       "success": 5,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 722.12,
+       "p95_ttft_ms": 922.8,
+       "avg_latency_ms": 1724.8,
+       "p95_latency_ms": 1977.88,
+       "avg_tps": 57.0,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Claude Opus 5",
+     "channels": [
+      {
+       "channel": "Bedrock ap-northeast-2",
+       "samples": 5,
+       "success": 4,
+       "error": 0,
+       "overloaded": 1,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 684.92,
+       "p95_ttft_ms": 956.53,
+       "avg_latency_ms": 1700.05,
+       "p95_latency_ms": 2045.02,
+       "avg_tps": 69.95,
+       "error_buckets": {
+        "overloaded": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Sonnet 5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 5,
+       "success": 4,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 607.08,
+       "p95_ttft_ms": 857.06,
+       "avg_latency_ms": 1583.5,
+       "p95_latency_ms": 1882.11,
+       "avg_tps": 64.4,
+       "error_buckets": {
+        "model": 1
+       }
+      },
+      {
+       "channel": "Bedrock Global",
+       "samples": 5,
+       "success": 5,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 601.02,
+       "p95_ttft_ms": 801.7,
+       "avg_latency_ms": 1590.6,
+       "p95_latency_ms": 1843.68,
+       "avg_tps": 70.32,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "GPT 6.1 Sol",
+     "channels": [
+      {
+       "channel": "OpenAI Global",
+       "samples": 5,
+       "success": 4,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 599.87,
+       "p95_ttft_ms": 815.54,
+       "avg_latency_ms": 1524.25,
+       "p95_latency_ms": 1901.5,
+       "avg_tps": 63.48,
+       "error_buckets": {
+        "throttle": 1
+       }
+      },
+      {
+       "channel": "OpenAI us-east-1",
+       "samples": 5,
+       "success": 4,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.8,
+       "avg_ttft_ms": 568.15,
+       "p95_ttft_ms": 702.23,
+       "avg_latency_ms": 1589.82,
+       "p95_latency_ms": 1773.68,
+       "avg_tps": 55.77,
+       "error_buckets": {
+        "server": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8b",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 5,
+       "success": 5,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 749.8,
+       "p95_ttft_ms": 979.02,
+       "avg_latency_ms": 1739.57,
+       "p95_latency_ms": 2044.58,
+       "avg_tps": 77.35,
+       "error_buckets": {}
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "reliability_7d": {
+  "url": "/api/reliability/multi-channel?window=7d",
+  "status": 200,
+  "body": {
+   "window": "7d",
+   "since": "2026-09-23T16:00:00+00:00",
+   "families": [
+    {
+     "family": "Claude Haiku 4.5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 14,
+       "success": 11,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7857,
+       "avg_ttft_ms": 630.43,
+       "p95_ttft_ms": 902.9,
+       "avg_latency_ms": 1596.38,
+       "p95_latency_ms": 1895.6,
+       "avg_tps": 64.74,
+       "error_buckets": {
+        "overloaded": 1,
+        "other": 2
+       }
+      },
+      {
+       "channel": "Bedrock US",
+       "samples": 14,
+       "success": 12,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 696.33,
+       "p95_ttft_ms": 957.4,
+       "avg_latency_ms": 1691.38,
+       "p95_latency_ms": 1989.32,
+       "avg_tps": 68.47,
+       "error_buckets": {
+        "overloaded": 1,
+        "network": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Opus 5",
+     "channels": [
+      {
+       "channel": "Bedrock ap-northeast-2",
+       "samples": 14,
+       "success": 12,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 641.68,
+       "p95_ttft_ms": 927.12,
+       "avg_latency_ms": 1643.7,
+       "p95_latency_ms": 1943.56,
+       "avg_tps": 58.23,
+       "error_buckets": {
+        "network": 1,
+        "overloaded": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Sonnet 5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 14,
+       "success": 11,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7857,
+       "avg_ttft_ms": 649.15,
+       "p95_ttft_ms": 905.5,
+       "avg_latency_ms": 1670.95,
+       "p95_latency_ms": 1924.32,
+       "avg_tps": 67.28,
+       "error_buckets": {
+        "model": 2,
+        "overloaded": 1
+       }
+      },
+      {
+       "channel": "Bedrock Global",
+       "samples": 14,
+       "success": 12,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 650.72,
+       "p95_ttft_ms": 957.4,
+       "avg_latency_ms": 1607.34,
+       "p95_latency_ms": 1896.78,
+       "avg_tps": 60.08,
+       "error_buckets": {
+        "overloaded": 2
+       }
+      }
+     ]
+    },
+    {
+     "family": "GPT 6.1 Sol",
+     "channels": [
+      {
+       "channel": "OpenAI Global",
+       "samples": 14,
+       "success": 11,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7857,
+       "avg_ttft_ms": 651.19,
+       "p95_ttft_ms": 918.47,
+       "avg_latency_ms": 1629.55,
+       "p95_latency_ms": 1971.85,
+       "avg_tps": 61.04,
+       "error_buckets": {
+        "throttle": 2,
+        "overloaded": 1
+       }
+      },
+      {
+       "channel": "OpenAI us-east-1",
+       "samples": 14,
+       "success": 12,
+       "error": 2,
+       "overloaded": 0,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 595.67,
+       "p95_ttft_ms": 914.15,
+       "avg_latency_ms": 1598.34,
+       "p95_latency_ms": 1862.73,
+       "avg_tps": 54.78,
+       "error_buckets": {
+        "server": 2
+       }
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 7,
+       "success": 7,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 634.47,
+       "p95_ttft_ms": 918.48,
+       "avg_latency_ms": 1597.45,
+       "p95_latency_ms": 1959.8,
+       "avg_tps": 62.92,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8b",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 7,
+       "success": 5,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.7143,
+       "avg_ttft_ms": 749.8,
+       "p95_ttft_ms": 979.02,
+       "avg_latency_ms": 1739.57,
+       "p95_latency_ms": 2044.58,
+       "avg_tps": 77.35,
+       "error_buckets": {
+        "overloaded": 2
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "reliability_168h": {
+  "url": "/api/reliability/multi-channel?window=168h",
+  "status": 200,
+  "body": {
+   "window": "168h",
+   "since": "2026-09-23T16:00:00+00:00",
+   "families": [
+    {
+     "family": "Claude Haiku 4.5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 14,
+       "success": 11,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7857,
+       "avg_ttft_ms": 630.43,
+       "p95_ttft_ms": 902.9,
+       "avg_latency_ms": 1596.38,
+       "p95_latency_ms": 1895.6,
+       "avg_tps": 64.74,
+       "error_buckets": {
+        "overloaded": 1,
+        "other": 2
+       }
+      },
+      {
+       "channel": "Bedrock US",
+       "samples": 14,
+       "success": 12,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 696.33,
+       "p95_ttft_ms": 957.4,
+       "avg_latency_ms": 1691.38,
+       "p95_latency_ms": 1989.32,
+       "avg_tps": 68.47,
+       "error_buckets": {
+        "overloaded": 1,
+        "network": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Opus 5",
+     "channels": [
+      {
+       "channel": "Bedrock ap-northeast-2",
+       "samples": 14,
+       "success": 12,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 641.68,
+       "p95_ttft_ms": 927.12,
+       "avg_latency_ms": 1643.7,
+       "p95_latency_ms": 1943.56,
+       "avg_tps": 58.23,
+       "error_buckets": {
+        "network": 1,
+        "overloaded": 1
+       }
+      }
+     ]
+    },
+    {
+     "family": "Claude Sonnet 5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 14,
+       "success": 11,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7857,
+       "avg_ttft_ms": 649.15,
+       "p95_ttft_ms": 905.5,
+       "avg_latency_ms": 1670.95,
+       "p95_latency_ms": 1924.32,
+       "avg_tps": 67.28,
+       "error_buckets": {
+        "model": 2,
+        "overloaded": 1
+       }
+      },
+      {
+       "channel": "Bedrock Global",
+       "samples": 14,
+       "success": 12,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 650.72,
+       "p95_ttft_ms": 957.4,
+       "avg_latency_ms": 1607.34,
+       "p95_latency_ms": 1896.78,
+       "avg_tps": 60.08,
+       "error_buckets": {
+        "overloaded": 2
+       }
+      }
+     ]
+    },
+    {
+     "family": "GPT 6.1 Sol",
+     "channels": [
+      {
+       "channel": "OpenAI Global",
+       "samples": 14,
+       "success": 11,
+       "error": 2,
+       "overloaded": 1,
+       "success_rate": 0.7857,
+       "avg_ttft_ms": 651.19,
+       "p95_ttft_ms": 918.47,
+       "avg_latency_ms": 1629.55,
+       "p95_latency_ms": 1971.85,
+       "avg_tps": 61.04,
+       "error_buckets": {
+        "throttle": 2,
+        "overloaded": 1
+       }
+      },
+      {
+       "channel": "OpenAI us-east-1",
+       "samples": 14,
+       "success": 12,
+       "error": 2,
+       "overloaded": 0,
+       "success_rate": 0.8571,
+       "avg_ttft_ms": 595.67,
+       "p95_ttft_ms": 914.15,
+       "avg_latency_ms": 1598.34,
+       "p95_latency_ms": 1862.73,
+       "avg_tps": 54.78,
+       "error_buckets": {
+        "server": 2
+       }
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 7,
+       "success": 7,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 634.47,
+       "p95_ttft_ms": 918.48,
+       "avg_latency_ms": 1597.45,
+       "p95_latency_ms": 1959.8,
+       "avg_tps": 62.92,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8b",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 7,
+       "success": 5,
+       "error": 1,
+       "overloaded": 1,
+       "success_rate": 0.7143,
+       "avg_ttft_ms": 749.8,
+       "p95_ttft_ms": 979.02,
+       "avg_latency_ms": 1739.57,
+       "p95_latency_ms": 2044.58,
+       "avg_tps": 77.35,
+       "error_buckets": {
+        "overloaded": 2
+       }
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "reliability_90m": {
+  "url": "/api/reliability/multi-channel?window=90m",
+  "status": 200,
+  "body": {
+   "window": "90m",
+   "since": "2026-09-30T14:30:00+00:00",
+   "families": [
+    {
+     "family": "Claude Haiku 4.5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 2,
+       "success": 1,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.5,
+       "avg_ttft_ms": 386.5,
+       "p95_ttft_ms": 386.5,
+       "avg_latency_ms": 1378.7,
+       "p95_latency_ms": 1378.7,
+       "avg_tps": 57.0,
+       "error_buckets": {
+        "other": 1
+       }
+      },
+      {
+       "channel": "Bedrock US",
+       "samples": 2,
+       "success": 2,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 836.3,
+       "p95_ttft_ms": 929.72,
+       "avg_latency_ms": 1835.05,
+       "p95_latency_ms": 1969.74,
+       "avg_tps": 69.95,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Claude Opus 5",
+     "channels": [
+      {
+       "channel": "Bedrock ap-northeast-2",
+       "samples": 2,
+       "success": 2,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 602.75,
+       "p95_ttft_ms": 828.51,
+       "avg_latency_ms": 1614.6,
+       "p95_latency_ms": 1799.1,
+       "avg_tps": 73.65,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Claude Sonnet 5",
+     "channels": [
+      {
+       "channel": "Anthropic (CP on AWS)",
+       "samples": 2,
+       "success": 1,
+       "error": 1,
+       "overloaded": 0,
+       "success_rate": 0.5,
+       "avg_ttft_ms": 473.0,
+       "p95_ttft_ms": 473.0,
+       "avg_latency_ms": 1543.8,
+       "p95_latency_ms": 1543.8,
+       "avg_tps": 101.4,
+       "error_buckets": {
+        "model": 1
+       }
+      },
+      {
+       "channel": "Bedrock Global",
+       "samples": 2,
+       "success": 2,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 715.2,
+       "p95_ttft_ms": 808.62,
+       "avg_latency_ms": 1700.85,
+       "p95_latency_ms": 1835.53,
+       "avg_tps": 66.25,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "GPT 6.1 Sol",
+     "channels": [
+      {
+       "channel": "OpenAI Global",
+       "samples": 2,
+       "success": 2,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 732.5,
+       "p95_ttft_ms": 825.92,
+       "avg_latency_ms": 1796.75,
+       "p95_latency_ms": 1931.43,
+       "avg_tps": 45.9,
+       "error_buckets": {}
+      },
+      {
+       "channel": "OpenAI us-east-1",
+       "samples": 2,
+       "success": 2,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 611.4,
+       "p95_ttft_ms": 704.82,
+       "avg_latency_ms": 1662.55,
+       "p95_latency_ms": 1797.24,
+       "avg_tps": 42.2,
+       "error_buckets": {}
+      }
+     ]
+    },
+    {
+     "family": "Mystery 8b",
+     "channels": [
+      {
+       "channel": "Bedrock Global",
+       "samples": 2,
+       "success": 2,
+       "error": 0,
+       "overloaded": 0,
+       "success_rate": 1.0,
+       "avg_ttft_ms": 992.0,
+       "p95_ttft_ms": 992.0,
+       "avg_latency_ms": 1613.2,
+       "p95_latency_ms": 2006.05,
+       "avg_tps": 75.5,
+       "error_buckets": {}
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "efficiency_default": {
+  "url": "/api/efficiency/score",
+  "status": 200,
+  "body": {
+   "window": "24h",
+   "since": "2026-09-29T16:00:00+00:00",
+   "category": null,
+   "models": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "samples": 10,
+     "success_rate": 0.9,
+     "avg_output_tokens": 980.0,
+     "avg_input_tokens": 1100.2222,
+     "avg_cost_usd": 0.006,
+     "avg_total_latency_ms": 1533.6778,
+     "avg_tps": 65.2222,
+     "score": 84.77,
+     "components": {
+      "cost": 1.0,
+      "output_tokens": 0.6291,
+      "latency": 0.9763,
+      "tps": 0.6342,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "samples": 10,
+     "success_rate": 0.9,
+     "avg_output_tokens": 1046.25,
+     "avg_input_tokens": 976.8889,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1530.4714,
+     "avg_tps": 62.2857,
+     "score": 72.94,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.5699,
+      "latency": 1.0,
+      "tps": 0.4541,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "samples": 10,
+     "success_rate": 0.9,
+     "avg_output_tokens": 899.7778,
+     "avg_input_tokens": 1116.6667,
+     "avg_cost_usd": 0.0062,
+     "avg_total_latency_ms": 1661.8875,
+     "avg_tps": 63.475,
+     "score": 65.66,
+     "components": {
+      "cost": 0.9886,
+      "output_tokens": 0.7007,
+      "latency": 0.0288,
+      "tps": 0.527,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "samples": 10,
+     "success_rate": 0.8,
+     "avg_output_tokens": 564.875,
+     "avg_input_tokens": 856.125,
+     "avg_cost_usd": 0.0074,
+     "avg_total_latency_ms": 1627.2875,
+     "avg_tps": 57.4625,
+     "score": 65.66,
+     "components": {
+      "cost": 0.92,
+      "output_tokens": 1.0,
+      "latency": 0.2845,
+      "tps": 0.1581,
+      "success_rate": 0.5
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "samples": 10,
+     "success_rate": 0.9,
+     "avg_output_tokens": 680.7778,
+     "avg_input_tokens": 1059.1111,
+     "avg_cost_usd": 0.0098,
+     "avg_total_latency_ms": 1630.3875,
+     "avg_tps": 54.8857,
+     "score": 61.13,
+     "components": {
+      "cost": 0.7829,
+      "output_tokens": 0.8964,
+      "latency": 0.2616,
+      "tps": 0.0,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "samples": 10,
+     "success_rate": 0.8,
+     "avg_output_tokens": 1375.4286,
+     "avg_input_tokens": 1059.625,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1636.7429,
+     "avg_tps": 71.1833,
+     "score": 44.55,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.2757,
+      "latency": 0.2146,
+      "tps": 1.0,
+      "success_rate": 0.5
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "samples": 10,
+     "success_rate": 0.8,
+     "avg_output_tokens": 734.2857,
+     "avg_input_tokens": 1068.875,
+     "avg_cost_usd": 0.0235,
+     "avg_total_latency_ms": 1665.7875,
+     "avg_tps": 62.55,
+     "score": 33.27,
+     "components": {
+      "cost": 0.0,
+      "output_tokens": 0.8486,
+      "latency": 0.0,
+      "tps": 0.4703,
+      "success_rate": 0.5
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "samples": 10,
+     "success_rate": 0.7,
+     "avg_output_tokens": 1684.0,
+     "avg_input_tokens": 1203.0,
+     "avg_cost_usd": 0.0192,
+     "avg_total_latency_ms": 1629.1,
+     "avg_tps": 69.3333,
+     "score": 26.09,
+     "components": {
+      "cost": 0.2457,
+      "output_tokens": 0.0,
+      "latency": 0.2711,
+      "tps": 0.8865,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "samples": 10,
+     "success_rate": 0.8,
+     "avg_output_tokens": 1557.4286,
+     "avg_input_tokens": 999.5,
+     "avg_cost_usd": 0.0231,
+     "avg_total_latency_ms": 1606.8125,
+     "avg_tps": 58.3875,
+     "score": 20.45,
+     "components": {
+      "cost": 0.0229,
+      "output_tokens": 0.1131,
+      "latency": 0.4358,
+      "tps": 0.2149,
+      "success_rate": 0.5
+     }
+    }
+   ]
+  }
+ },
+ "efficiency_6h": {
+  "url": "/api/efficiency/score?window=6h",
+  "status": 200,
+  "body": {
+   "window": "6h",
+   "since": "2026-09-30T10:00:00+00:00",
+   "category": null,
+   "models": [
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "samples": 5,
+     "success_rate": 0.8,
+     "avg_output_tokens": 482.25,
+     "avg_input_tokens": 934.75,
+     "avg_cost_usd": 0.0067,
+     "avg_total_latency_ms": 1524.25,
+     "avg_tps": 63.475,
+     "score": 73.41,
+     "components": {
+      "cost": 0.9243,
+      "output_tokens": 0.8522,
+      "latency": 0.8132,
+      "tps": 0.5408,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "samples": 5,
+     "success_rate": 1.0,
+     "avg_output_tokens": 132.25,
+     "avg_input_tokens": 1114.2,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1739.575,
+     "avg_tps": 77.35,
+     "score": 71.43,
+     "components": {
+      "cost": null,
+      "output_tokens": 1.0,
+      "latency": 0.0,
+      "tps": 1.0,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "samples": 5,
+     "success_rate": 0.8,
+     "avg_output_tokens": 187.0,
+     "avg_input_tokens": 1073.5,
+     "avg_cost_usd": 0.0044,
+     "avg_total_latency_ms": 1589.825,
+     "avg_tps": 55.7667,
+     "score": 70.02,
+     "components": {
+      "cost": 1.0,
+      "output_tokens": 0.9769,
+      "latency": 0.5655,
+      "tps": 0.2857,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "samples": 5,
+     "success_rate": 0.8,
+     "avg_output_tokens": 160.25,
+     "avg_input_tokens": 1055.0,
+     "avg_cost_usd": 0.0102,
+     "avg_total_latency_ms": 1700.05,
+     "avg_tps": 69.95,
+     "score": 63.29,
+     "components": {
+      "cost": 0.8092,
+      "output_tokens": 0.9882,
+      "latency": 0.1493,
+      "tps": 0.7551,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "samples": 5,
+     "success_rate": 1.0,
+     "avg_output_tokens": 1178.2,
+     "avg_input_tokens": 1032.8,
+     "avg_cost_usd": 0.0076,
+     "avg_total_latency_ms": 1724.8,
+     "avg_tps": 57.0,
+     "score": 56.81,
+     "components": {
+      "cost": 0.8947,
+      "output_tokens": 0.5582,
+      "latency": 0.0558,
+      "tps": 0.3265,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "samples": 5,
+     "success_rate": 0.8,
+     "avg_output_tokens": 1948.0,
+     "avg_input_tokens": 944.0,
+     "avg_cost_usd": 0.0107,
+     "avg_total_latency_ms": 1474.775,
+     "avg_tps": 58.85,
+     "score": 55.43,
+     "components": {
+      "cost": 0.7928,
+      "output_tokens": 0.233,
+      "latency": 1.0,
+      "tps": 0.3878,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "samples": 5,
+     "success_rate": 0.8,
+     "avg_output_tokens": 1719.0,
+     "avg_input_tokens": 1082.75,
+     "avg_cost_usd": 0.0194,
+     "avg_total_latency_ms": 1583.5,
+     "avg_tps": 64.4,
+     "score": 43.8,
+     "components": {
+      "cost": 0.5066,
+      "output_tokens": 0.3298,
+      "latency": 0.5894,
+      "tps": 0.5714,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "samples": 5,
+     "success_rate": 1.0,
+     "avg_output_tokens": 2122.2,
+     "avg_input_tokens": 995.8,
+     "avg_cost_usd": 0.0348,
+     "avg_total_latency_ms": 1590.6,
+     "avg_tps": 70.32,
+     "score": 36.75,
+     "components": {
+      "cost": 0.0,
+      "output_tokens": 0.1594,
+      "latency": 0.5626,
+      "tps": 0.7673,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "samples": 5,
+     "success_rate": 0.8,
+     "avg_output_tokens": 2499.6667,
+     "avg_input_tokens": 1064.25,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1521.0333,
+     "avg_tps": 47.1333,
+     "score": 23.58,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.0,
+      "latency": 0.8253,
+      "tps": 0.0,
+      "success_rate": 0.0
+     }
+    }
+   ]
+  }
+ },
+ "efficiency_7d": {
+  "url": "/api/efficiency/score?window=7d",
+  "status": 200,
+  "body": {
+   "window": "7d",
+   "since": "2026-09-23T16:00:00+00:00",
+   "category": null,
+   "models": [
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "samples": 12,
+     "success_rate": 0.75,
+     "avg_output_tokens": 980.0,
+     "avg_input_tokens": 1100.2222,
+     "avg_cost_usd": 0.006,
+     "avg_total_latency_ms": 1533.6778,
+     "avg_tps": 65.2222,
+     "score": 77.23,
+     "components": {
+      "cost": 0.9924,
+      "output_tokens": 0.668,
+      "latency": 1.0,
+      "tps": 0.7175,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "samples": 14,
+     "success_rate": 0.7857,
+     "avg_output_tokens": 473.6364,
+     "avg_input_tokens": 910.3636,
+     "avg_cost_usd": 0.0066,
+     "avg_total_latency_ms": 1629.5455,
+     "avg_tps": 61.0364,
+     "score": 75.71,
+     "components": {
+      "cost": 0.9466,
+      "output_tokens": 1.0,
+      "latency": 0.722,
+      "tps": 0.4299,
+      "success_rate": 0.1428
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "samples": 14,
+     "success_rate": 0.8571,
+     "avg_output_tokens": 969.2727,
+     "avg_input_tokens": 1014.9167,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1654.3,
+     "avg_tps": 69.3333,
+     "score": 70.24,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.6751,
+      "latency": 0.6502,
+      "tps": 1.0,
+      "success_rate": 0.4284
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "samples": 14,
+     "success_rate": 0.8571,
+     "avg_output_tokens": 1142.4167,
+     "avg_input_tokens": 1055.0,
+     "avg_cost_usd": 0.0074,
+     "avg_total_latency_ms": 1691.38,
+     "avg_tps": 68.47,
+     "score": 69.85,
+     "components": {
+      "cost": 0.8855,
+      "output_tokens": 0.5616,
+      "latency": 0.5427,
+      "tps": 0.9407,
+      "success_rate": 0.4284
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "samples": 14,
+     "success_rate": 0.7857,
+     "avg_output_tokens": 964.6,
+     "avg_input_tokens": 954.0909,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1551.9667,
+     "avg_tps": 63.5778,
+     "score": 66.27,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.6781,
+      "latency": 0.947,
+      "tps": 0.6045,
+      "success_rate": 0.1428
+     }
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "samples": 14,
+     "success_rate": 0.8571,
+     "avg_output_tokens": 893.1667,
+     "avg_input_tokens": 1018.0,
+     "avg_cost_usd": 0.0121,
+     "avg_total_latency_ms": 1598.34,
+     "avg_tps": 54.78,
+     "score": 54.46,
+     "components": {
+      "cost": 0.5267,
+      "output_tokens": 0.725,
+      "latency": 0.8125,
+      "tps": 0.0,
+      "success_rate": 0.4284
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "samples": 14,
+     "success_rate": 0.7857,
+     "avg_output_tokens": 1276.8,
+     "avg_input_tokens": 1118.9091,
+     "avg_cost_usd": 0.0138,
+     "avg_total_latency_ms": 1670.95,
+     "avg_tps": 67.2778,
+     "score": 50.09,
+     "components": {
+      "cost": 0.3969,
+      "output_tokens": 0.4735,
+      "latency": 0.602,
+      "tps": 0.8588,
+      "success_rate": 0.1428
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "samples": 2,
+     "success_rate": 1.0,
+     "avg_output_tokens": 1999.0,
+     "avg_input_tokens": 907.0,
+     "avg_cost_usd": 0.0059,
+     "avg_total_latency_ms": 1878.55,
+     "avg_tps": 62.55,
+     "score": 48.01,
+     "components": {
+      "cost": 1.0,
+      "output_tokens": 0.0,
+      "latency": 0.0,
+      "tps": 0.5339,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "samples": 14,
+     "success_rate": 0.8571,
+     "avg_output_tokens": 530.0909,
+     "avg_input_tokens": 1024.1667,
+     "avg_cost_usd": 0.019,
+     "avg_total_latency_ms": 1643.7,
+     "avg_tps": 58.2333,
+     "score": 45.54,
+     "components": {
+      "cost": 0.0,
+      "output_tokens": 0.963,
+      "latency": 0.681,
+      "tps": 0.2373,
+      "success_rate": 0.4284
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "samples": 14,
+     "success_rate": 0.8571,
+     "avg_output_tokens": 1252.7273,
+     "avg_input_tokens": 953.25,
+     "avg_cost_usd": 0.0183,
+     "avg_total_latency_ms": 1607.3417,
+     "avg_tps": 60.0833,
+     "score": 39.31,
+     "components": {
+      "cost": 0.0534,
+      "output_tokens": 0.4892,
+      "latency": 0.7864,
+      "tps": 0.3644,
+      "success_rate": 0.4284
+     }
+    }
+   ]
+  }
+ },
+ "efficiency_7d_reasoning": {
+  "url": "/api/efficiency/score?window=7d&category=reasoning",
+  "status": 200,
+  "body": {
+   "window": "7d",
+   "since": "2026-09-23T16:00:00+00:00",
+   "category": "reasoning",
+   "models": [
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "samples": 3,
+     "success_rate": 1.0,
+     "avg_output_tokens": 337.0,
+     "avg_input_tokens": 1203.0,
+     "avg_cost_usd": 0.0064,
+     "avg_total_latency_ms": 1478.8,
+     "avg_tps": 65.6333,
+     "score": 82.94,
+     "components": {
+      "cost": 0.7644,
+      "output_tokens": 0.831,
+      "latency": 0.9464,
+      "tps": 0.6869,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "samples": 3,
+     "success_rate": 1.0,
+     "avg_output_tokens": 166.0,
+     "avg_input_tokens": 870.0,
+     "avg_cost_usd": 0.0034,
+     "avg_total_latency_ms": 1729.7333,
+     "avg_tps": 60.7,
+     "score": 79.48,
+     "components": {
+      "cost": 0.9087,
+      "output_tokens": 0.9165,
+      "latency": 0.5108,
+      "tps": 0.6061,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "samples": 2,
+     "success_rate": 1.0,
+     "avg_output_tokens": 1049.5,
+     "avg_input_tokens": 574.0,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 1447.9,
+     "avg_tps": null,
+     "score": 76.13,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.4748,
+      "latency": 1.0,
+      "tps": null,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "samples": 2,
+     "success_rate": 0.5,
+     "avg_output_tokens": -1.0,
+     "avg_input_tokens": 1499.0,
+     "avg_cost_usd": 0.0082,
+     "avg_total_latency_ms": 1486.2,
+     "avg_tps": 60.7,
+     "score": 73.1,
+     "components": {
+      "cost": 0.6779,
+      "output_tokens": 1.0,
+      "latency": 0.9335,
+      "tps": 0.6061,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "samples": 2,
+     "success_rate": 0.5,
+     "avg_output_tokens": 0.0,
+     "avg_input_tokens": 1536.0,
+     "avg_cost_usd": 0.0015,
+     "avg_total_latency_ms": 1720.5,
+     "avg_tps": 42.2,
+     "score": 70.07,
+     "components": {
+      "cost": 1.0,
+      "output_tokens": 0.9995,
+      "latency": 0.5268,
+      "tps": 0.303,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "samples": 3,
+     "success_rate": 0.6667,
+     "avg_output_tokens": 512.0,
+     "avg_input_tokens": 685.0,
+     "avg_cost_usd": 0.0036,
+     "avg_total_latency_ms": 1984.7,
+     "avg_tps": 84.75,
+     "score": 65.26,
+     "components": {
+      "cost": 0.899,
+      "output_tokens": 0.7435,
+      "latency": 0.0682,
+      "tps": 1.0,
+      "success_rate": 0.3334
+     }
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "samples": 2,
+     "success_rate": 1.0,
+     "avg_output_tokens": 512.0,
+     "avg_input_tokens": 981.0,
+     "avg_cost_usd": null,
+     "avg_total_latency_ms": 2024.0,
+     "avg_tps": 71.8,
+     "score": 57.72,
+     "components": {
+      "cost": null,
+      "output_tokens": 0.7435,
+      "latency": 0.0,
+      "tps": 0.7879,
+      "success_rate": 1.0
+     }
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "samples": 2,
+     "success_rate": 0.5,
+     "avg_output_tokens": 999.0,
+     "avg_input_tokens": 944.0,
+     "avg_cost_usd": 0.0119,
+     "avg_total_latency_ms": 1901.4,
+     "avg_tps": 23.7,
+     "score": 31.76,
+     "components": {
+      "cost": 0.5,
+      "output_tokens": 0.5,
+      "latency": 0.2128,
+      "tps": 0.0,
+      "success_rate": 0.0
+     }
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "samples": 2,
+     "success_rate": 0.5,
+     "avg_output_tokens": 1999.0,
+     "avg_input_tokens": 1166.0,
+     "avg_cost_usd": 0.0223,
+     "avg_total_latency_ms": 1919.7,
+     "avg_tps": 27.4,
+     "score": 4.53,
+     "components": {
+      "cost": 0.0,
+      "output_tokens": 0.0,
+      "latency": 0.181,
+      "tps": 0.0606,
+      "success_rate": 0.0
+     }
+    }
+   ]
+  }
+ },
+ "cost_trend_default": {
+  "url": "/api/cost/trend",
+  "status": 200,
+  "body": {
+   "window": "24h",
+   "since": "2026-09-29T16:00:00+00:00",
+   "bucket_minutes": 60,
+   "points": [
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003624
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.00662
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.005803
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.004452
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.003206
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.024565
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002749
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.006924
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0058
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.00612
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.019879
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001696
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.058971
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.001716
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.00173
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.012822
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001661
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.007378
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002535
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.047256
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.008147
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001536
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.042998
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002557
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.035514
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.004164
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.021064
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.00528
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001233
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.032592
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001339
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.017924
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.009735
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.011814
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.004653
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003763
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.022322
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001201
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.063165
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.003828
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0265
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.013072
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002048
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.008217
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050775
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.006138
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.01124
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.009436
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.033493
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.014696
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050427
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.008816
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.009194
+    }
+   ]
+  }
+ },
+ "cost_trend_6h": {
+  "url": "/api/cost/trend?window=6h",
+  "status": 200,
+  "body": {
+   "window": "6h",
+   "since": "2026-09-30T10:00:00+00:00",
+   "bucket_minutes": 5,
+   "points": [
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001233
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.032592
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001339
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.017924
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.009735
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.011814
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.004653
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003763
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.022322
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001201
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.063165
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.003828
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0265
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.013072
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002048
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.008217
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050775
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.006138
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.009436
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003651
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.007128
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.032151
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.004388
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.006395
+    },
+    {
+     "bucket": "2026-09-30T15:45:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.01124
+    },
+    {
+     "bucket": "2026-09-30T15:45:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.029842
+    },
+    {
+     "bucket": "2026-09-30T15:45:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.007568
+    },
+    {
+     "bucket": "2026-09-30T15:45:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.018276
+    },
+    {
+     "bucket": "2026-09-30T15:45:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.004428
+    },
+    {
+     "bucket": "2026-09-30T15:45:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.002798
+    }
+   ]
+  }
+ },
+ "cost_trend_7d": {
+  "url": "/api/cost/trend?window=7d",
+  "status": 200,
+  "body": {
+   "window": "7d",
+   "since": "2026-09-23T16:00:00+00:00",
+   "bucket_minutes": 60,
+   "points": [
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.000722
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.00637
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003488
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.006287
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.016148
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.004082
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.00255
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.011087
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.00591
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.005599
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.011878
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.008116
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.00285
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.018536
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.009834
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.002618
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.003492
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.002444
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.011707
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.017847
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.005022
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.005666
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.04574
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003624
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.00662
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.005803
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.004452
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.003206
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.024565
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002749
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.006924
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0058
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.00612
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.019879
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001696
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.058971
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.001716
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.00173
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.012822
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001661
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.007378
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002535
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.047256
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.008147
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001536
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.042998
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002557
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.035514
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.004164
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.021064
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.00528
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001233
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.032592
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001339
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.017924
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.009735
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.011814
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.004653
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003763
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.022322
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001201
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.063165
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.003828
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0265
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.013072
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002048
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.008217
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050775
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.006138
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.01124
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.009436
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.033493
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.014696
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050427
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.008816
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.009194
+    }
+   ]
+  }
+ },
+ "cost_trend_30d": {
+  "url": "/api/cost/trend?window=30d",
+  "status": 200,
+  "body": {
+   "window": "30d",
+   "since": "2026-08-31T16:00:00+00:00",
+   "bucket_minutes": 60,
+   "points": [
+    {
+     "bucket": "2026-08-31T17:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003388
+    },
+    {
+     "bucket": "2026-08-31T17:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.042692
+    },
+    {
+     "bucket": "2026-08-31T17:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001955
+    },
+    {
+     "bucket": "2026-08-31T17:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (global)",
+     "cost_usd": 0.0076
+    },
+    {
+     "bucket": "2026-08-31T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.002924
+    },
+    {
+     "bucket": "2026-08-31T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.005885
+    },
+    {
+     "bucket": "2026-09-09T20:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.00068
+    },
+    {
+     "bucket": "2026-09-09T20:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.021296
+    },
+    {
+     "bucket": "2026-09-09T20:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (global)",
+     "cost_usd": 0.053074
+    },
+    {
+     "bucket": "2026-09-09T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.011508
+    },
+    {
+     "bucket": "2026-09-09T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.003568
+    },
+    {
+     "bucket": "2026-09-18T04:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003615
+    },
+    {
+     "bucket": "2026-09-18T04:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.017036
+    },
+    {
+     "bucket": "2026-09-18T04:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003238
+    },
+    {
+     "bucket": "2026-09-18T04:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.012271
+    },
+    {
+     "bucket": "2026-09-18T04:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.007258
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.021425
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.012766
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001885
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.01238
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.022554
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.006798
+    },
+    {
+     "bucket": "2026-09-23T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.003216
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.000722
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.00637
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003488
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.006287
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.016148
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.004082
+    },
+    {
+     "bucket": "2026-09-24T00:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.00255
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.011087
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.00591
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.005599
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.011878
+    },
+    {
+     "bucket": "2026-09-26T12:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.008116
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.00285
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.018536
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.009834
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.002618
+    },
+    {
+     "bucket": "2026-09-28T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.003492
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.002444
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.011707
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.017847
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.005022
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.005666
+    },
+    {
+     "bucket": "2026-09-29T10:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.04574
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003624
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.00662
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.005803
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.004452
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.003206
+    },
+    {
+     "bucket": "2026-09-29T17:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.024565
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002749
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.006924
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0058
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.00612
+    },
+    {
+     "bucket": "2026-09-29T20:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.019879
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001696
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.058971
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.001716
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.00173
+    },
+    {
+     "bucket": "2026-09-30T03:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.012822
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001661
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.007378
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002535
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.047256
+    },
+    {
+     "bucket": "2026-09-30T05:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.008147
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001536
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.042998
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002557
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.035514
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.004164
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.021064
+    },
+    {
+     "bucket": "2026-09-30T09:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.00528
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001233
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.032592
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001339
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.017924
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.009735
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.011814
+    },
+    {
+     "bucket": "2026-09-30T11:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.004653
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.003763
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.022322
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.001201
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.063165
+    },
+    {
+     "bucket": "2026-09-30T13:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.003828
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.0265
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.013072
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.002048
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.008217
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050775
+    },
+    {
+     "bucket": "2026-09-30T14:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.006138
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "cost_usd": 0.01124
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "cost_usd": 0.009436
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "cost_usd": 0.033493
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "cost_usd": 0.014696
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "cost_usd": 0.050427
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "cost_usd": 0.008816
+    },
+    {
+     "bucket": "2026-09-30T15:00:00+00:00",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "cost_usd": 0.009194
+    }
+   ]
+  }
+ },
+ "results_stats_default": {
+  "url": "/api/results/stats",
+  "status": 200,
+  "body": {
+   "start_time": "2026-09-29T16:00:00Z",
+   "end_time": null,
+   "models": [
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "count": 8,
+     "avg_ttft_ms": 617.89,
+     "p50_ttft_ms": 628.7,
+     "p95_ttft_ms": 897.71,
+     "p99_ttft_ms": 931.62,
+     "avg_latency_ms": 1606.81,
+     "p50_latency_ms": 1555.4,
+     "p95_latency_ms": 1878.12,
+     "p99_latency_ms": 1890.03,
+     "avg_tps": 58.39,
+     "p50_tps": 51.45,
+     "p95_tps": 97.52,
+     "p99_tps": 100.62,
+     "avg_server_latency_ms": 1285.45,
+     "p50_server_latency_ms": 1244.32,
+     "p95_server_latency_ms": 1502.5,
+     "p99_server_latency_ms": 1512.02
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "count": 9,
+     "avg_ttft_ms": 687.09,
+     "p50_ttft_ms": 689.25,
+     "p95_ttft_ms": 962.59,
+     "p99_ttft_ms": 972.28,
+     "avg_latency_ms": 1661.89,
+     "p50_latency_ms": 1668.35,
+     "p95_latency_ms": 1990.16,
+     "p99_latency_ms": 1992.51,
+     "avg_tps": 63.47,
+     "p50_tps": 62.55,
+     "p95_tps": 92.7,
+     "p99_tps": 93.74,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "count": 8,
+     "avg_ttft_ms": 671.95,
+     "p50_ttft_ms": 637.35,
+     "p95_ttft_ms": 944.42,
+     "p99_ttft_ms": 968.64,
+     "avg_latency_ms": 1665.79,
+     "p50_latency_ms": 1623.0,
+     "p95_latency_ms": 1994.92,
+     "p99_latency_ms": 2066.82,
+     "avg_tps": 62.55,
+     "p50_tps": 58.85,
+     "p95_tps": 92.52,
+     "p99_tps": 96.66,
+     "avg_server_latency_ms": 1332.63,
+     "p50_server_latency_ms": 1298.4,
+     "p95_server_latency_ms": 1595.94,
+     "p99_server_latency_ms": 1653.46
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "count": 9,
+     "avg_ttft_ms": 574.64,
+     "p50_ttft_ms": 568.15,
+     "p95_ttft_ms": 824.19,
+     "p99_ttft_ms": 833.88,
+     "avg_latency_ms": 1533.68,
+     "p50_latency_ms": 1421.2,
+     "p95_latency_ms": 1759.64,
+     "p99_latency_ms": 1762.33,
+     "avg_tps": 65.22,
+     "p50_tps": 64.4,
+     "p95_tps": 96.96,
+     "p99_tps": 100.51,
+     "avg_server_latency_ms": 1226.94,
+     "p50_server_latency_ms": 1136.96,
+     "p95_server_latency_ms": 1407.71,
+     "p99_server_latency_ms": 1409.86
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "count": 9,
+     "avg_ttft_ms": 607.08,
+     "p50_ttft_ms": 585.45,
+     "p95_ttft_ms": 884.74,
+     "p99_ttft_ms": 942.87,
+     "avg_latency_ms": 1630.39,
+     "p50_latency_ms": 1538.35,
+     "p95_latency_ms": 1870.39,
+     "p99_latency_ms": 1891.84,
+     "avg_tps": 54.89,
+     "p50_tps": 57.0,
+     "p95_tps": 90.67,
+     "p99_tps": 93.33,
+     "avg_server_latency_ms": 1304.31,
+     "p50_server_latency_ms": 1230.68,
+     "p95_server_latency_ms": 1496.31,
+     "p99_server_latency_ms": 1513.47
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "count": 8,
+     "avg_ttft_ms": 665.77,
+     "p50_ttft_ms": 663.3,
+     "p95_ttft_ms": 931.45,
+     "p99_ttft_ms": 952.21,
+     "avg_latency_ms": 1627.29,
+     "p50_latency_ms": 1651.3,
+     "p95_latency_ms": 1976.96,
+     "p99_latency_ms": 1986.51,
+     "avg_tps": 57.46,
+     "p50_tps": 62.55,
+     "p95_tps": 82.71,
+     "p99_tps": 85.82,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "count": 9,
+     "avg_ttft_ms": 671.95,
+     "p50_ttft_ms": 663.3,
+     "p95_ttft_ms": 979.89,
+     "p99_ttft_ms": 989.58,
+     "avg_latency_ms": 1530.47,
+     "p50_latency_ms": 1456.3,
+     "p95_latency_ms": 1787.18,
+     "p99_latency_ms": 1789.2,
+     "avg_tps": 62.29,
+     "p50_tps": 64.4,
+     "p95_tps": 93.63,
+     "p99_tps": 99.85,
+     "avg_server_latency_ms": 1224.38,
+     "p50_server_latency_ms": 1165.04,
+     "p95_server_latency_ms": 1429.74,
+     "p99_server_latency_ms": 1431.36
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "count": 8,
+     "avg_ttft_ms": 653.41,
+     "p50_ttft_ms": 697.9,
+     "p95_ttft_ms": 966.05,
+     "p99_ttft_ms": 986.81,
+     "avg_latency_ms": 1636.74,
+     "p50_latency_ms": 1716.3,
+     "p95_latency_ms": 2039.47,
+     "p99_latency_ms": 2047.65,
+     "avg_tps": 71.18,
+     "p50_tps": 79.2,
+     "p95_tps": 94.93,
+     "p99_tps": 97.15,
+     "avg_server_latency_ms": 1309.39,
+     "p50_server_latency_ms": 1373.04,
+     "p95_server_latency_ms": 1631.58,
+     "p99_server_latency_ms": 1638.12
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "count": 7,
+     "avg_ttft_ms": 618.81,
+     "p50_ttft_ms": 594.1,
+     "p95_ttft_ms": 862.25,
+     "p99_ttft_ms": 883.01,
+     "avg_latency_ms": 1629.1,
+     "p50_latency_ms": 1569.25,
+     "p95_latency_ms": 1911.18,
+     "p99_latency_ms": 1918.0,
+     "avg_tps": 69.33,
+     "p50_tps": 75.5,
+     "p95_tps": 100.48,
+     "p99_tps": 101.22,
+     "avg_server_latency_ms": 1303.28,
+     "p50_server_latency_ms": 1255.4,
+     "p95_server_latency_ms": 1528.94,
+     "p99_server_latency_ms": 1534.4
+    }
+   ]
+  }
+ },
+ "results_stats_7d": {
+  "url": "/api/results/stats?start_time=2026-09-23T16:00:00Z",
+  "status": 200,
+  "body": {
+   "start_time": "2026-09-23T16:00:00Z",
+   "end_time": null,
+   "models": [
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "count": 12,
+     "avg_ttft_ms": 650.72,
+     "p50_ttft_ms": 646.0,
+     "p95_ttft_ms": 957.4,
+     "p99_ttft_ms": 971.24,
+     "avg_latency_ms": 1607.34,
+     "p50_latency_ms": 1555.4,
+     "p95_latency_ms": 1896.78,
+     "p99_latency_ms": 1900.48,
+     "avg_tps": 60.08,
+     "p50_tps": 57.0,
+     "p95_tps": 99.37,
+     "p99_tps": 100.99,
+     "avg_server_latency_ms": 1285.87,
+     "p50_server_latency_ms": 1244.32,
+     "p95_server_latency_ms": 1517.42,
+     "p99_server_latency_ms": 1520.38
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "count": 12,
+     "avg_ttft_ms": 696.33,
+     "p50_ttft_ms": 680.6,
+     "p95_ttft_ms": 957.4,
+     "p99_ttft_ms": 971.24,
+     "avg_latency_ms": 1691.38,
+     "p50_latency_ms": 1672.55,
+     "p95_latency_ms": 1989.32,
+     "p99_latency_ms": 1992.34,
+     "avg_tps": 68.47,
+     "p50_tps": 71.8,
+     "p95_tps": 98.07,
+     "p99_tps": 100.73,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "count": 12,
+     "avg_ttft_ms": 641.68,
+     "p50_ttft_ms": 637.35,
+     "p95_ttft_ms": 927.12,
+     "p99_ttft_ms": 965.19,
+     "avg_latency_ms": 1643.7,
+     "p50_latency_ms": 1623.0,
+     "p95_latency_ms": 1943.56,
+     "p99_latency_ms": 2056.55,
+     "avg_tps": 58.23,
+     "p50_tps": 58.85,
+     "p95_tps": 89.56,
+     "p99_tps": 96.07,
+     "avg_server_latency_ms": 1314.96,
+     "p50_server_latency_ms": 1298.4,
+     "p95_server_latency_ms": 1554.85,
+     "p99_server_latency_ms": 1645.24
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "count": 11,
+     "avg_ttft_ms": 649.15,
+     "p50_ttft_ms": 628.7,
+     "p95_ttft_ms": 905.5,
+     "p99_ttft_ms": 919.34,
+     "avg_latency_ms": 1670.95,
+     "p50_latency_ms": 1590.5,
+     "p95_latency_ms": 1924.32,
+     "p99_latency_ms": 1927.34,
+     "avg_tps": 67.28,
+     "p50_tps": 71.8,
+     "p95_tps": 99.92,
+     "p99_tps": 101.1,
+     "avg_server_latency_ms": 1336.76,
+     "p50_server_latency_ms": 1272.4,
+     "p95_server_latency_ms": 1539.46,
+     "p99_server_latency_ms": 1541.88
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "count": 2,
+     "avg_ttft_ms": 853.6,
+     "p50_ttft_ms": 853.6,
+     "p95_ttft_ms": 947.02,
+     "p99_ttft_ms": 955.32,
+     "avg_latency_ms": 1878.55,
+     "p50_latency_ms": 1878.55,
+     "p95_latency_ms": 2013.24,
+     "p99_latency_ms": 2025.21,
+     "avg_tps": 62.55,
+     "p50_tps": 62.55,
+     "p95_tps": 84.19,
+     "p99_tps": 86.12,
+     "avg_server_latency_ms": 1502.84,
+     "p50_server_latency_ms": 1502.84,
+     "p95_server_latency_ms": 1610.59,
+     "p99_server_latency_ms": 1620.17
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "count": 12,
+     "avg_ttft_ms": 595.67,
+     "p50_ttft_ms": 542.2,
+     "p95_ttft_ms": 914.15,
+     "p99_ttft_ms": 948.75,
+     "avg_latency_ms": 1598.34,
+     "p50_latency_ms": 1517.1,
+     "p95_latency_ms": 1862.73,
+     "p99_latency_ms": 1890.31,
+     "avg_tps": 54.78,
+     "p50_tps": 51.45,
+     "p95_tps": 92.34,
+     "p99_tps": 93.67,
+     "avg_server_latency_ms": 1278.67,
+     "p50_server_latency_ms": 1213.68,
+     "p95_server_latency_ms": 1490.18,
+     "p99_server_latency_ms": 1512.24
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "count": 11,
+     "avg_ttft_ms": 651.19,
+     "p50_ttft_ms": 646.0,
+     "p95_ttft_ms": 918.47,
+     "p99_ttft_ms": 949.62,
+     "avg_latency_ms": 1629.55,
+     "p50_latency_ms": 1647.1,
+     "p95_latency_ms": 1971.85,
+     "p99_latency_ms": 1985.49,
+     "avg_tps": 61.04,
+     "p50_tps": 64.4,
+     "p95_tps": 90.3,
+     "p99_tps": 93.26,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "count": 12,
+     "avg_ttft_ms": 680.6,
+     "p50_ttft_ms": 715.2,
+     "p95_ttft_ms": 968.64,
+     "p99_ttft_ms": 987.33,
+     "avg_latency_ms": 1654.3,
+     "p50_latency_ms": 1720.5,
+     "p95_latency_ms": 2038.13,
+     "p99_latency_ms": 2047.39,
+     "avg_tps": 69.33,
+     "p50_tps": 75.5,
+     "p95_tps": 96.22,
+     "p99_tps": 97.4,
+     "avg_server_latency_ms": 1323.44,
+     "p50_server_latency_ms": 1376.4,
+     "p95_server_latency_ms": 1630.51,
+     "p99_server_latency_ms": 1637.91
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "count": 11,
+     "avg_ttft_ms": 668.49,
+     "p50_ttft_ms": 663.3,
+     "p95_ttft_ms": 976.43,
+     "p99_ttft_ms": 988.89,
+     "avg_latency_ms": 1551.97,
+     "p50_latency_ms": 1456.3,
+     "p95_latency_ms": 1815.2,
+     "p99_latency_ms": 1828.8,
+     "avg_tps": 63.58,
+     "p50_tps": 64.4,
+     "p95_tps": 95.48,
+     "p99_tps": 100.22,
+     "avg_server_latency_ms": 1241.57,
+     "p50_server_latency_ms": 1165.04,
+     "p95_server_latency_ms": 1452.16,
+     "p99_server_latency_ms": 1463.04
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "count": 9,
+     "avg_ttft_ms": 574.64,
+     "p50_ttft_ms": 568.15,
+     "p95_ttft_ms": 824.19,
+     "p99_ttft_ms": 833.88,
+     "avg_latency_ms": 1533.68,
+     "p50_latency_ms": 1421.2,
+     "p95_latency_ms": 1759.64,
+     "p99_latency_ms": 1762.33,
+     "avg_tps": 65.22,
+     "p50_tps": 64.4,
+     "p95_tps": 96.96,
+     "p99_tps": 100.51,
+     "avg_server_latency_ms": 1226.94,
+     "p50_server_latency_ms": 1136.96,
+     "p95_server_latency_ms": 1407.71,
+     "p99_server_latency_ms": 1409.86
+    }
+   ]
+  }
+ },
+ "results_stats_30d_code_gen": {
+  "url": "/api/results/stats?start_time=2026-08-31T16:00:00Z&category=code-gen",
+  "status": 200,
+  "body": {
+   "start_time": "2026-08-31T16:00:00Z",
+   "end_time": null,
+   "models": [
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "count": 2,
+     "avg_ttft_ms": 490.3,
+     "p50_ttft_ms": 490.3,
+     "p95_ttft_ms": 490.3,
+     "p99_ttft_ms": 490.3,
+     "avg_latency_ms": 1495.6,
+     "p50_latency_ms": 1495.6,
+     "p95_latency_ms": 1495.6,
+     "p99_latency_ms": 1495.6,
+     "avg_tps": 36.65,
+     "p50_tps": 36.65,
+     "p95_tps": 44.98,
+     "p99_tps": 45.71,
+     "avg_server_latency_ms": 1196.48,
+     "p50_server_latency_ms": 1196.48,
+     "p95_server_latency_ms": 1196.48,
+     "p99_server_latency_ms": 1196.48
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "count": 1,
+     "avg_ttft_ms": 663.3,
+     "p50_ttft_ms": 663.3,
+     "p95_ttft_ms": 663.3,
+     "p99_ttft_ms": 663.3,
+     "avg_latency_ms": 1694.8,
+     "p50_latency_ms": 1694.8,
+     "p95_latency_ms": 1694.8,
+     "p99_latency_ms": 1694.8,
+     "avg_tps": 97.7,
+     "p50_tps": 97.7,
+     "p95_tps": 97.7,
+     "p99_tps": 97.7,
+     "avg_server_latency_ms": 1355.84,
+     "p50_server_latency_ms": 1355.84,
+     "p95_server_latency_ms": 1355.84,
+     "p99_server_latency_ms": 1355.84
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "count": 2,
+     "avg_ttft_ms": 421.1,
+     "p50_ttft_ms": 421.1,
+     "p95_ttft_ms": 498.95,
+     "p99_ttft_ms": 505.87,
+     "avg_latency_ms": 1406.75,
+     "p50_latency_ms": 1406.75,
+     "p95_latency_ms": 1537.65,
+     "p99_latency_ms": 1549.29,
+     "avg_tps": 71.8,
+     "p50_tps": 71.8,
+     "p95_tps": 95.11,
+     "p99_tps": 97.18,
+     "avg_server_latency_ms": 1125.4,
+     "p50_server_latency_ms": 1125.4,
+     "p95_server_latency_ms": 1230.12,
+     "p99_server_latency_ms": 1239.43
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "count": 2,
+     "avg_ttft_ms": 533.55,
+     "p50_ttft_ms": 533.55,
+     "p95_ttft_ms": 697.04,
+     "p99_ttft_ms": 711.57,
+     "avg_latency_ms": 1584.7,
+     "p50_latency_ms": 1584.7,
+     "p95_latency_ms": 1742.29,
+     "p99_latency_ms": 1756.3,
+     "avg_tps": 88.45,
+     "p50_tps": 88.45,
+     "p95_tps": 96.78,
+     "p99_tps": 97.52,
+     "avg_server_latency_ms": 1267.76,
+     "p50_server_latency_ms": 1267.76,
+     "p95_server_latency_ms": 1393.83,
+     "p99_server_latency_ms": 1405.04
+    },
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "count": 2,
+     "avg_ttft_ms": 853.6,
+     "p50_ttft_ms": 853.6,
+     "p95_ttft_ms": 931.45,
+     "p99_ttft_ms": 938.37,
+     "avg_latency_ms": 1858.9,
+     "p50_latency_ms": 1858.9,
+     "p95_latency_ms": 1889.59,
+     "p99_latency_ms": 1892.32,
+     "avg_tps": 44.05,
+     "p50_tps": 44.05,
+     "p95_tps": 59.04,
+     "p99_tps": 60.37,
+     "avg_server_latency_ms": 1487.12,
+     "p50_server_latency_ms": 1487.12,
+     "p95_server_latency_ms": 1511.67,
+     "p99_server_latency_ms": 1513.85
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8b (Global)",
+     "count": 2,
+     "avg_ttft_ms": 819.0,
+     "p50_ttft_ms": 819.0,
+     "p95_ttft_ms": 896.85,
+     "p99_ttft_ms": 903.77,
+     "avg_latency_ms": 1870.15,
+     "p50_latency_ms": 1870.15,
+     "p95_latency_ms": 2001.06,
+     "p99_latency_ms": 2012.69,
+     "avg_tps": 66.25,
+     "p50_tps": 66.25,
+     "p95_tps": 81.23,
+     "p99_tps": 82.57,
+     "avg_server_latency_ms": 1496.12,
+     "p50_server_latency_ms": 1496.12,
+     "p95_server_latency_ms": 1600.84,
+     "p99_server_latency_ms": 1610.15
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "count": 2,
+     "avg_ttft_ms": 870.9,
+     "p50_ttft_ms": 870.9,
+     "p95_ttft_ms": 948.75,
+     "p99_ttft_ms": 955.67,
+     "avg_latency_ms": 1789.7,
+     "p50_latency_ms": 1789.7,
+     "p95_latency_ms": 1789.7,
+     "p99_latency_ms": 1789.7,
+     "avg_tps": 47.75,
+     "p50_tps": 47.75,
+     "p95_tps": 62.73,
+     "p99_tps": 64.07,
+     "avg_server_latency_ms": 1431.76,
+     "p50_server_latency_ms": 1431.76,
+     "p95_server_latency_ms": 1431.76,
+     "p99_server_latency_ms": 1431.76
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "count": 2,
+     "avg_ttft_ms": 646.0,
+     "p50_ttft_ms": 646.0,
+     "p95_ttft_ms": 723.85,
+     "p99_ttft_ms": 730.77,
+     "avg_latency_ms": 1685.4,
+     "p50_latency_ms": 1685.4,
+     "p95_latency_ms": 1685.4,
+     "p99_latency_ms": 1685.4,
+     "avg_tps": 62.55,
+     "p50_tps": 62.55,
+     "p95_tps": 77.53,
+     "p99_tps": 78.87,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "count": 1,
+     "avg_ttft_ms": 507.6,
+     "p50_ttft_ms": 507.6,
+     "p95_ttft_ms": 507.6,
+     "p99_ttft_ms": 507.6,
+     "avg_latency_ms": 1421.2,
+     "p50_latency_ms": 1421.2,
+     "p95_latency_ms": 1421.2,
+     "p99_latency_ms": 1421.2,
+     "avg_tps": 79.2,
+     "p50_tps": 79.2,
+     "p95_tps": 79.2,
+     "p99_tps": 79.2,
+     "avg_server_latency_ms": 1136.96,
+     "p50_server_latency_ms": 1136.96,
+     "p95_server_latency_ms": 1136.96,
+     "p99_server_latency_ms": 1136.96
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "count": 1,
+     "avg_ttft_ms": 628.7,
+     "p50_ttft_ms": 628.7,
+     "p95_ttft_ms": 628.7,
+     "p99_ttft_ms": 628.7,
+     "avg_latency_ms": 1647.1,
+     "p50_latency_ms": 1647.1,
+     "p95_latency_ms": 1647.1,
+     "p99_latency_ms": 1647.1,
+     "avg_tps": 64.4,
+     "p50_tps": 64.4,
+     "p95_tps": 64.4,
+     "p99_tps": 64.4,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    }
+   ]
+  }
+ },
+ "results_stats_run_2": {
+  "url": "/api/results/stats?run_id=2",
+  "status": 200,
+  "body": {
+   "start_time": null,
+   "end_time": null,
+   "models": [
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "count": 3,
+     "avg_ttft_ms": 582.57,
+     "p50_ttft_ms": 611.4,
+     "p95_ttft_ms": 798.24,
+     "p99_ttft_ms": 814.85,
+     "avg_latency_ms": 1539.83,
+     "p50_latency_ms": 1551.2,
+     "p95_latency_ms": 1820.57,
+     "p99_latency_ms": 1844.51,
+     "avg_tps": 61.93,
+     "p50_tps": 53.3,
+     "p95_tps": 86.6,
+     "p99_tps": 89.56,
+     "avg_server_latency_ms": 1231.87,
+     "p50_server_latency_ms": 1240.96,
+     "p95_server_latency_ms": 1456.46,
+     "p99_server_latency_ms": 1475.61
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "count": 2,
+     "avg_ttft_ms": 576.8,
+     "p50_ttft_ms": 576.8,
+     "p95_ttft_ms": 670.22,
+     "p99_ttft_ms": 678.52,
+     "avg_latency_ms": 1543.8,
+     "p50_latency_ms": 1543.8,
+     "p95_latency_ms": 1543.8,
+     "p99_latency_ms": 1543.8,
+     "avg_tps": 82.9,
+     "p50_tps": 82.9,
+     "p95_tps": 99.55,
+     "p99_tps": 101.03,
+     "avg_server_latency_ms": 1235.04,
+     "p50_server_latency_ms": 1235.04,
+     "p95_server_latency_ms": 1235.04,
+     "p99_server_latency_ms": 1235.04
+    }
+   ]
+  }
+ },
+ "results_stats_range": {
+  "url": "/api/results/stats?start_time=2026-09-28T16:00:00Z&end_time=2026-09-30T04:00:00Z",
+  "status": 200,
+  "body": {
+   "start_time": "2026-09-28T16:00:00Z",
+   "end_time": "2026-09-30T04:00:00Z",
+   "models": [
+    {
+     "model_id": "global.anthropic.claude-sonnet-5",
+     "model_name": "Bedrock Claude Sonnet 5 (Global)",
+     "count": 3,
+     "avg_ttft_ms": 498.95,
+     "p50_ttft_ms": 498.95,
+     "p95_ttft_ms": 631.29,
+     "p99_ttft_ms": 643.06,
+     "avg_latency_ms": 1408.17,
+     "p50_latency_ms": 1448.9,
+     "p95_latency_ms": 1548.53,
+     "p99_latency_ms": 1557.39,
+     "avg_tps": 61.93,
+     "p50_tps": 49.6,
+     "p95_tps": 92.89,
+     "p99_tps": 96.74,
+     "avg_server_latency_ms": 1126.53,
+     "p50_server_latency_ms": 1159.12,
+     "p95_server_latency_ms": 1238.82,
+     "p99_server_latency_ms": 1245.91
+    },
+    {
+     "model_id": "us.anthropic.claude-haiku-4-5-20251001-v1:0",
+     "model_name": "Bedrock Claude Haiku 4.5 (US)",
+     "count": 3,
+     "avg_ttft_ms": 827.65,
+     "p50_ttft_ms": 827.65,
+     "p95_ttft_ms": 960.0,
+     "p99_ttft_ms": 971.76,
+     "avg_latency_ms": 1670.97,
+     "p50_latency_ms": 1659.7,
+     "p95_latency_ms": 1959.76,
+     "p99_latency_ms": 1986.43,
+     "avg_tps": 81.67,
+     "p50_tps": 90.3,
+     "p95_tps": 100.29,
+     "p99_tps": 101.18,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "bedrock:ap-northeast-2:anthropic.claude-opus-5",
+     "model_name": "Bedrock Claude Opus 5 (ap-northeast-2)",
+     "count": 3,
+     "avg_ttft_ms": 761.33,
+     "p50_ttft_ms": 801.7,
+     "p95_ttft_ms": 879.55,
+     "p99_ttft_ms": 886.47,
+     "avg_latency_ms": 1705.5,
+     "p50_latency_ms": 1793.9,
+     "p95_latency_ms": 1824.59,
+     "p99_latency_ms": 1827.32,
+     "avg_tps": 40.97,
+     "p50_tps": 45.9,
+     "p95_tps": 55.89,
+     "p99_tps": 56.78,
+     "avg_server_latency_ms": 1364.4,
+     "p50_server_latency_ms": 1435.12,
+     "p95_server_latency_ms": 1459.67,
+     "p99_server_latency_ms": 1461.85
+    },
+    {
+     "model_id": "anthropic:claude-sonnet-5",
+     "model_name": "Anthropic Claude Sonnet 5 (US)",
+     "count": 2,
+     "avg_ttft_ms": 715.2,
+     "p50_ttft_ms": 715.2,
+     "p95_ttft_ms": 902.04,
+     "p99_ttft_ms": 918.65,
+     "avg_latency_ms": 1740.15,
+     "p50_latency_ms": 1740.15,
+     "p95_latency_ms": 1909.31,
+     "p99_latency_ms": 1924.34,
+     "avg_tps": 97.7,
+     "p50_tps": 97.7,
+     "p95_tps": 97.7,
+     "p99_tps": 97.7,
+     "avg_server_latency_ms": 1392.12,
+     "p50_server_latency_ms": 1392.12,
+     "p95_server_latency_ms": 1527.44,
+     "p99_server_latency_ms": 1539.47
+    },
+    {
+     "model_id": "openai:us-east-1:openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (us-east-1)",
+     "count": 4,
+     "avg_ttft_ms": 676.27,
+     "p50_ttft_ms": 646.0,
+     "p95_ttft_ms": 926.26,
+     "p99_ttft_ms": 951.17,
+     "avg_latency_ms": 1681.58,
+     "p50_latency_ms": 1670.95,
+     "p95_latency_ms": 1885.71,
+     "p99_latency_ms": 1894.9,
+     "avg_tps": 36.03,
+     "p50_tps": 31.1,
+     "p95_tps": 54.41,
+     "p99_tps": 56.48,
+     "avg_server_latency_ms": 1345.26,
+     "p50_server_latency_ms": 1336.76,
+     "p95_server_latency_ms": 1508.57,
+     "p99_server_latency_ms": 1515.92
+    },
+    {
+     "model_id": "openai:global:global.openai.gpt-6.1-sol",
+     "model_name": "OpenAI GPT 6.1 Sol (Global)",
+     "count": 4,
+     "avg_ttft_ms": 620.05,
+     "p50_ttft_ms": 620.05,
+     "p95_ttft_ms": 839.76,
+     "p99_ttft_ms": 864.67,
+     "avg_latency_ms": 1638.45,
+     "p50_latency_ms": 1638.45,
+     "p95_latency_ms": 1909.9,
+     "p99_latency_ms": 1945.82,
+     "avg_tps": 47.75,
+     "p50_tps": 47.75,
+     "p95_tps": 70.13,
+     "p99_tps": 71.47,
+     "avg_server_latency_ms": null,
+     "p50_server_latency_ms": null,
+     "p95_server_latency_ms": null,
+     "p99_server_latency_ms": null
+    },
+    {
+     "model_id": "mystery.model-v8",
+     "model_name": "Bedrock Mystery 8 (Global)",
+     "count": 4,
+     "avg_ttft_ms": 628.7,
+     "p50_ttft_ms": 628.7,
+     "p95_ttft_ms": 908.96,
+     "p99_ttft_ms": 933.87,
+     "avg_latency_ms": 1630.73,
+     "p50_latency_ms": 1575.05,
+     "p95_latency_ms": 1979.1,
+     "p99_latency_ms": 2015.02,
+     "avg_tps": 54.53,
+     "p50_tps": 45.9,
+     "p95_tps": 79.2,
+     "p99_tps": 82.16,
+     "avg_server_latency_ms": 1304.58,
+     "p50_server_latency_ms": 1260.04,
+     "p95_server_latency_ms": 1583.28,
+     "p99_server_latency_ms": 1612.02
+    },
+    {
+     "model_id": "anthropic:claude-haiku-4-5-20251001",
+     "model_name": "Anthropic Claude Haiku 4.5 (US)",
+     "count": 3,
+     "avg_ttft_ms": 628.7,
+     "p50_ttft_ms": 628.7,
+     "p95_ttft_ms": 815.54,
+     "p99_ttft_ms": 832.15,
+     "avg_latency_ms": 1612.17,
+     "p50_latency_ms": 1686.4,
+     "p95_latency_ms": 1755.34,
+     "p99_latency_ms": 1761.47,
+     "avg_tps": 73.03,
+     "p50_tps": 64.4,
+     "p95_tps": 97.7,
+     "p99_tps": 100.66,
+     "avg_server_latency_ms": 1289.73,
+     "p50_server_latency_ms": 1349.12,
+     "p95_server_latency_ms": 1404.27,
+     "p99_server_latency_ms": 1409.17
+    },
+    {
+     "model_id": "mystery.model-v9",
+     "model_name": "weird-label",
+     "count": 3,
+     "avg_ttft_ms": 755.57,
+     "p50_ttft_ms": 784.4,
+     "p95_ttft_ms": 971.24,
+     "p99_ttft_ms": 987.85,
+     "avg_latency_ms": 1623.0,
+     "p50_latency_ms": 1623.0,
+     "p95_latency_ms": 1773.03,
+     "p99_latency_ms": 1786.37,
+     "avg_tps": 69.95,
+     "p50_tps": 69.95,
+     "p95_tps": 74.94,
+     "p99_tps": 75.39,
+     "avg_server_latency_ms": 1298.4,
+     "p50_server_latency_ms": 1298.4,
+     "p95_server_latency_ms": 1418.42,
+     "p99_server_latency_ms": 1429.09
+    }
+   ]
+  }
+ }
+}

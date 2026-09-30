@@ -229,11 +229,17 @@ def probe_context_window_1m(t, model_id, model_key):
     return obj.get("max_input_tokens") == 1_000_000, {"request": _req(model_id, api=f"GET /v1/models/{model_id}"), **caps}
 
 
+# adaptive 사고 프로브 문제 — 쉬운 문제는 모델이 사고를 생략해 false-broken이 된다(v2.32.1, Sonnet 5.5).
+ADAPTIVE_THINKING_PROMPT = ("A 3-digit number has digits a, b, c. a + b + c = 17, the number is divisible by 11, and a > c. "
+                            "Find every such number. Think it through carefully, then answer with just the numbers separated by commas.")
+
+
 def probe_adaptive_thinking(t, model_id, model_key):
-    prompt = "What is the third prime number greater than 100? Think it through, then answer with just the number."
+    prompt = ADAPTIVE_THINKING_PROMPT
     thinking = {"type": "adaptive", "display": "summarized"}
-    # effort medium에서는 adaptive 모델이 이 정도 문제에 사고를 생략한다(Fable 5.1 Bedrock 실측) →
-    # 사고 여부는 프롬프트 난이도가 아니라 effort가 가른다. high로 고정해 블록을 요구한다.
+    # effort medium에서는 adaptive 모델이 쉬운 문제에 사고를 생략한다(Fable 5.1 Bedrock 실측) → high로 고정한다.
+    # effort high만으로도 부족하다 — Sonnet 5.5는 "100보다 큰 세 번째 소수"에서 사고를 생략했다(2026-09-30, 3/3).
+    # 그래서 조건 세 개를 모두 따져야 하는 문제를 보낸다(대표 6모델, CP와 Bedrock 모두 사고 블록 3/3).
     output_config = {"effort": "high"}
     if t.surface == "bedrock_converse":
         kw = {"messages": [{"role": "user", "content": [{"text": prompt}]}], "inferenceConfig": {"maxTokens": _THINK_MAX},

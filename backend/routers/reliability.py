@@ -13,25 +13,23 @@ from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sqlalchemy import case
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from streamed_read import stream_rows_or_503
 from visibility import visible_only
+from window_spec import parse_window
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/reliability", tags=["reliability"])
 
 
-def _parse_window(spec: str) -> timedelta:
-    s = spec.strip().lower()
-    if s.endswith("d"):
-        return timedelta(days=int(s[:-1]))
-    if s.endswith("h"):
-        return timedelta(hours=int(s[:-1]))
-    if s.endswith("m"):
-        return timedelta(minutes=int(s[:-1]))
-    return timedelta(hours=24)
+# 창 상한 = /reliability 화면의 가장 긴 창(1h, 6h, 24h, 7d 중 7d). 넘는 창은 422 (window_spec).
+# 공개 엔드포인트라 상한이 곧 요청 하나의 스캔 상한이다 — 2026-09-30 /analysis OOM과 같은 경로.
+_MAX_WINDOW = timedelta(days=7)
+_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read, 넘으면 503)
 
 
 def _percentile(values: list[float], pct: float) -> Optional[float]:
@@ -146,17 +144,30 @@ def get_multi_channel(
     db: Session = Depends(get_db),
 ):
     """동일 family를 채널별로 집계해 가용성/실패 모드 비교."""
-    since = datetime.now(timezone.utc) - _parse_window(window)
+    since = datetime.now(timezone.utc) - parse_window(window, max_window=_MAX_WINDOW)
+    # 집계에 쓰는 열만 나눠 읽는다. ORM 엔티티는 prompt, output_text까지 담아 7d에서 요청 하나가 0.3~0.6 GB였다.
+    # error_message는 실패 행에서만 쓰므로 성공 행은 NULL로 받는다. 누적하는 것은 채널별 지표 값 목록뿐이다(p95).
     rows = (
-        visible_only(db.query(ProbeResult), ProbeResult.model_name)
+        visible_only(
+            db.query(
+                ProbeResult.model_name,
+                ProbeResult.status,
+                ProbeResult.ttft_ms,
+                ProbeResult.total_latency_ms,
+                ProbeResult.tps,
+                case((ProbeResult.status != "success", ProbeResult.error_message), else_=None),
+            ),
+            ProbeResult.model_name,
+        )
         .filter(ProbeResult.timestamp >= since)
-        .all()
+        .yield_per(_YIELD_PER)
     )
+    rows = stream_rows_or_503(rows, route=f"GET /api/reliability/multi-channel window={window!r}")
 
     # family → channel → bucket
     agg: dict[str, dict[str, dict]] = {}
-    for r in rows:
-        family, channel = _parse_label(r.model_name)
+    for model_name, status, ttft_ms, total_latency_ms, tps, error_message in rows:
+        family, channel = _parse_label(model_name)
         f = agg.setdefault(family, {})
         c = f.setdefault(
             channel,
@@ -172,20 +183,20 @@ def get_multi_channel(
             },
         )
         c["samples"] += 1
-        if r.status == "success":
+        if status == "success":
             c["success"] += 1
-            if r.ttft_ms is not None:
-                c["ttft"].append(float(r.ttft_ms))
-            if r.total_latency_ms is not None:
-                c["latency"].append(float(r.total_latency_ms))
-            if r.tps is not None:
-                c["tps"].append(float(r.tps))
-        elif r.status == "overloaded":
+            if ttft_ms is not None:
+                c["ttft"].append(float(ttft_ms))
+            if total_latency_ms is not None:
+                c["latency"].append(float(total_latency_ms))
+            if tps is not None:
+                c["tps"].append(float(tps))
+        elif status == "overloaded":
             c["overloaded"] += 1
         else:
             c["error"] += 1
-        if r.status != "success":
-            bucket = _classify_error(r.error_message, r.status)
+        if status != "success":
+            bucket = _classify_error(error_message, status)
             c["buckets"][bucket] = c["buckets"].get(bucket, 0) + 1
 
     # Format

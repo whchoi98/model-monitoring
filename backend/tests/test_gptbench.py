@@ -758,10 +758,14 @@ def test_run_cycle_records_wall_clock_timeout_row(bench_env, session_factory, mo
 
 
 # ---------------------------------------------------------------------------
-# 두 갈래 병렬 (v2.32.0, 2026-09-30 사용자 결정)
-#   cris = 유사 리전 global/us(bedrock-runtime), mantle = 인리전(bedrock-mantle). 두 갈래가 동시에 돌고
-#   갈래 안은 순차, 데드라인은 공유 시각, 넘긴 갈래는 자기 남은 채널만 skip, DB는 메인 스레드만 쓴다.
+# 호스트별 갈래 병렬 (v2.32.0 두 갈래, v2.32.1 Mantle 리전별 분할 — 2026-09-30 사용자 결정)
+#   cris = 유사 리전 global/us(bedrock-runtime), mantle-<region> = 인리전(bedrock-mantle.<region>) 리전마다 한 갈래.
+#   갈래가 동시에 돌고 갈래 안은 순차, 데드라인은 공유 시각, 넘긴 갈래는 자기 남은 채널만 skip, DB는 메인 스레드만 쓴다.
+#   v2.32.1 배경: GPT 5.4 (us-east-2) 한 채널이 느려지자 mantle 한 갈래가 783초, 802초로 데드라인을 넘겨
+#   us-east-1 끝 채널(GPT 6 Sol, 6 Luna, 6.1 Sol)이 잘렸다 — 느린 호스트는 자기 갈래만 늦춰야 한다.
 # ---------------------------------------------------------------------------
+
+LANES_ORDER = ["cris", "mantle-us-east-1", "mantle-us-east-2", "mantle-us-west-2"]
 
 CRIS_ORDER = [
     "openai:global:global.openai.gpt-5.6-terra",
@@ -788,6 +792,12 @@ MANTLE_ORDER = [
     "openai:us-east-1:openai.gpt-6-luna",
     "openai:us-east-1:openai.gpt-6.1-sol",
 ]
+# Mantle 리전 갈래 — 갈래 안 순서는 bench_channels 순서(MANTLE_ORDER를 리전으로 거른 것).
+E1_ORDER = [k for k in MANTLE_ORDER if k.startswith("openai:us-east-1:")]
+E2_ORDER = [k for k in MANTLE_ORDER if k.startswith("openai:us-east-2:")]
+W2_ORDER = [k for k in MANTLE_ORDER if k.startswith("openai:us-west-2:")]
+LANE_KEYS = {"cris": CRIS_ORDER, "mantle-us-east-1": E1_ORDER, "mantle-us-east-2": E2_ORDER,
+             "mantle-us-west-2": W2_ORDER}
 
 
 def _model_key(region, actual_id):
@@ -825,37 +835,78 @@ def _recording_session_factory(engine, seen_threads):
     return sessionmaker(bind=engine, class_=RecordingSession)
 
 
-def test_bench_lanes_split_by_host_with_gpt61_sol_last(bench_env):
-    """CRIS 9 = Global 5 + US 4, Mantle 12 — 갈래 안 순서는 bench_channels 순서, 각 갈래 끝은 GPT 6.1 Sol."""
+def test_bench_lanes_split_by_host_cris_then_one_lane_per_mantle_region(bench_env):
+    """CRIS 9 = Global 5 + US 4, Mantle 리전 갈래 us-east-1 6, us-east-2 3, us-west-2 3 (v2.32.1).
+
+    갈래 순서는 cris 다음 Mantle 리전(첫 채널이 bench_channels에 나오는 순서), 갈래 안 순서는 bench_channels 순서.
+    GPT 6.1 Sol은 자기가 있는 갈래(cris, mantle-us-east-1)의 끝이다.
+    """
     import gptbench
 
     chans = gptbench.bench_channels()
     lanes = gptbench.bench_lanes(chans)
-    assert list(lanes) == ["cris", "mantle"]
-    assert [ch["model_id"] for _, ch in lanes["cris"]] == CRIS_ORDER
-    assert [ch["model_id"] for _, ch in lanes["mantle"]] == MANTLE_ORDER
+    assert list(lanes) == LANES_ORDER
+    assert {lane: len(items) for lane, items in lanes.items()} == {
+        "cris": 9, "mantle-us-east-1": 6, "mantle-us-east-2": 3, "mantle-us-west-2": 3}
+    for lane, keys in LANE_KEYS.items():
+        assert [ch["model_id"] for _, ch in lanes[lane]] == keys, lane
+    assert lanes["cris"][-1][1]["family"] == "GPT 6.1 Sol"
+    assert lanes["mantle-us-east-1"][-1][1]["family"] == "GPT 6.1 Sol"
     for items in lanes.values():
-        assert items[-1][1]["family"] == "GPT 6.1 Sol"
         idx = [i for i, _ in items]
         assert idx == sorted(idx)  # bench_channels 순서를 거른 것
         assert all(chans[i] is ch for i, ch in items)
+    assert sorted(i for items in lanes.values() for i, _ in items) == list(range(21))  # 채널마다 정확히 한 갈래
     assert {gptbench.lane_of(c) for c in chans if c["region"] in ("global", "us")} == {"cris"}
-    assert {gptbench.lane_of(c) for c in chans if c["region"] not in ("global", "us")} == {"mantle"}
+    for c in chans:
+        if c["region"] not in ("global", "us"):
+            assert gptbench.lane_of(c) == gptbench.mantle_lane(c["region"]) == f"mantle-{c['region']}"
+
+
+def test_bench_lanes_new_mantle_region_gets_its_own_lane(bench_env, monkeypatch):
+    """새 Mantle 리전은 코드 수정 없이 자기 갈래를 얻는다 — 갈래 이름은 채널 리전에서 파생한다.
+
+    갈래 순서는 cris가 맨 앞(첫 채널이 Mantle이어도), 그다음 Mantle 리전은 첫 채널이 나오는 순서다(이름순 아님).
+    """
+    import gptbench
+    import prober
+
+    monkeypatch.setitem(prober._OPENAI_REGION_ENV, "eu-north-1", "OPENAI_EU_NORTH_1_BASE_URL")
+    monkeypatch.setenv("OPENAI_EU_NORTH_1_BASE_URL", "http://en1")
+    monkeypatch.setattr(gptbench, "_BENCH_SPECS", [
+        ("GPT 6 Sol", "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", ("us-west-2", "global", "eu-north-1", "us-east-1")),
+        ("GPT 6 Luna", "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", ("eu-north-1", "us", "us-west-2")),
+    ])
+
+    lanes = gptbench.bench_lanes(gptbench.bench_channels())
+    assert list(lanes) == ["cris", "mantle-us-west-2", "mantle-eu-north-1", "mantle-us-east-1"]
+    assert {lane: [(i, ch["model_id"]) for i, ch in items] for lane, items in lanes.items()} == {
+        "cris": [(1, "openai:global:global.openai.gpt-6-sol"), (5, "openai:us:us.openai.gpt-6-luna")],
+        "mantle-us-west-2": [(0, "openai:us-west-2:openai.gpt-6-sol"), (6, "openai:us-west-2:openai.gpt-6-luna")],
+        "mantle-eu-north-1": [(2, "openai:eu-north-1:openai.gpt-6-sol"), (4, "openai:eu-north-1:openai.gpt-6-luna")],
+        "mantle-us-east-1": [(3, "openai:us-east-1:openai.gpt-6-sol")],
+    }
 
 
 def test_bench_lanes_drop_empty_lane(bench_env, monkeypatch):
-    """CRIS base URL이 없으면 CRIS 갈래 자체가 없다 — 빈 갈래 스레드를 띄우지 않는다."""
+    """base URL이 없는 호스트의 갈래는 아예 없다 — 빈 갈래 스레드를 띄우지 않는다(CRIS, Mantle 리전 모두)."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
     monkeypatch.delenv("OPENAI_US_BASE_URL")
     lanes = gptbench.bench_lanes(gptbench.bench_channels())
-    assert list(lanes) == ["mantle"] and len(lanes["mantle"]) == 12
+    assert list(lanes) == ["mantle-us-east-1", "mantle-us-east-2", "mantle-us-west-2"]
+    assert [len(items) for items in lanes.values()] == [6, 3, 3]
+
+    monkeypatch.delenv("OPENAI_US_EAST_2_BASE_URL")
+    lanes = gptbench.bench_lanes(gptbench.bench_channels())
+    assert list(lanes) == ["mantle-us-east-1", "mantle-us-west-2"]
 
 
-def test_run_cycle_runs_both_lanes_in_parallel_each_sequential(bench_env, engine, monkeypatch, caplog):
-    """두 갈래가 동시에 호출 중인 순간이 있어야 한다(Barrier), 갈래 안 호출 순서는 채널 순서 × (워밍업 1 + RUNS),
-    한 갈래의 호출은 한 스레드에서만 나오고, DB는 메인 스레드만 쓴다. 행은 두 갈래 합쳐 정확히 한 번씩 저장된다."""
+def test_run_cycle_runs_four_lanes_in_parallel_each_sequential(bench_env, engine, monkeypatch, caplog):
+    """네 갈래(cris, mantle-us-east-1, mantle-us-east-2, mantle-us-west-2)가 동시에 호출 중인 순간이 있어야 한다(Barrier),
+    갈래 안 호출 순서는 채널 순서 × (워밍업 1 + RUNS), 한 갈래의 호출은 한 스레드에서만 나오고, DB는 메인 스레드만
+    쓴다. 행은 네 갈래 합쳐 정확히 한 번씩 저장되고, 갈래 구성 로그 한 줄과 갈래마다 종료 로그 한 줄이 남는다."""
     import database
     import gptbench
 
@@ -864,8 +915,8 @@ def test_run_cycle_runs_both_lanes_in_parallel_each_sequential(bench_env, engine
     monkeypatch.setattr(database, "SessionLocal", factory)
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
 
-    # 두 갈래의 첫 호출이 서로를 기다린다 — 순차 실행이면 5초 뒤 BrokenBarrierError로 사이클이 실패한다.
-    barrier = threading.Barrier(2, timeout=5)
+    # 네 갈래의 첫 호출이 서로를 기다린다 — 갈래가 넷보다 적거나 순차면 5초 뒤 BrokenBarrierError로 사이클이 실패한다.
+    barrier = threading.Barrier(4, timeout=5)
     first_call_done: set[str] = set()
     calls: list[tuple[str, str]] = []  # (thread name, model key)
     lock = threading.Lock()
@@ -888,10 +939,9 @@ def test_run_cycle_runs_both_lanes_in_parallel_each_sequential(bench_env, engine
 
     assert res["rows"] == 42 and res["errors"] == 0 and res["skipped_channels"] == []
     assert res["channels"] == 21
-    assert {n for n, _ in calls} == {"gptbench-cris", "gptbench-mantle"}
-    per_thread = {n: [k for t, k in calls if t == n] for n in ("gptbench-cris", "gptbench-mantle")}
-    assert per_thread["gptbench-cris"] == [k for k in CRIS_ORDER for _ in range(3)]
-    assert per_thread["gptbench-mantle"] == [k for k in MANTLE_ORDER for _ in range(3)]
+    assert {n for n, _ in calls} == {f"gptbench-{lane}" for lane in LANES_ORDER}
+    for lane, keys in LANE_KEYS.items():
+        assert [k for t, k in calls if t == f"gptbench-{lane}"] == [k for k in keys for _ in range(3)], lane
     assert seen_db_threads == {threading.current_thread().name}
 
     s = factory()
@@ -902,17 +952,27 @@ def test_run_cycle_runs_both_lanes_in_parallel_each_sequential(bench_env, engine
     assert len({r.cycle_ts for r in rows}) == 1
     s.close()
 
-    done = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
+    messages = [r.getMessage() for r in caplog.records]
+    done = [m for m in messages if m.startswith("GPT bench cycle done:")]
     assert len(done) == 1 and done[0].startswith("GPT bench cycle done: rows=42 errors=0 skipped=none elapsed=")
-    assert any(r.getMessage() == "GPT bench lanes: cris=9 mantle=12" for r in caplog.records)
+    assert [m for m in messages if m.startswith("GPT bench lanes:")] == [
+        "GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3"]
+    lane_done = sorted(m.split(" elapsed=")[0] for m in messages if m.startswith("GPT bench lane done:"))
+    assert lane_done == [
+        "GPT bench lane done: cris channels=9",
+        "GPT bench lane done: mantle-us-east-1 channels=6",
+        "GPT bench lane done: mantle-us-east-2 channels=3",
+        "GPT bench lane done: mantle-us-west-2 channels=3",
+    ]
 
 
 def test_run_cycle_deadline_is_per_lane(bench_env, session_factory, monkeypatch):
-    """느린 Mantle 갈래만 데드라인을 넘겨 자기 남은 채널을 skip한다 — CRIS 갈래는 끝까지 측정한다.
+    """Mantle 리전 갈래는 저마다 데드라인 전체를 쓴다 — 갈래마다 자기 셋째 채널에서 잘리고, CRIS 갈래는 끝까지 측정한다.
 
     가상 시계: Mantle 호출 100s, CRIS 호출 1s, RUNS=2(채널당 3호출), 데드라인 780s.
-    Mantle 채널 0: 0→300, 1: 300→600, 2: 600 통과 → 워밍업 700 → run1 700 통과 → 800 → run2 800 초과 = "(run 2+)",
-    채널 3~11: 채널 전체 skip. CRIS: 9채널 × 3s = 27s, skip 없음.
+    Mantle 갈래마다 채널 1: 0→300, 2: 300→600, 3: 600 통과 → 워밍업 700 → run1 700 통과 → 800 → run2 800 초과 = "(run 2+)",
+    그 뒤 채널은 채널 전체 skip(mantle-us-east-1의 GPT 6 Sol, 6 Luna, 6.1 Sol). CRIS: 9채널 × 3s = 27s, skip 없음.
+    skipped_channels는 갈래가 섞여도 bench_channels 순서다.
     """
     import database
     import gptbench
@@ -932,25 +992,77 @@ def test_run_cycle_deadline_is_per_lane(bench_env, session_factory, monkeypatch)
 
     res = gptbench.run_cycle()
 
-    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
-    assert res["skipped_channels"] == (
-        [f"{labels[MANTLE_ORDER[2]]} (run 2+)"] + [labels[k] for k in MANTLE_ORDER[3:]])
-    assert res["skipped_channels"][0] == "OpenAI GPT 5.4 (us-west-2) (run 2+)"
-    assert res["rows"] == 9 * 2 + 2 + 2 + 1  # CRIS 전부 + Mantle 채널 0, 1 전부 + 채널 2의 run 1
+    assert res["skipped_channels"] == [
+        "OpenAI GPT 5.6 Terra (us-east-1) (run 2+)",
+        "OpenAI GPT 5.6 Terra (us-east-2) (run 2+)",
+        "OpenAI GPT 6 Astra (us-west-2) (run 2+)",
+        "OpenAI GPT 6 Sol (us-east-1)",
+        "OpenAI GPT 6 Luna (us-east-1)",
+        "OpenAI GPT 6.1 Sol (us-east-1)",
+    ]
+    assert res["rows"] == 9 * 2 + 3 * (2 + 2 + 1)  # CRIS 전부 + Mantle 갈래마다 채널 1, 2 전부와 채널 3의 run 1
 
-    s = session_factory()
-    got = {}
-    for r in s.query(models.GptBenchResult).all():
-        got.setdefault(r.model_id, []).append(r.run_no)
-    s.close()
-    assert {k: sorted(v) for k, v in got.items()} == {
+    assert _stored_runs(session_factory) == {
         **{k: [1, 2] for k in CRIS_ORDER},
-        MANTLE_ORDER[0]: [1, 2], MANTLE_ORDER[1]: [1, 2], MANTLE_ORDER[2]: [1],
+        **{keys[0]: [1, 2] for keys in (E1_ORDER, E2_ORDER, W2_ORDER)},
+        **{keys[1]: [1, 2] for keys in (E1_ORDER, E2_ORDER, W2_ORDER)},
+        **{keys[2]: [1] for keys in (E1_ORDER, E2_ORDER, W2_ORDER)},
     }
 
 
+def test_run_cycle_slow_us_east_2_host_does_not_cut_us_east_1(bench_env, session_factory, monkeypatch, caplog):
+    """2026-09-30 운영 재현 — GPT 5.4 (us-east-2)가 느려져(호출당 70s, 11호출 770s) 데드라인을 거의 다 써도
+    us-east-1 여섯 채널(GPT 6 Sol, 6 Luna, 6.1 Sol 포함)은 run 10개를 모두 저장한다. 느린 호스트의 컷은 자기 갈래
+    (us-east-2) 뒤 채널에만 떨어지고, 그 갈래의 lane done elapsed만 780초 근처다.
+
+    가상 시계(RUNS=10, 채널당 11호출, 데드라인 780s): us-east-1 호출 4s → 6채널 264s, us-west-2 호출 2s → 66s,
+    CRIS 호출 3s → 297s, us-east-2의 GPT 5.5와 Terra 호출 3s.
+    us-east-2: GPT 5.4 0→770, GPT 5.5 770 통과 → 워밍업 773 → run 1~3 (776, 779, 782) → run 4 판정 782 초과 = "(run 4+)",
+    Terra (us-east-2)는 782에 시작 판정 초과 = 채널 전체 skip.
+    v2.32.0 한 갈래 Mantle이었다면 GPT 5.4 (us-east-1) 44s + GPT 5.4 (us-east-2) 770s = 814s에서 뒤 채널이 모두 잘린다.
+    """
+    import database
+    import gptbench
+
+    clock = _LaneClock()
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "_clock", clock)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 10)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 780.0)
+    base = _fake_call()
+    per_call = {"us-east-1": 4.0, "us-west-2": 2.0, "global": 3.0, "us": 3.0, "us-east-2": 3.0}
+
+    def call(region, actual_id):
+        slow = _model_key(region, actual_id) == "openai:us-east-2:openai.gpt-5.4"
+        clock.advance(70.0 if slow else per_call[region])
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+
+    res = gptbench.run_cycle()
+
+    assert res["skipped_channels"] == ["OpenAI GPT 5.5 (us-east-2) (run 4+)", "OpenAI GPT 5.6 Terra (us-east-2)"]
+    stored = _stored_runs(session_factory)
+    ten = list(range(1, 11))
+    assert {k: stored.get(k) for k in E1_ORDER} == {k: ten for k in E1_ORDER}  # 운영에서 잘린 끝 채널 포함 전부
+    assert {k: stored.get(k) for k in CRIS_ORDER + W2_ORDER} == {k: ten for k in CRIS_ORDER + W2_ORDER}
+    assert stored["openai:us-east-2:openai.gpt-5.4"] == ten
+    assert stored["openai:us-east-2:openai.gpt-5.5"] == [1, 2, 3]
+    assert "openai:us-east-2:openai.gpt-5.6-terra" not in stored
+    assert res["rows"] == 19 * 10 + 3
+
+    lane_done = sorted(r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench lane done:"))
+    assert lane_done == [
+        "GPT bench lane done: cris channels=9 elapsed=297s",
+        "GPT bench lane done: mantle-us-east-1 channels=6 elapsed=264s",
+        "GPT bench lane done: mantle-us-east-2 channels=3 elapsed=782s",
+        "GPT bench lane done: mantle-us-west-2 channels=3 elapsed=66s",
+    ]
+
+
 def test_run_cycle_skipped_list_follows_channel_order_across_lanes(bench_env, session_factory, monkeypatch):
-    """두 갈래 모두 데드라인을 넘기면 skipped_channels는 도착 순서가 아니라 bench_channels 순서다(결정적 보고)."""
+    """모든 갈래가 데드라인을 넘기면 skipped_channels는 도착 순서가 아니라 bench_channels 순서다(결정적 보고)."""
     import database
     import gptbench
 
@@ -964,9 +1076,10 @@ def test_run_cycle_skipped_list_follows_channel_order_across_lanes(bench_env, se
     assert res["skipped_channels"] == [c["model_name"] for c in gptbench.bench_channels()]
 
 
-def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory, monkeypatch):
-    """watchdog도 풀지 못한 정지 갈래는 데드라인 + 호출 상한 + 여유가 지나면 기다리지 않는다 — 남은 채널은 skip,
-    다른 갈래의 행은 저장, 사이클은 끝난다. 워밍업에서 멈춘 채널은 시작한 채널이라 "(run 1+)"이다."""
+def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory, monkeypatch, caplog):
+    """watchdog도 풀지 못한 정지 호스트(us-east-2)의 갈래는 데드라인 + 호출 상한 + 여유가 지나면 기다리지 않는다 —
+    그 갈래의 남은 채널만 skip, 다른 세 갈래(cris, us-east-1, us-west-2)의 행은 모두 저장, 사이클은 끝난다.
+    워밍업에서 멈춘 채널은 시작한 채널이라 "(run 1+)"이다."""
     import database
     import gptbench
 
@@ -979,11 +1092,12 @@ def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory,
     base = _fake_call()
 
     def call(region, actual_id):
-        if region not in ("global", "us"):
+        if region == "us-east-2":
             release.wait(10)  # 테스트 안전판 — 대기 상한(0.4s)이 동작하지 않으면 10초를 다 쓴다
         return base(region, actual_id)
 
     monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
     try:
         t0 = time.perf_counter()
         res = gptbench.run_cycle()
@@ -992,9 +1106,13 @@ def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory,
         release.set()
         _join_lanes()
 
-    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
-    assert res["rows"] == 9
-    assert res["skipped_channels"] == [f"{labels[MANTLE_ORDER[0]]} (run 1+)"] + [labels[k] for k in MANTLE_ORDER[1:]]
+    assert res["rows"] == 9 + 6 + 3
+    assert _stored_runs(session_factory) == {k: [1] for k in CRIS_ORDER + E1_ORDER + W2_ORDER}
+    assert res["skipped_channels"] == [
+        "OpenAI GPT 5.4 (us-east-2) (run 1+)", "OpenAI GPT 5.5 (us-east-2)", "OpenAI GPT 5.6 Terra (us-east-2)"]
+    abandoned = [r.getMessage() for r in caplog.records if "did not finish within" in r.getMessage()]
+    assert len(abandoned) == 1 and abandoned[0].startswith("GPT bench lane mantle-us-east-2 did not finish within")
+    assert abandoned[0].endswith("- abandoning 3 channel(s)")
 
 
 def _join_lanes():
@@ -1014,8 +1132,9 @@ def _stored_runs(session_factory):
 
 
 def test_run_cycle_wait_cap_keeps_finished_runs_of_the_stuck_channel(bench_env, session_factory, monkeypatch, caplog):
-    """Mantle 채널 1이 워밍업과 run 1, 2를 끝낸 뒤 run 3에서 대기 상한을 넘겨 멈춘다(연결, 헤더 대기는 watchdog이
-    못 끊는다). 끝난 run 1, 2는 저장되고 그 채널은 데드라인 skip처럼 "(run 3+)", 시작하지 못한 뒤 채널은 라벨이다."""
+    """GPT 5.4 (us-east-2)가 워밍업과 run 1, 2를 끝낸 뒤 run 3에서 대기 상한을 넘겨 멈춘다(연결, 헤더 대기는 watchdog이
+    못 끊는다). 끝난 run 1, 2는 저장되고 그 채널은 데드라인 skip처럼 "(run 3+)", 같은 갈래(mantle-us-east-2)에서
+    시작하지 못한 뒤 채널은 라벨이다. 다른 Mantle 리전 갈래는 끝까지 측정한다."""
     import database
     import gptbench
 
@@ -1026,7 +1145,7 @@ def test_run_cycle_wait_cap_keeps_finished_runs_of_the_stuck_channel(bench_env, 
     monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
     monkeypatch.setattr(gptbench, "LANE_JOIN_GRACE_S", 0.1)
     base = _fake_call()
-    stuck_calls = []  # Mantle 갈래 스레드만 쓴다
+    stuck_calls = []  # mantle-us-east-2 갈래 스레드만 쓴다
 
     def call(region, actual_id):
         if _model_key(region, actual_id) == MANTLE_ORDER[1]:
@@ -1043,17 +1162,17 @@ def test_run_cycle_wait_cap_keeps_finished_runs_of_the_stuck_channel(bench_env, 
         release.set()
         _join_lanes()
 
-    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
-    assert any(r.getMessage().startswith("GPT bench lane mantle did not finish within") for r in caplog.records)
+    abandoned = [r.getMessage() for r in caplog.records if "did not finish within" in r.getMessage()]
+    assert len(abandoned) == 1 and abandoned[0].startswith("GPT bench lane mantle-us-east-2 did not finish within")
     assert _stored_runs(session_factory) == {
-        **{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1, 2, 3], MANTLE_ORDER[1]: [1, 2]}
-    assert res["rows"] == 9 * 3 + 3 + 2
-    assert res["skipped_channels"] == (
-        ["OpenAI GPT 5.4 (us-east-2) (run 3+)"] + [labels[k] for k in MANTLE_ORDER[2:]])
+        **{k: [1, 2, 3] for k in CRIS_ORDER + E1_ORDER + W2_ORDER}, MANTLE_ORDER[1]: [1, 2]}
+    assert res["rows"] == 9 * 3 + 6 * 3 + 3 * 3 + 2
+    assert res["skipped_channels"] == [
+        "OpenAI GPT 5.4 (us-east-2) (run 3+)", "OpenAI GPT 5.5 (us-east-2)", "OpenAI GPT 5.6 Terra (us-east-2)"]
 
 
 def test_run_cycle_wait_cap_stores_channels_already_queued(bench_env, engine, monkeypatch, caplog):
-    """두 갈래는 일찍 끝났는데 메인의 첫 커밋이 대기 상한을 넘겨 멈춘다(RDS 지연, 잠금 대기 등). 이미 큐에 도착한
+    """네 갈래는 일찍 끝났는데 메인의 첫 커밋이 대기 상한을 넘겨 멈춘다(RDS 지연, 잠금 대기 등). 이미 큐에 도착한
     채널은 포기하지 않고 모두 저장한다 — 상한은 기다림을 멈출 뿐 도착한 측정을 버리지 않는다."""
     import database
     import gptbench
@@ -1065,7 +1184,7 @@ def test_run_cycle_wait_cap_stores_channels_already_queued(bench_env, engine, mo
         def commit(self):
             if not StallingSession.stalled:
                 StallingSession.stalled = True
-                _join_lanes()  # 두 갈래가 모든 진행을 큐에 넣고 끝난 뒤
+                _join_lanes()  # 모든 갈래가 모든 진행을 큐에 넣고 끝난 뒤
                 time.sleep(0.5)  # 대기 상한(0.4s)을 넘긴다
             return super().commit()
 
@@ -1087,14 +1206,15 @@ def test_run_cycle_wait_cap_stores_channels_already_queued(bench_env, engine, mo
 
 
 def test_run_cycle_lane_crash_mid_channel_keeps_finished_runs(bench_env, session_factory, monkeypatch, caplog):
-    """갈래가 채널 도중에 예외로 멈춰도 그 채널의 끝난 run은 저장되고 "(run N+)"로 보고된다(대기 상한과 같은 처리)."""
+    """갈래가 채널 도중에 예외로 멈춰도 그 채널의 끝난 run은 저장되고 "(run N+)"로 보고된다(대기 상한과 같은 처리).
+    멈춘 갈래(mantle-us-east-1)의 남은 채널만 라벨로 보고되고, 다른 Mantle 리전 갈래는 끝까지 저장된다."""
     import database
     import gptbench
 
     monkeypatch.setattr(database, "SessionLocal", session_factory)
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 3)
     base = _fake_call()
-    first_mantle_calls = []  # Mantle 갈래 스레드만 쓴다
+    first_mantle_calls = []  # mantle-us-east-1 갈래 스레드만 쓴다
 
     def call(region, actual_id):
         if _model_key(region, actual_id) == MANTLE_ORDER[0]:
@@ -1108,18 +1228,20 @@ def test_run_cycle_lane_crash_mid_channel_keeps_finished_runs(bench_env, session
     with pytest.raises(RuntimeError, match="client init failed"):
         gptbench.run_cycle()
 
-    assert _stored_runs(session_factory) == {**{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1]}
+    assert _stored_runs(session_factory) == {
+        **{k: [1, 2, 3] for k in CRIS_ORDER + E2_ORDER + W2_ORDER}, MANTLE_ORDER[0]: [1]}
     labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
     (done,) = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
-    skipped = ["OpenAI GPT 5.4 (us-east-1) (run 2+)"] + [labels[k] for k in MANTLE_ORDER[1:]]
-    assert done.startswith(f"GPT bench cycle done: rows={9 * 3 + 1} errors=0 skipped={skipped!r} elapsed=")
+    skipped = ["OpenAI GPT 5.4 (us-east-1) (run 2+)"] + [labels[k] for k in E1_ORDER[1:]]
+    assert done.startswith(f"GPT bench cycle done: rows={9 * 3 + 6 * 3 + 1} errors=0 skipped={skipped!r} elapsed=")
+    assert any(r.getMessage().startswith("GPT bench lane mantle-us-east-1 stopped: RuntimeError") for r in caplog.records)
 
 
 @pytest.mark.parametrize("stop", ["wait_cap", "crash"])
 def test_run_cycle_lane_stopped_after_all_runs_is_not_skipped(bench_env, engine, monkeypatch, caplog, stop):
-    """Mantle 채널 1이 run을 RUNS_PER_CHANNEL개 모두 끝낸 뒤 "done" 직전에 갈래가 멈춘다(대기 상한, 예외).
+    """GPT 5.4 (us-east-2)가 run을 RUNS_PER_CHANNEL개 모두 끝낸 뒤 "done" 직전에 갈래가 멈춘다(대기 상한, 예외).
     측정은 다 끝났으므로 "done"을 받은 것과 같다 — run 1~3 저장, skipped_channels에 없고("(run 4+)" 아님),
-    시작하지 못한 뒤 채널만 라벨이다. DB는 메인 스레드만 쓴다."""
+    같은 갈래(mantle-us-east-2)에서 시작하지 못한 뒤 채널만 라벨이다. 다른 갈래는 끝까지 저장한다. DB는 메인 스레드만 쓴다."""
     import database
     import gptbench
 
@@ -1155,21 +1277,23 @@ def test_run_cycle_lane_stopped_after_all_runs_is_not_skipped(bench_env, engine,
         _join_lanes()
 
     labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
-    skipped = [labels[k] for k in MANTLE_ORDER[2:]]
+    skipped = [labels[k] for k in E2_ORDER[1:]]
+    assert skipped == ["OpenAI GPT 5.5 (us-east-2)", "OpenAI GPT 5.6 Terra (us-east-2)"]
+    rows = 9 * 3 + 6 * 3 + 3 * 3 + 3  # cris, us-east-1, us-west-2 전부 + GPT 5.4 (us-east-2) run 1~3
     if stop == "wait_cap":
-        assert res["rows"] == 9 * 3 + 3 + 3 and res["skipped_channels"] == skipped
+        assert res["rows"] == rows and res["skipped_channels"] == skipped
         # 로그의 버린 채널 수는 skip으로 보고한 수와 같다 — 다 측정한 진행 중 채널은 세지 않는다.
-        (abandon,) = [r.getMessage() for r in caplog.records
-                      if r.getMessage().startswith("GPT bench lane mantle did not finish within")]
+        (abandon,) = [r.getMessage() for r in caplog.records if "did not finish within" in r.getMessage()]
+        assert abandon.startswith("GPT bench lane mantle-us-east-2 did not finish within")
         assert abandon.endswith(f"- abandoning {len(skipped)} channel(s)")
     assert _stored_runs(factory) == {
-        **{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1, 2, 3], MANTLE_ORDER[1]: [1, 2, 3]}
+        **{k: [1, 2, 3] for k in CRIS_ORDER + E1_ORDER + W2_ORDER}, MANTLE_ORDER[1]: [1, 2, 3]}
     assert seen_db_threads == {threading.current_thread().name}
     messages = [r.getMessage() for r in caplog.records]
     assert f"channel done: {labels[MANTLE_ORDER[1]]}" in messages
     assert not any("(run 4+)" in m for m in messages)
     (done,) = [m for m in messages if m.startswith("GPT bench cycle done:")]
-    assert done.startswith(f"GPT bench cycle done: rows={9 * 3 + 3 + 3} errors=0 skipped={skipped!r} elapsed=")
+    assert done.startswith(f"GPT bench cycle done: rows={rows} errors=0 skipped={skipped!r} elapsed=")
 
 
 def test_default_wait_cap_stays_below_the_15_minute_schedule():
@@ -1180,7 +1304,10 @@ def test_default_wait_cap_stays_below_the_15_minute_schedule():
 
 
 def test_run_cycle_lane_crash_keeps_other_lane_and_reraises(bench_env, session_factory, monkeypatch, caplog):
-    """갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고, 사이클 로그를 한 번 남긴 뒤 예외를 다시 던진다."""
+    """갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고, 사이클 로그를 한 번 남긴 뒤 예외를 다시 던진다.
+
+    Mantle 호출이 모두 실패하면 Mantle 리전 갈래 셋이 저마다 멈춘다 — 갈래마다 정지 로그 한 줄, 갈래마다 첫 채널은
+    시작한 채널이라 "(run 1+)", 나머지는 라벨(bench_channels 순서), 다시 던지는 예외는 하나다."""
     import database
     import gptbench
 
@@ -1202,13 +1329,58 @@ def test_run_cycle_lane_crash_keeps_other_lane_and_reraises(bench_env, session_f
     s = session_factory()
     assert sorted(r.model_id for r in s.query(models.GptBenchResult).all()) == sorted(CRIS_ORDER)
     s.close()
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    skipped = [f"{labels[k]} (run 1+)" for k in MANTLE_ORDER[:3]] + [labels[k] for k in MANTLE_ORDER[3:]]
+    assert skipped[:3] == [
+        "OpenAI GPT 5.4 (us-east-1) (run 1+)", "OpenAI GPT 5.4 (us-east-2) (run 1+)", "OpenAI GPT 5.4 (us-west-2) (run 1+)"]
     done = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
-    assert len(done) == 1 and done[0].startswith("GPT bench cycle done: rows=9 errors=0 skipped=[")
-    assert "OpenAI GPT 6.1 Sol (us-east-1)" in done[0]
+    assert len(done) == 1 and done[0].startswith(f"GPT bench cycle done: rows=9 errors=0 skipped={skipped!r} elapsed=")
+    stopped = sorted(r.getMessage().split(":")[0] for r in caplog.records if " stopped: " in r.getMessage())
+    assert stopped == [f"GPT bench lane {lane} stopped" for lane in LANES_ORDER[1:]]
+
+
+def test_client_cache_one_client_per_host_each_lane_uses_its_own(bench_env, session_factory, monkeypatch):
+    """네 갈래가 동시에 돌아도 클라이언트는 base URL마다 하나이고, Mantle 리전 클라이언트는 그 리전 갈래만 쓴다
+    (갈래끼리 클라이언트를 나눠 쓰지 않는다 — 같은 호스트 호출이 겹치지 않는다). cris 갈래는 global, us 두 개를 쓴다.
+    실제 one_call(watchdog 포함) 경로로 사이클 하나를 돈다."""
+    import database
+    import gptbench
+
+    created: dict[str, str] = {}  # base_url → 만든 스레드
+    used: dict[str, set[str]] = {}  # base_url → 호출한 스레드
+    lock = threading.Lock()
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            base_url = kwargs["base_url"]
+            with lock:
+                assert base_url not in created  # 캐시 — 같은 base URL을 두 번 만들지 않는다
+                created[base_url] = threading.current_thread().name
+
+            def create(**_):
+                with lock:
+                    used.setdefault(base_url, set()).add(threading.current_thread().name)
+                return _SlowStream()
+
+            self.responses = types.SimpleNamespace(create=create)
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    monkeypatch.setattr(gptbench, "_client_cache", {})
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+
+    res = gptbench.run_cycle()
+
+    assert res["rows"] == 21 and res["errors"] == 0 and res["skipped_channels"] == []
+    expected = {"http://gl": "gptbench-cris", "http://us": "gptbench-cris",
+                "http://e1": "gptbench-mantle-us-east-1", "http://e2": "gptbench-mantle-us-east-2",
+                "http://w2": "gptbench-mantle-us-west-2"}
+    assert created == expected
+    assert used == {url: {thread} for url, thread in expected.items()}
 
 
 def test_client_cache_is_shared_safely_across_lanes(bench_env, monkeypatch):
-    """두 갈래가 같은 base URL을 동시에 처음 요청해도 클라이언트는 하나만 만든다(캐시 잠금)."""
+    """여러 갈래가 같은 base URL을 동시에 처음 요청해도 클라이언트는 하나만 만든다(캐시 잠금)."""
     import gptbench
 
     created = []

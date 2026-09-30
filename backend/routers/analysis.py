@@ -6,37 +6,35 @@ LLM 특유의 시그널을 시각화:
                  → max_tokens 비율이 높으면 prompt 설계 문제, content_filtered가 높으면 안전성 시그널
   - Output Length: 모델별 output_tokens 분포 (n, mean, median, p50, p95, std, histogram)
                   → 같은 prompt에 모델이 얼마나 장황한지 / 간결한지, 비용/지연 예측에 사용
+
+메모리 (2026-09-30 OOM): 두 엔드포인트는 /analysis 화면이 동시에 부른다. 예전에는 창 안의 success 행을
+prompt, output_text까지 담은 ORM 엔티티로 모두 읽어 7d 기본 창 두 요청이 backend 태스크(1024 MiB)를 OOM(exit 137)으로
+죽였다. 지금은 DB에서 GROUP BY로 센 행 수만 읽고(모델 × 값 종류), 창은 최대 30일이다(window_spec.parse_window, 넘으면 422).
 """
 
 from __future__ import annotations
 
 import logging
-from collections import Counter, defaultdict
 from datetime import datetime, timedelta, timezone
 from statistics import mean, median, pstdev
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
 from pydantic import BaseModel
+from sqlalchemy import func
 from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
 from visibility import visible_only
+from window_spec import parse_window
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/analysis", tags=["analysis"])
 
 
-def _parse_window(spec: str) -> timedelta:
-    s = spec.strip().lower()
-    if s.endswith("d"):
-        return timedelta(days=int(s[:-1]))
-    if s.endswith("h"):
-        return timedelta(hours=int(s[:-1]))
-    if s.endswith("m"):
-        return timedelta(minutes=int(s[:-1]))
-    return timedelta(hours=24)
+# 창 상한 = /analysis 화면의 가장 긴 창(24h, 7d, 30d 중 30d). 넘는 창은 422.
+_MAX_WINDOW = timedelta(days=30)
 
 
 # stop_reason 정규화 — Bedrock과 Anthropic SDK가 다른 형태를 반환할 수 있음.
@@ -95,26 +93,36 @@ def get_stop_reasons(
     db: Session = Depends(get_db),
 ):
     """모델별 stop_reason 분포 (success status만 집계)."""
-    cutoff = datetime.now(timezone.utc) - _parse_window(window)
+    cutoff = datetime.now(timezone.utc) - parse_window(window, max_window=_MAX_WINDOW)
 
-    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(
+    # 원래 stop_reason 값별 행 수를 DB에서 센다(GROUP BY) — 엔티티를 읽지 않으니 메모리는 모델 × 값 종류.
+    # 정규화는 그 뒤에 하고 같은 정규 키끼리 합친다. model_name 동률인 행과 counts 키는 창 안에서 처음 나온
+    # 순서(min(id))로 둔다 — 예전 코드는 DB가 돌려준 행 순서를 따랐고, 행을 id 순으로 돌면 결과가 같다.
+    q = visible_only(
+        db.query(ProbeResult.model_id, ProbeResult.model_name, ProbeResult.stop_reason,
+                 func.count(ProbeResult.id), func.min(ProbeResult.id)),
+        ProbeResult.model_name,
+    ).filter(
         ProbeResult.timestamp >= cutoff,
         ProbeResult.status == "success",
     )
     if category:
         q = q.filter(ProbeResult.category == category)
+    q = q.group_by(ProbeResult.model_id, ProbeResult.model_name, ProbeResult.stop_reason)
 
-    grouped: dict[tuple[str, str], Counter] = defaultdict(Counter)
-    for row in q.all():
-        key = (row.model_id, row.model_name)
-        grouped[key][_normalize_stop_reason(row.stop_reason)] += 1
+    # (model_id, model_name) → {"first_id", "reasons": {정규 키: [행 수, 처음 나온 id]}}
+    grouped: dict[tuple[str, str], dict] = {}
+    for model_id, model_name, raw_reason, n, first_id in q:
+        slot = grouped.setdefault((model_id, model_name), {"first_id": first_id, "reasons": {}})
+        slot["first_id"] = min(slot["first_id"], first_id)
+        reason = slot["reasons"].setdefault(_normalize_stop_reason(raw_reason), [0, first_id])
+        reason[0] += n
+        reason[1] = min(reason[1], first_id)
 
     rows: list[StopReasonRow] = []
-    for (model_id, model_name), counter in grouped.items():
-        total = sum(counter.values())
-        if total == 0:
-            continue
-        counts = dict(counter)
+    for (model_id, model_name), slot in sorted(grouped.items(), key=lambda kv: kv[1]["first_id"]):
+        counts = {k: v[0] for k, v in sorted(slot["reasons"].items(), key=lambda kv: kv[1][1])}
+        total = sum(counts.values())
         percentages = {k: round(v * 100.0 / total, 1) for k, v in counts.items()}
         rows.append(StopReasonRow(
             model_id=model_id,
@@ -202,26 +210,37 @@ def get_output_length(
     db: Session = Depends(get_db),
 ):
     """모델별 output_tokens 분포 통계 + 히스토그램."""
-    cutoff = datetime.now(timezone.utc) - _parse_window(window)
+    cutoff = datetime.now(timezone.utc) - parse_window(window, max_window=_MAX_WINDOW)
 
-    q = visible_only(db.query(ProbeResult), ProbeResult.model_name).filter(
+    # output_tokens 값별 행 수를 DB에서 센다(GROUP BY). 자동 프로브 max_tokens가 512 이하, 수동이 4096 이하라
+    # 그룹 수는 모델 × 수백이다. 통계에는 값 목록이 필요하므로 [값] * 행 수로 펼친다 — 원소는 같은 int를 가리켜
+    # 포인터 하나(8 B)씩이고, mean, median, pstdev, 백분위, 히스토그램 모두 값의 순서와 무관해 예전 결과와 같다.
+    q = visible_only(
+        db.query(ProbeResult.model_id, ProbeResult.model_name, ProbeResult.output_tokens,
+                 func.count(ProbeResult.id), func.min(ProbeResult.id)),
+        ProbeResult.model_name,
+    ).filter(
         ProbeResult.timestamp >= cutoff,
         ProbeResult.status == "success",
         ProbeResult.output_tokens.isnot(None),
     )
     if category:
         q = q.filter(ProbeResult.category == category)
+    q = q.group_by(ProbeResult.model_id, ProbeResult.model_name, ProbeResult.output_tokens)
 
-    grouped: dict[tuple[str, str], list[int]] = defaultdict(list)
-    for row in q.all():
-        if row.output_tokens is None or row.output_tokens < 0:
+    # (model_id, model_name) → {"first_id", "vals"} — 음수 값은 예전처럼 건너뛴다(그 그룹만으로는 행이 생기지 않는다).
+    # 행 순서(model_name 동률)는 stop-reasons와 같이 창 안에서 처음 나온 순서다.
+    grouped: dict[tuple[str, str], dict] = {}
+    for model_id, model_name, tokens, n, first_id in q:
+        if tokens is None or tokens < 0:
             continue
-        grouped[(row.model_id, row.model_name)].append(int(row.output_tokens))
+        slot = grouped.setdefault((model_id, model_name), {"first_id": first_id, "vals": []})
+        slot["first_id"] = min(slot["first_id"], first_id)
+        slot["vals"].extend([int(tokens)] * n)
 
     rows: list[OutputLengthRow] = []
-    for (model_id, model_name), vals in grouped.items():
-        if not vals:
-            continue
+    for (model_id, model_name), slot in sorted(grouped.items(), key=lambda kv: kv[1]["first_id"]):
+        vals = slot["vals"]
         sorted_vals = sorted(vals)
         rows.append(OutputLengthRow(
             model_id=model_id,

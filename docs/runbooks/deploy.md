@@ -620,15 +620,17 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
 # 기댓값: {"anthropic": 10, "bedrock": 24, "openai": 28} (bedrock = Global 11 + US 11 + 서울 in-region 2)
 
-# 3. GPT on AWS 벤치 21채널, 두 갈래
+# 3. GPT on AWS 벤치 21채널, 두 갈래(v2.32.1부터 네 갈래: cris + Mantle 리전마다 한 갈래)
 aws logs tail /ecs/gptbench --since 30m --region $REGION | grep -E "cycle (start|done)|GPT bench lane|WallClockTimeout"
 # 기댓값: "cycle start: 21 channels x 10 runs", "GPT bench lanes: cris=9 mantle=12",
+#   v2.32.1부터는 "GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3"이다(Mantle 리전마다 한 갈래라 lane done 네 줄, ADR-031 후속).
 #   갈래마다 "GPT bench lane done: <lane> channels=N elapsed=Ns" 한 줄, 끝에 "cycle done: rows=210 errors=0 skipped=none elapsed=…s"
 curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), first: .channels[0].family,
   sol61: [.channels[] | select(.family == "GPT 6.1 Sol") | {model_name, runs, success, cache_hit_rate, median_reasoning_tokens}]}'
 # 기댓값: n 21, first "GPT 6.1 Sol", sol61 3장(Global, US, us-east-1) runs 10, success 10, median_reasoning_tokens 0은 정상
 #   /latest는 시작 후 14분이 지난 사이클만 완료로 본다 — 배포 직후 18장이면 아직 옛 사이클이니 15분 뒤 다시 확인한다.
-#   skipped=에 GPT 6.1 Sol이 찍히면 그 갈래의 데드라인 컷이다(갈래마다 목록 끝). "did not finish within 885s"는 정지한 갈래다.
+#   skipped=에 GPT 6.1 Sol이 찍히면 그 갈래의 데드라인 컷이다(v2.32.0은 갈래마다 목록 끝, v2.32.1부터는 cris와 mantle-us-east-1의 끝이고
+#   mantle-us-east-2는 GPT 5.6 Terra (us-east-2), mantle-us-west-2는 GPT 6 Astra (us-west-2)부터 잘린다). "did not finish within 885s"는 정지한 갈래다.
 
 # 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
 aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'
@@ -667,6 +669,39 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version
   보고한다. GPT 벤치 `skipped=` 빈도는 24시간 뒤 한 번 더 본다.
 - 오등록 확인(선택): `SELECT DISTINCT model_id, model_name FROM probe_results WHERE model_id LIKE 'anthropic:claude-sonnet-5%'` — 두 id가 각자
   자기 라벨이면 정상이다(가드가 막았다면 오등록 행이 없다).
+
+### 5-7. v2.32.1 배포 경로와 확인 (/analysis OOM 핫픽스, 벤치 호스트별 갈래)
+
+**배포 경로**: env, IAM, 스키마 변경이 없다. 그래도 GptBench 이미지를 함께 바꿔야 하므로 §5-6과 같이 **digest 고정 CDK로
+`BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다(diff는 이미지와 태그별 ECR pull 권한만 나와야 한다).
+운영 화면 점검에서는 `/analysis`를 메모리 지표를 보면서 연다. v2.32.0 배포 확인 중 이 페이지 로드가 backend를 OOM으로 종료시켰다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 창 상한 — 상한 초과는 422, 화면이 보내는 값은 200
+for q in "analysis/stop-reasons?window=30d" "analysis/stop-reasons?window=31d" "analysis/output-length?window=3650d" \
+         "reliability/multi-channel?window=7d" "reliability/multi-channel?window=8d" "efficiency/score?window=30d" \
+         "cost/trend?window=30d" "cost/trend?window=31d" "cost/summary?window=31d" "analysis/stop-reasons?window=0d" "results/stats?run_id=0"; do
+  echo "$q $(curl -s -o /dev/null -w '%{http_code}' "https://$CF_DOMAIN/api/$q")"; done
+# 기댓값: 30d 200, 31d 422, 3650d 422, 7d 200, 8d 422, efficiency 30d 422, cost 30d 200, 31d 422, cost summary 31d 422, 0d 422, run_id=0 422
+
+# 2. /analysis 메모리 — 7일과 30일 창을 연 뒤 1분 최댓값이 크게 오르지 않고 태스크가 그대로인지
+curl -s -o /dev/null -w '%{http_code} %{time_total}s\n' "https://$CF_DOMAIN/api/analysis/stop-reasons?window=7d"
+curl -s -o /dev/null -w '%{http_code} %{time_total}s\n' "https://$CF_DOMAIN/api/analysis/output-length?window=30d"
+aws cloudwatch get-metric-statistics --namespace AWS/ECS --metric-name MemoryUtilization --region $REGION \
+  --dimensions Name=ClusterName,Value=bedrock-monitor Name=ServiceName,Value=backend --period 60 --statistics Maximum \
+  --start-time $(date -u -d '-10 min' +%FT%TZ) --end-time $(date -u +%FT%TZ) --query 'sort_by(Datapoints,&Timestamp)[].Maximum'
+aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION \
+  --query 'services[0].events[:3].[createdAt,message]' --output text
+# 기댓값: 두 요청 200, 메모리 최댓값이 평소(약 15~20%)에서 크게 벗어나지 않는다, 새 "has started 1 tasks" 이벤트가 없다
+
+# 3. GPT 벤치 호스트별 갈래 — 배포 뒤 첫 GptBench 사이클
+aws logs tail /ecs/gptbench --since 30m --region $REGION | grep -E "cycle (start|done)|GPT bench lane"
+# 기댓값: "GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3", "lane done" 네 줄,
+#   느린 호스트가 있어도 그 갈래만 780초 근처이고 나머지 갈래는 일찍 끝난다. "cycle done: rows=210 errors=0 skipped=none"이 목표다
+#   (한 호스트가 업스트림에서 느리면 그 갈래의 끝 채널만 잘린다 — 2026-09-30 GPT 5.4 (us-east-2) 저하).
+```
 
 ## 6. 후속 배포 (코드만 변경 시)
 

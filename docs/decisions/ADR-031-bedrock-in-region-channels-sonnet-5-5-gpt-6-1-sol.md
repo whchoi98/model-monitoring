@@ -2,7 +2,7 @@
 
 - **Status**: Accepted
 - **Date**: 2026-09-30
-- **Related**: ADR-019 (Mantle Path 4, `openai:<region>:<id>` 키), ADR-025 (Global CRIS, 채널별 단가), ADR-026 (Claude API Features — v2.32.0 부록), ADR-027 (유사 리전 `us`), ADR-028 (CP 점 버전 가드 `_is_point_release_of`), ADR-030 (단가 자동 동기화), v2.32.0
+- **Related**: ADR-019 (Mantle Path 4, `openai:<region>:<id>` 키), ADR-025 (Global CRIS, 채널별 단가), ADR-026 (Claude API Features — v2.32.0 부록), ADR-027 (유사 리전 `us`), ADR-028 (CP 점 버전 가드 `_is_point_release_of`), ADR-030 (단가 자동 동기화), v2.32.0, v2.32.1 (벤치 Mantle 갈래 리전별 분할 후속)
 
 ## Context
 
@@ -177,6 +177,24 @@ Opus 5.0, Sonnet 5.0이 포함되었습니다. 이것도 포함해 주세요."
      나이가 최대 "15분 + 15분 + 기동 지연"이 되어 프런트 `STALE_AFTER_MS`(30분)를 넘는 순간이 사이클마다 생긴다.
    - `routers/gptbench.fam_rank`는 GPT 6.1 Sol이 0이다. 프런트 `GptOnAwsPanel`은 "GPT 6.x 세대" 그룹 첫 열에 GPT 6.1 Sol을 두고 선 패턴
      `"16 4 4 4"`(7개 모두 다름)를 쓴다.
+   - **후속 — Mantle 갈래를 리전별로 나눈다 (v2.32.1, 2026-09-30 16:31 UTC 사용자 결정)**. 위 두 갈래 결정은 v2.32.0 기록으로 남긴다.
+     - 배경: v2.32.0 배포 뒤 두 사이클에서 `cris` 갈래는 443초, 409초에 끝났지만 `mantle` 갈래는 783초, 802초로 공유 데드라인
+       780초를 넘겼다. GPT 5.4 (us-east-2)가 업스트림 저하로 느려져(TTFT 중앙값 34초, 11호출 합계 427초, 527초) 같은 갈래 뒤쪽의
+       us-east-1 끝 채널(GPT 6 Sol, GPT 6 Luna, GPT 6.1 Sol의 us-east-1)이 잘렸고, 두 사이클은 210행 중 205행, 181행만 저장했다.
+       한 호스트의 저하가 다른 호스트의 채널을 자른 것이다.
+     - 결정: `cris`는 한 갈래로 둔다(사용자 선택, 유사 리전 `global`, `us` 두 호스트를 함께 둔다). 인리전 채널은 Mantle 리전
+       (`bedrock-mantle.<region>` 호스트)마다 한 갈래 `mantle-<region>`으로 나눈다. 갈래 이름은 채널 리전에서 파생하므로
+       (`gptbench.mantle_lane`) 새 Mantle 리전은 코드 수정 없이 자기 갈래를 얻는다. 갈래 순서는 `cris` 다음, Mantle 갈래는 첫 채널이
+       `bench_channels()`에 나오는 순서다. 지금은 `cris` 9, `mantle-us-east-1` 6, `mantle-us-east-2` 3, `mantle-us-west-2` 3의 네 갈래다.
+       GPT 6.1 Sol은 자기가 있는 갈래(`cris`, `mantle-us-east-1`)의 끝이다.
+     - 원칙은 그대로다: 같은 호스트 호출은 겹치지 않는다(갈래는 호스트 단위이고 갈래 안은 순차다). 공유 데드라인, 대기 상한 885초,
+       회차 단위 이벤트, 메인 스레드 커밋, skip 표기, 로그 형식은 바꾸지 않는다. 동시 호출은 최대 4개(cris 1, Mantle 리전마다 1)로
+       늘지만 호스트마다 1개다. OpenAI 클라이언트는 base URL마다 하나이고 한 클라이언트는 한 갈래만 쓴다.
+     - 로그: `GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3`, 갈래마다
+       `GPT bench lane done: <lane> channels=N elapsed=Ns`.
+     - 예상: 채널별 실측 합으로 갈래 소요는 us-east-1 약 240초, us-east-2 약 590초(느린 GPT 5.4 포함), us-west-2 약 80초다. us-east-2가
+       더 느려져도 컷은 그 갈래의 뒤 채널(GPT 5.5, GPT 5.6 Terra의 us-east-2)에만 떨어진다. 느린 호스트는 그 갈래의 `lane done`
+       elapsed가 780초 가까이 가고 다른 갈래는 일찍 끝나는 것으로 드러난다(`docs/runbooks/troubleshooting.md` 벤치 절).
 
 6. **`/claude-features` 6번째 대표 모델 Sonnet 5.5** (`sonnet-5` 앞, 카탈로그 `MODELS` 순서 `fable-5-1, fable-5, opus-5-5, opus-5, sonnet-5-5,
    sonnet-5`) — `mantle: None`(V3 404), 사유 `mantle_reason`(KO)과 `mantle_reason_en`(EN)을 카탈로그가 싣고 프런트가 그대로 표시한다

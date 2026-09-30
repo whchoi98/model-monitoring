@@ -213,14 +213,19 @@ Returns available model list.
 ### GET /api/results?model_id=X&run_id=N&start_time=…&end_time=…&limit=100&offset=0
 Query stored probe results (manual and automatic), newest first. All filters are optional: `model_id`, `run_id`,
 `start_time` / `end_time` (ISO 8601, inclusive bounds on the result `timestamp`), `limit` (default 100, 1–1000), `offset`
-(default 0). Rows whose label matches `HIDDEN_MODEL_PATTERNS` (default `(1P)`, the dormant 1P channels) are excluded.
+(default 0). `run_id` must be 1 or more; 0 and negatives are HTTP 422 (v2.32.1). Rows whose label matches `HIDDEN_MODEL_PATTERNS` (default `(1P)`, the dormant 1P channels) are excluded.
 
 ### GET /api/results/latest
 Latest results across all models.
 
 ### GET /api/results/stats
 Statistics: avg, p50, p95, p99 per model, successful probes only. Optional `start_time`, `end_time`, `run_id`, `category`.
-Without `start_time` and `run_id` the window is the last 24 hours.
+Without `start_time` and `run_id` the window is the last 24 hours. Without `run_id`, a `start_time` older than 31 days is
+read as now − 31 days (the History dialog offers up to 30 days; the extra day absorbs browser clock skew) and the response
+`start_time` is that clamped value. So without `run_id`, an `end_time` older than now − 31 days yields an empty result
+(`"models": []`, HTTP 200) even when `start_time` is older still: the clamped range ends before it starts. Pass `run_id` to
+read an older run; with `run_id` neither bound is clamped. `run_id` must be 1 or more (0 and negatives are HTTP 422, v2.32.1 —
+`run_id=0` used to skip both the 24-hour default and the floor and read every retained row).
 
 ---
 
@@ -266,8 +271,16 @@ Latest saved AI insight (bilingual Markdown) / list of recent insights.
 in a backend thread and returns at once: `{"triggered": true, "message": "..."}`, or `{"triggered": false, ...}` while another
 regeneration is running. Poll `GET /api/insights/latest` for the result.
 
+`window` is `<n>h` or `<n>d`, longer than 0 and at most 24 hours (`24h` or `1d`; the Insights panel sends `6h`). Anything
+else is HTTP 422 before any work, and no thread starts. The Korean `detail` names the cause: `window는 최대 24h까지 …` for
+`25h` or `2d`, `window는 0보다 길어야 합니다 …` for `0h`, `window 값을 읽을 수 없습니다 …` for `45m` or `abc`. The statistics read only the five columns `compute_stats` uses (`model_name`, `status`, `ttft_ms`,
+`total_latency_ms`, `tps`) of the window's automatic runs, in batches (2026-09-30). The scheduled Insights task
+(`python -m insights_runner --window 6h`) is not capped.
+
 ### POST /api/insights/stream-regenerate
-**Auth required.** SSE stream — regenerate the insight summary.
+**Auth required.** SSE stream — regenerate the insight summary. Body `{"window": "6h", "lang": "ko"}` with the same `window`
+rule as `/regenerate`: an out-of-range or unreadable window is HTTP 422 before the stream starts. The statistics read the
+same five columns of every visible row in the window, in batches.
 
 ---
 
@@ -303,18 +316,34 @@ in v2.31.0 are display-only and never enter `row_cost`, and the `openai-list:<fa
 channel-compare `channel` is `Anthropic (CP on AWS)`, `Bedrock Global`, `Bedrock US`, `Bedrock Nova`, `Bedrock <aws-region>`
 (`bedrock:<region>:<fm-id>` keys, `Bedrock ap-northeast-2` since v2.32.0; a malformed key is `Other`) or `OpenAI`.
 
+`window` is an integer with `m`, `h` or `d` (a value without a unit reads as 24 hours). Summary, channel-compare and trend
+accept at most `30d`, the longest the Cost page offers. A longer window, one of 0 or less (`0h`, `-5d`) or an unreadable one
+is HTTP 422 with a Korean `detail` before any query; before v2.32.1 every `window=` endpoint accepted any window (0 and negative windows returned empty 200s, unreadable or out-of-range ones 500s)
+(`3650d` scanned the whole retained table), a negative one returned empty totals and an overflowing one was a 500. The same
+rules hold for every `window=` below, each with its own cap.
+
+**Streamed reads (v2.32.1).** `/api/reliability/multi-channel`, `/api/efficiency/score`, `/api/cost/trend` and `/api/results/stats`
+read their rows in batches through a server-side cursor, where the database `statement_timeout` (`DB_STATEMENT_TIMEOUT_MS`,
+30 s) applies to each FETCH only. `streamed_read.stream_rows_or_503` bounds the whole read by the same limit: past it the
+cursor is closed and the response is HTTP 503 with a Korean `detail` ("DB 조회가 30초 안에 끝나지 않아 중단했습니다. 잠시 후 다시 시도해
+주세요."). The check runs between rows, so the worst case is the limit plus one FETCH.
+
 ### GET /api/reliability/multi-channel
 Success rate + error buckets grouped by family/channel. Channels come in the order `Anthropic (CP on AWS)`, `Bedrock Global`,
 `Bedrock US`, `Bedrock <aws-region>` (a Bedrock label whose parenthesis is an AWS region code, e.g. `Bedrock ap-northeast-2` for
 the Seoul in-region channels, v2.32.0; any other non-Global Bedrock label stays in `Bedrock US`), `OpenAI <region>` (`Global`,
-`US`, Mantle regions), other.
+`US`, Mantle regions), other. `window` (default `24h`) accepts at most `7d`, the longest the page offers; a longer,
+non-positive or unreadable window is HTTP 422.
 
 ### GET /api/efficiency/score
 0-100 weighted Token Efficiency Score per workload category. The cost component averages the per-row cost of successful rows
-that have a price (the unit price in effect at each probe's time, v2.30.0).
+that have a price (the unit price in effect at each probe's time, v2.30.0). `window` (default `24h`) accepts at most `7d`; a
+longer, non-positive or unreadable window is HTTP 422.
 
 ### GET /api/analysis/stop-reasons · /api/analysis/output-length
-Stop-reason distribution + output-length histograms.
+Stop-reason distribution + output-length histograms, successful probes only. `window` (default `7d`) accepts at most `30d`,
+the longest the page offers; a longer, non-positive or unreadable window is HTTP 422 (`{"detail": "window는 최대 30d까지 …"}`),
+and the response `window` echoes the request string. Both count in SQL (`GROUP BY` per model and raw value) since the 2026-09-30 OOM.
 
 ---
 
@@ -558,13 +587,19 @@ Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --o
 Mantle in-region 12 + CRIS 9: GPT 5.4 (us-east-1, us-east-2, us-west-2), GPT 5.5 (us-east-1, us-east-2), GPT 5.6 Terra (Global,
 us-east-1, us-east-2, us-west-2), GPT 6 Astra (Global, US, us-west-2), GPT 6 Sol and GPT 6 Luna (Global, US, us-east-1), GPT 6.1 Sol
 (Global, US, us-east-1, v2.32.0) — with a fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per
-channel. Since v2.32.0 the cycle runs two lanes at the same time, `cris` (the 9 Global and US CRIS channels on the Bedrock Runtime
-OpenAI-compatible hosts) and `mantle` (the 12 in-region channels on `bedrock-mantle.<region>`); inside a lane the channels stay
-sequential in `_BENCH_SPECS` order. The task logs `GPT bench lanes: cris=9 mantle=12` at start and
-`GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main thread saves and commits each finished channel. Each call has a wall-clock cap
+channel. The cycle runs one lane per host at the same time: `cris` (the 9 Global and US CRIS channels on the Bedrock Runtime
+OpenAI-compatible hosts, kept as one lane) and one `mantle-<region>` lane per Mantle region (`bedrock-mantle.<region>`), today
+`mantle-us-east-1` (6), `mantle-us-east-2` (3) and `mantle-us-west-2` (3). The lane name comes from the channel region, so a new
+Mantle region gets its own lane. Inside a lane the channels stay sequential in `_BENCH_SPECS` order, so calls to one host never
+overlap. The task logs `GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3` at start and
+`GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main thread saves and commits each finished channel. From
+per-channel timings the lanes take about 240 s (us-east-1), 590 s (us-east-2, with the slow GPT 5.4) and 80 s (us-west-2).
+v2.32.0 ran two lanes, `cris` 9 and `mantle` 12; v2.32.1 split `mantle` per region after GPT 5.4 (us-east-2) slowed on
+2026-09-30 and pushed the single Mantle lane past the deadline (783 s, 802 s), which cut the us-east-1 tail channels (user
+decision). Each call has a wall-clock cap
 (`GPT_BENCH_CALL_TIMEOUT`, default 90 s — an expired call is stored as an error row `WallClockTimeout: …`), the client never retries
-(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by both lanes; GPT 6.1 Sol is
-last in each lane). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
+(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by all lanes; GPT 6.1 Sol is
+last in the lanes it belongs to, `cris` and `mantle-us-east-1`). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
 stored, the runs its in-flight channel already finished are stored and that channel is reported as `label (run N+)`, and the
 channels it never started are reported as `label` (a lane that raises is handled the same way). The 15 s grace is a best-effort
 bound, because the watchdog cannot cut the pre-stream phase (connect, request write, response headers).
