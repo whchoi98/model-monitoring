@@ -45,11 +45,21 @@ ERRORS = ("ThrottlingException: Rate exceeded", "ServiceUnavailableException", N
 
 
 class FrozenDatetime(datetime):
-    """라우터 모듈의 datetime.now만 FROZEN_NOW로 고정한다(나머지는 datetime 그대로)."""
+    """라우터 모듈의 datetime.now만 FROZEN_NOW로 고정한다(나머지는 datetime 그대로).
+
+    FastAPI 0.142(CI가 받는 최신판)는 include_router로 넣은 라우트의 파라미터 주석을 첫 요청 때 다시 해석한다. 라우터
+    모듈은 `from __future__ import annotations`라 그때 `Optional[datetime]` 주석이 이 클래스로 풀리고, Pydantic이 스키마를
+    만들지 못해 FastAPIError가 났다(results/stats의 start_time, end_time). 그래서 Pydantic에는 datetime과 같은 스키마로
+    보이게 한다 — 검증 결과는 datetime 인스턴스다. 로컬 0.115는 include_router 때 이미 해석해 이 훅을 쓰지 않는다.
+    """
 
     @classmethod
     def now(cls, tz=None):
         return FROZEN_NOW.astimezone(tz) if tz is not None else FROZEN_NOW.replace(tzinfo=None)
+
+    @classmethod
+    def __get_pydantic_core_schema__(cls, source, handler):
+        return handler(datetime)
 
 
 def row_values(k: int, i: int, j: int, model: tuple) -> dict:

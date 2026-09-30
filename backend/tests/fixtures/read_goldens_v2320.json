@@ -4770,7 +4770,7 @@
        "p95_ttft_ms": 962.59,
        "avg_latency_ms": 1661.89,
        "p95_latency_ms": 1990.16,
-       "avg_tps": 63.48,
+       "avg_tps": 63.47,
        "error_buckets": {
         "network": 1
        }
@@ -4937,7 +4937,7 @@
        "success_rate": 0.8,
        "avg_ttft_ms": 498.95,
        "p95_ttft_ms": 757.58,
-       "avg_latency_ms": 1474.78,
+       "avg_latency_ms": 1474.77,
        "p95_latency_ms": 1704.59,
        "avg_tps": 58.85,
        "error_buckets": {
@@ -5044,7 +5044,7 @@
        "success_rate": 0.8,
        "avg_ttft_ms": 568.15,
        "p95_ttft_ms": 702.23,
-       "avg_latency_ms": 1589.83,
+       "avg_latency_ms": 1589.82,
        "p95_latency_ms": 1773.68,
        "avg_tps": 55.77,
        "error_buckets": {
@@ -7721,7 +7721,7 @@
      "p50_latency_ms": 1668.35,
      "p95_latency_ms": 1990.16,
      "p99_latency_ms": 1992.51,
-     "avg_tps": 63.48,
+     "avg_tps": 63.47,
      "p50_tps": 62.55,
      "p95_tps": 92.7,
      "p99_tps": 93.74,
@@ -8513,7 +8513,7 @@
      "p50_ttft_ms": 628.7,
      "p95_ttft_ms": 908.96,
      "p99_ttft_ms": 933.87,
-     "avg_latency_ms": 1630.72,
+     "avg_latency_ms": 1630.73,
      "p50_latency_ms": 1575.05,
      "p95_latency_ms": 1979.1,
      "p99_latency_ms": 2015.02,

@@ -7,8 +7,13 @@ probe_results 행을 prompt, output_text까지 담은 ORM 엔티티로 모두 �
 
 응답 골든: tests/_read_dataset.py의 SQLite 데이터셋(시각은 FROZEN_NOW 기준으로 고정)에서 v2.32.0(98af18e) 코드가 낸 응답을
 tests/fixtures/read_goldens_v2320.json에 고정했다. 조회 방식을 바꾼 뒤에도 키 순서까지 같아야 한다.
-응답을 의도적으로 바꾸는 변경이 아니면 골든을 다시 만들지 않는다(다시 만들 때:
-FREEZE_READ_GOLDENS=1 python3.12 -m pytest tests/test_read_scan_bounds.py -k freeze).
+골든은 Python 3.11(운영 이미지 python:3.11-slim, CI)에서 만들었고 3.11에서는 바이트 단위로 비교한다. 3.12부터 내장 sum()이
+float을 Neumaier 보정 합산으로 더해 평균(avg_*)이 round(…, 2) 뒤 0.01씩 갈라지므로(PR #70 CI), 다른 버전에서는
+tests/_golden_compare.py가 float의 마지막 자리 한 단위만 받고 나머지(키 순서, 길이, 문자열, 정수, None)는 정확히 본다.
+3.11에서 98af18e 코드와 지금 코드의 응답은 34건 모두 바이트 단위로 같다(2026-09-30 확인). 응답을 의도적으로 바꾸는
+변경이 아니면 골든을 다시 만들지 않는다(다시 만들 때는 3.11에서 — 3.12에서 FREEZE하면 실패한다:
+docker run --rm -v "$PWD":/w -w /w python:3.11-slim sh -c 'pip install -q -r requirements.txt &&
+FREEZE_READ_GOLDENS=1 python -m pytest tests/test_read_scan_bounds.py -k freeze').
 
 골든 밖 데이터셋: 골든 데이터셋이 가리지 못하는 변이를 따로 잡는다. (1) 지표 값이 모두 있는 실패 행(error, overloaded,
 timeout)을 더해도 success만 세는 응답(분석, 비용 추이, 결과 통계)은 골든 그대로다. (2) id 순서와 시각 순서가 어긋나는
@@ -48,6 +53,7 @@ from routers import cost as cost_router
 from routers import efficiency as efficiency_router
 from routers import reliability as reliability_router
 from routers import results as results_router
+from tests._golden_compare import GOLDEN_PYTHON_LABEL, ON_GOLDEN_PYTHON, assert_matches_golden, canonical
 from tests._read_dataset import CATALOG, FROZEN_NOW, G, OA, TWIN_B, FrozenDatetime, seed
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "read_goldens_v2320.json"
@@ -116,7 +122,8 @@ def _serve(monkeypatch, *seeders):
             yield db
 
     app.dependency_overrides[get_db] = db_override
-    # 라우트를 만든 뒤에 바꾼다 — Query 파라미터 타입(datetime)은 라우트 생성 때 이미 해석됐다.
+    # 라우트를 만든 뒤에 바꾼다 — FastAPI 0.115는 Query 파라미터 타입(datetime)을 include_router 때 이미 해석했다.
+    # 첫 요청 때 다시 해석하는 0.142에서는 FrozenDatetime이 datetime 스키마를 돌려준다(tests/_read_dataset.py).
     for module in (analysis_router, reliability_router, efficiency_router, cost_router, results_router):
         monkeypatch.setattr(module, "datetime", FrozenDatetime)
     monkeypatch.setattr(results_router, "AVAILABLE_MODELS", CATALOG)
@@ -141,16 +148,14 @@ def env(monkeypatch):
         yield served
 
 
-def _canonical(body) -> str:
-    return json.dumps(body, ensure_ascii=False, separators=(",", ":"))
-
-
 def _load_goldens() -> dict:
     return json.loads(GOLDEN_PATH.read_text(encoding="utf-8"))
 
 
 @pytest.mark.skipif(not FREEZE, reason="FREEZE_READ_GOLDENS=1일 때만 골든을 다시 만든다")
 def test_freeze_goldens(env):
+    assert ON_GOLDEN_PYTHON, (
+        f"골든은 Python {GOLDEN_PYTHON_LABEL}(운영 런타임)에서만 다시 만든다 — 3.12의 sum()은 결과가 다르다")
     client, _ = env
     out = {}
     for name, url in CASES.items():
@@ -177,9 +182,7 @@ def test_response_matches_frozen_golden(env, name):
     golden = _load_goldens()[name]
     resp = client.get(CASES[name])
     assert resp.status_code == golden["status"]
-    got = resp.json()
-    assert got == golden["body"]
-    assert _canonical(got) == _canonical(golden["body"])  # dict 키 순서까지
+    assert_matches_golden(resp.json(), golden["body"])  # dict 키 순서까지, 3.11에서는 바이트 단위
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -230,7 +233,7 @@ def test_non_success_rows_with_metrics_leave_success_only_responses_unchanged(no
     client, _ = non_success_env
     resp = client.get(CASES[name])
     assert resp.status_code == 200
-    assert _canonical(resp.json()) == _canonical(_load_goldens()[name]["body"])
+    assert_matches_golden(resp.json(), _load_goldens()[name]["body"])
 
 
 @pytest.mark.skipif(FREEZE, reason="골든을 다시 만드는 중")
@@ -308,10 +311,10 @@ def test_stop_reason_twin_rows_and_count_keys_follow_first_appearance_by_id(tie_
     zz, aa = stop[0], stop[1]
     # 키 = 정규 키가 처음 나온 id 순서. zz의 end_turn은 별칭 "endTurn"(id 7)보다 "end_turn"(id 3)이 먼저 나왔다.
     # 알파벳 순서, 행 수 순서, 가장 이른 시각 순서는 셋 다 이 순서와 다르다.
-    assert _canonical(zz["counts"]) == _canonical({"max_tokens": 1, "end_turn": 2, "unknown": 2})
-    assert _canonical(zz["percentages"]) == _canonical({"max_tokens": 20.0, "end_turn": 40.0, "unknown": 40.0})
-    assert _canonical(aa["counts"]) == _canonical({"end_turn": 1, "tool_use": 1, "max_tokens": 1})
-    assert _canonical(aa["percentages"]) == _canonical({"end_turn": 33.3, "tool_use": 33.3, "max_tokens": 33.3})
+    assert canonical(zz["counts"]) == canonical({"max_tokens": 1, "end_turn": 2, "unknown": 2})
+    assert canonical(zz["percentages"]) == canonical({"max_tokens": 20.0, "end_turn": 40.0, "unknown": 40.0})
+    assert canonical(aa["counts"]) == canonical({"end_turn": 1, "tool_use": 1, "max_tokens": 1})
+    assert canonical(aa["percentages"]) == canonical({"end_turn": 33.3, "tool_use": 33.3, "max_tokens": 33.3})
 
 
 def test_output_length_twin_rows_follow_first_appearance_by_id(tie_env):
@@ -435,7 +438,7 @@ def test_streamed_read_past_the_statement_timeout_is_503_mid_stream(env, slow_cl
     with caplog.at_level("WARNING", logger="streamed_read"):
         resp = client.get(path)
     assert resp.status_code == 503
-    assert _canonical(resp.json()) == _canonical(
+    assert canonical(resp.json()) == canonical(
         {"detail": "DB 조회가 5초 안에 끝나지 않아 중단했습니다. 잠시 후 다시 시도해 주세요."}
     )
     (record,) = [r for r in caplog.records if r.name == "streamed_read"]
@@ -451,7 +454,7 @@ def test_streamed_read_past_the_statement_timeout_is_503_mid_stream(env, slow_cl
     slow_clock["calls"] = 0
     resp = client.get(path)
     assert resp.status_code == 200
-    assert _canonical(resp.json()) == _canonical(_load_goldens()[_STREAMED_DEFAULT_GOLDENS[path]]["body"])
+    assert_matches_golden(resp.json(), _load_goldens()[_STREAMED_DEFAULT_GOLDENS[path]]["body"])
     assert slow_clock["calls"] - 1 > 6 * 5
 
 
