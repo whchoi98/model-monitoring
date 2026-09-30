@@ -2,6 +2,10 @@
 
 주기적으로 insights_runner가 만들어 둔 결과를 GET /api/insights 로 조회.
 대시보드의 인사이트 패널이 사용.
+
+재생성(regenerate, stream-regenerate)은 backend 프로세스 안에서 창 안의 probe_results를 읽는다. body window는
+최대 24h다(인사이트 패널은 6h, 스케줄 태스크는 --window 6h) — 넘거나, 0 이하이거나, 읽을 수 없으면 스레드나 스트림을
+시작하기 전에 422 (2026-09-30 /analysis OOM 후속).
 """
 
 from __future__ import annotations
@@ -10,9 +14,10 @@ import asyncio
 import json as _json
 import logging
 import threading
+from datetime import timedelta
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from sqlalchemy import desc
@@ -20,6 +25,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from database import get_db, SessionLocal
+from insights_runner import parse_window
 from models import Insight, User
 
 logger = logging.getLogger(__name__)
@@ -74,6 +80,23 @@ class RegenerateRequest(BaseModel):
     lang: Optional[str] = "ko"
 
 
+# body window 상한 — 인사이트 패널은 6h를 보낸다. 24h 창의 행 수는 모델 × 시간당 12회 × 24 정도다.
+_MAX_WINDOW = timedelta(hours=24)
+
+
+def _checked_window(window: str) -> timedelta:
+    """insights_runner.parse_window 형식('6h', '1d')이고 0보다 길며 24h 이하인 창만 받는다. 아니면 HTTPException(422)."""
+    try:
+        delta = parse_window(window)
+    except (ValueError, OverflowError):
+        raise HTTPException(status_code=422, detail=f"window 값을 읽을 수 없습니다: {window!r} (예: 6h, 24h)") from None
+    if delta <= timedelta(0):
+        raise HTTPException(status_code=422, detail=f"window는 0보다 길어야 합니다: {window!r} (예: 6h, 24h)")
+    if delta > _MAX_WINDOW:
+        raise HTTPException(status_code=422, detail=f"window는 최대 24h까지 지정할 수 있습니다: {window!r}")
+    return delta
+
+
 class RegenerateResponse(BaseModel):
     triggered: bool
     message: str
@@ -105,8 +128,10 @@ def regenerate(
     - Backend는 이미 Bedrock InvokeModel + DB 접근 권한을 갖고 있어 추가 IAM 불필요.
     - Lock으로 동시 요청 직렬화 (Bedrock 중복 호출 회피).
     - 응답은 즉시 (triggered=True) 반환. 클라이언트는 잠시 후 /api/insights/latest 재조회.
+    - window는 최대 24h, 넘거나 읽을 수 없으면 스레드를 시작하지 않고 422.
     """
     logger.info("insight regenerate requested by user='%s' window='%s'", user.username, body.window)
+    _checked_window(body.window)
     global _is_regenerating
     with _regenerate_lock:
         if _is_regenerating:
@@ -143,11 +168,14 @@ async def stream_regenerate(
     의존성 cleanup으로 session을 close하지만 generator는 그 후에도 계속 실행되어
     closed session에 대한 silent data loss가 발생. 대신 generator 안에서 SessionLocal()로
     dedicated session을 생성하고 finally에서 close.
+
+    window는 최대 24h, 넘거나 읽을 수 없으면 스트림을 시작하지 않고 422.
     """
     from agent.bedrock import converse_stream_text, INSIGHTS_MODEL_ID
     from insights_runner import collect_stats_for_window, _build_prompt
     from datetime import datetime, timezone
 
+    window_delta = _checked_window(body.window)
     window = body.window
     lang = body.lang or "ko"
 
@@ -199,9 +227,7 @@ async def stream_regenerate(
             # 4) DB 저장.
             full_text = "".join(accumulated)
             try:
-                from insights_runner import parse_window
                 now = datetime.now(timezone.utc)
-                window_delta = parse_window(window)
                 insight = Insight(
                     window_start=now - window_delta,
                     window_end=now,

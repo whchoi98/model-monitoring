@@ -14,10 +14,13 @@ run_once는 ProbeRun 엔티티도 읽었는데 ProbeRun.results가 lazy="selecti
   프롬프트와 저장하는 model_breakdown, stream-regenerate가 보내는 프롬프트가 v2.32.0(엔티티 조회) 코드의 결과와
   바이트 단위로 같다. 골든은 fixtures/insights_prompts_v2320.json이고 바꾸기 전 코드로 만들었다(다시 만들 때:
   FREEZE_INSIGHTS_GOLDENS=1 python3.12 -m pytest tests/test_insights_scan_bounds.py -k freeze).
+- API 창 상한: body window는 최대 24h다(인사이트 패널은 6h를 보낸다). 넘거나, 0 이하이거나, 읽을 수 없으면 422이고
+  스레드, 스트림, DB 조회를 시작하지 않는다. 스케줄 태스크의 CLI(python -m insights_runner --window 6h)에는 상한이 없다.
 """
 
 import json
 import os
+import sys
 import threading
 from pathlib import Path
 from types import SimpleNamespace
@@ -267,3 +270,85 @@ def test_regenerate_thread_reads_only_the_stats_columns(api, db_env, bedrock_cal
     assert done.wait(10)
     assert results and results[0] > 0
     _assert_stats_columns_only(statements, runs_query=True)
+
+
+# ───────────────────────────────────────────────────────────────────────
+# API 창 상한 — body window 최대 24h
+# ───────────────────────────────────────────────────────────────────────
+
+OVER_24H = ["25h", "2d", "48h", "3650d", "99999999d"]
+NON_POSITIVE = ["0h", "0d", "00h"]
+# 형식은 insights_runner.parse_window('6h', '1d')를 따른다 — m 단위, 단위 없음, 음수는 읽을 수 없는 값이다.
+# timedelta 범위를 넘는 수(30자리 일)와 int 변환 한도를 넘는 수(5000자리)도 window_spec과 같이 읽을 수 없는 값이다.
+UNREADABLE = ["45m", "abc", "6", "", "1e3h", "-1h", "6 h", "9" * 30 + "d", "9" * 5000 + "h"]
+ACCEPTED = ["6h", "24h", "1d", " 6H "]
+
+
+_REJECTED_CASES = [
+    (path, window, fragment)
+    for path in ("/api/insights/regenerate", "/api/insights/stream-regenerate")
+    for windows, fragment in ((OVER_24H, "최대 24h"), (NON_POSITIVE, "0보다 길어야"), (UNREADABLE, "읽을 수 없습니다"))
+    for window in windows
+]
+
+
+@pytest.mark.parametrize(("path", "window", "fragment"), _REJECTED_CASES,
+                         ids=[f"{p.rsplit('/', 1)[1]}-{w!r}" if len(w) <= 12 else f"{p.rsplit('/', 1)[1]}-{len(w)}-chars"
+                              for p, w, _ in _REJECTED_CASES])
+def test_regenerate_window_over_24h_or_unusable_is_422_before_any_work(api, db_env, bedrock_calls, monkeypatch,
+                                                                       path, window, fragment):
+    _, statements = db_env
+    started: list[str] = []
+    monkeypatch.setattr(insights_runner, "run_once", lambda window_spec="6h": started.append(window_spec))
+    statements.clear()
+    resp = api.post(path, json={"window": window})
+    assert resp.status_code == 422
+    detail = resp.json()["detail"]
+    assert isinstance(detail, str) and "window" in detail and fragment in detail, detail
+    assert started == [] and insights_router._is_regenerating is False  # 스레드를 시작하지 않았다
+    assert bedrock_calls == [] and _probe_selects(statements) == []
+
+
+@pytest.mark.parametrize("window", ACCEPTED)
+def test_regenerate_accepts_windows_up_to_24h(api, monkeypatch, window):
+    started: list[str] = []
+    done = threading.Event()
+
+    def run_once(window_spec="6h"):
+        started.append(window_spec)
+        done.set()
+
+    monkeypatch.setattr(insights_runner, "run_once", run_once)
+    resp = api.post("/api/insights/regenerate", json={"window": window})
+    assert resp.status_code == 200
+    assert resp.json() == {"triggered": True, "message": f"인사이트 생성 시작 (window={window})"}
+    assert done.wait(10) and started == [window]  # body 문자열을 그대로 넘긴다
+
+
+def test_regenerate_default_body_is_the_6h_window(api, monkeypatch):
+    started: list[str] = []
+    done = threading.Event()
+    monkeypatch.setattr(insights_runner, "run_once", lambda window_spec="6h": (started.append(window_spec), done.set()))
+    assert api.post("/api/insights/regenerate", json={}).status_code == 200
+    assert done.wait(10) and started == ["6h"]
+
+
+@pytest.mark.parametrize("window", ["24h", "1d"])
+def test_stream_regenerate_accepts_24h_and_saves_its_window(api, db_env, bedrock_calls, window):
+    factory, _ = db_env
+    resp = api.post("/api/insights/stream-regenerate", json={"window": window})
+    assert resp.status_code == 200 and "event: final" in resp.text
+    with factory() as db:
+        saved = db.query(models.Insight).one()
+    assert (saved.window_end - saved.window_start).total_seconds() == 24 * 3600
+
+
+def test_cli_window_stays_uncapped_for_the_scheduled_task(db_env, bedrock_calls, monkeypatch):
+    """스케줄 태스크(--window 6h, 기본값도 6h)와 운영자가 CLI로 돌리는 긴 창은 API 상한과 무관하다."""
+    assert insights_runner.run_once("3d") > 0
+    started: list[str] = []
+    monkeypatch.setattr(insights_runner, "run_once", lambda window_spec="6h": started.append(window_spec) or 1)
+    for argv, expected in ((["insights_runner"], "6h"), (["insights_runner", "--window", "3d"], "3d")):
+        monkeypatch.setattr(sys, "argv", argv)
+        assert insights_runner.main() == 0
+        assert started.pop() == expected
