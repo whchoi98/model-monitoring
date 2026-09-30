@@ -413,6 +413,37 @@ def test_unreadable_window_is_422_not_500(env, path, window):
     assert _probe_result_selects(statements) == []
 
 
+# 0 이하의 창. 예전에는 0과 음수 창이 now 이후를 하한으로 삼아 빈 응답(200)을 냈고, 아주 큰 음수 창은 상한 검사를
+# 지나 now - 창에서 OverflowError(500)가 났다. 상한이 있든 없든 모든 호출자가 DB를 읽기 전에 422다.
+NON_POSITIVE_WINDOWS = [
+    "0d", "0h", "0m", "-0d", "-5d", "-1m", " -24H ",
+    pytest.param("-99999999d", id="negative-overflow"),
+]
+_ALL_WINDOW_PATHS = [*WINDOW_CAPS, "/api/cost/summary", "/api/cost/channel-compare"]
+
+
+@pytest.mark.parametrize("path", _ALL_WINDOW_PATHS)
+@pytest.mark.parametrize("window", NON_POSITIVE_WINDOWS)
+def test_zero_or_negative_window_is_422_before_any_scan(env, path, window):
+    client, statements = env
+    statements.clear()
+    resp = client.get(path, params={"window": window})
+    assert resp.status_code == 422
+    assert "window는 0보다 길어야 합니다" in resp.json()["detail"]
+    assert _probe_result_selects(statements) == []
+
+
+@pytest.mark.parametrize("path", _ALL_WINDOW_PATHS)
+def test_window_past_the_datetime_range_is_422_not_500(env, path):
+    """timedelta로는 읽히지만(999999999일) now - 창이 서기 1년보다 이른 창 — 예전 상한 없는 cost summary는 500이었다."""
+    client, statements = env
+    statements.clear()
+    resp = client.get(path, params={"window": "999999999d"})
+    assert resp.status_code == 422
+    assert "window" in resp.json()["detail"]
+    assert _probe_result_selects(statements) == []
+
+
 @pytest.mark.parametrize(("path", "window"), [(p, w) for p, (_, _, ok) in WINDOW_CAPS.items() for w in ok])
 def test_window_up_to_the_cap_is_accepted(env, path, window):
     client, _ = env
@@ -465,7 +496,7 @@ def test_results_stats_with_run_id_keeps_an_old_start_time(env):
     assert body["models"]
 
 
-def test_parse_window_keeps_the_no_unit_fallback_and_accepts_any_size_without_a_cap():
+def test_parse_window_keeps_the_no_unit_fallback_and_accepts_long_windows_without_a_cap():
     assert window_spec.parse_window("") == timedelta(hours=24)
     assert window_spec.parse_window("abc") == timedelta(hours=24)  # 단위가 없으면 예전처럼 24h
     assert window_spec.parse_window("7") == timedelta(hours=24)
@@ -477,3 +508,21 @@ def test_parse_window_keeps_the_no_unit_fallback_and_accepts_any_size_without_a_
     with pytest.raises(HTTPException) as exc:
         window_spec.parse_window("31d", max_window=cap)
     assert exc.value.status_code == 422
+
+
+@pytest.mark.parametrize("max_window", [None, timedelta(days=30)])
+@pytest.mark.parametrize("spec", ["0d", "0m", "-0h", "-1h", "-99999999d", "999999999d", "800000d"])
+def test_parse_window_rejects_non_positive_and_datetime_overflowing_windows(spec, max_window):
+    """0 이하와 now - 창이 datetime 범위를 넘는 창은 상한이 없는 호출(max_window=None)에서도 422다."""
+    with pytest.raises(HTTPException) as exc:
+        window_spec.parse_window(spec, max_window=max_window)
+    assert exc.value.status_code == 422
+    assert "window" in exc.value.detail
+
+
+def test_parse_window_overflow_check_uses_now_minus_the_window():
+    # 70만 일(약 1916년)은 now - 창이 서기 1년 뒤라 받고, 80만 일(약 2190년)은 그 전이라 422다.
+    assert window_spec.parse_window("700000d") == timedelta(days=700000)
+    with pytest.raises(HTTPException):
+        window_spec.parse_window("800000d")
+    assert window_spec.parse_window("+5d") == timedelta(days=5)  # 부호가 붙은 양수는 예전처럼 받는다
