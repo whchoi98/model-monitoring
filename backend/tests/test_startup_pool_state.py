@@ -5,20 +5,26 @@
    `pg_advisory_unlock`을 불렀다. 블록이 DB 오류로 실패하면 unlock이 이미 중단된 트랜잭션 안에서 InFailedSqlTransaction으로
    실패하고(삼켜진다), 락은 풀로 돌아간 커넥션(state idle)에 남았다. 그 커넥션이 재활용될 때까지 다음 기동(다른 태스크)의
    `pg_advisory_lock`은 lock_timeout(5초)을 기다린 뒤 실패했다.
-2. 세션 설정 누수: 블록의 `SET statement_timeout`, `SET lock_timeout`이 풀 커넥션에 남았다. 평범한 기동 뒤 쉬는 풀 커넥션에서
-   lock_timeout 5초가 보였다. 설정값은 database.py가 커넥션 옵션(`-c statement_timeout`, DB_STATEMENT_TIMEOUT_MS, 기본
-   30초)으로 거는 값이고 lock_timeout은 0이다.
+2. 세션 설정 누수: 블록의 `SET statement_timeout`, `SET lock_timeout`, ensure_performance_indexes의 AUTOCOMMIT
+   `SET statement_timeout = '600000'`, label_repair의 `SET statement_timeout`이 풀 커넥션에 남았다. 평범한 기동 뒤 쉬는 풀
+   커넥션에서 lock_timeout 5초, statement_timeout 10분과 1분이 보였다. 설정값은 database.py가 커넥션 옵션
+   (`-c statement_timeout`, DB_STATEMENT_TIMEOUT_MS, 기본 30초)으로 거는 값이고 lock_timeout은 0이다.
 
 지금은 블록이 한 트랜잭션에서 `SET LOCAL` 두 개 뒤 `pg_advisory_xact_lock(917350001)`을 잡는다. 락은 커밋이나 롤백에 풀리고
-unlock 문장이 없다.
+unlock 문장이 없다. label_repair도 `SET LOCAL`이다. 트랜잭션 밖(AUTOCOMMIT)에서 도는 CONCURRENTLY 인덱스 경로는 `SET LOCAL`이
+듣지 않으므로 finally에서 `RESET statement_timeout`으로 세션 기본값(커넥션 옵션 값, pg_settings.source = 'client')에 되돌리고,
+RESET조차 못 하면 그 커넥션을 풀에서 버린다(invalidate).
 
 고정하는 것:
 - 문장 형태(가짜 커넥션, 항상 돈다): 블록의 첫 세 문장은 `SET LOCAL statement_timeout`, `SET LOCAL lock_timeout`,
-  `pg_advisory_xact_lock(917350001)`이고 세션 수준 SET, lock, unlock은 없다. 블록이 실패하면 그 뒤로 문장이 없다.
-- PostgreSQL(TEST_PG_URL이 있을 때만): 블록 뒤 풀의 커넥션 전부가 새 커넥션과 같은 statement_timeout(설정값, 출처 client)과
-  lock_timeout(0)을 보인다. 블록을 강제로 실패시키면 advisory 락이 남지 않고, 풀을 그대로 둔 채 다음 태스크(새 풀)의 lifespan이
-  기다리지 않고 락을 잡아 열을 더한다(v2.32.1: 5초 뒤 실패). ALTER 뒤 강제 실패와 커밋 실패는 `Startup columns added`를 남기지
-  않는다. 다른 세션이 917350001을 쥐고 있으면 블록은 여전히 lock_timeout(5초) 뒤 포기하고 기동은 계속한다.
+  `pg_advisory_xact_lock(917350001)`이고 세션 수준 SET, lock, unlock은 없다. 블록이 실패하면 그 뒤로 문장이 없다. 인덱스 경로는
+  마지막이 RESET이고, CREATE INDEX가 실패해도 RESET한 뒤 예외를 넘기며, RESET이 실패하면 커넥션을 invalidate한다.
+  label_repair는 `SET LOCAL statement_timeout`이다.
+- PostgreSQL(TEST_PG_URL이 있을 때만): 평범한 lifespan(모델 등록만 끈다) 뒤 풀의 커넥션 전부가 새 커넥션과 같은
+  statement_timeout(설정값, 출처 client)과 lock_timeout(0)을 보인다. 블록, 인덱스, 라벨 복구 각각도 그렇고, 인덱스 빌드가 실패해도
+  그렇다. 블록을 강제로 실패시키면 advisory 락이 남지 않고, 풀을 그대로 둔 채 다음 태스크(새 풀)의 lifespan이 기다리지 않고 락을
+  잡아 열을 더한다(v2.32.1: 5초 뒤 실패). ALTER 뒤 강제 실패와 커밋 실패는 `Startup columns added`를 남기지 않는다. 다른 세션이
+  917350001을 쥐고 있으면 블록은 여전히 lock_timeout(5초) 뒤 포기하고 기동은 계속한다.
   예: docker run -d --rm --name <이름> -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=pg postgres:16 뒤
   TEST_PG_URL=postgresql://postgres:pg@127.0.0.1:55432/postgres python3.12 -m pytest tests/test_startup_pool_state.py
 """
@@ -26,6 +32,7 @@ unlock 문장이 없다.
 import asyncio
 import logging
 import os
+import threading
 import time
 from datetime import datetime, timezone
 from types import SimpleNamespace
@@ -33,7 +40,9 @@ from types import SimpleNamespace
 import pytest
 from sqlalchemy import create_engine, event, inspect, text
 from sqlalchemy.exc import OperationalError
+from sqlalchemy.orm import sessionmaker
 
+import auth
 import database
 import label_repair
 import main
@@ -141,6 +150,80 @@ def test_failed_block_issues_nothing_after_the_failure(monkeypatch, caplog):
     assert conn.sql[:3] == BLOCK_HEAD
     assert conn.sql[-1].startswith("DELETE FROM probe_results")  # 실패한 문장이 마지막이다
     assert _messages(caplog, "Startup columns added") == []
+
+
+class _IndexConn:
+    """ensure_performance_indexes의 AUTOCOMMIT 커넥션. fail_on으로 시작하는 문장은 한 번 실패한다."""
+
+    def __init__(self, fail_on=()):
+        self.sql: list[str] = []
+        self.fail_on = list(fail_on)
+        self.invalidated = False
+
+    def execution_options(self, **kw):
+        assert kw == {"isolation_level": "AUTOCOMMIT"}
+        return self
+
+    def __enter__(self):
+        return self
+
+    def __exit__(self, *exc):
+        return False
+
+    def execute(self, stmt, params=None):
+        sql = str(stmt)
+        self.sql.append(sql)
+        for prefix in self.fail_on:
+            if sql.startswith(prefix):
+                self.fail_on.remove(prefix)
+                raise RuntimeError(f"forced failure at {sql}")
+        return SimpleNamespace(first=lambda: None)
+
+    def invalidate(self):
+        self.invalidated = True
+
+
+def _index_engine(conn):
+    return SimpleNamespace(dialect=SimpleNamespace(name="postgresql"), connect=lambda: conn)
+
+
+def test_index_path_resets_the_statement_timeout_last():
+    conn = _IndexConn()
+    models.ensure_performance_indexes(_index_engine(conn))
+    assert conn.sql[0] == "SET statement_timeout = '600000'"
+    assert conn.sql[-1] == "RESET statement_timeout"
+    assert sum(s.startswith("CREATE INDEX CONCURRENTLY") for s in conn.sql) == len(models._PERF_INDEXES)
+    assert not conn.invalidated
+
+
+def test_index_failure_still_resets_then_raises():
+    conn = _IndexConn(fail_on=["CREATE INDEX CONCURRENTLY"])
+    with pytest.raises(RuntimeError, match="forced failure"):
+        models.ensure_performance_indexes(_index_engine(conn))
+    assert conn.sql[-2].startswith("CREATE INDEX CONCURRENTLY") and conn.sql[-1] == "RESET statement_timeout"
+    assert not conn.invalidated
+
+
+@pytest.mark.parametrize("index_fails", [False, True])
+def test_index_path_discards_a_connection_it_cannot_reset(index_fails):
+    """RESET조차 실패한 커넥션(끊긴 소켓 등)은 풀로 돌려보내지 않는다. 인덱스 오류가 있으면 그 오류를 넘긴다."""
+    conn = _IndexConn(fail_on=(["CREATE INDEX CONCURRENTLY"] if index_fails else []) + ["RESET statement_timeout"])
+    if index_fails:
+        with pytest.raises(RuntimeError, match="CREATE INDEX"):
+            models.ensure_performance_indexes(_index_engine(conn))
+    else:
+        models.ensure_performance_indexes(_index_engine(conn))
+    assert conn.sql[-1] == "RESET statement_timeout"
+    assert conn.invalidated
+
+
+def test_label_repair_scopes_its_statement_timeout_to_the_transaction():
+    conn = _RecordingPgConn()
+    conn.execute = lambda stmt, params=None: conn.sql.append(str(stmt)) or SimpleNamespace(fetchall=lambda: [])
+    pg = SimpleNamespace(dialect=conn.dialect, begin=lambda: _Begin(conn))
+    assert label_repair.repair_model_labels(pg, {"m": "Bedrock M (Global)"}) == 0
+    assert conn.sql[0] == "SET LOCAL statement_timeout = '60000'"
+    assert not any(s.startswith("SET statement_timeout") for s in conn.sql)
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -261,6 +344,45 @@ def _labels(engine) -> list[str]:
         return conn.execute(text("SELECT model_name FROM probe_results ORDER BY id")).scalars().all()
 
 
+class _RecordedThreads:
+    """lifespan이 띄우는 스레드(perf-indexes)를 그대로 띄우고 기록해 테스트가 join한다."""
+
+    def __init__(self):
+        self.started: list[threading.Thread] = []
+
+    def Thread(self, *args, **kwargs):  # noqa: N802 — threading.Thread 자리를 대신한다
+        thread = threading.Thread(*args, **kwargs)
+        self.started.append(thread)
+        return thread
+
+
+def test_pg_normal_lifespan_leaves_every_pooled_connection_at_the_configured_settings(pg, pg_url, monkeypatch, caplog):
+    """모델 등록(네트워크)만 끄고 블록, perf-indexes 스레드, admin seed, 라벨 복구, 단가 열과 seed를 모두 실제로 돌린다."""
+    engine = pg.new_task()
+    threads = _RecordedThreads()
+    monkeypatch.setattr(main, "engine", engine)
+    monkeypatch.setattr(main, "create_tables", lambda: models.Base.metadata.create_all(engine))
+    monkeypatch.setattr(main, "SessionLocal", sessionmaker(bind=engine))
+    monkeypatch.setattr(main, "threading", SimpleNamespace(Thread=threads.Thread))
+    monkeypatch.setattr(prober, "_discover_anthropic_models", lambda: None)
+    monkeypatch.setattr(prober, "_register_openai_models", lambda: None)
+    monkeypatch.setenv("SEED_ADMIN_PASSWORD", "startup-pool-state")
+    monkeypatch.setattr(auth, "hash_password", lambda password: "hashed")  # bcrypt 백엔드는 이 테스트의 관심 밖
+    with caplog.at_level(logging.INFO):
+        _run_lifespan()
+        for thread in threads.started:
+            thread.join(60)
+    assert [t.name for t in threads.started] == ["perf-indexes"] and not threads.started[0].is_alive()
+    assert "Performance indexes ensured (background)." in [r.getMessage() for r in caplog.records]
+    assert [r.getMessage() for r in caplog.records if r.levelno >= logging.ERROR] == []
+    assert _labels(engine) == [_NEW_LABEL]
+    with engine.connect() as conn:  # admin seed와 단가 seed도 이 풀의 커넥션으로 커밋됐다
+        assert conn.execute(text("SELECT username, approved FROM users")).all() == [("admin", 1)]
+        assert conn.execute(text("SELECT count(*) FROM price_history")).scalar() > 0
+    _assert_pool_at_configured_settings(pg_url, engine)
+    assert _advisory_holders(pg.observer) == []
+
+
 def test_pg_migration_block_restores_the_pooled_connection(pg, pg_url, monkeypatch, caplog):
     engine = pg.new_task()
     monkeypatch.setattr(main, "engine", engine)
@@ -270,6 +392,29 @@ def test_pg_migration_block_restores_the_pooled_connection(pg, pg_url, monkeypat
     assert _messages(caplog, "Migration block failed") == []
     assert _labels(engine) == [_NEW_LABEL]
     _assert_pool_at_configured_settings(pg_url, engine)  # v2.32.1: lock_timeout 5000, statement_timeout 30000 (session)
+
+
+def test_pg_index_build_restores_the_pooled_connection(pg, pg_url):
+    engine = pg.new_task()
+    models.ensure_performance_indexes(engine)
+    _assert_pool_at_configured_settings(pg_url, engine)  # v2.32.1: statement_timeout 600000 (session)
+
+
+def test_pg_label_repair_restores_the_pooled_connection(pg, pg_url):
+    engine = pg.new_task()
+    with engine.begin() as conn:
+        conn.execute(text("UPDATE probe_results SET model_id = 'x', model_name = 'old'"))
+    assert label_repair.repair_model_labels(engine, {"x": "Bedrock X (Global)"}) == 1
+    _assert_pool_at_configured_settings(pg_url, engine)  # v2.32.1: statement_timeout 60000 (session)
+
+
+def test_pg_failed_index_build_still_restores_the_pooled_connection(pg, pg_url):
+    engine = pg.new_task()
+    with engine.begin() as conn:  # ix_probe_results_model_name의 열이 없어 그 CREATE INDEX가 실패한다
+        conn.execute(text("ALTER TABLE probe_results DROP COLUMN model_name"))
+    with pytest.raises(Exception, match="model_name"):
+        models.ensure_performance_indexes(engine)
+    _assert_pool_at_configured_settings(pg_url, engine)
 
 
 def test_pg_failed_block_leaves_no_advisory_lock_and_the_next_task_takes_it_at_once(pg, pg_url, monkeypatch, caplog):

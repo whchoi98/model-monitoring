@@ -314,29 +314,40 @@ def ensure_performance_indexes(engine) -> None:
     (2) statement_timeout 10분,
     (3) CREATE INDEX CONCURRENTLY — 쓰기(autoprober cycle) 블로킹 없음,
     (4) 이전 CONCURRENTLY 실패가 남긴 INVALID 인덱스는 드롭 후 재생성.
+    (5) 끝나면(실패해도) RESET statement_timeout (v2.32.2). 이 커넥션은 풀로 돌아가는데, 트랜잭션 밖이라 SET LOCAL이 듣지
+        않고 세션 SET이 남으면 이후 요청이 10분 상한으로 돈다(기동 뒤 쉬는 풀 커넥션에서 관측). RESET은 세션 기본값, 곧
+        database.py가 커넥션 옵션(-c statement_timeout, DB_STATEMENT_TIMEOUT_MS)으로 건 값으로 돌리므로 설정값을 여기서 다시
+        읽을 필요가 없다. AUTOCOMMIT이라 앞 문장이 실패해도 중단된 트랜잭션이 없어 RESET이 돈다. RESET조차 실패한 커넥션은
+        상태를 알 수 없으니 풀로 돌려보내지 않고 버린다(invalidate). 항상 버리지 않는 것은 정상 경로의 커넥션을 살려 두기 위해서다.
     """
     from sqlalchemy import text  # 지역 import — models는 기본적으로 DDL-only 모듈
 
     if engine.dialect.name == "postgresql":
         with engine.connect().execution_options(isolation_level="AUTOCOMMIT") as conn:
             conn.execute(text("SET statement_timeout = '600000'"))
-            for idx in _PERF_INDEXES:
-                invalid = conn.execute(
-                    text(
-                        "SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
-                        "WHERE c.relname = :name AND NOT i.indisvalid"
-                    ),
-                    {"name": idx.name},
-                ).first()
-                if invalid:
-                    conn.execute(text(f"DROP INDEX CONCURRENTLY IF EXISTS {idx.name}"))
-                cols = ", ".join(c.name for c in idx.columns)
-                conn.execute(
-                    text(
-                        f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {idx.name} "
-                        f"ON {idx.table.name} ({cols})"
+            try:
+                for idx in _PERF_INDEXES:
+                    invalid = conn.execute(
+                        text(
+                            "SELECT 1 FROM pg_index i JOIN pg_class c ON c.oid = i.indexrelid "
+                            "WHERE c.relname = :name AND NOT i.indisvalid"
+                        ),
+                        {"name": idx.name},
+                    ).first()
+                    if invalid:
+                        conn.execute(text(f"DROP INDEX CONCURRENTLY IF EXISTS {idx.name}"))
+                    cols = ", ".join(c.name for c in idx.columns)
+                    conn.execute(
+                        text(
+                            f"CREATE INDEX CONCURRENTLY IF NOT EXISTS {idx.name} "
+                            f"ON {idx.table.name} ({cols})"
+                        )
                     )
-                )
+            finally:
+                try:
+                    conn.execute(text("RESET statement_timeout"))
+                except Exception:
+                    conn.invalidate()
     else:
         # sqlite (로컬/테스트): CONCURRENTLY 미지원 — 일반 IF NOT EXISTS로 충분.
         with engine.begin() as conn:

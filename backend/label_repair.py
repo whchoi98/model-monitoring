@@ -41,7 +41,8 @@ def repair_model_labels(engine: Engine, catalog: dict[str, str], statement_timeo
     try:
         with engine.begin() as conn:
             if engine.dialect.name == "postgresql":
-                conn.execute(text(f"SET statement_timeout = '{int(statement_timeout_ms)}'"))
+                # 트랜잭션 한정 (v2.32.2) — 세션 SET이면 풀로 돌아간 커넥션의 이후 요청까지 이 상한으로 돈다.
+                conn.execute(text(f"SET LOCAL statement_timeout = '{int(statement_timeout_ms)}'"))
             for table in _TABLES:
                 for model_id, old_label, new_label in find_label_mismatches(conn, catalog, table):
                     res = conn.execute(
