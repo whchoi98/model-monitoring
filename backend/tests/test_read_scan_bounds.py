@@ -18,7 +18,11 @@ timeout)을 더해도 success만 세는 응답(분석, 비용 추이, 결과 통
 스캔 상한: SQL 캡처(before_cursor_execute)로 probe_results의 Text 열(prompt, output_text)을 SELECT하지 않는지
 확인한다. 분석 두 엔드포인트는 GROUP BY로 센 값만, 신뢰성, 효율성, 비용 추이, 결과 통계는 쓰는 열만 stream_results로
 읽는다. 창 상한(분석과 비용 추이 30d, 신뢰성과 효율성 7d)을 넘거나 읽을 수 없는 window는 DB를 읽기 전에 422이고,
-결과 통계는 run_id 없이 31일보다 이른 start_time을 31일 전으로 당긴다.
+결과 통계는 run_id 없이 31일보다 이른 start_time을 31일 전으로 당긴다. 결과 통계와 목록은 run_id가 1보다 작으면 DB를
+읽기 전에 422다(run_id=0이 두 상한을 건너뛰던 경로).
+
+시간 상한: statement_timeout은 서버 측 커서의 FETCH마다 따로 걸리므로 stream_results로 읽는 네 엔드포인트는
+streamed_read.stream_rows_or_503이 같은 상한으로 전체 경과 시간을 잰다 — 가짜 시계로 넘기면 행 중간에서 503이다.
 """
 
 import json

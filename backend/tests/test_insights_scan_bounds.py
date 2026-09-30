@@ -16,6 +16,9 @@ run_once는 ProbeRun 엔티티도 읽었는데 ProbeRun.results가 lazy="selecti
   FREEZE_INSIGHTS_GOLDENS=1 python3.12 -m pytest tests/test_insights_scan_bounds.py -k freeze).
 - API 창 상한: body window는 최대 24h다(인사이트 패널은 6h를 보낸다). 넘거나, 0 이하이거나, 읽을 수 없으면 422이고
   스레드, 스트림, DB 조회를 시작하지 않는다. 스케줄 태스크의 CLI(python -m insights_runner --window 6h)에는 상한이 없다.
+- 시간 상한: 두 통계 조회는 streamed_read.stream_rows로 전체 경과 시간이 statement_timeout과 같은 상한에 묶인다(서버 측
+  커서에는 statement_timeout이 FETCH마다 따로 걸린다). 넘으면 run_once는 Bedrock을 부르기 전에 -1(CLI exit 1),
+  stream-regenerate는 error 이벤트 하나, regenerate 스레드는 -1 뒤 잠금을 푼다.
 """
 
 import json
