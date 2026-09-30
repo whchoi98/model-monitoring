@@ -94,9 +94,10 @@ def run_features(surfaces=None, features=None, models=None) -> int:
     try:
         run = FeatureRun(status="running", started_at=datetime.now(timezone.utc), catalog_version=CATALOG_VERSION)
         db.add(run)
-        db.commit()
-        db.refresh(run)
+        db.flush()
         run_id = run.id
+        # commit 뒤 refresh로 트랜잭션을 다시 열지 않는다 — 스윕(약 11분) 동안 feature_runs 락과 커넥션을 쥐지 않는다(v2.32.2).
+        db.commit()
     except Exception:
         db.close()
         raise

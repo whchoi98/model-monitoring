@@ -277,10 +277,24 @@ else is HTTP 422 before any work, and no thread starts. The Korean `detail` name
 `total_latency_ms`, `tps`) of the window's automatic runs, in batches (2026-09-30). The scheduled Insights task
 (`python -m insights_runner --window 6h`) is not capped.
 
+The thread runs the same `run_once` as the scheduled task (v2.32.2): the statistics session is closed before any Bedrock
+call, the Korean and English summaries are generated at the same time with `converse_stream` on a dedicated client
+(connect 10 s, read 60 s between chunks, botocore standard retries with 2 attempts in total) and a 180 s wall-clock cap per
+call, and the Insight is saved from a new session in one short transaction. A stream that breaks after it opened is called
+once more; a wall-clock expiry is not. If the Korean summary fails nothing is saved; if the English one fails the Korean
+summary is saved with `summary_md_en` null, as before. The thread has no task budget (the scheduled task stops at 240 s,
+see `docs/runbooks/troubleshooting.md`), so one regeneration takes at most about 6 minutes, and the lock above holds until it
+ends.
+
 ### POST /api/insights/stream-regenerate
 **Auth required.** SSE stream — regenerate the insight summary. Body `{"window": "6h", "lang": "ko"}` with the same `window`
 rule as `/regenerate`: an out-of-range or unreadable window is HTTP 422 before the stream starts. The statistics read the
 same five columns of every visible row in the window, in batches.
+
+No database transaction stays open while the model streams (v2.32.2): the request session that authenticated the user is
+closed before the stream starts, the stream's own session rolls back right after the statistics read, and the Insight is
+saved in a new short transaction after the last chunk. The Bedrock call itself is unchanged (`converse_stream` on the
+default client, 60 s read timeout between chunks, no wall-clock cap).
 
 ---
 

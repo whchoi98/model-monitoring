@@ -2,6 +2,91 @@
 
 증상별 확인과 조치. 배포 절차는 [deploy.md](deploy.md), 되돌리기는 [rollback.md](rollback.md)를 본다.
 
+## 인사이트 — EN 요약 누락(KO만 저장), 태스크 겹침, 요약 중 DB 락 (2026-09-30, v2.32.2)
+
+**배경**: Insights 태스크(`rate(5 minutes)`, `python -m insights_runner --window 6h`, 로그 그룹 `/ecs/insights`)는 KO와 EN 요약을
+Sonnet 4.6(`global.anthropic.claude-sonnet-4-6`)으로 만든다. v2.32.1까지는 비스트림 `converse`를 기본 boto3 client(read timeout
+60초, legacy 재시도 5회)로 KO 다음 EN 순서로 불렀다. `converse`는 생성이 끝나야 첫 바이트가 오는데 요약이 5.4k~6.3k토큰이라
+55~75초가 걸렸고(초당 90~110토큰), 48시간 호출 로그에서 EN 첫 시도의 85%, KO의 37%가 60초를 넘었다. EN이 실패하면 KO만 저장했고
+(`summary_md_en`이 null이면 인사이트 패널의 EN 화면은 KO 본문을 보여 준다) 24시간 279건 중 109건이 그랬다. 실패 한 번이 5 × 60초 +
+backoff라 태스크가 6~7분으로 늘어 다음 태스크와 겹쳤고, 서버는 클라이언트가 포기한 시도도 끝까지 생성해 과금했다(호출의 72%).
+같은 태스크는 통계를 읽은 세션을 요약 내내 열어 두어 `probe_runs`, `probe_results`(+ 인덱스)의 ACCESS SHARE 락을 쥐었다. 그동안
+backend가 기동하면 lifespan 마이그레이션 블록의 `ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS …`(열이 있는지 보기 전에 ACCESS
+EXCLUSIVE를 요청한다)가 5초 뒤 `LockNotAvailable`로 실패했다(2026-09-30 기동 네 번 중 두 번, 블록은 non-fatal이라 backend는 떴다).
+
+v2.32.2부터:
+
+1. 통계를 읽은 세션은 요약 전에 닫고, 저장은 요약 뒤 새 세션의 짧은 트랜잭션이다. `POST /api/insights/regenerate` 스레드도 같은
+   함수이고, `/stream-regenerate`는 generator 세션을 통계 뒤에 rollback하고 인증의 요청 세션을 스트림 전에 닫는다. 챗봇, OptimizePrompt,
+   Comparison Lab, 패리티 런, Claude API Features 런도 느린 호출 전에 읽기 트랜잭션을 끝낸다. `POST /api/probes/run`은 아직이다.
+2. 요약은 인사이트 전용 client(connect 10초, read 60초, standard 재시도 total_max_attempts 2)의 `converse_stream`이다. read
+   timeout은 청크 사이 대기 상한이고, 호출 전체는 `INSIGHTS_CALL_WALL_CLOCK_S`(기본 180초, max_tokens 8192를 초당 약 45토큰으로
+   만드는 시간)에서 끊는다. botocore 재시도는 응답 헤더 전에만 일어나 생성을 다시 과금하지 않는다. KO와 EN은 동시에 만든다.
+3. 스트림이 열린 뒤 끊기면(청크 사이 read timeout, 연결 끊김, 스트림 안의 오류 이벤트) 호출 상한이 90초 이상 남았을 때만 한 번
+   다시 부른다. wall-clock 만료는 다시 부르지 않는다. 프롬프트, max_tokens 8192, temperature 0.1은 그대로다.
+4. 태스크 예산 `INSIGHTS_TASK_BUDGET_S`(기본 240초, 프로세스 시작부터, CLI만): 호출 상한은 마감 15초 전까지로 줄고, 메인 스레드는
+   마감에서 워커를 포기하고 KO를 저장하며, 마감 + 15초에 백스톱이 exit 1로 끝낸다. 태스크는 늦어도 기동 약 255초 뒤에 끝나므로 5분
+   주기와 겹치지 않는다. 조사 시뮬레이션(48시간 실측 지연)의 예상은 EN 성공 약 99%, 태스크 p50 약 105초, 호출 수 run당 약 2건이다.
+5. 언어마다 `insights summary <ko|en>: <초>s, output_tokens=…, input_tokens=…, stop_reason=…, chars=…, attempts=…`(INFO)를
+   남기고, max_tokens에서 멈추면 `insights summary <lang> stopped at max_tokens (8192), …`(WARNING)이다.
+
+### 증상
+
+- 인사이트 패널의 EN 화면이 한국어 본문이다. `GET /api/insights?limit=10`의 `summary_md_en`이 null이다.
+- `/ecs/insights`에 `EN insight generation failed; KO만 저장`이 있다. v2.32.1 이하는 그 아래 `ReadTimeoutError … read timeout=60`
+  traceback, v2.32.2는 바로 앞에 `insights summary en failed after …` 한 줄이 원인을 적는다.
+- Insights 태스크가 5분 넘게 돈다(v2.32.1 이하: EN 실패 run 6분 30초~6분 45초, EN 성공 run 2분 15초~2분 35초).
+- `/ecs/backend` 기동 로그에서 기동 5초 뒤에 `Migration block failed`와 `LockNotAvailable … ALTER TABLE probe_runs ADD COLUMN IF NOT
+  EXISTS is_auto`가 나온다.
+
+### 확인
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+
+# 1. 최근 인사이트 10건 — EN이 빠진 건
+curl -s "https://$CF_DOMAIN/api/insights?limit=10" | jq '[.[] | {id, created_at, en: (.summary_md_en != null)}]'
+
+# 2. 언어별 결과(v2.32.2) — 소요 시간, 출력 토큰, 재시도, 실패, 예산 초과, 저장
+aws logs tail /ecs/insights --since 1h --region $REGION \
+  | grep -E "insights summary|EN insight generation failed|insights_runner 실패|task budget|insight id="
+
+# 3. 태스크 길이 — 정지한 태스크는 약 1시간만 조회된다. 컨테이너 이름은 insightstaskdef(containers[0]은 GuardDuty 사이드카일 수 있다)
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerInsightsTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+for T in $(aws ecs list-tasks --cluster bedrock-monitor --family "$FAM" --desired-status STOPPED \
+    --region $REGION --query 'taskArns[]' --output text); do
+  aws ecs describe-tasks --cluster bedrock-monitor --tasks "$T" --region $REGION \
+    --query "tasks[].[startedAt,stoppedAt,containers[?name=='insightstaskdef'].exitCode|[0]]" --output text
+done
+
+# 4. backend 기동의 마이그레이션 블록 — 기동 시각과 5초 뒤 실패
+aws logs tail /ecs/backend --since 6h --region $REGION | grep -E "Migration block|LockNotAvailable"
+```
+
+| 표지(2번) | 뜻 | 조치 |
+|-----------|----|------|
+| `insights summary en: 7x.xs, output_tokens=6xxx, …, attempts=1` | 정상. 60초를 넘는 생성도 스트림으로 받았다 | 없음 |
+| `… interrupted after …, retrying (attempt 2/2)` 뒤 `insights summary en: …, attempts=2` | 스트림이 끊겨 한 번 다시 불러 성공 | 드물면 없음. 매 run이면 Bedrock 쪽(리전 배분, 스로틀링) 확인 |
+| `insights summary en failed after 18x.xs … exceeded the 180s wall-clock limit` | 처리량이 초당 약 45토큰 밑(관측상 1% 미만) | 몇 건이면 없음(KO만 저장). 계속되면 출력 크기를 본다(아래) |
+| `… stopped at max_tokens (8192), …` | 요약이 잘렸다. 모델 수에 비례해 EN 출력이 늘어 약 75모델부터 자주 걸린다 | 프롬프트로 출력을 줄이는 결정이 필요하다(프롬프트 골든 `backend/tests/fixtures/insights_prompts_v2320.json`이 바뀐다) |
+| `insights summary ko: … left for the call (< 30s), not calling Bedrock` 또는 `summary did not finish before the task deadline` | 태스크 예산 부족(DB 조회나 헤더 대기가 길었다) | 반복되면 DB 지연(`streamed read over the …`)과 Bedrock 헤더 지연을 본다 |
+| `insights_runner: task budget 240s + 15s grace passed, exiting 1 …` | 백스톱이 프로세스를 끝냈다(요약이 예산 안에 돌아오지 않았다) | 다음 태스크는 정상 시작한다. 반복되면 로그 스트림을 보관하고 원인을 본다 |
+
+- 3번 태스크가 약 255초를 넘게 RUNNING이면 v2.32.1 이하 이미지이거나 새 유형이다. 이미지 digest를 확인한다.
+- 4번 실패가 v2.32.2 이미지에서도 Insights 태스크와 겹쳐 나오면 다른 경로가 락을 쥔 것이다. 느린 외부 호출(Bedrock, AgentCore,
+  HTTP) 동안 세션 트랜잭션을 열어 두는 코드를 찾는다(`backend/tests/test_insights_locks.py`, `test_session_release.py`의 패턴).
+
+### 조치
+
+- 설정은 env로만 바꾼다(Insights 태스크 정의, 기본값이 권장값이다): `INSIGHTS_CALL_WALL_CLOCK_S`(호출 상한), `INSIGHTS_TASK_BUDGET_S`
+  (태스크 예산). 예산을 5분 주기에 가깝게 올리면 태스크가 다시 겹칠 수 있다(백스톱은 예산 + 15초).
+- `POST /api/insights/regenerate`(backend 스레드)에는 태스크 예산이 없고 호출 상한 180초만 있다. `/stream-regenerate`의 Bedrock
+  호출은 바뀌지 않았다(기본 client의 converse_stream, 청크 사이 60초, wall-clock 상한 없음).
+- 새 코드를 추가할 때: 느린 외부 호출 전에 읽기 트랜잭션을 끝낸다(세션 close, rollback, commit). 요청 세션을 쓰는 스트리밍
+  엔드포인트는 FastAPI 0.142에서 세션이 스트림 끝까지 살아 있으므로, `Depends(get_db)`로 같은 세션을 받아 스트림 전에 닫는다.
+
 ## backend OOM — 전체 API 502/503/504, 컨테이너 exit 137 (2026-09-30 `/analysis`)
 
 **배경**: backend 서비스는 태스크 하나(1024 MiB, desiredCount 1)다. 컨테이너가 메모리 한도를 넘으면 ECS가 SIGKILL로 죽이고(exit

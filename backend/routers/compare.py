@@ -9,9 +9,11 @@ import logging
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
+from sqlalchemy.orm import Session
 from starlette.responses import StreamingResponse
 
 from auth import get_current_user
+from database import get_db
 from models import User
 from prober import AVAILABLE_MODELS, stream_compare_events
 
@@ -28,7 +30,7 @@ class CompareRequest(BaseModel):
 
 
 @router.post("/run")
-async def compare_run(payload: CompareRequest, user: User = Depends(get_current_user)):
+async def compare_run(payload: CompareRequest, user: User = Depends(get_current_user), db: Session = Depends(get_db)):
     """N개 모델 병렬 invoke - SSE event stream으로 응답.
 
     Events:
@@ -48,6 +50,9 @@ async def compare_run(payload: CompareRequest, user: User = Depends(get_current_
             detail=f"Unknown model_ids: {unknown}",
         )
 
+    # 인증의 users 읽기 트랜잭션을 끝낸다 — FastAPI 0.142는 요청 세션(db = get_current_user와 같은 세션)을 스트림이 끝날
+    # 때 닫으므로, 그대로 두면 모델 N개의 생성 내내 users 락이 남는다(v2.32.2). 이 라우터는 DB를 쓰지 않는다.
+    db.close()
     generator = stream_compare_events(
         model_ids=payload.model_ids,
         prompt=payload.prompt,
