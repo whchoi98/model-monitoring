@@ -105,8 +105,8 @@ def get_stats(
         floor = now - _MAX_STATS_LOOKBACK
         # 오프셋 없는 값은 UTC로 본다(저장 시각이 모두 UTC)
         if (start_time if start_time.tzinfo else start_time.replace(tzinfo=timezone.utc)) < floor:
-            logger.warning("results/stats: start_time %s is older than %s; reading from %s",
-                           start_time.isoformat(), _MAX_STATS_LOOKBACK, floor.isoformat())
+            logger.warning("results/stats: start_time %s is older than %d days; reading from %s",
+                           start_time.isoformat(), _MAX_STATS_LOOKBACK.days, floor.isoformat())
             start_time = floor
     if start_time:
         query = query.filter(ProbeResult.timestamp >= start_time)

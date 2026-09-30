@@ -10,8 +10,10 @@ tests/fixtures/read_goldens_v2320.json에 고정했다. 조회 방식을 바꾼 
 응답을 의도적으로 바꾸는 변경이 아니면 골든을 다시 만들지 않는다(다시 만들 때:
 FREEZE_READ_GOLDENS=1 python3.12 -m pytest tests/test_read_scan_bounds.py -k freeze).
 
-스캔 상한: SQL 캡처(before_cursor_execute)로 probe_results의 Text 열(prompt, output_text)을 SELECT하지 않는지,
-창 상한을 넘는 요청이 DB를 읽기 전에 422로 끝나는지 확인한다. 분석 두 엔드포인트는 GROUP BY로 센 값만 읽는다.
+스캔 상한: SQL 캡처(before_cursor_execute)로 probe_results의 Text 열(prompt, output_text)을 SELECT하지 않는지
+확인한다. 분석 두 엔드포인트는 GROUP BY로 센 값만, 신뢰성, 효율성, 비용 추이, 결과 통계는 쓰는 열만 stream_results로
+읽는다. 창 상한(분석과 비용 추이 30d, 신뢰성과 효율성 7d)을 넘거나 읽을 수 없는 window는 DB를 읽기 전에 422이고,
+결과 통계는 run_id 없이 31일보다 이른 start_time을 31일 전으로 당긴다.
 """
 
 import json
@@ -383,7 +385,7 @@ def test_results_stats_start_time_older_than_31_days_is_clamped(env, caplog, sta
         body = _stats(client, start_time=start_time)
     assert body["start_time"] == floor  # 실제로 읽은 하한을 돌려준다
     assert body["models"] == _stats(client, start_time=floor)["models"]
-    assert "older than" in caplog.text
+    assert "older than 31 days" in caplog.text
     # 데이터셋에 31일보다 오래된 success 행(960h)이 있어야 당김이 의미 있다 — run_id로만 거르면 그 행까지 센다.
     old_rows = {m["model_id"]: m["count"] for m in _stats(client, run_id=1, start_time="1970-01-01T00:00:00Z")["models"]}
     assert sum(old_rows.values()) > sum(m["count"] for m in body["models"])
