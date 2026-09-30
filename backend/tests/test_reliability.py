@@ -13,6 +13,30 @@ def test_parse_label_bedrock_and_anthropic():
     assert rel._parse_label("Bedrock Nova 2.0 Lite (US)") == ("Nova 2.0 Lite", "Bedrock US")
 
 
+def test_parse_label_bedrock_inregion_and_v232_families():
+    assert rel._parse_label("Bedrock Claude Opus 5 (ap-northeast-2)") == ("Claude Opus 5", "Bedrock ap-northeast-2")
+    assert rel._parse_label("Bedrock Claude Sonnet 5 (ap-northeast-2)") == ("Claude Sonnet 5", "Bedrock ap-northeast-2")
+    assert rel._parse_label("Bedrock Claude Sonnet 5.5 (Global)") == ("Claude Sonnet 5.5", "Bedrock Global")
+    assert rel._parse_label("Anthropic Claude Sonnet 5.5 (US)") == ("Claude Sonnet 5.5", "Anthropic (CP on AWS)")
+    assert rel._parse_label("OpenAI GPT 6.1 Sol (Global)") == ("GPT 6.1 Sol", "OpenAI Global")
+    assert rel._parse_label("OpenAI GPT 6.1 Sol (US)") == ("GPT 6.1 Sol", "OpenAI US")
+    assert rel._parse_label("OpenAI GPT 6.1 Sol (us-east-1)") == ("GPT 6.1 Sol", "OpenAI us-east-1")
+
+
+def test_parse_label_non_region_bedrock_paren_stays_us():
+    # 리전 코드 모양만 새 채널로 간다 — 과거의 비정형 Bedrock 라벨은 지금처럼 "Bedrock US"에 남는다.
+    assert rel._parse_label("Bedrock Claude Opus 5 (US)") == ("Claude Opus 5", "Bedrock US")
+    assert rel._parse_label("Bedrock Claude Opus 5 (legacy)") == ("Claude Opus 5", "Bedrock US")
+    assert rel._parse_label("Bedrock Claude Opus 5 (AP-NORTHEAST-2)") == ("Claude Opus 5", "Bedrock US")
+
+
+def test_channel_sort_key_places_bedrock_inregion_after_us_and_before_openai():
+    chans = ["OpenAI us-east-1", "Bedrock ap-northeast-2", "Bedrock US", "Anthropic (CP on AWS)", "Bedrock Global"]
+    assert sorted(chans, key=rel._channel_sort_key) == [
+        "Anthropic (CP on AWS)", "Bedrock Global", "Bedrock US", "Bedrock ap-northeast-2", "OpenAI us-east-1"]
+    assert rel._channel_sort_key("Other") > rel._channel_sort_key("OpenAI 1P")
+
+
 def test_parse_label_openai_mantle_and_1p():
     assert rel._parse_label("OpenAI GPT 5.4 (us-east-1)") == ("GPT 5.4", "OpenAI us-east-1")
     assert rel._parse_label("OpenAI GPT 5.4 (us-east-2)") == ("GPT 5.4", "OpenAI us-east-2")
