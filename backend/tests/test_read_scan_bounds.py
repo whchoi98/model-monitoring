@@ -12,8 +12,8 @@ float을 Neumaier 보정 합산으로 더해 평균(avg_*)이 round(…, 2) 뒤 
 tests/_golden_compare.py가 float의 마지막 자리 한 단위만 받고 나머지(키 순서, 길이, 문자열, 정수, None)는 정확히 본다.
 3.11에서 98af18e 코드와 지금 코드의 응답은 34건 모두 바이트 단위로 같다(2026-09-30 확인). 응답을 의도적으로 바꾸는
 변경이 아니면 골든을 다시 만들지 않는다(다시 만들 때는 3.11에서 — 3.12에서 FREEZE하면 실패한다:
-docker run --rm -v "$PWD":/w -w /w python:3.11-slim sh -c 'pip install -q -r requirements.txt &&
-FREEZE_READ_GOLDENS=1 python -m pytest tests/test_read_scan_bounds.py -k freeze').
+docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/w -w /w python:3.11-slim sh -c 'pip install -q -r requirements.txt &&
+FREEZE_READ_GOLDENS=1 python -m pytest -p no:cacheprovider tests/test_read_scan_bounds.py -k freeze').
 
 골든 밖 데이터셋: 골든 데이터셋이 가리지 못하는 변이를 따로 잡는다. (1) 지표 값이 모두 있는 실패 행(error, overloaded,
 timeout)을 더해도 success만 세는 응답(분석, 비용 추이, 결과 통계)은 골든 그대로다. (2) id 순서와 시각 순서가 어긋나는

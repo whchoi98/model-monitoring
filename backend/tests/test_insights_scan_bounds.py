@@ -16,8 +16,8 @@ run_once는 ProbeRun 엔티티도 읽었는데 ProbeRun.results가 lazy="selecti
   python:3.11-slim, CI)에서 만들었다. 3.12부터 내장 sum()이 float을 Neumaier 보정 합산으로 더해 통계 JSON의 avg가
   0.01씩 갈라지므로(PR #70 CI — 1506.23과 1506.22), 3.11에서는 바이트 단위로, 다른 버전에서는 tests/_golden_compare.py가
   JSON 블록 밖 텍스트와 숫자를 가린 블록 텍스트를 정확히, 블록의 숫자는 float 마지막 자리 한 단위까지 비교한다.
-  다시 만들 때는 3.11에서(3.12에서 FREEZE하면 실패한다): docker run --rm -v "$PWD":/w -w /w python:3.11-slim sh -c
-  'pip install -q -r requirements.txt && FREEZE_INSIGHTS_GOLDENS=1 python -m pytest tests/test_insights_scan_bounds.py -k freeze'.
+  다시 만들 때는 3.11에서(3.12에서 FREEZE하면 실패한다): docker run --rm -e PYTHONDONTWRITEBYTECODE=1 -v "$PWD":/w -w /w python:3.11-slim sh -c
+  'pip install -q -r requirements.txt && FREEZE_INSIGHTS_GOLDENS=1 python -m pytest -p no:cacheprovider tests/test_insights_scan_bounds.py -k freeze'.
 - API 창 상한: body window는 최대 24h다(인사이트 패널은 6h를 보낸다). 넘거나, 0 이하이거나, 읽을 수 없으면 422이고
   스레드, 스트림, DB 조회를 시작하지 않는다. 스케줄 태스크의 CLI(python -m insights_runner --window 6h)에는 상한이 없다.
 - 시간 상한: 두 통계 조회는 streamed_read.stream_rows로 전체 경과 시간이 statement_timeout과 같은 상한에 묶인다(서버 측
