@@ -15,7 +15,7 @@ are served by `routers/features.py` and rendered on `/claude-features`. Design a
 ## Rules
 - Bump `runner.CATALOG_VERSION` whenever `_NOT_APPLICABLE_BY_DOC`, `documented` expectations, `_CONVERSE_NOT_EXPRESSIBLE`, `is_applicable` rules or `MODELS` change (root CLAUDE.md). Label/description text changes don't need it
 - Adding a model: `MODELS` + `_ADVISOR_FOR` + `parity/catalog.py` `_NO_FORCED_TOOL_CHOICE_MARKERS` if forced `tool_choice` returns 400 (Sonnet 5.5 did, v2.32.0) + `mantle: None` with `mantle_reason` and `mantle_reason_en` when Mantle does not serve it + the cell-count pins in `tests/test_claude_features.py` (39 × 5 × 6 = 1170, probes 946 + pre-decided 224) + a `CATALOG_VERSION` bump
-- Suspect the probe first when a cell is broken: check the evidence snapshot (`/api/features/evidence`) before calling it a platform regression
+- Suspect the probe first when a cell is broken: check the evidence snapshot (`/api/features/evidence`) before calling it a platform regression. Example: `adaptive_thinking` at effort high still lets the model skip thinking on an easy question — Sonnet 5.5 did on the prime question (run 30, 2026-09-30), so `probes.ADAPTIVE_THINKING_PROMPT` is a three-constraint problem that all six models think about (v2.32.1); keep it hard when you edit it
 
 ## Commands
 ```bash
