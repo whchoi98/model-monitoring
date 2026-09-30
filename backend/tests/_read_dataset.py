@@ -1,6 +1,7 @@
 """읽기 조회 테스트가 함께 쓰는 고정 시계 SQLite 데이터셋 — 2026-09-30 /analysis OOM 회귀 테스트.
 
-tests/test_read_scan_bounds.py의 v2.32.0 응답 골든(fixtures/read_goldens_v2320.json)이 이 데이터셋에서 나왔다.
+tests/test_read_scan_bounds.py의 v2.32.0 응답 골든(fixtures/read_goldens_v2320.json)과 tests/test_insights_scan_bounds.py의
+인사이트 프롬프트 골든(fixtures/insights_prompts_v2320.json)이 이 데이터셋에서 나왔다.
 값을 바꾸면 골든이 달라지므로 응답을 의도적으로 바꾸는 변경이 아니면 고치지 않는다. 시각은 FROZEN_NOW 기준이고,
 행은 오래된 것부터 넣는다(id 순서 = 시각 순서). pytest가 모으지 않는 공용 모듈이다(파일 이름이 test_로 시작하지 않는다).
 """

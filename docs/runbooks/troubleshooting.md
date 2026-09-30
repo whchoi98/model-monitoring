@@ -13,8 +13,18 @@
 
 수정 뒤에는 공개 집계 엔드포인트가 엔티티를 읽지 않는다. 분석 두 엔드포인트는 DB에서 `GROUP BY`로 센 값만 읽고, 신뢰성, 효율성, 비용
 추이, 결과 통계는 쓰는 열만 `yield_per`로 나눠 읽는다(PostgreSQL 서버 측 커서). 창은 화면이 고를 수 있는 가장 긴 창까지다. 분석과 비용
-추이는 30d, 신뢰성과 효율성은 7d이고, 넘거나 읽을 수 없는 `window`는 DB를 읽기 전에 422로 끝난다(`backend/window_spec.py`). 결과 통계는
-`run_id` 없이 31일보다 이른 `start_time`을 31일 전으로 당긴다.
+(요약, 채널 비교, 추이)은 30d, 신뢰성과 효율성은 7d다. 이를 넘는 `window`, 0 이하인 `window`(`0h`, `-5d`), 읽을 수 없는 `window`, now − 창이
+datetime 범위를 벗어나는 `window`는 DB를 읽기 전에 422로 끝난다(`backend/window_spec.py`). 예전에는 0과 음수 창이 빈 응답(200)을, 아주
+큰 음수 창이 500을 냈고, 비용 요약과 채널 비교는 창 상한이 없었다. 결과 통계는 `run_id` 없이 31일보다 이른 `start_time`을 31일 전으로
+당긴다(그래서 `end_time`까지 31일보다 이르면 빈 결과다).
+
+JWT 엔드포인트인 인사이트 재생성(`POST /api/insights/regenerate`, `/api/insights/stream-regenerate`)도 backend 프로세스 안에서
+`probe_results`를 읽는다. 예전에는 body `window`에 상한이 없었고(`3650d`도 받았다), `insights_runner.collect_stats_for_window`와
+`run_once`가 `ProbeResult` 엔티티를 `.all()`로 적재했다. `run_once`의 `ProbeRun` 엔티티 조회는 `ProbeRun.results`(`lazy="selectin"`)로 그
+run들의 결과 엔티티를 한 번 더 끌어왔다. 지금은 body `window`가 최대 24h(인사이트 패널은 6h를 보낸다)이고 넘거나, 0 이하이거나, 읽을 수
+없으면 스레드와 스트림을 시작하기 전에 422다. 통계는 `compute_stats`가 쓰는 다섯 열(`model_name`, `status`, `ttft_ms`,
+`total_latency_ms`, `tps`)만 `yield_per`로 읽고, `run_once`는 run id만 읽는다. 스케줄 태스크(`python -m insights_runner --window 6h`)의
+CLI에는 상한이 없다.
 
 ### 증상
 
@@ -51,14 +61,18 @@ aws logs tail /ecs/backend --since 2h --region $REGION | grep -E '"GET /api/' | 
 
 - 2번이 `exitCode` 137이고 `OutOfMemoryError`면 이 문서의 경우다. 다른 `stoppedReason`(헬스체크 실패, 배포 서킷 브레이커)은
   [rollback.md](rollback.md)와 [deploy.md](deploy.md)를 본다.
-- 4번 마지막 줄들에 창이 큰 공개 집계 요청(`window=`, `start_time=`, `hours=`)이 몰려 있으면 요청 단위 적재다.
+- 4번 마지막 줄들에 창이 큰 공개 집계 요청(`window=`, `start_time=`, `hours=`)이나 `POST /api/insights/regenerate`,
+  `/api/insights/stream-regenerate`가 몰려 있으면 요청 단위 적재다. 인사이트 재생성은 body에 창이 있어 access log에 창이 남지 않는다.
+  `insight regenerate requested by user=… window=…` 로그 줄(`/regenerate`만 남긴다)로 창을 확인한다.
 
 ### 조치
 
 - 이미 복구된 뒤라면 할 일은 원인 요청 확인이다. 운영 이미지가 v2.32.0 이하(창 상한 없음)면 이 수정이 들어간 이미지로 배포한다.
-- 새 엔드포인트나 조회를 추가할 때 지킬 것: 공개 집계에서 `db.query(ProbeResult)` 엔티티를 읽지 않는다. 가능하면 SQL로 집계하고,
-  값 목록이 필요하면(백분위) 쓰는 열만 `yield_per`로 읽는다. 창에는 화면 최대값의 상한을 둔다(`window_spec.parse_window`, `Query(le=…)`).
-  응답은 `backend/tests/test_read_scan_bounds.py`의 골든으로 고정돼 있다.
+- 새 엔드포인트나 조회를 추가할 때 지킬 것: 집계에서 `db.query(ProbeResult)` 엔티티를 읽지 않고, run 목록도 `db.query(ProbeRun)`
+  엔티티로 읽지 않는다(`results`가 `selectin`이라 그 run들의 결과 엔티티를 함께 적재한다, `routers/auto_probe.py`처럼 `ProbeRun.id` 같은
+  열만 읽는다). 가능하면 SQL로 집계하고, 값 목록이 필요하면(백분위) 쓰는 열만 `yield_per`로 읽는다. 창에는 화면 최대값의 상한을 둔다(`window_spec.parse_window`, `Query(le=…)`,
+  JWT 엔드포인트의 body 창도 같다). 응답은 `backend/tests/test_read_scan_bounds.py`의 골든으로, 인사이트 프롬프트는
+  `backend/tests/test_insights_scan_bounds.py`의 골든으로 고정돼 있다.
 - 태스크 메모리를 늘리는 것(`cdk/lib/constructs/fargate-service.ts` `memoryMiB`, 기본 1024)은 임시방편이다. 창 상한이 없는
   엔드포인트는 창을 키우면 다시 넘는다.
 
