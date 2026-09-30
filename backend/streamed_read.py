@@ -3,8 +3,9 @@
 database.py가 커넥션마다 거는 statement_timeout(DB_STATEMENT_TIMEOUT_MS, 기본 30초)은 문장 하나의 상한이다. 한 번에 받는
 조회(.all(), GROUP BY 집계)는 문장 하나라 그 상한에서 취소된다. yield_per로 나눠 읽는 조회는 PostgreSQL에서 psycopg2 이름 있는
 커서(DECLARE 뒤 FETCH 반복)이고, FETCH마다 새 문장이라 FETCH 하나하나가 상한 안에 끝나면 전체는 얼마든지 길어진다. DB가
-느려지면(t4g.micro CPU 크레딧 소진) 풀 커넥션 하나와 워커 스레드 하나가 30초를 넘겨 붙잡히고, 그동안 CloudFront는 이미 504를
-돌려준다.
+느려지면(t4g.micro CPU 크레딧 소진) 풀 커넥션 하나와 워커 스레드 하나가 30초를 넘겨 붙잡힌다. CloudFront origin readTimeout은
+60초(cdk/lib/stacks/edge-stack.ts)라, 이 도우미가 보통 약 30초에 503을 돌려주면 CloudFront 504보다 먼저 응답이 간다. 마지막
+FETCH가 statement_timeout에 가까운 최악의 경우에만 60초 근처까지 간다.
 
 stream_rows(query, what=...)는 조회를 돌며 행마다 시작 이후 경과 시간을 재고, 상한을 넘으면 안쪽 반복자를 닫고(ORM Query의
 생성기는 닫힐 때 결과와 서버 측 커서를 닫는다 — CLOSE, 커넥션과 트랜잭션은 그대로) WARNING을 남긴 뒤 StreamedReadTimeout을

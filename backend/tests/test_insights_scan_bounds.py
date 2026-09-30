@@ -452,3 +452,26 @@ def test_regenerate_thread_times_out_and_releases_the_lock(api, db_env, bedrock_
     assert bedrock_calls == []
     with factory() as db:
         assert db.query(models.Insight).count() == 0
+
+
+def test_stream_regenerate_reads_stats_off_the_event_loop(api, db_env, bedrock_calls, monkeypatch):
+    """stream-regenerate의 통계 수집은 이벤트 루프 밖 스레드에서 돈다(v2.32.1) — 루프에서 직접 부르면 느린 DB에서
+    statement_timeout + FETCH 하나 동안 같은 프로세스의 다른 요청과 헬스체크가 멈춘다."""
+    import asyncio
+
+    import insights_runner
+
+    seen: list[bool] = []
+    real = insights_runner.collect_stats_for_window
+
+    def spy(db, window):
+        try:
+            asyncio.get_running_loop()
+            seen.append(True)  # 이벤트 루프 스레드에서 불렸다
+        except RuntimeError:
+            seen.append(False)
+        return real(db, window)
+
+    monkeypatch.setattr(insights_runner, "collect_stats_for_window", spy)
+    assert api.post("/api/insights/stream-regenerate", json={"window": "6h"}).status_code == 200
+    assert seen == [False]

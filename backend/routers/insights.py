@@ -183,9 +183,10 @@ async def stream_regenerate(
         # Generator 전용 DB session — StreamingResponse 반환 후 의존성 cleanup의 영향을 받지 않음.
         db = SessionLocal()
         try:
-            # 1) Stats 수집.
+            # 1) Stats 수집 — 동기 DB 읽기는 스레드에서 돈다. 이벤트 루프에서 직접 부르면 느린 DB에서 최대 statement_timeout +
+            # FETCH 하나 동안 같은 프로세스의 다른 요청과 헬스체크가 멈춘다(v2.32.1). 세션은 그동안 이 스레드만 쓴다.
             try:
-                stats = collect_stats_for_window(db, window)
+                stats = await asyncio.to_thread(collect_stats_for_window, db, window)
             except Exception as exc:
                 logger.exception("stats compute failed")
                 yield f"event: error\ndata: {_json.dumps({'message': str(exc)})}\n\n"
