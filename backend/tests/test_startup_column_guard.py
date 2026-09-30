@@ -198,7 +198,7 @@ def test_postgres_existing_columns_emit_no_ddl(monkeypatch):
 
 PG_URL = os.environ.get("TEST_PG_URL")
 _SCHEMA = "startup_column_guard"
-_LOCK_TIMEOUT_S = 5.0  # main.lifespan의 SET lock_timeout = '5000'
+_LOCK_TIMEOUT_S = 5.0  # main.lifespan의 SET LOCAL lock_timeout = '5000'
 _OLD_LABEL, _NEW_LABEL = "Claude Opus 4.7 (Global)", "Bedrock Claude Opus 4.7 (Global)"
 _REMOVED = ("Bedrock Claude Sonnet 4.5 (Global)", "Bedrock Nova Pro (US)")
 
