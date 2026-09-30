@@ -244,7 +244,7 @@ model-monitoring/
 │   ├── pricing_export.py         # CSV, Markdown and JSON export
 │   ├── agent/                    # chatbot core: Bedrock model ids, 4 tools, AgentCore Memory, streaming
 │   ├── parity/                   # parity run engine: catalog (6 surfaces × 19 features), engine, probes, runner
-│   ├── claude_features/          # catalog (39 rows × 5 surfaces × 5 models), transports, probes, engine, runner (v2.23.0)
+│   ├── claude_features/          # catalog (39 rows × 5 surfaces × 6 models), transports, probes, engine, runner (v2.23.0)
 │   ├── routers/                  # 18 router modules (auth, admin, analysis, cost, pricing, gptbench, features, …)
 │   └── tests/                    # pytest suite
 ├── frontend/                     # Next.js 16 standalone + 12 routes (installable PWA)
@@ -259,7 +259,7 @@ model-monitoring/
 │   ├── architecture.md           # full system design
 │   ├── api-reference.md          # endpoint reference
 │   ├── onboarding.md             # onboarding guide: local setup, key concepts, common tasks
-│   ├── decisions/                # ADR-001 through ADR-030
+│   ├── decisions/                # ADR-001 through ADR-031
 │   ├── images/                   # README screenshots (ui/*-en.png, ui/*-ko.png)
 │   └── runbooks/                 # deploy, rollback, troubleshooting
 ├── CHANGELOG.md                  # Keep a Changelog format (bilingual, repo root)
@@ -580,7 +580,7 @@ model-monitoring/
 │   ├── pricing_export.py         # CSV, Markdown, JSON 내보내기
 │   ├── agent/                    # 챗봇 core: Bedrock model id, 4개 도구, AgentCore Memory, 스트리밍
 │   ├── parity/                   # 패리티 런 엔진: 카탈로그(6 surface × 19 피처), 엔진, 프로브, 러너
-│   ├── claude_features/          # 카탈로그(39행 × 5 surface × 5모델), 전송기, 프로브, 엔진, 러너 (v2.23.0)
+│   ├── claude_features/          # 카탈로그(39행 × 5 surface × 6모델), 전송기, 프로브, 엔진, 러너 (v2.23.0)
 │   ├── routers/                  # 18개 라우터 모듈 (auth, admin, analysis, cost, pricing, gptbench, features, …)
 │   └── tests/                    # pytest 테스트
 ├── frontend/                     # Next.js 16 standalone + 12 라우트 (설치형 PWA)
@@ -595,7 +595,7 @@ model-monitoring/
 │   ├── architecture.md           # 전체 시스템 설계
 │   ├── api-reference.md          # 엔드포인트 레퍼런스
 │   ├── onboarding.md             # 온보딩 가이드: 로컬 환경 구성, 핵심 개념, 자주 하는 작업
-│   ├── decisions/                # ADR-001 ~ ADR-030
+│   ├── decisions/                # ADR-001 ~ ADR-031
 │   ├── images/                   # README 스크린샷 (ui/*-en.png, ui/*-ko.png)
 │   └── runbooks/                 # 배포, 롤백, 트러블슈팅
 ├── CHANGELOG.md                  # Keep a Changelog 형식 (bilingual, 저장소 루트)

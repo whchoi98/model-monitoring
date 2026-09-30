@@ -385,8 +385,10 @@ aws logs tail /ecs/gptbench --since 2h --region $REGION \
 
 ### 조치
 
-- 데드라인 컷이 반복되면 `GPT_BENCH_RUNS`(채널당 호출 수) 또는 `GPT_BENCH_DEADLINE`을 GptBench task env로 조정한다. 데드라인을
-  올리면 885초 상한도 함께 늘어나므로 15분 스케줄과 겹치지 않는지 먼저 계산한다(데드라인 + 호출 상한 + 15초 < 900초).
+- 데드라인 컷이 반복되면 GptBench task env로 `GPT_BENCH_RUNS`(채널당 호출 수, 기본 10)를 줄이는 것이 첫 레버다.
+  `GPT_BENCH_DEADLINE`은 올릴 여유가 없다 — 기본값에서 데드라인 780초 + 호출 상한 90초 + 15초 = 885초라 15분 스케줄(900초)까지
+  15초뿐이다. 데드라인을 올려야 하면 `GPT_BENCH_CALL_TIMEOUT`을 같은 만큼 낮춰 합계를 900초 미만으로 유지한다. 대안 비교(갈래 수,
+  주기 변경)는 ADR-031 Options "21채널 벤치 데드라인"에 있다.
 - 같은 채널이 매 사이클 `WallClockTimeout`이면 그 채널 호스트 문제다. 갈래를 나눈 이유(호스트가 다르면 서로의 대기열에 끼지 않는다)대로
   다른 갈래의 채널은 영향을 받지 않는다.
 - 갈래 예외는 코드 결함이다. traceback을 보관하고 `backend/gptbench.py`를 고친다. 그 사이클의 다른 갈래 결과는 이미 저장돼 있다.
