@@ -268,11 +268,30 @@ def test_response_matches_frozen_golden(env, name):
 # ───────────────────────────────────────────────────────────────────────
 
 ANALYSIS_PATHS = ("/api/analysis/stop-reasons", "/api/analysis/output-length")
+STREAMED_PATHS = ("/api/reliability/multi-channel", "/api/efficiency/score")
 _TEXT_COLUMNS = ("probe_results.prompt", "probe_results.output_text")
+_OVER_30D = ["31d", "3650d", "99999h", "721h", "43201m"]
+_OVER_7D = ["8d", "3650d", "99999h", "169h", "10081m"]
+# 경로 → (상한 표기, 상한을 넘는 창, 상한 이하의 창). 상한 = 그 화면이 고를 수 있는 가장 긴 창.
+WINDOW_CAPS = {
+    "/api/analysis/stop-reasons": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
+    "/api/analysis/output-length": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
+    "/api/reliability/multi-channel": ("7d", _OVER_7D, ["7d", "168h", "10080m", "7D", " 24h "]),
+    "/api/efficiency/score": ("7d", _OVER_7D, ["7d", "168h", "10080m", "7D", " 24h "]),
+}
+UNREADABLE_WINDOWS = [
+    "xd", "1e3h", "d",
+    pytest.param("99999999999d", id="timedelta-overflow"),
+    pytest.param("9" * 5000 + "h", id="5000-digit-int"),
+]
 
 
-def _probe_result_selects(statements) -> list[str]:
-    return [sql for sql, _ in statements if "FROM probe_results" in sql]
+def _probe_result_selects(statements) -> list[tuple[str, dict]]:
+    return [(sql, opts) for sql, opts in statements if "FROM probe_results" in sql]
+
+
+def _items(body: dict) -> list:
+    return body.get("rows") or body.get("families") or body.get("models") or []
 
 
 @pytest.mark.parametrize("path", ANALYSIS_PATHS)
@@ -283,49 +302,62 @@ def test_analysis_reads_grouped_counts_not_entities(env, path, query):
     assert client.get(path + query).status_code == 200
     selects = _probe_result_selects(statements)
     assert len(selects) == 1, selects
-    sql = selects[0]
+    sql = selects[0][0]
     for column in (*_TEXT_COLUMNS, "probe_results.error_message", "probe_results.id AS probe_results_id"):
         assert column not in sql, sql
     assert "GROUP BY" in sql, sql
 
 
-@pytest.mark.parametrize("path", ANALYSIS_PATHS)
-@pytest.mark.parametrize("window", ["31d", "3650d", "99999h", "721h", "43201m"])
-def test_analysis_window_over_30_days_is_rejected_before_any_scan(env, path, window):
+@pytest.mark.parametrize("path", STREAMED_PATHS)
+@pytest.mark.parametrize("query", ["", "?window=7d"])
+def test_streamed_endpoints_read_only_metric_columns_in_batches(env, path, query):
     client, statements = env
     statements.clear()
-    resp = client.get(f"{path}?window={window}")
+    assert client.get(path + query).status_code == 200
+    selects = _probe_result_selects(statements)
+    assert len(selects) == 1, selects
+    sql, opts = selects[0]
+    for column in (*_TEXT_COLUMNS, "probe_results.error_message AS", "probe_results.id AS probe_results_id"):
+        assert column not in sql, sql
+    assert opts.get("stream_results") is True and opts.get("yield_per"), opts  # PostgreSQL 서버 측 커서
+
+
+def test_reliability_reads_error_message_only_for_failed_rows(env):
+    client, statements = env
+    statements.clear()
+    assert client.get("/api/reliability/multi-channel?window=7d").status_code == 200
+    (sql, _), = _probe_result_selects(statements)
+    assert "CASE WHEN (probe_results.status != ?) THEN probe_results.error_message END" in sql, sql
+
+
+@pytest.mark.parametrize(("path", "window"), [(p, w) for p, (_, over, _) in WINDOW_CAPS.items() for w in over])
+def test_window_over_the_cap_is_rejected_before_any_scan(env, path, window):
+    client, statements = env
+    statements.clear()
+    resp = client.get(path, params={"window": window})
     assert resp.status_code == 422
-    assert "30d" in resp.json()["detail"]
+    assert f"최대 {WINDOW_CAPS[path][0]}" in resp.json()["detail"]
     assert _probe_result_selects(statements) == []
 
 
-UNREADABLE_WINDOWS = [
-    "xd", "1e3h", "d",
-    pytest.param("99999999999d", id="timedelta-overflow"),
-    pytest.param("9" * 5000 + "h", id="5000-digit-int"),
-]
-
-
-@pytest.mark.parametrize("path", ANALYSIS_PATHS)
+@pytest.mark.parametrize("path", list(WINDOW_CAPS))
 @pytest.mark.parametrize("window", UNREADABLE_WINDOWS)
-def test_analysis_unreadable_window_is_422_not_500(env, path, window):
+def test_unreadable_window_is_422_not_500(env, path, window):
     client, statements = env
     statements.clear()
-    resp = client.get(f"{path}?window={window}")
+    resp = client.get(path, params={"window": window})
     assert resp.status_code == 422
     assert "window" in resp.json()["detail"]
     assert _probe_result_selects(statements) == []
 
 
-@pytest.mark.parametrize("path", ANALYSIS_PATHS)
-@pytest.mark.parametrize("window", ["30d", "720h", "43200m", "30D", " 7d "])
-def test_analysis_window_up_to_30_days_is_accepted(env, path, window):
+@pytest.mark.parametrize(("path", "window"), [(p, w) for p, (_, _, ok) in WINDOW_CAPS.items() for w in ok])
+def test_window_up_to_the_cap_is_accepted(env, path, window):
     client, _ = env
     resp = client.get(path, params={"window": window})
     assert resp.status_code == 200
     assert resp.json()["window"] == window  # 요청 문자열을 그대로 돌려준다
-    assert resp.json()["rows"]
+    assert _items(resp.json())
 
 
 def test_parse_window_keeps_the_no_unit_fallback_and_accepts_any_size_without_a_cap():
