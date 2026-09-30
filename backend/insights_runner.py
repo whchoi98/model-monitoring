@@ -1,13 +1,18 @@
 """인사이트 도출 잡 — EventBridge Scheduler가 30분마다 호출.
 
 흐름:
-  1. 최근 N시간(기본 6h) ProbeResult 로드.
+  1. 최근 N시간(기본 6h) 자동 run의 ProbeResult에서 통계에 쓰는 다섯 열만 나눠 읽는다.
   2. 모델별 stats 계산 (avg/p50/p95/err_rate).
   3. Sonnet 4.6에 요약 프롬프트 + stats를 전달, 마크다운 요약 수신.
   4. Insight 테이블에 INSERT.
 
 ECS Task Definition CMD:
   python -m insights_runner --window 6h
+
+메모리 (2026-09-30 /analysis OOM 후속): run_once와 collect_stats_for_window는 POST /api/insights/regenerate,
+/stream-regenerate가 backend 프로세스 안에서도 부른다. 예전에는 ProbeResult 엔티티(prompt, output_text 포함)를 .all()로
+적재했고, run_once의 ProbeRun 엔티티 조회는 ProbeRun.results(lazy="selectin")로 그 run들의 결과 엔티티를 한 번 더
+끌어왔다. 지금은 run id만, 결과는 _STATS_COLUMNS만 yield_per로 읽는다. API의 창 상한(24h)은 routers/insights.py에 있다.
 """
 
 from __future__ import annotations
@@ -18,13 +23,23 @@ import logging
 import re
 import sys
 from datetime import datetime, timedelta, timezone
-from typing import Any, Dict, List
+from typing import Any, Dict, Iterable, List
 
 from database import SessionLocal
 from models import Insight, ProbeResult, ProbeRun
 from visibility import visible_only
 
 logger = logging.getLogger(__name__)
+
+# compute_stats가 읽는 속성 전부 — 이 밖의 열(prompt, output_text, error_message …)은 읽지 않는다.
+_STATS_COLUMNS = (
+    ProbeResult.model_name,
+    ProbeResult.status,
+    ProbeResult.ttft_ms,
+    ProbeResult.total_latency_ms,
+    ProbeResult.tps,
+)
+_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서)
 
 
 def parse_window(spec: str) -> timedelta:
@@ -37,9 +52,13 @@ def parse_window(spec: str) -> timedelta:
     return timedelta(hours=n) if unit == "h" else timedelta(days=n)
 
 
-def compute_stats(rows: List[ProbeResult]) -> Dict[str, Any]:
-    """모델별 ttft/total_latency/tps 통계 + 에러율."""
-    by_model: Dict[str, List[ProbeResult]] = {}
+def compute_stats(rows: Iterable[Any]) -> Dict[str, Any]:
+    """모델별 ttft/total_latency/tps 통계 + 에러율.
+
+    rows는 한 번만 돈다. 각 행은 model_name, status, ttft_ms, total_latency_ms, tps 속성을 가진다
+    (_stats_query의 열 조회 행 또는 ProbeResult). 모델 순서는 행에서 처음 나온 순서다.
+    """
+    by_model: Dict[str, List[Any]] = {}
     for r in rows:
         by_model.setdefault(r.model_name, []).append(r)
 
@@ -148,15 +167,16 @@ def _build_prompt(window_label: str, stats: Dict[str, Any], lang: str) -> tuple[
     return SUMMARY_SYSTEM_KO, user_text
 
 
+def _stats_query(db):
+    """숨김 라벨을 뺀 ProbeResult의 _STATS_COLUMNS 조회 — 엔티티를 만들지 않는다."""
+    return visible_only(db.query(*_STATS_COLUMNS), ProbeResult.model_name)
+
+
 def collect_stats_for_window(db, window_spec: str) -> Dict[str, Any]:
     """주어진 window의 stats만 계산 (DB session 주입식, SSE에서 사용)."""
     delta = parse_window(window_spec)
     since = datetime.now(timezone.utc) - delta
-    rows = (
-        visible_only(db.query(ProbeResult), ProbeResult.model_name)
-        .filter(ProbeResult.timestamp >= since)
-        .all()
-    )
+    rows = _stats_query(db).filter(ProbeResult.timestamp >= since).yield_per(_YIELD_PER)
     return compute_stats(rows)
 
 
@@ -173,27 +193,26 @@ def run_once(window_spec: str = "6h") -> int:
 
     db = SessionLocal()
     try:
-        runs = (
-            db.query(ProbeRun)
-            .filter(
+        # id만 읽는다 — ProbeRun 엔티티는 results(lazy="selectin")로 그 run들의 ProbeResult 엔티티를 함께 끌어온다.
+        run_ids = [
+            run_id
+            for (run_id,) in db.query(ProbeRun.id).filter(
                 ProbeRun.is_auto == 1,
                 ProbeRun.status == "completed",
                 ProbeRun.created_at >= cutoff,
             )
-            .all()
-        )
-        if not runs:
+        ]
+        if not run_ids:
             logger.info("최근 %s 동안 auto run 없음 - insight skip", window_spec)
             return 0
 
-        run_ids = [r.id for r in runs]
-        rows = (visible_only(db.query(ProbeResult), ProbeResult.model_name)
-                .filter(ProbeResult.run_id.in_(run_ids)).all())
-        if not rows:
+        stats = compute_stats(
+            _stats_query(db).filter(ProbeResult.run_id.in_(run_ids)).yield_per(_YIELD_PER)
+        )
+        if not stats:  # 결과 행이 없거나 모두 숨김 라벨
             logger.info("ProbeResult 없음 - insight skip")
             return 0
 
-        stats = compute_stats(rows)
         # 한국어와 영어 두 요약을 한 번에 생성 (UI 언어 토글 즉시 반영용).
         summary_ko = _summarize(window_spec, stats, "ko")
         try:
