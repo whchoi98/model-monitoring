@@ -74,9 +74,10 @@ export const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
   // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 금색 계열(청록은 Haiku 4.5 Global과 겹친다).
+  // 라이트 테마가 밝은 US를 어둡게 보정해 밝기 순서는 테마마다 다르지만, 두 테마 모두 세 채널 쌍이 CIEDE2000 16 이상 떨어진다.
   "OpenAI GPT 6.1 Sol (Global)": "#aa8f09",
-  "OpenAI GPT 6.1 Sol (US)": "#d9b40f",
-  "OpenAI GPT 6.1 Sol (us-east-1)": "#8f7400",
+  "OpenAI GPT 6.1 Sol (US)": "#d7be7d",
+  "OpenAI GPT 6.1 Sol (us-east-1)": "#4b3c00",
   // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 3채널.
   "OpenAI GPT 6 Astra (Global)": "#099268",
   "OpenAI GPT 6 Astra (US)": "#2e8b57",

@@ -176,11 +176,20 @@ describe("trend chart line encoding", () => {
     }
   });
 
-  test("GPT 6.1 Sol channels read as one family (one hue, three lightness steps)", () => {
-    const hues = ["(Global)", "(US)", "(us-east-1)"].map((channel) => {
-      const [, a, b] = hexToLab(MODEL_COLORS[`OpenAI GPT 6.1 Sol ${channel}`]);
+  test("GPT 6.1 Sol channels read as one family (one hue, three distinct steps in both themes)", () => {
+    const names = ["(Global)", "(US)", "(us-east-1)"].map((channel) => `OpenAI GPT 6.1 Sol ${channel}`);
+    const hues = names.map((name) => {
+      const [, a, b] = hexToLab(MODEL_COLORS[name]);
       return Math.atan2(b, a) * 180 / Math.PI;
     });
     expect(Math.max(...hues) - Math.min(...hues)).toBeLessThan(10);
+    // The steps are measured after getColor, because the light theme darkens bright bases (the lightness order may differ by theme).
+    for (const theme of THEMES) {
+      for (const [i, first] of names.entries()) {
+        for (const second of names.slice(i + 1)) {
+          expect(distance(first, second, theme), `${first} vs ${second} (${theme})`).toBeGreaterThanOrEqual(12);
+        }
+      }
+    }
   });
 });
