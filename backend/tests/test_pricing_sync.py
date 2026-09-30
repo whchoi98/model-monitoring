@@ -843,6 +843,26 @@ def test_the_openai_doc_long_context_price_of_gpt_61_sol_is_kept(Session):
             row.long_cache_write_per_mtok) == (4.0, 15.0, 0.2, 5.0)
 
 
+def test_an_implausible_long_context_doc_price_is_never_stored(Session, caplog):
+    """The doc path applies the same sanity rule as the offers path (settle_doc): a long-context output below the
+    short-context output is dropped with a warning, never stored and never a run error."""
+    ol = "openai-list:gpt-6.1-sol"
+    _seed(Session, values={ol: (2.0, 10.0, "openai-pricing")}, extras={})
+    row_ok = "| gpt-6.1-sol | $2.00 | $0.10 | $2.50 | $10.00 | $4.00 | $0.20 | $5.00 | $15.00 |"
+    row_bad = "| gpt-6.1-sol | $2.00 | $0.10 | $2.50 | $10.00 | $4.00 | $0.20 | $5.00 | $2.00 |"
+    text = (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+    assert text.count(row_ok) == 1
+    caplog.set_level(logging.INFO, logger="pricing_sync")
+    run = _sync(Session, active=_active(ol), openai_md=text.replace(row_ok, row_bad))
+    assert run.summary["channels"][ol] == "enriched"            # the short-context cache fields still fill in
+    (row,) = _rows(Session, ol)
+    assert (row.long_input_per_mtok, row.long_output_per_mtok, row.long_cache_read_per_mtok,
+            row.long_cache_write_per_mtok) == (None,) * 4
+    assert (row.cache_read_per_mtok, row.cache_write_per_mtok) == (0.1, 2.5)
+    assert any("openai_doc gpt-6.1-sol: long-context price below the short-context price" in m for m in caplog.messages)
+    assert not any("gpt-6.1-sol" in e for e in run.summary["errors"])
+
+
 def test_seoul_in_region_shares_one_offer_call_with_the_cris_channels(Session):
     opus = ("global.anthropic.claude-opus-5", "us.anthropic.claude-opus-5", "bedrock:ap-northeast-2:anthropic.claude-opus-5")
     src = "offer:offer-f3u6lgbrem3zs"
