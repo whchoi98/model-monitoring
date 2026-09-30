@@ -156,6 +156,17 @@ test("reliability keeps the latest period when an older request finishes last", 
   }
 });
 
+test("reliability orders families like the dashboard, not in the backend's alphabetical order", async ({ page }) => {
+  // Alphabetically "Claude Sonnet 5" comes first; the dashboard's FAMILY_ORDER puts the newer 5.5 first.
+  const [base] = reliability().families;
+  await page.route("**/api/reliability/multi-channel*", (route) => route.fulfill({
+    json: { ...reliability(), families: ["Claude Sonnet 5", "Claude Sonnet 5.5"].map((family) => ({ ...base, family })) },
+  }));
+  await page.goto("/reliability");
+  const families = page.getByRole("heading", { level: 2 }).filter({ hasText: /^Claude Sonnet 5(\.5)?$/ });
+  await expect(families).toHaveText(["Claude Sonnet 5.5", "Claude Sonnet 5"]);
+});
+
 test("efficiency keys results by both period and workload", async ({ page }) => {
   const old = await delayedResponse(page, "**/api/efficiency/score?window=24h&category=reasoning", efficiency("24h", "reasoning", "Older reasoning model"));
   await page.route("**/api/efficiency/score?window=7d&category=code-gen", (route) =>
