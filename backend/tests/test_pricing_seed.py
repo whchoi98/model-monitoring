@@ -14,7 +14,9 @@ from sqlalchemy.pool import StaticPool
 
 import models
 from pricing_parsers import parse_openai_pricing_md
-from pricing_seed import CP_SEED, OPENAI_LIST_SEED, SEED, SEED_SOURCE_DATE, ensure_seed, seed_extra, seed_rows
+from pricing_seed import (
+    CP_SEED, OPENAI_LIST_SEED, SEED, SEED_SOURCE_DATE, SEED_SOURCE_DATES, ensure_seed, seed_extra, seed_rows,
+)
 from pricing_sources import (
     ANTHROPIC_SOURCE_ID, EPOCH, NOVA_USAGETYPES, OPENAI_SOURCE_ID, PriceIdentity, active_channels, price_identity,
     pricelist_source_id, tier_of,
@@ -268,3 +270,11 @@ def test_v2_32_new_channels_seed_values():
     for mid, want in (("openai:global:global.openai.gpt-6.1-sol", (2.0, 10.0)), ("openai:us:us.openai.gpt-6.1-sol", (2.2, 11.0)),
                       ("openai:us-east-1:openai.gpt-6.1-sol", (2.2, 11.0))):
         assert rows[mid] == (*want, "offer:offer-wbhj4kycntgkk"), mid
+
+
+def test_per_source_seed_dates_name_seeded_sources_checked_after_the_default():
+    """SEED_SOURCE_DATES holds only the v2.32.0 offers checked on 2026-09-30; every key is a source a seed row cites."""
+    assert {sid: d.isoformat() for sid, d in SEED_SOURCE_DATES.items()} == {
+        "offer:offer-5fu2rhus3byrs": "2026-09-30", "offer:offer-wbhj4kycntgkk": "2026-09-30"}
+    assert set(SEED_SOURCE_DATES) <= {src for *_, src in seed_rows(ACTIVE).values()}
+    assert all(d > SEED_SOURCE_DATE for d in SEED_SOURCE_DATES.values())

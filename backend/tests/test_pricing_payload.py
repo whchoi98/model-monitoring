@@ -10,7 +10,7 @@ cited sources (v2.31.1): the invariant test at the bottom builds the payload on 
 channels (tests/pricing_catalog.py) and checks that every reference is cited.
 """
 
-from datetime import timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from sqlalchemy import create_engine
@@ -296,3 +296,45 @@ def test_production_payload_shows_the_v2_32_channels():
     assert [g61[t]["long"] for t in ("global", "us")] + [g61["in_region"][0]["long"]] == [None] * 3
     assert g61["openai_list"]["long"] == {"input": 4, "output": 15, "cache_read": 0.2, "cache_write": 5}
     assert payload["models"]["bedrock:ap-northeast-2:anthropic.claude-opus-5"]["input"] == 5.5
+
+
+# v2.32.0 channels a v2.31.2 database does not have yet: they cite the two new offers, the Seoul in-region rows cite
+# the Opus 5 and Sonnet 5 offers, CP Sonnet 5.5 cites the Anthropic doc and openai-list:gpt-6.1-sol the OpenAI doc.
+V2_32_NEW_CHANNELS = {
+    "global.anthropic.claude-sonnet-5-5", "anthropic:claude-sonnet-5-5",
+    "bedrock:ap-northeast-2:anthropic.claude-opus-5", "bedrock:ap-northeast-2:anthropic.claude-sonnet-5",
+}
+
+
+def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_check():
+    """v2.31.2 -> v2.32.0 before the first PricingSync: the two new offers are cited by seed rows only, so their
+    references show their own seed check date (pricing_seed.SEED_SOURCE_DATES, 2026-09-30), not the 2026-09-27
+    default that predates them. Every other source keeps the date its last sync observed it."""
+    engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
+    models.Base.metadata.create_all(engine)
+    Session = sessionmaker(bind=engine)
+    active = active_channels(ACTIVE_MODELS, [])
+    old = {m: i for m, i in active.items() if m not in V2_32_NEW_CHANNELS and i.family_key != "gpt-6.1-sol"}
+    assert len(old) == 63
+    try:
+        assert pricing_seed.ensure_seed(engine, old) == 63
+        synced = datetime(2026, 9, 29, 3, 0, tzinfo=timezone.utc)  # the last v2.31.2 sync
+        with Session() as s:
+            s.add(models.PriceSyncRun(started_at=synced, finished_at=synced + timedelta(seconds=31), status="completed"))
+            for row in s.query(models.PriceHistory):
+                row.observed_at = synced
+            s.commit()
+        assert pricing_seed.ensure_seed(engine, active) == 8  # the upgrade: backend lifespan seeds the new rows
+        with Session() as s:
+            payload = build_pricing_payload(s, active, now=datetime(2026, 9, 30, 13, 0, tzinfo=timezone.utc))
+    finally:
+        engine.dispose()
+
+    _assert_every_reference_is_cited(payload)
+    as_of = {r["id"]: r["as_of"] for r in payload["references"]}
+    assert len(as_of) == 23
+    assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
+    assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol
+    assert set(as_of.values()) == {"2026-09-29"}  # incl. the offers and docs the other new rows cite
+    s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
+    assert (s55["global"]["verification"], s55["global"]["observed_at"]) == ("seed_only", None)
