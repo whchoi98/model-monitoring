@@ -575,6 +575,8 @@ def _run_reserved_cycle(run_id: int, preset: dict) -> int:
     try:
         pending: dict[Future, _ProbeSlot] = {}
         for model_id, model_name, model_preset in plan:
+            # in-region 키(bedrock:<region>:<id>)는 _get_region_for_model이 키의 리전을 돌려준다(v2.32.0). modelId 변환은
+            # _probe_single_model이 한다 — import를 _bedrock_target으로 바꾸지 말 것(테스트가 이 이름을 monkeypatch).
             client = _get_bedrock_client(_get_region_for_model(model_id))
             slot = _ProbeSlot(model_id, model_name, model_preset)
             slots.append(slot)

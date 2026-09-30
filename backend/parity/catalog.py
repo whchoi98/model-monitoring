@@ -6,6 +6,7 @@ chat_completions / responses (OpenAI 호환 bearer — Mantle·1P 공용).
 
 적용 규칙:
 - Bedrock Claude → converse + invoke_model + messages_mantle. Nova → converse만.
+- Bedrock in-region 온디맨드(bedrock:<region>:<FM id>, v2.32.0) Claude → converse + invoke_model(Mantle 제외, 결정 D1).
 - reasoning 피처는 확장 사고 지원 모델에만 적용 (그 외 skipped).
 """
 
@@ -197,6 +198,10 @@ def surfaces_for(model_id: str) -> list[str]:
         return ["messages"]
     if model_id.startswith("openai:"):
         return ["chat_completions", "responses"]
+    # Bedrock in-region 온디맨드(bedrock:<region>:<FM id>, v2.32.0) — Bedrock runtime surface만.
+    # messages_mantle은 us-east-1 Mantle에 같은 FM id를 보내 Global 행과 똑같은 호출이 되므로 제외(서울 측정 아님).
+    if model_id.startswith("bedrock:"):
+        return ["converse", "invoke_model"] if "anthropic" in model_id else ["converse"]
     # Bedrock inference profile
     if "anthropic" in model_id:
         return ["converse", "invoke_model", "messages_mantle"]

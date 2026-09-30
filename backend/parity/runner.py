@@ -55,16 +55,18 @@ def _execute(model_id: str, surface: str, feature: str) -> ProbeOutcome:
     from prober import (  # 지연 import — 클라이언트 헬퍼 재사용
         _anthropic_actual_id,
         _get_anthropic_client,
+        _bedrock_target,
         _get_bedrock_client,
-        _get_region_for_model,
         _openai_base_url,
         _openai_parts,
     )
 
     if surface in ("converse", "invoke_model"):
-        client = _get_bedrock_client(_get_region_for_model(model_id))
+        # in-region 키(bedrock:<region>:<id>)는 리전과 실제 Bedrock id로 푼다(v2.32.0). CRIS 키는 그대로.
+        region, bedrock_model_id = _bedrock_target(model_id)
+        client = _get_bedrock_client(region)
         fn = probe_converse if surface == "converse" else probe_invoke_model
-        return fn(client, model_id, feature)
+        return fn(client, bedrock_model_id, feature)
     if surface == "messages":
         return probe_messages(_get_anthropic_client(), _anthropic_actual_id(model_id), feature)
     if surface == "messages_mantle":

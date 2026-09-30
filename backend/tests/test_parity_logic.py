@@ -26,6 +26,16 @@ def test_surfaces_for_each_provider_path():
     assert surfaces_for("openai:1p:gpt-5.4") == ["chat_completions", "responses"]
     # US CRIS pseudo-region도 동일 surface — 패리티 런이 openai:us:* 키에서 깨지지 않아야 함 (v2.25.0)
     assert surfaces_for("openai:us:us.openai.gpt-6-astra") == ["chat_completions", "responses"]
+    # Bedrock in-region(v2.32.0) — Bedrock runtime surface만, Mantle은 Global 행과 중복이라 제외(결정 D1)
+    assert surfaces_for("bedrock:ap-northeast-2:anthropic.claude-opus-5") == ["converse", "invoke_model"]
+    assert surfaces_for("global.anthropic.claude-sonnet-5-5") == ["converse", "invoke_model", "messages_mantle"]
+    assert surfaces_for("openai:global:global.openai.gpt-6.1-sol") == ["chat_completions", "responses"]
+
+
+def test_gpt61_sol_stays_out_of_reasoning_cells():
+    # gpt-6.1-sol은 "gpt-5" 마커에 걸리지 않는다 — reasoning_tokens 0(2026-09-30)이라 제외 유지.
+    assert is_applicable("reasoning", "responses", "openai:global:global.openai.gpt-6.1-sol") is False
+    assert is_applicable("reasoning_effort", "responses", "openai:us:us.openai.gpt-6.1-sol") is False
 
 
 def test_mantle_fm_id_strips_profile_prefix():
