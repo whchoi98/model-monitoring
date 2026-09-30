@@ -1158,7 +1158,10 @@ def test_run_cycle_lane_stopped_after_all_runs_is_not_skipped(bench_env, engine,
     skipped = [labels[k] for k in MANTLE_ORDER[2:]]
     if stop == "wait_cap":
         assert res["rows"] == 9 * 3 + 3 + 3 and res["skipped_channels"] == skipped
-        assert any(r.getMessage().startswith("GPT bench lane mantle did not finish within") for r in caplog.records)
+        # 로그의 버린 채널 수는 skip으로 보고한 수와 같다 — 다 측정한 진행 중 채널은 세지 않는다.
+        (abandon,) = [r.getMessage() for r in caplog.records
+                      if r.getMessage().startswith("GPT bench lane mantle did not finish within")]
+        assert abandon.endswith(f"- abandoning {len(skipped)} channel(s)")
     assert _stored_runs(factory) == {
         **{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1, 2, 3], MANTLE_ORDER[1]: [1, 2, 3]}
     assert seen_db_threads == {threading.current_thread().name}

@@ -352,14 +352,18 @@ def run_cycle() -> dict:
                 errors += 1
         db.commit()  # 채널 단위 커밋 — 부분 실패에도 완료 채널은 보존
 
+    def settle_measured(lane: str) -> None:
+        """진행 중 채널이 run을 RUNS_PER_CHANNEL개 모두 끝냈으면 "done"만 오지 않은 것이다 — "done"을 받은 것과 같이
+        처리한다(저장, skip 아님)."""
+        if lane in inflight and len(inflight[lane][1]) >= RUNS_PER_CHANNEL:
+            handle(_LaneEvent(lane=lane, kind="done", index=inflight[lane][0]))
+
     def stop_lane(lane: str) -> None:
         """멈춘 갈래의 남은 채널 보고 — 진행 중 채널은 끝난 run을 저장하고 "라벨 (run N+)", 시작 못 한 채널은 라벨.
 
-        진행 중 채널이 run을 RUNS_PER_CHANNEL개 모두 끝냈으면 "done"만 오지 않은 것이다 — "done"을 받은 것과 같이
-        처리한다(저장, skip 아님).
+        다 측정한 진행 중 채널은 settle_measured가 먼저 완료로 처리한다.
         """
-        if lane in inflight and len(inflight[lane][1]) >= RUNS_PER_CHANNEL:
-            handle(_LaneEvent(lane=lane, kind="done", index=inflight[lane][0]))
+        settle_measured(lane)
         left = pending.pop(lane, set())
         if lane in inflight:
             index, runs = inflight.pop(lane)
@@ -404,6 +408,7 @@ def run_cycle() -> dict:
                 if remaining > 0:
                     continue
                 for lane in list(pending):
+                    settle_measured(lane)  # 로그의 채널 수가 skip으로 보고하는 수와 같도록 먼저 정리한다
                     logger.error("GPT bench lane %s did not finish within %.0fs - abandoning %d channel(s)",
                                  lane, wait_cap, len(pending[lane]))
                     stop_lane(lane)

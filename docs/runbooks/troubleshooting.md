@@ -380,7 +380,7 @@ aws logs tail /ecs/gptbench --since 2h --region $REGION \
 - `cycle deadline exceeded - skipping <라벨>`과 `skipped=[…]`만 있으면 데드라인 컷이다. `lane done`의 `elapsed`가 780초 가까운
   갈래가 원인이다.
 - `GPT bench lane <lane> did not finish within 885s - abandoning N channel(s)`는 watchdog(`GPT_BENCH_CALL_TIMEOUT`)도 풀지 못한
-  정지다(N은 진행 중 채널을 포함한 남은 채널 수). 진행 중이던 채널은 끝난 회차까지 저장되고 `skipped=`에 `라벨 (run N+)`로,
+  정지다(N은 skip으로 보고되는 채널 수이고, 측정이 덜 끝난 진행 중 채널을 포함한다. 다 측정한 진행 중 채널은 완료로 저장돼 세지 않는다). 진행 중이던 채널은 끝난 회차까지 저장되고 `skipped=`에 `라벨 (run N+)`로,
   시작하지 못한 채널은 `라벨`로 찍힌다. 워밍업에서 멈췄으면 `(run 1+)`다. 스레드는 daemon이라 태스크 종료를 막지 않는다.
 - `GPT bench lane <lane> stopped: <예외>`는 갈래가 예외로 멈춘 것이다. 그 갈래의 진행 중 채널은 끝난 회차까지 저장되고 `라벨 (run N+)`로
   보고된다. 다른 갈래는 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를 다시 던지므로 태스크가 traceback과 함께 비정상 종료한다.
