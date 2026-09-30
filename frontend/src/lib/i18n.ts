@@ -343,8 +343,8 @@ export const ko: Translations = {
   channels: {
     bedrock: {
       name: "Bedrock",
-      desc: "AWS Bedrock의 cross-region inference profile을 통해 호출합니다. IAM 권한으로 인증되며 AWS 청구서에 통합됩니다.",
-      endpoint: "bedrock-runtime.{us-east-1 | ap-northeast-2}.amazonaws.com (us.* / global.* inference profile)",
+      desc: "AWS Bedrock의 cross-region inference profile(global.*, us.*) 또는 서울 리전 In-Region 온디맨드(기본 모델 ID, 예: anthropic.claude-opus-5)로 호출합니다. IAM 권한으로 인증되며 AWS 청구서에 통합됩니다.",
+      endpoint: "bedrock-runtime.{us-east-1 | ap-northeast-2}.amazonaws.com (us.* / global.* inference profile, ap-northeast-2 In-Region anthropic.*)",
     },
     anthropic: {
       name: "Anthropic",
@@ -548,8 +548,8 @@ export const en: Translations = {
   channels: {
     bedrock: {
       name: "Bedrock",
-      desc: "Invoked via AWS Bedrock cross-region inference profiles. Authenticated by IAM; usage rolls up to your AWS bill.",
-      endpoint: "bedrock-runtime.{us-east-1 | ap-northeast-2}.amazonaws.com (us.* / global.* inference profile)",
+      desc: "Invoked via AWS Bedrock cross-region inference profiles (global.*, us.*) or Seoul In-Region on-demand (base model ID, e.g. anthropic.claude-opus-5). Authenticated by IAM; usage rolls up to your AWS bill.",
+      endpoint: "bedrock-runtime.{us-east-1 | ap-northeast-2}.amazonaws.com (us.* / global.* inference profile, ap-northeast-2 In-Region anthropic.*)",
     },
     anthropic: {
       name: "Anthropic",

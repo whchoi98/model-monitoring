@@ -78,6 +78,7 @@ export class AppServicesStack extends cdk.Stack {
         ],
         // global.* inference profile은 cross-region 라우팅이라 region-less foundation-model
         // ARN (arn:aws:bedrock:::foundation-model/*) 권한도 필요. 모든 region scope 허용.
+        // 서울 in-region 온디맨드 FM(ap-northeast-2::foundation-model/anthropic.claude-{opus,sonnet}-5, v2.32.0)도 이 패턴이 허용 — 리전으로 좁히지 말 것 (ADR-031).
         resources: [
           `arn:aws:bedrock:*::foundation-model/*`,
           `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
@@ -181,7 +182,7 @@ export class AppServicesStack extends cdk.Stack {
       // US CRIS(us.openai.*)도 bedrock-mantle 호스트 미지원 — us-east-1 bedrock-runtime
       // OpenAI-compat 엔드포인트로만 호출 가능. GPT-6 Astra US 채널용 (v2.25.0, ADR-027).
       OPENAI_US_BASE_URL: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
-      // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 모델(5종, Opus 5.5 포함)이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
+      // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 모델 6종 중 Mantle 대상(Fable 5, Opus 5.5, Opus 5, Sonnet 5 — v2.32.0)이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
       // MCP 커넥터 프로브용 공개 read-only MCP 서버 (서버 장애는 inconclusive로 격리).
       MANTLE_ANTHROPIC_REGION: "us-east-1",
       FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
@@ -200,6 +201,9 @@ export class AppServicesStack extends cdk.Stack {
       // Global/US 프로파일 id는 Astra와 같이 prober가 접두로 파생 (ADR-028).
       BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID: "openai.gpt-6-sol",
       BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID: "openai.gpt-6-luna",
+      // GPT-6.1 Sol (v2.32.0) — Mantle 인리전은 us-east-1만(us-east-2/us-west-2 404, 2026-09-30 — 제외).
+      // Global/US 프로파일 id는 prober가 파생 (ADR-031).
+      BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID: "openai.gpt-6.1-sol",
       // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.
       ...(ENABLE_OPENAI_1P ? {
         OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",

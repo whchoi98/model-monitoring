@@ -26,6 +26,7 @@ The following table shows pricing for all Claude models:
 | Claude Opus 4.5                                                                                                                       | $5 / MTok             | $6.25 / MTok    | $10 / MTok      | $0.50 / MTok             | $25 / MTok             |
 | Claude Opus 4.1 ([retired, except on Bedrock and Google Cloud](https://platform.claude.com/docs/en/about-claude/model-deprecations))  | $15 / MTok            | $18.75 / MTok   | $30 / MTok      | $1.50 / MTok             | $75 / MTok             |
 | Claude Opus 4 ([retired, except on Google Cloud](https://platform.claude.com/docs/en/about-claude/model-deprecations))                | $15 / MTok            | $18.75 / MTok   | $30 / MTok      | $1.50 / MTok             | $75 / MTok             |
+| Claude Sonnet 5.5                                                                                                                     | $2 / MTok             | $2.50 / MTok    | $4 / MTok       | $0.20 / MTok             | $10 / MTok             |
 | Claude Sonnet 5                                                                                                                       | $2 / MTok<sup>3</sup> | $2.50 / MTok    | $4 / MTok       | $0.20 / MTok             | $10 / MTok<sup>3</sup> |
 | Claude Sonnet 4.6                                                                                                                     | $3 / MTok             | $3.75 / MTok    | $6 / MTok       | $0.30 / MTok             | $15 / MTok             |
 | Claude Sonnet 4.5                                                                                                                     | $3 / MTok             | $3.75 / MTok    | $6 / MTok       | $0.30 / MTok             | $15 / MTok             |
@@ -68,6 +69,7 @@ The Batch API allows asynchronous processing of large volumes of requests with a
 | Claude Opus 4.5                                                                                                                       | $2.50 / MTok | $12.50 / MTok |
 | Claude Opus 4.1 ([retired, except on Bedrock and Google Cloud](https://platform.claude.com/docs/en/about-claude/model-deprecations))  | $7.50 / MTok | $37.50 / MTok |
 | Claude Opus 4 ([retired, except on Google Cloud](https://platform.claude.com/docs/en/about-claude/model-deprecations))                | $7.50 / MTok | $37.50 / MTok |
+| Claude Sonnet 5.5                                                                                                                     | $1 / MTok    | $5 / MTok     |
 | Claude Sonnet 5                                                                                                                       | $1 / MTok    | $5 / MTok     |
 | Claude Sonnet 4.6                                                                                                                     | $1.50 / MTok | $7.50 / MTok  |
 | Claude Sonnet 4.5                                                                                                                     | $1.50 / MTok | $7.50 / MTok  |

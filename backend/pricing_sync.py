@@ -11,6 +11,9 @@ a value change follows the 50 % gate per field.
 
 A parser exception of any type only skips that source's (or FM id's) channels as skipped:parse_failed; it
 never fails the run. Observed prices are quantized to 6 decimals before they are compared or stored.
+
+A long-context input or output below its short-context price is a source error (v2.32.0): the four long-context
+fields of that observation are dropped with a WARNING log line (not a run error), so the stored values stay.
 """
 
 import logging
@@ -219,6 +222,22 @@ def _gpt_long_only(price: UnitPrice, ident: PriceIdentity) -> UnitPrice:
     return replace(price, **dict.fromkeys(_LONG_FIELDS))
 
 
+def _implausible_long(price: UnitPrice) -> bool:
+    """A long-context input or output below its short-context price is a source data error, not a price (2026-09-30
+    GPT-6.1 Sol agreement offer: long output 2.2 / 2 against output 11 / 10; the OpenAI pricing doc says 15)."""
+    return ((price.long_input is not None and price.long_input < price.input)
+            or (price.long_output is not None and price.long_output < price.output))
+
+
+def _plausible_long(price: UnitPrice, where: str) -> UnitPrice:
+    """`price` without its four long_* fields when they are implausible (a warning log line names `where`), else as is.
+    The fields become None, which the compare ignores: a stored long value stays, a missing one stays missing."""
+    if not _implausible_long(price):
+        return price
+    logger.warning("pricing sync: %s: long-context price below the short-context price, long prices dropped", where)
+    return replace(price, **dict.fromkeys(_LONG_FIELDS))
+
+
 def _parse_message(exc: Exception) -> str:
     """PriceParseError text as-is; any other parser exception (a shape the parser did not expect) with its type."""
     return str(exc) if isinstance(exc, PriceParseError) else _short(exc)
@@ -335,7 +354,7 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
                 why = "not_found"
             elif price is not None:
                 try:
-                    price = _quantized(price)
+                    price = _quantized(_plausible_long(price, f"{source} {doc_name}"))
                 except Exception as exc:  # noqa: BLE001 — a bad value only skips this model's channels
                     error(f"{source} {doc_name}: {_parse_message(exc)}")
                     price, why = None, "parse_failed"
@@ -396,7 +415,8 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
                 offer_id, rate_card = single_public_offer(response)
                 for model_id, ident in members:
                     price = select_offer_price(rate_card, ident.channel)
-                    prices[model_id] = None if price is None else _quantized(_gpt_long_only(price, ident))
+                    prices[model_id] = None if price is None else _quantized(
+                        _plausible_long(_gpt_long_only(price, ident), f"offers {fm_id} {ident.channel}"))
             except Exception as exc:  # noqa: BLE001 — any parser error only skips this FM's channels
                 offers_list = response.get("offers") if isinstance(response, dict) else None
                 reason = "offer_count" if isinstance(offers_list, list) and len(offers_list) != 1 else "parse_failed"

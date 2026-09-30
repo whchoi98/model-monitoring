@@ -249,27 +249,32 @@ curl -i "https://$CF_DOMAIN/api/health"
 # 첫 자동 프로빙 결과 (5분 후).
 curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 
-# OpenAI (v2.27.0 기준) — 25개 채널 토큰 수 확인 (Mantle 인리전 16 + Global CRIS 6 + US CRIS 3).
+# OpenAI (v2.32.0 기준) — 28개 채널 토큰 수 확인 (Mantle 인리전 17 + Global CRIS 7 + US CRIS 4).
 # Bedrock Mantle 엔드포인트가 stream_options.include_usage를 무시하면
 # input_tokens/output_tokens 가 0 으로 silent drop → TPS·비용도 0.
 # 1P direct 채널(openai:1p:*)은 v2.19.1부터 휴면(env 미주입 + visibility "(1P)" 필터) — 0행이 정상.
-# Global CRIS 6채널(openai:global:global.openai.gpt-5.6-*, gpt-6-*)은 첫 success 확인 필수:
+# Global CRIS 7채널(openai:global:global.openai.gpt-5.6-*, gpt-6-*, gpt-6.1-sol)은 첫 success 확인 필수:
 #   bedrock-runtime.ap-northeast-2 호스트는 BedrockRuntime interface VPC endpoint 경유라
 #   로컬 라이브 검증과 Fargate 내부의 네트워크 경로가 다름 (ADR-025).
-# US CRIS 3채널(openai:us:us.openai.gpt-6-*)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
-#   미주입이면 prober가 조용히 skip해 25행이 22행이 된다 (ADR-027).
+# US CRIS 4채널(openai:us:us.openai.gpt-6-*, gpt-6.1-sol)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
+#   미주입이면 prober가 조용히 skip해 28행이 24행이 된다 (ADR-027).
 # GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원(2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님),
 #   GPT-6 Sol/Luna Mantle us-east-2/us-west-2도 현재 미지원(404, 2026-09-23 사용자 결정으로 제외) — 그 채널은 없는 것이 정상 (ADR-027, ADR-028).
 #   Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가 빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지,
-#   CDK 양 스택 배포 (v2.27.0).
+#   CDK 양 스택 배포 (v2.27.0). GPT-6.1 Sol env(BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID)도 같다 — 빠지면 3채널이 조용히 사라진다 (v2.32.0).
+#   GPT-6.1 Sol Mantle us-east-2/us-west-2는 404라 제외 — 그 채널은 없는 것이 정상 (ADR-031).
 # v2.28.0부터 GPT-6 Sol/Luna 6채널도 비용이 표시된다(agreement offer rate card 단가 — Sol $2.20/$11, Global $2/$10,
 #   Luna $0.11/$0.55, Global $0.10/$0.50). /cost에서 이 6채널이 "-"면 이미지가 v2.28.0이 아니다(pricing 키 누락).
-# 첫 프로브 cycle 후 아래 명령으로 25행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
+# 첫 프로브 cycle 후 아래 명령으로 28행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
-# 기댓값: 25개 행 (Mantle 16 + Global 6 + US 3), status "success", input_tokens > 0, output_tokens > 0.
-# CP(anthropic:*)는 9행 — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
-#   "Anthropic Claude Opus 5.5 (US)"인지 확인 (v2.27.0 점 버전 오등록 수정, ADR-028).
+# 기댓값: 28개 행 (Mantle 17 + Global 7 + US 4), status "success", input_tokens > 0, output_tokens > 0.
+# CP(anthropic:*)는 10행 — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
+#   "Anthropic Claude Opus 5.5 (US)", anthropic:claude-sonnet-5-5가 "Anthropic Claude Sonnet 5.5 (US)",
+#   anthropic:claude-sonnet-5가 "Anthropic Claude Sonnet 5 (US)"인지 확인 (v2.27.0 점 버전 오등록 수정 ADR-028, v2.32.0 ADR-031).
+# Bedrock 서울 in-region(bedrock:*)은 2행 — 라벨 "(ap-northeast-2)", status "success" (v2.32.0, ADR-031).
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
+  | jq '[.[] | select(.model_id|startswith("bedrock:")) | {model_id, model_name, status, input_tokens, output_tokens}]'
 ```
 
 - v2.23.0: `aws ecs run-task`로 FeaturesVerify 1회 실행 후 `/ecs/features` 로그에 `bedrock_messages` AccessDenied 0건 +
@@ -332,7 +337,7 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.ca
 ### 5-2. v2.29.0 배포 경로와 확인 (CP 10분 주기, FeaturesVerify 고정 cron)
 
 > v2.29.1부터 CP 기본 주기는 다시 매 사이클이다(§5-3). 아래 CP 확인(2~4번과 대시보드, 카테고리 항목, 사용량 상한 항목의
-> 시간당 54개)은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
+> 시간당 54개 — v2.32.0부터 CP 10채널이라 60개, 로그는 "10 due")은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
 > 그대로 유효하다.
 
 **배포 경로**: CDK 변경이 있다(FeaturesVerify 스케줄 `rate(24 hours)` → `cron(30 17 * * ? *)` Etc/UTC, AutoProber task def
@@ -353,11 +358,12 @@ FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedu
 aws ecs describe-task-definition --task-definition "$FAM" --region $REGION \
   --query 'taskDefinition.containerDefinitions[0].environment[?name==`ANTHROPIC_CP_PROBE_INTERVAL_S`]'
 
-# 3. CP 채널이 두 사이클에 한 번만 프로빙되는지 — 사이클마다 한 줄, "9 due"와 "0 due … 9 not due"가 번갈아 나온다
+# 3. CP 채널이 두 사이클에 한 번만 프로빙되는지 — 사이클마다 한 줄, "10 due"와 "0 due … 10 not due"가 번갈아 나온다
+#    (v2.32.0부터 CP 10채널, v2.29.0 당시는 9)
 aws logs tail /ecs/autoprober --since 30m --region $REGION | grep "Claude Platform on AWS 600s cadence"
-# 예: … 600s cadence - 9 due ['code-gen'], 0 not due   /   … 600s cadence - 0 due [], 9 not due
+# 예: … 600s cadence - 10 due ['code-gen'], 0 not due   /   … 600s cadence - 0 due [], 10 not due
 
-# 4. CP를 건너뛴 사이클에도 /latest에 CP 9행이 남는다(직전 run의 행, run_id가 다름)
+# 4. CP를 건너뛴 사이클에도 /latest에 CP 10행이 남는다(직전 run의 행, run_id가 다름, v2.29.0 당시 9행)
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id|startswith("anthropic:")) | {model_name, run_id, category, timestamp}]'
 curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{interval_seconds, channel_intervals, channel_category_intervals}'
 # 기댓값: channel_intervals {"anthropic": 600}, channel_category_intervals {"anthropic": 3600}
@@ -572,9 +578,99 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=md&lang=ko" | grep -E '^- 
 - 배포 뒤 README 스크린샷 `docs/images/ui/pricing-{en,ko}.png`를 새 열 이름과 캐시 줄이 보이게 다시 캡처하고(운영, 다크 테마,
   1440x900), README 캡션의 캡처 날짜와 버전을 함께 고친다.
 
+### 5-6. v2.32.0 배포 경로와 확인 (Claude Sonnet 5.5, GPT-6.1 Sol, 서울 In-Region Opus 5와 Sonnet 5)
+
+**배포 경로**: 신규 env `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID=openai.gpt-6.1-sol`이 있다(AppServices `backendEnv`와 Scheduler
+`buildTaskDef` 공용 environment). 이미지-only 경로(§2-1)는 쓰지 않는다 — 기존 task def를 복사하면 env가 빠지고 prober와
+gptbench가 GPT-6.1 Sol 3채널을 조용히 건너뛴다. **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를
+backend, frontend 이미지 모두로 배포한다(§3 경고 — `-c backendImage=<전체 URI>:$TAG@sha256:…`). IAM은 바뀌지 않는다(두 역할 모두
+`arn:aws:bedrock:*::foundation-model/*`라 서울 in-region FM도 이미 허용된다). 서울 in-region 채널은 리전이 키에 있어 env가 없다.
+DB 스키마 변경도 없다. backend 기동 seed가 새 7채널과 `openai-list:gpt-6.1-sol` 단가 행을 넣는다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 0. 두 스택의 task def에 새 env가 있는지 (backend 서비스 + 스케줄 태스크 6개)
+BE_TD=$(aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION \
+  --query 'services[0].taskDefinition' --output text)
+for td in "$BE_TD" $(aws ecs list-task-definition-families --family-prefix BedrockMonitorScheduler --status ACTIVE \
+  --region $REGION --query 'families[]' --output text); do
+  echo "$td $(aws ecs describe-task-definition --task-definition "$td" --region $REGION \
+    --query "taskDefinition.containerDefinitions[].environment[?name=='BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID'].value[]" --output text)"
+done
+# 기댓값: 7줄(backend + 스케줄 태스크 6개) 모두 openai.gpt-6.1-sol. 빈 줄이 있으면 그 스택이 배포되지 않았다.
+
+# 1. 카탈로그 — /status 62, /api/models 62
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count, channel_intervals}'
+curl -s "https://$CF_DOMAIN/api/models" | jq 'length'
+# 기댓값: expected_model_count 62, channel_intervals {"anthropic": 300} (bedrock:, openai: 키는 기본 주기라 항목이 없다), 62
+
+# 2. 새 7채널 — 첫 사이클(5분) 뒤 /latest에 라벨이 맞게 있는지
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | test("sonnet-5-5|gpt-6\\.1-sol|^bedrock:")) | {model_id, model_name, status}]'
+# 기댓값: 7행
+#   global.anthropic.claude-sonnet-5-5               "Bedrock Claude Sonnet 5.5 (Global)"
+#   anthropic:claude-sonnet-5-5                      "Anthropic Claude Sonnet 5.5 (US)"
+#   bedrock:ap-northeast-2:anthropic.claude-opus-5   "Bedrock Claude Opus 5 (ap-northeast-2)"
+#   bedrock:ap-northeast-2:anthropic.claude-sonnet-5 "Bedrock Claude Sonnet 5 (ap-northeast-2)"
+#   openai:global:global.openai.gpt-6.1-sol          "OpenAI GPT 6.1 Sol (Global)"
+#   openai:us:us.openai.gpt-6.1-sol                  "OpenAI GPT 6.1 Sol (US)"
+#   openai:us-east-1:openai.gpt-6.1-sol              "OpenAI GPT 6.1 Sol (us-east-1)"
+#   GPT-6.1 Sol us-east-1의 첫 사이클 401 "subscription is being set up"은 Marketplace 구독 개시 과도 상태다(수 분 뒤 200).
+#   몇 시간 지나도 401이면 Marketplace 구독 페이지를 확인한다.
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
+# 기댓값: {"anthropic": 10, "bedrock": 24, "openai": 28} (bedrock = Global 11 + US 11 + 서울 in-region 2)
+
+# 3. GPT on AWS 벤치 21채널, 두 갈래
+aws logs tail /ecs/gptbench --since 30m --region $REGION | grep -E "cycle (start|done)|GPT bench lane|WallClockTimeout"
+# 기댓값: "cycle start: 21 channels x 10 runs", "GPT bench lanes: cris=9 mantle=12",
+#   갈래마다 "GPT bench lane done: <lane> channels=N elapsed=Ns" 한 줄, 끝에 "cycle done: rows=210 errors=0 skipped=none elapsed=…s"
+curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), first: .channels[0].family,
+  sol61: [.channels[] | select(.family == "GPT 6.1 Sol") | {model_name, runs, success, cache_hit_rate, median_reasoning_tokens}]}'
+# 기댓값: n 21, first "GPT 6.1 Sol", sol61 3장(Global, US, us-east-1) runs 10, success 10, median_reasoning_tokens 0은 정상
+#   /latest는 시작 후 14분이 지난 사이클만 완료로 본다 — 배포 직후 18장이면 아직 옛 사이클이니 15분 뒤 다시 확인한다.
+#   skipped=에 GPT 6.1 Sol이 찍히면 그 갈래의 데드라인 컷이다(갈래마다 목록 끝). "did not finish within 885s"는 정지한 갈래다.
+
+# 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'
+# 기댓값: "pricing_sync_runner: 71 active channels"(62 + OpenAI 공식 가격 9), 런 요약 "status=completed changes=0 pending=0
+#   results={'unchanged': 71} errors=0". GPT-6.1 Sol offer의 긴 컨텍스트 이상값 WARNING
+#   "pricing sync: offers openai.gpt-6.1-sol <channel>: long-context price below the short-context price, long prices dropped"는
+#   정상이다(run errors 아님, 채널은 unchanged).
+
+# 5. /api/pricing — families 21, models 62, references 23, 서울 In Region 셀, GPT-6.1 Sol 긴 컨텍스트 없음
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pending_review,
+  families: (.families | length), models: (.models | length), references: (.references | length),
+  seoul: [.families[] | select(.provider == "anthropic") | select(.tiers.in_region | length > 0) | {family, in_region: [.tiers.in_region[] | {regions, input, output}]}],
+  sol61: (.families[] | select(.family_key == "gpt-6.1-sol") | {global_long: .tiers.global.long, us_long: .tiers.us.long,
+    in_region_long: [.tiers.in_region[].long], openai_list: (.tiers.openai_list | {input, output, long})})}'
+# 기댓값: last_sync "completed", pending_review 0, families 21, models 62, references 23(오퍼 20, Price List 1, Anthropic 1, OpenAI 1),
+#   seoul [{"family": "Claude Opus 5", in_region [{"regions": ["ap-northeast-2"], "input": 5.5, "output": 27.5}]},
+#          {"family": "Claude Sonnet 5", in_region [{"regions": ["ap-northeast-2"], "input": 2.2, "output": 11}]}],
+#   sol61 global_long null, us_long null, in_region_long [null], openai_list {"input": 2, "output": 10, "long": {"input": 4, "output": 15, …}}
+
+# 6. FeaturesVerify 수동 1회 — §5-1과 같은 run-task, 약 11분 뒤
+curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version, n: (.results | length),
+  sonnet55: ([.results[] | select(.model_key == "sonnet-5-5")] | length),
+  sonnet55_mantle: ([.results[] | select(.model_key == "sonnet-5-5" and .surface == "mantle") | .status] | unique),
+  catalog_changes: ([.changes[] | select(.kind == "catalog")] | length)}'
+# 기댓값: cv "2026-09-30", n 1170(totals 6상태 합도 1170 = 프로브 946 + 사전판정 224), sonnet55 195,
+#   sonnet55_mantle ["not_applicable"], catalog_changes 195(직전 런에 없던 sonnet-5-5 셀 — 정상, 한 번만)
+```
+
+- 화면 확인: 대시보드 카드 62장(Claude Sonnet 5.5 행이 Sonnet 5 바로 앞, 서울 In-Region 카드가 각 패밀리의 US 카드 뒤), `/models`의
+  서울 카드 배지 "In-Region"과 엔드포인트 `bedrock-runtime.ap-northeast-2.amazonaws.com`, `/reliability`와 `/cost`의
+  `Bedrock ap-northeast-2` 채널, `/gpt-on-aws`의 "GPT 6.x 세대" 첫 열 GPT 6.1 Sol, `/claude-features` 모델 칩 Sonnet 5.5,
+  `/prompts` 대상 "Bedrock Claude Sonnet 5.5 (Global)", `/pricing` Claude 표 In Region 열의 Opus 5와 Sonnet 5(ap-northeast-2).
+- CP 호출은 시간당 108회에서 120회(10채널 × 12회)로 는다. 월간 사용량 상한이 다시 걸리면 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`이
+  레버다(AutoProber task와 backend 서비스 둘 다, §5-2).
+- AutoProber 사이클 소요(`/ecs/autoprober`)가 300초에 가까워지면(62채널, worker 3, reasoning 사이클) `CycleAlreadyRunning` 위험이 있으니
+  보고한다. GPT 벤치 `skipped=` 빈도는 24시간 뒤 한 번 더 본다.
+- 오등록 확인(선택): `SELECT DISTINCT model_id, model_name FROM probe_results WHERE model_id LIKE 'anthropic:claude-sonnet-5%'` — 두 id가 각자
+  자기 라벨이면 정상이다(가드가 막았다면 오등록 행이 없다).
+
 ## 6. 후속 배포 (코드만 변경 시)
 
-⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`)에는 이미지-only
+⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`)에는 이미지-only
 경로(§2-1 기존 task-def 복사 재등록)를 쓰지 말 것** — 기존 task definition의 env가
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포

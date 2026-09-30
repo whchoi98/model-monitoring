@@ -65,7 +65,7 @@ include a UTC offset.
   "last_completed_time": "2026-09-22T12:02:00Z",
   "next_run_time": "2026-09-22T12:05:00Z",
   "interval_seconds": 300,
-  "expected_model_count": 55,
+  "expected_model_count": 62,
   "category_count": 6,
   "category_interval_seconds": 1800,
   "channel_intervals": { "anthropic": 300 },
@@ -92,8 +92,11 @@ channel note whose value equals the base cadence). With
 `ANTHROPIC_CP_PROBE_INTERVAL_S=600` (the v2.29.0 behavior) CP is probed every
 other cycle with its own workload rotation and the fields read
 `{"anthropic": 600}` / `{"anthropic": 3600}`. A model whose prefix is absent
-uses the base fields. The value is the backend process's configuration (same
-default as the AutoProber task); it is not read back from the Scheduler.
+uses the base fields — for example the OpenAI (`openai`) and the Bedrock
+in-region (`bedrock:<region>:<fm-id>` keys, prefix `bedrock`, v2.32.0) channels
+have no entry and use the base cadence. The value is the backend process's
+configuration (same default as the AutoProber task); it is not read back from
+the Scheduler.
 
 ### GET /api/auto-probe/latest?category=code-gen
 Returns each model's latest visible result from completed automatic runs
@@ -296,10 +299,15 @@ computed at query time from `backend/pricing.py` (removed), so a price change re
 superseded). The time before the first PricingSync run is priced with the seed (`pricing_seed.py`, effective from
 1970-01-01): price changes made before v2.30.0 are not reconstructed, and the 11 channels whose code price was wrong (Bedrock
 Claude US, Nova 2.0 Lite) are corrected for all history. Response shapes are unchanged. The cache and long-context prices added
-in v2.31.0 are display-only and never enter `row_cost`, and the `openai-list:<family_key>` channels have no probe rows.
+in v2.31.0 are display-only and never enter `row_cost`, and the `openai-list:<family_key>` channels have no probe rows. The
+channel-compare `channel` is `Anthropic (CP on AWS)`, `Bedrock Global`, `Bedrock US`, `Bedrock Nova`, `Bedrock <aws-region>`
+(`bedrock:<region>:<fm-id>` keys, `Bedrock ap-northeast-2` since v2.32.0; a malformed key is `Other`) or `OpenAI`.
 
 ### GET /api/reliability/multi-channel
-Success rate + error buckets grouped by family/channel.
+Success rate + error buckets grouped by family/channel. Channels come in the order `Anthropic (CP on AWS)`, `Bedrock Global`,
+`Bedrock US`, `Bedrock <aws-region>` (a Bedrock label whose parenthesis is an AWS region code, e.g. `Bedrock ap-northeast-2` for
+the Seoul in-region channels, v2.32.0; any other non-Global Bedrock label stays in `Bedrock US`), `OpenAI <region>` (`Global`,
+`US`, Mantle regions), other.
 
 ### GET /api/efficiency/score
 0-100 weighted Token Efficiency Score per workload category. The cost component averages the per-row cost of successful rows
@@ -317,15 +325,19 @@ Data source for `/pricing` (Unit Prices / 비용 단가), Model Explorer card pr
 cache write, Claude 1-hour cache write) and, on GPT rows, the long-context prices; batch, flex and priority (fast) prices are not
 included. Costs use input and output only: the cache and long-context prices and the OpenAI official price are display-only.
 The PricingSync task (`python -m pricing_sync_runner --once`, every 12 hours) refreshes them from four official sources: the
-Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 20 + OpenAI 25 channels), the AWS Price
+Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 23 + OpenAI 28 channels, 20 FMs; the two Seoul
+in-region Claude channels read the `APN2_*_standard` dimensions, v2.32.0), the AWS Price
 List API (`GetProducts`, Nova 2.0 Lite), Anthropic's `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude
-Platform on AWS 9 channels) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 8
+Platform on AWS 10 channels) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 9
 active OpenAI families, stored as the display-only channels `openai-list:<family_key>`, v2.31.0). A change of more than 50% on
 any price field (the boundary itself is applied) is stored as `pending_review` and waits for admin approval (see Admin below); a
 field that was empty and is observed for the first time fills the current row in place (run result `enriched`, no new history
 row). Observed prices are compared and stored at 6 decimals (a positive value that rounds to 0 counts as a parse failure; a
 cache or long-context price may be exactly 0, as the Nova cache write is), and a parser error of any type only skips that
-source's channels (`skipped:parse_failed`) without failing the run. Dormant 1P channels and labels matching
+source's channels (`skipped:parse_failed`) without failing the run. A long-context input or output below its short-context price
+is a source error (v2.32.0, the GPT-6.1 Sol offer lists long output 2.2 / 2 against output 11 / 10): the sync drops the four
+long-context fields of that observation with a WARNING log line, not a run error, so a stored long value stays and a missing one
+stays missing (`pricing_sync._plausible_long`). Dormant 1P channels and labels matching
 `HIDDEN_MODEL_PATTERNS` are excluded.
 
 ### GET /api/pricing
@@ -385,6 +397,8 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
 - `tiers` always has five keys in this order: `cp`, `openai_list`, `global`, `us` (an object or `null`) and `in_region` (always an
   array whose elements add `regions` and group the regions whose nine price values, verification and pending values are all
   equal, sorted by region name). `cp` is set only for Claude families and `openai_list` only for OpenAI families (v2.31.0).
+  Since v2.32.0 the first Claude `in_region` elements exist: Claude Opus 5 and Claude Sonnet 5 have `regions: ["ap-northeast-2"]`
+  (the Seoul in-region channels `bedrock:ap-northeast-2:anthropic.claude-*`, priced from the offer's `APN2_*_standard` dimensions).
 - Every cell (single tier or `in_region` element) has `input`, `output`, `cache_read`, `cache_write`, `cache_write_1h` and `long`.
   `cache_read` is the cache hit (cached input) price; `cache_write` is the Claude 5-minute cache write, the OpenAI "cache writes"
   price or the Nova cache write; `cache_write_1h` is the Claude 1-hour cache write. Each is `null` when the source has no such
@@ -413,19 +427,22 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   disappears once a sync observes its `prior_price` on one of those tiers.
 - `references[]` lists only what a cell footnote or a family note cites (v2.31.1). v2.31.0 also appended nine fixed official
   pages (Amazon Bedrock pricing and eight OpenAI model cards) that nothing cited; they are gone, so production went from 30
-  references to 21 (18 agreement offers, 1 Price List usage type, the Anthropic doc and the OpenAI doc). The reference numbers are
+  references to 21 (18 agreement offers, 1 Price List usage type, the Anthropic doc and the OpenAI doc), and to 23 since v2.32.0
+  (20 agreement offers: Claude Sonnet 5.5 and GPT-6.1 Sol; the Seoul in-region channels reuse the Opus 5 and Sonnet 5 offers). The reference numbers are
   exactly the numbers used in cell `footnotes` plus the note references, 1..N without gaps. Fields: `n` (1-based, in order of first
   citation, then the notes whose `source` is `manual_note`), `id` (`offer:<offerId>`, `pricelist:<usagetype>`,
   `anthropic-pricing`, `openai-pricing`, `note:<family_key>`), `kind` (`agreement_offer`, `price_list`, `anthropic_doc`,
   `openai_doc`, `manual_note`; `official_page` appears only as the fallback for a cited `source_id` of unknown format, which is
   listed with the id as its title and `url: null` so the footnote still resolves), bilingual titles (`openai-pricing` is "OpenAI
   API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title names the family, e.g. "<family> promotion
-  (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source, or the seed date 2026-09-27;
-  `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
+  (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source; before any sync observes it, the
+  source's seed check date from `pricing_seed.SEED_SOURCE_DATES` (2026-09-30 for the v2.32.0 Claude Sonnet 5.5 and GPT-6.1 Sol
+  offers), else the default seed date 2026-09-27; `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
   box and the Markdown export header carry them.
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
   last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels, plus one display-only
-  `openai-list:<family_key>` channel per active OpenAI family (8, v2.31.0).
+  `openai-list:<family_key>` channel per active OpenAI family (8 in v2.31.0, 9 since v2.32.0 with `openai-list:gpt-6.1-sol`): 62 +
+  9 = 71 in production (v2.32.0).
 
 ### GET /api/pricing/export?format=csv|md|json&lang=ko|en
 Download the same table as a file: `Content-Disposition: attachment; filename="llm-monitor-unit-prices-YYYY-MM-DD.<csv|md|json>"`.
@@ -438,7 +455,8 @@ pytest against `frontend/src/components/PricingPanel.tsx`): `- Official pricing 
 pricing](https://aws.amazon.com/bedrock/pricing/), [Anthropic pricing](https://platform.claude.com/docs/en/about-claude/pricing),
 [OpenAI pricing](https://developers.openai.com/api/docs/pricing)`, KO `- 공식 요금 페이지: [Amazon Bedrock 요금](…), [Anthropic
 요금](…), [OpenAI 요금](…)`. Then one table per provider with that provider's own columns: Anthropic Claude
-`model | Claude Platform on AWS | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region`, OpenAI `model | OpenAI official price | AWS Bedrock - Global CRIS |
+`model | Claude Platform on AWS | AWS Bedrock - Global CRIS | AWS Bedrock - US CRIS | AWS Bedrock - In Region` (the In Region column
+carries the Seoul Opus 5 and Sonnet 5 cells since v2.32.0), OpenAI `model | OpenAI official price | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (KO "OpenAI 공식 가격"), Amazon Nova `model | AWS Bedrock - Global CRIS |
 AWS Bedrock - US CRIS | AWS Bedrock - In Region` (no blank column). A cell is the price pair, regions and badges with `[^n]`
 footnotes (a pending value lists only what changes, as the screen badge does: the pair when input or output changes, then the
@@ -493,16 +511,18 @@ The 12-hour scheduled run uses a separate Fargate task instead (`python -m parit
 ### GET /api/features/catalog
 Feature catalog: `groups` (7 feature groups with `label_ko`/`label_en`), `surfaces` (5 — `cp`, `mantle`, `bedrock_messages`,
 `bedrock_invoke`, `bedrock_converse`; each `{id, label, short, group, region}`, the Mantle region is `MANTLE_ANTHROPIC_REGION`),
-`models` (5 representative models `fable-5-1`, `fable-5`, `opus-5-5`, `opus-5`, `sonnet-5` — Opus 5.5 since v2.28.0; this order is
-also the UI order of model chips and per-cell model lists — with per-surface native ids; `mantle: null` plus `mantle_reason` when
-Mantle does not serve the model) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
+`models` (6 representative models `fable-5-1`, `fable-5`, `opus-5-5`, `opus-5`, `sonnet-5-5`, `sonnet-5` — Opus 5.5 since v2.28.0,
+Sonnet 5.5 since v2.32.0; this order is also the UI order of model chips and per-cell model lists — with per-surface native ids;
+`mantle: null` plus `mantle_reason` (KO) and, since v2.32.0, `mantle_reason_en` (EN, shown as is by the frontend) when Mantle does
+not serve the model: Fable 5.1 is US GovCloud only, and Mantle us-east-1 returns 404 for `anthropic.claude-sonnet-5-5`) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
 Messages checks + Models API + the strict_tool_use split; each with `label_ko/label_en`, `desc_ko/desc_en`, `doc_url`, per-surface
 `documented` ∈ ga|beta|no|unknown, `verification` ∈ evidence|acceptance|negative|capability, `notes`). Since v2.24.0 the UI takes every
 feature label and surface short name from this payload (`labelMaps`) — it is the single source for banners, modal titles and the drawer.
 
 ### GET /api/features/latest
 Latest completed run: `run` (id, started_at, finished_at, `totals` — the 6 status counts plus `drift`; since v2.28.0 the status
-counts sum to 975 cells = 813 probed + 162 pre-decided, catalog_version `2026-09-23`, running flag),
+counts sum to 1,170 cells = 946 probed + 224 pre-decided since v2.32.0 (975 = 813 + 162 in v2.28.0 to v2.31.2), catalog_version
+`2026-09-30`, running flag),
 `previous_run_id`, `changes`, `drift`, `results`. `results[]` = one row per (feature, surface, model_key): `model_label`, `model_id`,
 `status` ∈ supported|unsupported|broken|inconclusive|skipped|not_applicable, `documented`, `verdict` ∈ match|drift|undocumented|none,
 `latency_ms` (null for runner pre-decided rows and for probes that failed before a measurement). `drift[]` = the results whose verdict is
@@ -511,8 +531,8 @@ counts sum to 975 cells = 813 probed + 162 pre-decided, catalog_version `2026-09
 **`kind` (v2.24.0)** is `"catalog"` when the cell did not exist before or when either side is a runner pre-decided row
 (`latency_ms IS NULL AND error_message IS NULL` — a catalog rule such as `_NOT_APPLICABLE_BY_DOC`), else `"measured"`. A row with a NULL
 `latency_ms` but an `error_message` is a failed probe (transport-init or executor failure), not a pre-decided row, so it counts as
-`"measured"`. The first run after a representative-model addition (v2.28.0: `opus-5-5`) therefore lists every new cell (195) as
-a `catalog` change. `Cache-Control: s-maxage=60`.
+`"measured"`. The first run after a representative-model addition (v2.28.0: `opus-5-5`, v2.32.0: `sonnet-5-5`) therefore lists every new cell
+(195 each) as a `catalog` change. `Cache-Control: s-maxage=60`.
 With no completed run: `{"run": null, "previous_run_id": null, "changes": [], "drift": [], "results": [], "running": false}`.
 
 ### GET /api/features/evidence?run_id=&feature=&surface=&model_key=
@@ -526,26 +546,34 @@ Since v2.24.0 failed cells also carry the last body the transport actually sent 
 (`HTTP 404: (empty body) GET /v1/files`), and the thinking probes store `usage`. 404 if the cell does not exist.
 
 ### POST /api/features/trigger (Auth Required)
-Start a manual Claude API Features run in a backend background thread (약 9분 since v2.28.0, 5 models — the duration the router
-reports in `routers/features.py`; it was 약 7분 with 4 models). Rejects if already running. The daily scheduled run uses a separate Fargate task instead
+Start a manual Claude API Features run in a backend background thread (약 11분 since v2.32.0, 6 models — the duration the router
+reports in `routers/features.py`; it was 약 9분 with 5 models and 약 7분 with 4 models). Rejects if already running. The daily scheduled run uses a separate Fargate task instead
 (`python -m features_runner --once`).
 
 ---
 
-## GPT on AWS bench (Public) — v2.18.0, 18 channels since v2.28.0
+## GPT on AWS bench (Public) — v2.18.0, 21 channels since v2.32.0
 
-Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --once`, every 15 min) measures 18 channels —
-Mantle in-region 11 + CRIS 7: GPT 5.4 (us-east-1, us-east-2, us-west-2), GPT 5.5 (us-east-1, us-east-2), GPT 5.6 Terra (Global,
-us-east-1, us-east-2, us-west-2), GPT 6 Astra (Global, US, us-west-2), GPT 6 Sol and GPT 6 Luna (Global, US, us-east-1) — with a
-fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per channel. Each call has a wall-clock cap
+Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --once`, every 15 min) measures 21 channels —
+Mantle in-region 12 + CRIS 9: GPT 5.4 (us-east-1, us-east-2, us-west-2), GPT 5.5 (us-east-1, us-east-2), GPT 5.6 Terra (Global,
+us-east-1, us-east-2, us-west-2), GPT 6 Astra (Global, US, us-west-2), GPT 6 Sol and GPT 6 Luna (Global, US, us-east-1), GPT 6.1 Sol
+(Global, US, us-east-1, v2.32.0) — with a fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per
+channel. Since v2.32.0 the cycle runs two lanes at the same time, `cris` (the 9 Global and US CRIS channels on the Bedrock Runtime
+OpenAI-compatible hosts) and `mantle` (the 12 in-region channels on `bedrock-mantle.<region>`); inside a lane the channels stay
+sequential in `_BENCH_SPECS` order. The task logs `GPT bench lanes: cris=9 mantle=12` at start and
+`GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main thread saves and commits each finished channel. Each call has a wall-clock cap
 (`GPT_BENCH_CALL_TIMEOUT`, default 90 s — an expired call is stored as an error row `WallClockTimeout: …`), the client never retries
-(`max_retries=0`), and the cycle skips trailing channels after `GPT_BENCH_DEADLINE` (780 s; Sol/Luna are last).
+(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by both lanes; GPT 6.1 Sol is
+last in each lane). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
+stored, the runs its in-flight channel already finished are stored and that channel is reported as `label (run N+)`, and the
+channels it never started are reported as `label` (a lane that raises is handled the same way). The 15 s grace is a best-effort
+bound, because the watchdog cannot cut the pre-stream phase (connect, request write, response headers).
 
 ### GET /api/gptbench/latest
 Latest **complete** cycle: `cycle_ts` + `channels[]` scorecards (`model_id`, `model_name`, `family`, `region`, `runs`, `success`,
 `median_ttfb_ms`, `median_ttft_ms`, `median_gap_ms`, `p95_ttft_ms`, `cache_hit_rate`, `median_reasoning_tokens`, `last_error`).
 A cycle counts as complete only 14 minutes after it started (deadline 13 min + margin); while the newest cycle is still running the
-previous one is returned, so the payload lags the newest cycle by about 15–30 minutes. Sorted by family (GPT 6 Astra, Sol, Luna,
+previous one is returned, so the payload lags the newest cycle by about 15–30 minutes. Sorted by family (GPT 6.1 Sol, GPT 6 Astra, Sol, Luna,
 GPT 5.6 Terra, 5.5, 5.4; unknown families last) then region.
 
 ### GET /api/gptbench/trend?hours=24

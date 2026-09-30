@@ -185,3 +185,42 @@ platform.claude.com "Build with Claude" 개요는 33개 피처를 플랫폼별 �
 - **배포 후 첫 런에서 예상되는 화면**: 변경 배너에 **카탈로그 변경 195건**(직전 런에 없던 opus-5-5 셀, `before: null`
   → `kind: catalog`) — 정상이다. 여기에 Mantle `fallback_credit`의 opus-5, sonnet-5가 unsupported → supported로 바뀐
   **실측 변경 2건**(지연시간이 있는 프로브 행이라 `kind: measured`)이 더해지고, 드리프트는 그만큼 줄어든다.
+
+## Addendum — v2.32.0 대표 모델 6종 (Claude Sonnet 5.5 편입, 2026-09-30)
+
+2026-09-30 추가된 Claude Sonnet 5.5(ADR-031)를 6번째 대표 모델로 넣었다(사용자 결정 2026-09-30, "메뉴들에 포함"). 대표 `MODELS`가
+바뀌어 런 형태가 달라지므로 **`CATALOG_VERSION`을 `2026-09-30`으로 범프**했다.
+
+- **모델 세트(카탈로그 `models` 순서)**: `fable-5-1`, `fable-5`, `opus-5-5`, `opus-5`, **`sonnet-5-5`**, `sonnet-5`. Sonnet 5.5는 패밀리 안
+  최신 우선(Opus 5.5 선례)으로 `sonnet-5` 앞이다. id는 CP `claude-sonnet-5-5`, Bedrock `global.anthropic.claude-sonnet-5-5`(Messages API,
+  InvokeModel, Converse 공통), Mantle은 `None`이다.
+- **Mantle `None` (V3)**: Mantle us-east-1 `/anthropic`이 `anthropic.claude-sonnet-5-5`에 404 `not_found_error`를 두 번 돌려줬고, 같은 리전
+  대조군 `anthropic.claude-sonnet-5`는 200이었다. Mantle 열 39셀은 러너 사전판정 `not_applicable`이다. 사유는 카탈로그 `mantle_reason`(KO)과
+  **`mantle_reason_en`(EN, v2.32.0 신설)**이 싣고, 프런트(`ClaudeFeaturesPanel`, `lib/claudeFeatures.ts`)는 그대로 표시한다. 이전에는 프런트가
+  Mantle N/A 사유를 "US GovCloud 전용"으로 하드코딩해 Sonnet 5.5에 틀린 안내가 나갈 뻔했다. 키가 없는 카탈로그에서는 일반 문구로 떨어진다.
+  - Fable 5.1(GovCloud 전용, 영구)과 달리 Sonnet 5.5 404는 온보딩이 덜 끝난 것일 수 있다. `None`이면 AWS가 서빙을 시작해도 매트릭스가 알려
+    주지 않으므로 **수동으로 다시 확인한다**. 마지막 확인 2026-09-30(404), 다음 확인 2026-10-30 또는 AWS 발표 시. 200이 나오면 `MODELS`의
+    `mantle`에 `anthropic.claude-sonnet-5-5`를 넣고 `mantle_reason`, `mantle_reason_en`을 지운 뒤 `CATALOG_VERSION`을 범프한다(런 형태
+    983 + 187).
+- **런 형태**: 39행 × 5 surface × 6모델 = **1170셀 = 프로브 946 + 사전판정 224**(이전 975 = 813 + 162). Sonnet 5.5 몫은 195셀 = 프로브 133 +
+  사전판정 62(Mantle 39, Converse 표현 불가 17, `context_window_1m` skipped 3, `data_residency` 비적용 3 — 뒤 두 규칙의 Mantle 셀은 Mantle 39에
+  이미 들어 있다). 사전판정 224 = Mantle(Fable 5.1 + Sonnet 5.5) 78 + Converse 표현 불가 17 × 6 = 102 + `context_window_1m` 22 +
+  `data_residency` 22. 런 소요는 약 9분 → **약 11분**(수동 트리거 응답 문구 "약 11분 소요"). `test_default_job_count_matches_spec_estimate`가
+  946 + 224와 Sonnet 5.5 몫 133 + 62를 고정한다.
+- **모델별 프로브 조정**(라이브 2026-09-30):
+  - `tool_use`: Sonnet 5.5는 forced `tool_choice`(tool, any)를 400으로 거부하므로(V1) Fable 5.1, Opus 5.5와 같이 auto + 프롬프트 지시로 보낸다.
+    Sonnet 5는 forced 유지. 패리티 `_NO_FORCED_TOOL_CHOICE_MARKERS`의 `"sonnet-5-5"`와 같은 판단이다.
+  - `advisor_tool`: `_ADVISOR_FOR`의 `sonnet-5-5` → **`claude-opus-5-5`**(V4, CP 실측 supported — `server_tool_use` +
+    `advisor_redacted_result`). `sonnet-5` → `claude-opus-5` 관례가 한 세대 위에서도 맞는다.
+  - `computer_use`: Sonnet 5.5도 **toolset 전용**이다(V5) — `computer_toolset_20260801`은 수락, legacy `computer_20251124`는 400 "does not
+    support tool types". 카탈로그 note에 Sonnet 5.5를 넣었다(문구만).
+  - `extended_thinking`: Sonnet 5.5도 adaptive-only다. `thinking {type: enabled, budget_tokens}`는 400 "thinking.type.enabled is not
+    supported"(V2, Sonnet 5와 같다)이고, 정확한 거부 문구면 기존 규칙대로 `not_applicable`이다. adaptive + effort는 200.
+  - `models_api`, `context_window_1m`, `prompt_caching_5m`(V5): Models API `max_input_tokens` 1,000,000, `max_tokens` 128,000. `CACHE_PAD`로
+    cache_creation 3103 → cache_read 3103(캐시 최소 토큰 이상).
+- **관찰(판정 불변, D9)**: Bedrock CountTokens는 서울 in-region **평문 FM id**(`anthropic.claude-opus-5`, `anthropic.claude-sonnet-5`)에서도
+  ValidationException "The provided model doesn't support counting tokens"다(2026-09-30, V8). `token_counting` note의 "CRIS 전용(`global.*`)
+  모델 미지원"은 CRIS 프로파일만의 제약이 아니라 이 모델들의 CountTokens 자체가 막혀 있는 것으로 보인다. 서울 in-region 변형은 매트릭스에
+  넣지 않았으므로(ADR-031 Decision 7) 셀과 판정은 바뀌지 않는다.
+- **배포 후 첫 런에서 예상되는 화면**: 변경 배너에 **카탈로그 변경 195건**(직전 런에 없던 `sonnet-5-5` 셀, `before: null` → `kind: catalog`)이
+  한 번 뜬다. 정상이다. 실측 변경은 없어야 한다(기존 5모델의 규칙과 프로브는 바뀌지 않았다).

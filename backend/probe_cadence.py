@@ -2,7 +2,7 @@
 
 EventBridge 스케줄은 그대로 rate(5 minutes)이고, 사이클마다 어떤 모델을 프로빙할지를 auto_prober가
 고른다. 주기를 따로 둘 수 있는 채널은 Claude Platform on AWS(model_id 접두 "anthropic:", Anthropic 1P
-API, 라벨 "Anthropic Claude … (US)")뿐이다. Bedrock Claude(global./us.), Nova, OpenAI는 항상 5분이다.
+API, 라벨 "Anthropic Claude … (US)")뿐이다. Bedrock Claude(global./us., in-region bedrock:<region>: — v2.32.0), Nova, OpenAI는 항상 5분이다.
 
 v2.29.1 기본값은 300 — CP도 매 사이클, 사이클 카테고리 그대로(v2.29.0 이전 동작). 2026-09-26 사용자 결정
 ("Anthropic API 호출 기간 텀을 늘렸었습니다. 원래대로 복귀해 주세요"). v2.29.0의 10분 주기(2026-09-23 조직

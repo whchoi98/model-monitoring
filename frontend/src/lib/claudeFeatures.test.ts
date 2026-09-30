@@ -259,7 +259,8 @@ describe("isGroupOpen (v2.24.0 — 필터 활성 시 강제 펼침)", () => {
 describe("surfaceFindings", () => {
   const models: ModelDef[] = [
     { key: "fable-5-1", label: "Claude Fable 5.1", cp: "claude-fable-5-1", mantle: null, bedrock: "global.anthropic.claude-fable-5-1",
-      mantle_reason: "측정 불가 — GovCloud 전용" },
+      mantle_reason: "측정 불가 — GovCloud 전용",
+      mantle_reason_en: "Not measurable — Mantle serves Fable 5.1 only in US GovCloud (us-gov-west-1), not in commercial regions" },
     { key: "fable-5", label: "Claude Fable 5", cp: "claude-fable-5", mantle: "anthropic.claude-fable-5", bedrock: "global.anthropic.claude-fable-5" },
     { key: "opus-5", label: "Claude Opus 5", cp: "claude-opus-5", mantle: "anthropic.claude-opus-5", bedrock: "global.anthropic.claude-opus-5" },
   ];
@@ -325,6 +326,23 @@ describe("surfaceFindings", () => {
     const empty = surfaceFindings([], "cp", models, "ko");
     expect(empty).toMatchObject({ surface: "cp", total: 0, drift: [], broken: [], intendedGaps: [], undecidedGaps: [], undocumented: [] });
     expect(empty.perModel.every((m) => m.docHealth === null && m.na_reason === null)).toBe(true);
+  });
+  test("lang en → catalog mantle_reason_en first; without it the generic fallback, never GovCloud (v2.32.0)", () => {
+    const sonnet55: ModelDef = {
+      key: "sonnet-5-5", label: "Claude Sonnet 5.5", cp: "claude-sonnet-5-5", mantle: null, bedrock: "global.anthropic.claude-sonnet-5-5",
+      mantle_reason: "측정 불가 — Mantle us-east-1이 anthropic.claude-sonnet-5-5를 서빙하지 않음",
+      mantle_reason_en: "Not measurable — Mantle us-east-1 does not serve anthropic.claude-sonnet-5-5",
+    };
+    const na = mantle({ feature: "messages_basic", model_key: "sonnet-5-5", model_label: "Claude Sonnet 5.5", model_id: null, status: "not_applicable", verdict: "none", latency_ms: null });
+    const withEn = surfaceFindings([na], "mantle", [sonnet55], "en").perModel[0].na_reason;
+    expect(withEn).toBe("Not measurable — Mantle us-east-1 does not serve anthropic.claude-sonnet-5-5");
+    // 백엔드가 mantle_reason_en을 보내지 않는 카탈로그(구버전 런)도 견딘다 — 일반 폴백, GovCloud 문구 없음.
+    const withoutEn: ModelDef = { key: sonnet55.key, label: sonnet55.label, cp: sonnet55.cp, mantle: null, bedrock: sonnet55.bedrock, mantle_reason: sonnet55.mantle_reason };
+    const fallback = surfaceFindings([na], "mantle", [withoutEn], "en").perModel[0].na_reason;
+    expect(fallback).toMatch(/Not measurable on Bedrock Mantle/);
+    expect(fallback).not.toMatch(/GovCloud/);
+    // KO는 기존대로 mantle_reason
+    expect(surfaceFindings([na], "mantle", [sonnet55], "ko").perModel[0].na_reason).toBe(sonnet55.mantle_reason);
   });
   test("modelKey (D5 chip) narrows cells and perModel to the selected model — unselected models are not listed", () => {
     const f = surfaceFindings(cells, "mantle", models, "ko", "opus-5");

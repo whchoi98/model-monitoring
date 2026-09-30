@@ -18,6 +18,7 @@ import RefreshControls from "./RefreshControls";
 // Bedrock OptimizePrompt는 inference profile / foundation-model ARN 모두 시도.
 // Anthropic CP on AWS 채널은 Bedrock OptimizePrompt 대상이 아니므로 동일 family의
 // Bedrock US inference profile로 fallback.
+// Sonnet 5.5는 us. 프로파일이 없어 Global 항목만 둔다.
 const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   // Bedrock Global Anthropic
   { id: "global.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (Global)" },
@@ -27,6 +28,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   { id: "global.anthropic.claude-opus-4-8", label: "Bedrock Claude Opus 4.8 (Global)" },
   { id: "global.anthropic.claude-opus-4-7", label: "Bedrock Claude Opus 4.7 (Global)" },
   { id: "global.anthropic.claude-opus-4-6-v1", label: "Bedrock Claude Opus 4.6 (Global)" },
+  { id: "global.anthropic.claude-sonnet-5-5", label: "Bedrock Claude Sonnet 5.5 (Global)" },
   { id: "global.anthropic.claude-sonnet-5", label: "Bedrock Claude Sonnet 5 (Global)" },
   { id: "global.anthropic.claude-sonnet-4-6", label: "Bedrock Claude Sonnet 4.6 (Global)" },
   { id: "global.anthropic.claude-haiku-4-5-20251001-v1:0", label: "Bedrock Claude Haiku 4.5 (Global)" },

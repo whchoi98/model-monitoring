@@ -99,7 +99,7 @@ class _ProbeDeadline:
         return None if self.done else WallClockTimeout(self.limit_s)
 
 
-# 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출, Claude Platform on AWS).
+# 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출) + In-Region 온디맨드("bedrock:<aws-region>:<Bedrock FM id>", v2.32.0) + Claude Platform on AWS.
 AVAILABLE_MODELS: dict[str, str] = {
     # Bedrock - Global cross-region inference profile (ap-northeast-2)
     # Fable 5.1 (v2.22.0, 2026-09-01): Fable 5와 동일한 Covered Model 제약(provider_data_share 리전 opt-in 기존 적용).
@@ -113,11 +113,14 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
     "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
+    # Sonnet 5.5 (v2.32.0, 2026-09-30 실측): Global CRIS(Seoul 호출) 200, us. 프로파일 없음("model identifier is invalid").
+    # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "sonnet-5"가 substring으로 포함.
+    "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
     "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
-    # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용.
+    # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용 — 예외: Seoul Opus 5, Sonnet 5는 2026-09-30부터 ON_DEMAND(아래 In-Region 블록).
     "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
     "us.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (US)",
     "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
@@ -125,9 +128,16 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
+    # us.anthropic.claude-sonnet-5-5는 없음(2026-09-30 네 US 리전 프로파일 목록 부재, "model identifier is invalid") — 의도적 미등록.
     "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
     "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
+    # Bedrock - In-Region 온디맨드 (v2.32.0, 2026-09-30 실측, ADR-031): Seoul list-foundation-models가
+    # anthropic.claude-opus-5 / anthropic.claude-sonnet-5를 ON_DEMAND로 표시, converse_stream 200, temperature 400.
+    # 키 "bedrock:<aws-region>:<Bedrock FM id>" — 호출 리전과 실제 modelId는 _bedrock_target()이 푼다.
+    # 라벨의 채널 표기는 OpenAI 인리전처럼 소문자 리전 코드(DB model_name에 영구 기록, frontend channelRank가 rank 3으로 읽음).
+    "bedrock:ap-northeast-2:anthropic.claude-opus-5": "Bedrock Claude Opus 5 (ap-northeast-2)",
+    "bedrock:ap-northeast-2:anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (ap-northeast-2)",
     # Opus 4.5, Sonnet 4.5는 사용자 요청으로 모니터링 대상에서 제외 (2026-05-20).
     # Bedrock - Amazon Nova (1P). 사용자 요청으로 Nova 2.0 Lite (US)만 유지.
     "us.amazon.nova-2-lite-v1:0": "Bedrock Nova 2.0 Lite (US)",
@@ -137,9 +147,10 @@ AVAILABLE_MODELS: dict[str, str] = {
 # vendor-hosted endpoint: aws-external-anthropic.<region>.api.aws
 # Key prefix "anthropic:<actual-anthropic-model-id>" 형태로 저장.
 # 시작 시 _discover_anthropic_models()가 /v1/models 응답에서 substring 매칭해 자동 등록.
-# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1, opus-5 ⊂ opus-5-5)가 될 수 있음 —
+# ⚠️ substring이 다른 타깃의 접두(fable-5 ⊂ fable-5-1, opus-5 ⊂ opus-5-5, sonnet-5 ⊂ sonnet-5-5)가 될 수 있음 —
 #    _match_anthropic_model()이 더 긴 타깃을 포함하는 id와, 아직 타깃이 없는 점 버전 id
-#    (예: sonnet-5에 대한 claude-sonnet-5-5)를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0, v2.27.0).
+#    (예: sonnet-5에 대한 claude-sonnet-5-6)를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0, v2.27.0).
+#    sonnet-5-5는 v2.32.0부터 자기 타깃이 있다 — CP /v1/models가 2026-09-30 claude-sonnet-5-5를 맨 앞에 반환(가드가 Sonnet 5 오등록을 막음).
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("fable-5-1", "Anthropic Claude Fable 5.1 (US)"),  # v2.22.0 — CP 서빙 시 자동 발견
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
@@ -147,6 +158,7 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
     ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
+    ("sonnet-5-5", "Anthropic Claude Sonnet 5.5 (US)"),  # v2.32.0 — CP /v1/models 첫 항목(2026-09-30)
     ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
     ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
     ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
@@ -297,6 +309,7 @@ def _anthropic_actual_id(model_id: str) -> str:
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
 # "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)도, "opus-5"는 opus-5-5(Opus 5.5)도 포함한다
 # (Opus 5.5 temperature 400은 2026-09-23 converse_stream 실측).
+# "sonnet-5"는 sonnet-5-5(Sonnet 5.5)도, in-region 키 bedrock:ap-northeast-2:anthropic.claude-{opus,sonnet}-5도 포함한다(모두 2026-09-30 temperature 400 실측) — 판정은 키 전체 문자열로 한다.
 _REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "opus-5", "fable-5", "sonnet-5")
 
 
@@ -338,7 +351,9 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
 # (model-id env var, display family, 제공 리전 튜플)
 # "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
-# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23 라이브 200) — 5.x는 미검증이라 미기재.
+# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30 라이브 200) — 5.x는 미검증이라 미기재.
+# GPT 6.1 Sol(2026-09-30)의 Mantle 인리전은 us-east-1만 — us-east-2/us-west-2 404 not_found_error → 제외(스펙 미기재).
+# us-east-1 첫 호출은 401 "subscription is being set up"(Marketplace 구독 자동 개시, 과도 상태).
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
 # GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 현재 미지원
 # (404 not_found_error, 2026-09-09·2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재).
@@ -348,6 +363,7 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 정기 재확인 대상 아님. us-east-1 첫 호출은 401 "subscription is being set up"
 # (Marketplace 구독 자동 개시)이었다가 수 분 뒤 200.
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-west-2")),
     ("BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", "GPT 6 Luna", ("global", "us", "us-east-1")),
@@ -555,10 +571,34 @@ def _openai_stream_events(
             yield ("final", in_tok, out_tok, stop)
 
 
+# Bedrock in-region 온디맨드 키 (v2.32.0, ADR-031): "bedrock:<aws-region>:<Bedrock FM id>".
+# OpenAI "openai:<region>:<id>"와 같은 모양 — 같은 FM id를 리전마다 부를 수 있어 리전을 키에 넣는다.
+BEDROCK_INREGION_PREFIX = "bedrock:"
+
+
+def _is_bedrock_inregion(model_id: str) -> bool:
+    return model_id.startswith(BEDROCK_INREGION_PREFIX)
+
+
+def _bedrock_target(model_id: str) -> tuple[str, str]:
+    """Bedrock 채널 키 → (bedrock-runtime client 리전, converse/invoke_model에 넘길 modelId).
+
+    - "bedrock:<region>:<id>" → (<region>, <id>) — split(":", 2)라 <id> 안의 ':'(…-v1:0)는 보존
+    - "global.*" / "us.*" CRIS 프로파일 → (_REGION_MAP[접두], model_id 그대로) — 기존 동작
+    - 그 밖(깨진 bedrock: 키 포함) → ("us-east-1", model_id) — 기존 폴백. 예외를 던지지 않는다
+      (auto_prober 제출 루프에서 던지면 사이클 전체가 failed가 된다; 깨진 키는 오류 행 하나로 끝난다).
+    """
+    if _is_bedrock_inregion(model_id):
+        parts = model_id.split(":", 2)
+        if len(parts) == 3 and parts[1] and parts[2]:
+            return parts[1], parts[2]
+    return _REGION_MAP.get(model_id.split(".")[0], "us-east-1"), model_id
+
+
 def _get_region_for_model(model_id: str) -> str:
-    """Derive the AWS region from a model ID prefix."""
-    prefix = model_id.split(".")[0]
-    return _REGION_MAP.get(prefix, "us-east-1")
+    """Bedrock client 리전 — _bedrock_target의 첫 값. 이름 유지: auto_prober, stream_probe_events와
+    테스트 monkeypatch(test_auto_prober_pool, test_auto_prober_timeout, test_cp_cadence)가 쓴다."""
+    return _bedrock_target(model_id)[0]
 
 
 def _get_bedrock_client(region_name: str = "us-east-1"):
@@ -655,7 +695,7 @@ def _probe_single_model(
 ) -> None:
     """Execute a single streaming probe call and push SSE events to the queue.
 
-    Bedrock 경로(`us.*`, `global.*`)는 boto3 converse_stream.
+    Bedrock 경로(`us.*`, `global.*`, in-region `bedrock:<region>:<id>` — v2.32.0, _bedrock_target)는 boto3 converse_stream.
     Anthropic 직접 API 경로(`anthropic:*`)는 anthropic SDK messages.stream.
 
     세 경로 모두 wall-clock 상한(_wall_clock_limit — 자동 사이클은 PROBE_WALL_CLOCK_S) 안에서 돈다
@@ -758,8 +798,10 @@ def _probe_single_model(
                     if not _is_reasoning_model(model_id):
                         inference_config["temperature"] = temperature
 
+                    # in-region 키(bedrock:<region>:<id>)는 실제 Bedrock id로 보낸다 — client 리전은 호출자가
+                    # _get_region_for_model로 맞춘다(v2.32.0). ProbeResult.model_id와 SSE 이벤트에는 키를 그대로 쓴다.
                     response = client.converse_stream(
-                        modelId=model_id,
+                        modelId=_bedrock_target(model_id)[1],
                         messages=[{"role": "user", "content": [{"text": prompt}]}],
                         inferenceConfig=inference_config,
                     )
@@ -1136,7 +1178,7 @@ def _compare_single_model(
 ) -> None:
     """compare용 - DB 저장 없이 SSE event_queue로만 결과 push.
 
-    Bedrock(`us.*`/`global.*`) + Anthropic CP on AWS(`anthropic:*`) + OpenAI(`openai:*`) 채널 지원.
+    Bedrock(`us.*`/`global.*`/`bedrock:<region>:*`) + Anthropic CP on AWS(`anthropic:*`) + OpenAI(`openai:*`) 채널 지원.
     실패는 error 이벤트로만 보고 (raise 없음 - 다른 모델 호출에 영향 X).
     """
     start_time = time.monotonic()
@@ -1196,12 +1238,13 @@ def _compare_single_model(
                         else:  # ("final", input_tokens, output_tokens, _stop)
                             input_tokens, output_tokens, _stop = rest
                 else:
-                    client = _get_bedrock_client(_get_region_for_model(model_id))
+                    region, bedrock_model_id = _bedrock_target(model_id)  # in-region 키 → (리전, FM id), v2.32.0
+                    client = _get_bedrock_client(region)
                     cfg: dict = {"maxTokens": max_tokens}
                     if not _is_reasoning_model(model_id):
                         cfg["temperature"] = temperature
                     response = client.converse_stream(
-                        modelId=model_id,
+                        modelId=bedrock_model_id,
                         messages=[{"role": "user", "content": [{"text": prompt}]}],
                         inferenceConfig=cfg,
                     )

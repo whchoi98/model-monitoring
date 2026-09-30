@@ -11,13 +11,13 @@
 
 ## System Overview
 
-Bedrock LLM Monitor v2 measures a 55-channel active catalog across Amazon Bedrock, Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, including the 9 Claude Platform on AWS channels (v2.29.1 reverted the v2.29.0 10-minute CP cadence; `ANTHROPIC_CP_PROBE_INTERVAL_S=600` brings it back as an operational lever). Five more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, a daily Claude API Features evidence sweep, and a 12-hourly sync of official unit prices (v2.30.0). A chatbot answers natural-language questions over the stored time series.
+Bedrock LLM Monitor v2 measures a 62-channel active catalog across Amazon Bedrock (Global and US cross-region profiles plus Seoul in-region on-demand Claude Opus 5 and Sonnet 5, v2.32.0), Claude Platform on AWS (Anthropic CP), and OpenAI GPT on Bedrock (Mantle in-region plus Global and US cross-region profiles). A scheduled AutoProber task probes every channel every 5 minutes, including the 10 Claude Platform on AWS channels (v2.29.1 reverted the v2.29.0 10-minute CP cadence; `ANTHROPIC_CP_PROBE_INTERVAL_S=600` brings it back as an operational lever). Five more scheduled tasks produce AI insights, a 12-hourly model × API surface × feature parity sweep, a 15-minute GPT TTFB/TTFT bench, a daily Claude API Features evidence sweep, and a 12-hourly sync of official unit prices (v2.30.0). A chatbot answers natural-language questions over the stored time series.
 
 Traffic enters through CloudFront at `llm-monitor.whchoi.net` (the default `d36s7ml54xwemr.cloudfront.net` name also works), reaches an internal ALB through a VPC Origin, and is routed to two ECS Fargate services: `frontend` (Next.js standalone) and `backend` (FastAPI). All data lands in a single RDS PostgreSQL instance. Viewers connect over HTTPS. The VPC Origin currently reaches the ALB over HTTP port 80 inside the VPC, a temporary setting in `edge-stack.ts` until the origin switches to `HTTPS_ONLY`; the ALB is internal, sits in private subnets, and its security group admits only the VPC CIDR.
 
 Dashboard model cards grade TTFT, total latency, and TPS values against per-workload-category thresholds (normal blue, warning amber, critical rose). The grading is a pure frontend function in `frontend/src/lib/metricGrade.ts` with no backend involvement (v2.28.0, ADR-029).
 
-Unit prices have one source, the backend `price_history` table (v2.30.0, ADR-030). The PricingSync task reads the Standard input and output price of every active channel, plus the prompt-caching prices and the GPT long-context prices (v2.31.0), from four official sources every 12 hours: the Bedrock agreement-offer rate cards (Bedrock Claude and OpenAI), the AWS Price List API (Nova 2.0 Lite), Anthropic's `pricing.md` (Claude Platform on AWS) and OpenAI's `pricing.md` (the OpenAI official price column, stored as 8 display-only channels `openai-list:<family_key>`, v2.31.0). A change above 50% on any price field waits for admin approval, and a field seen for the first time fills the current row in place (`enriched`). `/api/cost/*` and `/api/efficiency/score` price each probe row at the input and output price in effect at its timestamp (cache and long-context prices are display-only), and the `/pricing` page, its CSV, Markdown and JSON downloads, Model Explorer and Comparison Lab read `/api/pricing`.
+Unit prices have one source, the backend `price_history` table (v2.30.0, ADR-030). The PricingSync task reads the Standard input and output price of every active channel, plus the prompt-caching prices and the GPT long-context prices (v2.31.0), from four official sources every 12 hours: the Bedrock agreement-offer rate cards (Bedrock Claude and OpenAI), the AWS Price List API (Nova 2.0 Lite), Anthropic's `pricing.md` (Claude Platform on AWS) and OpenAI's `pricing.md` (the OpenAI official price column, stored as 9 display-only channels `openai-list:<family_key>`, v2.31.0). A change above 50% on any price field waits for admin approval, and a field seen for the first time fills the current row in place (`enriched`). `/api/cost/*` and `/api/efficiency/score` price each probe row at the input and output price in effect at its timestamp (cache and long-context prices are display-only), and the `/pricing` page, its CSV, Markdown and JSON downloads, Model Explorer and Comparison Lab read `/api/pricing`.
 
 ## Full Architecture
 
@@ -56,7 +56,7 @@ flowchart TB
   end
 
   subgraph providers[Model Provider Layer]
-    br["Bedrock Runtime: Claude, Nova, OpenAI CRIS"]
+    br["Bedrock Runtime: Claude, Nova, OpenAI CRIS, Seoul in-region"]
     mantle["Bedrock Mantle: OpenAI in-region, /anthropic"]
     cp[Claude Platform on AWS]
     opt["Bedrock Agent Runtime: OptimizePrompt"]
@@ -158,27 +158,27 @@ flowchart LR
 
 | Resource | Role |
 |----------|------|
-| Bedrock Runtime | Bedrock Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, Haiku 4.5 (Global and US profiles) and Nova 2.0 Lite US: 21 channels. OpenAI Global and US CRIS profiles go through the Bedrock Runtime OpenAI-compatible endpoints in Seoul and us-east-1 |
-| Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna and GPT 6 Astra, Sol, Luna in-region (16 channels); `/anthropic` surface for the parity run and Claude API Features in `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
-| Claude Platform on AWS | 9 Anthropic channels at `aws-external-anthropic.us-east-2.api.aws` with a workspace ID header |
-| OpenAI channel total | 25 = Mantle in-region 16 + Global CRIS 6 + US CRIS 3; the OpenAI 1P direct path (5 channels) is dormant and hidden since v2.19.1 |
+| Bedrock Runtime | Bedrock Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, Haiku 4.5 (Global and US profiles), Sonnet 5.5 (Global only, v2.32.0), Seoul in-region on-demand Opus 5 and Sonnet 5 (`bedrock:ap-northeast-2:anthropic.claude-*`, the client region and FM id come from the key, v2.32.0, ADR-031) and Nova 2.0 Lite US: 24 channels (Global 11 + US 11 + Seoul in-region 2). OpenAI Global and US CRIS profiles go through the Bedrock Runtime OpenAI-compatible endpoints in Seoul and us-east-1 |
+| Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna and GPT 6 Astra, Sol, Luna and GPT 6.1 Sol in-region (17 channels); `/anthropic` surface for the parity run and Claude API Features in `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
+| Claude Platform on AWS | 10 Anthropic channels at `aws-external-anthropic.us-east-2.api.aws` with a workspace ID header |
+| OpenAI channel total | 28 = Mantle in-region 17 + Global CRIS 7 + US CRIS 4; the OpenAI 1P direct path (5 channels) is dormant and hidden since v2.19.1 |
 | Chatbot | Claude Sonnet 4.6 (`CHAT_MODEL_ID` in `backend/agent/bedrock.py`) with 4 tools; follow-up questions from Claude Haiku 4.5 (`backend/routers/chat.py`) |
 | Insights | Claude Sonnet 4.6 (`INSIGHTS_MODEL_ID`) writes KO and EN summaries of the last 6 hours |
 | AgentCore Memory `BedrockMonitorChatMemory` | Chat context, 30-day retention; IAM managed policy attached to the backend task role |
 | Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize` in `BEDROCK_OPTIMIZE_REGION` (default us-east-1) |
 | Amazon SES (us-east-1) | Registration approval email to the admin address |
-| Official price sources | Bedrock `ListFoundationModelAgreementOffers` (us-east-1, 18 foundation models), AWS Price List `GetProducts` (us-east-1, Nova 2.0 Lite), `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude Platform on AWS) and `https://developers.openai.com/api/docs/pricing.md` (OpenAI official price, v2.31.0); read only by the PricingSync task (ADR-030) |
+| Official price sources | Bedrock `ListFoundationModelAgreementOffers` (us-east-1, 20 foundation models), AWS Price List `GetProducts` (us-east-1, Nova 2.0 Lite), `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude Platform on AWS) and `https://developers.openai.com/api/docs/pricing.md` (OpenAI official price, v2.31.0); read only by the PricingSync task (ADR-030) |
 
 ### Scheduled Ingestion
 
 | Schedule | Expression | Task command | Output |
 |----------|------------|--------------|--------|
-| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | One `ProbeRun` plus 55 `probe_results` rows per cycle, all with the cycle's category (default `ANTHROPIC_CP_PROBE_INTERVAL_S=300`, v2.29.1); with `600`, `_plan_cycle` probes CP channels every other cycle with their own category rotation (46 or 55 rows per cycle) |
+| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | One `ProbeRun` plus 62 `probe_results` rows per cycle, all with the cycle's category (default `ANTHROPIC_CP_PROBE_INTERVAL_S=300`, v2.29.1); with `600`, `_plan_cycle` probes CP channels every other cycle with their own category rotation (52 or 62 rows per cycle) |
 | `InsightsSchedule` | `rate(5 minutes)` | `python -m insights_runner --window 6h` | `Insight` rows (KO and EN) |
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | Model × 6 surfaces × 19 features evidence cells |
-| `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 18 GPT channels (Mantle in-region 11 + CRIS 7) × 10 sequential calls; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s, cycle deadline `GPT_BENCH_DEADLINE` 780 s |
-| `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39 rows × 5 surfaces × 5 models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975 cells (813 probed + 162 pre-decided), about 9 minutes, daily at 17:30 UTC (02:30 KST) |
-| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel (55, plus 8 display-only OpenAI official price channels since v2.31.0), an unchanged observation, empty cache or long-context fields filled on the current row (`enriched`, v2.31.0), a new `verified` price (every field changed by 50% or less) or a `pending_review` row; run cap 300 s; `pg_try_advisory_lock(917350004)` keeps runs from overlapping — a second run exits at once (exit 1, no run row) (v2.30.0, ADR-030) |
+| `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 21 GPT channels (Mantle in-region 12 + CRIS 9) in two parallel lanes since v2.32.0: `cris` (9 Global and US CRIS channels, Bedrock Runtime OpenAI-compatible host) and `mantle` (12 in-region channels, `bedrock-mantle.<region>`). Inside a lane each channel runs sequentially, warm-up 1 + `GPT_BENCH_RUNS` (10) calls; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s; one cycle deadline `GPT_BENCH_DEADLINE` 780 s shared by both lanes (a lane past it skips only its own remaining channels); the main thread commits each finished channel; a lane still running after deadline + call cap + `LANE_JOIN_GRACE_S` 15 s (885 s, best effort) is no longer waited for: queued events are all stored, its in-flight channel keeps its finished runs and is reported as `label (run N+)`, never-started channels as `label` |
+| `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39 rows × 5 surfaces × 6 models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5) = 1,170 cells (946 probed + 224 pre-decided), about 11 minutes, daily at 17:30 UTC (02:30 KST) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel (62, plus 9 display-only OpenAI official price channels since v2.31.0), an unchanged observation, empty cache or long-context fields filled on the current row (`enriched`, v2.31.0), a new `verified` price (every field changed by 50% or less) or a `pending_review` row; run cap 300 s; `pg_try_advisory_lock(917350004)` keeps runs from overlapping — a second run exits at once (exit 1, no run row) (v2.30.0, ADR-030) |
 
 Every scheduled task uses the backend image with a command override, 0.5 vCPU / 1 GB, and a task definition family `:*` wildcard in the scheduler role's `ecs:RunTask` policy (ADR-011). PricingSync runs with its own task role that allows only `bedrock:ListFoundationModelAgreementOffers` and `pricing:GetProducts`, with no model invocation.
 
@@ -228,7 +228,7 @@ Reusable constructs live in `cdk/lib/constructs/`: `fargate-service.ts` (service
 
 ## Key Design Decisions
 
-See ADR-001 through ADR-030 in [`docs/decisions/`](./decisions/) (012, 014, 015, and 016 are unused numbers).
+See ADR-001 through ADR-031 in [`docs/decisions/`](./decisions/) (012, 014, 015, and 016 are unused numbers).
 
 | ADR | Decision |
 |-----|----------|
@@ -258,6 +258,7 @@ See ADR-001 through ADR-030 in [`docs/decisions/`](./decisions/) (012, 014, 015,
 | 028 | Claude Opus 5.5 and GPT-6 Sol, Luna: CP point-release guard `_is_point_release_of`, Sol and Luna Mantle in-region us-east-1 only, agreement-offer pricing |
 | 029 | Dashboard metric grades: per-category absolute thresholds from 48 h p90/p99, TPS graded on the low side only, `lib/metricGrade.ts` as the single source |
 | 030 | Official unit prices synced every 12 hours into a per-`model_id` price history, costs at the price in effect at each probe, 50% guard with admin approval (supersedes the ADR-025 retroactive re-pricing rule); v2.31.0 appendix: OpenAI pricing page as a fourth source, display-only cache and long-context prices, fill-in-place `enriched`; v2.31.1 follow-up: references list only cited sources, official pricing links in the Markdown header, GPT US CRIS = In Region note |
+| 031 | Seoul in-region Bedrock channels with the `bedrock:<region>:<fm-id>` key (client region and model id from `_bedrock_target`, channel `Bedrock ap-northeast-2`, price channel `inregion:ap-northeast-2`), Claude Sonnet 5.5 (Global + CP) and GPT-6.1 Sol (Global, US, Mantle us-east-1), implausible long-context offer prices dropped at sync (`_plausible_long`), GPT on AWS bench in two parallel lanes (CRIS, Mantle) |
 
 ## Operations
 
@@ -274,13 +275,13 @@ See ADR-001 through ADR-030 in [`docs/decisions/`](./decisions/) (012, 014, 015,
 
 ## 시스템 개요
 
-Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 55개 채널을 측정합니다. 스케줄된 AutoProber 태스크가 Claude Platform on AWS 9채널을 포함한 모든 채널을 5분마다 프로빙합니다(v2.29.1에서 v2.29.0의 CP 10분 주기를 되돌렸고, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 운영 레버로 써서 다시 켤 수 있습니다). 나머지 스케줄 태스크 5개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕, 12시간 주기 공식 단가 동기화(v2.30.0)를 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
+Bedrock LLM Monitor v2는 Amazon Bedrock, Claude Platform on AWS(Anthropic CP), OpenAI GPT on Bedrock(Mantle 인리전과 Global, US 교차 리전 프로파일)에 걸친 활성 62개 채널을 측정합니다(Bedrock은 Global, US 교차 리전 프로파일과 서울 in-region 온디맨드 Claude Opus 5, Sonnet 5, v2.32.0). 스케줄된 AutoProber 태스크가 Claude Platform on AWS 10채널을 포함한 모든 채널을 5분마다 프로빙합니다(v2.29.1에서 v2.29.0의 CP 10분 주기를 되돌렸고, `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 운영 레버로 써서 다시 켤 수 있습니다). 나머지 스케줄 태스크 5개가 AI 인사이트, 12시간 주기 모델 × API surface × 피처 패리티 스윕, 15분 주기 GPT TTFB/TTFT 벤치, 일 1회 Claude API Features 실행 증거 스윕, 12시간 주기 공식 단가 동기화(v2.30.0)를 만듭니다. 챗봇이 저장된 시계열에 대한 자연어 질문에 답합니다.
 
 트래픽은 `llm-monitor.whchoi.net`(기본 이름 `d36s7ml54xwemr.cloudfront.net`도 동작)의 CloudFront로 들어와 VPC Origin을 거쳐 내부 ALB에 도달하고, ECS Fargate 서비스 2개인 `frontend`(Next.js standalone)와 `backend`(FastAPI)로 라우팅됩니다. 모든 데이터는 RDS PostgreSQL 인스턴스 하나에 저장됩니다. 뷰어 구간은 HTTPS입니다. VPC Origin은 현재 VPC 내부에서 HTTP 포트 80으로 ALB에 연결하며, 이는 origin을 `HTTPS_ONLY`로 바꾸기 전까지의 임시 설정입니다(`edge-stack.ts`). ALB는 internal scheme이고 프라이빗 서브넷에 있으며 보안 그룹은 VPC CIDR만 허용합니다.
 
 대시보드 모델 카드는 TTFT, 총 응답시간, TPS 값을 워크로드 카테고리별 임계치로 등급 표시합니다(양호 파랑, 경고 호박, 위험 장미). 등급 판정은 `frontend/src/lib/metricGrade.ts`의 순수 프런트엔드 함수이며 백엔드는 관여하지 않습니다(v2.28.0, ADR-029).
 
-단가의 출처는 backend `price_history` 테이블 하나입니다(v2.30.0, ADR-030). PricingSync 태스크가 12시간마다 공식 출처 4개에서 활성 채널의 Standard 입력, 출력 단가와 프롬프트 캐싱 단가, GPT 긴 컨텍스트 단가(v2.31.0)를 읽습니다. Bedrock agreement offer rate card(Bedrock Claude, OpenAI), AWS Price List API(Nova 2.0 Lite), Anthropic `pricing.md`(Claude Platform on AWS), OpenAI `pricing.md`(OpenAI 공식 가격 열, 표시 전용 채널 `openai-list:<family_key>` 8개로 저장, v2.31.0)입니다. 어느 단가 필드든 50%를 넘게 바뀌면 관리자 승인을 기다리고, 처음 관측한 필드는 현재 행을 그 자리에서 채웁니다(`enriched`). `/api/cost/*`와 `/api/efficiency/score`는 프로브 행마다 그 시각에 유효했던 입력, 출력 단가로 비용을 계산하고(캐시와 긴 컨텍스트 단가는 표시 전용), `/pricing` 페이지와 CSV, Markdown, JSON 다운로드, 모델 탐색, Comparison Lab은 `/api/pricing`을 읽습니다.
+단가의 출처는 backend `price_history` 테이블 하나입니다(v2.30.0, ADR-030). PricingSync 태스크가 12시간마다 공식 출처 4개에서 활성 채널의 Standard 입력, 출력 단가와 프롬프트 캐싱 단가, GPT 긴 컨텍스트 단가(v2.31.0)를 읽습니다. Bedrock agreement offer rate card(Bedrock Claude, OpenAI), AWS Price List API(Nova 2.0 Lite), Anthropic `pricing.md`(Claude Platform on AWS), OpenAI `pricing.md`(OpenAI 공식 가격 열, 표시 전용 채널 `openai-list:<family_key>` 9개로 저장, v2.31.0)입니다. 어느 단가 필드든 50%를 넘게 바뀌면 관리자 승인을 기다리고, 처음 관측한 필드는 현재 행을 그 자리에서 채웁니다(`enriched`). `/api/cost/*`와 `/api/efficiency/score`는 프로브 행마다 그 시각에 유효했던 입력, 출력 단가로 비용을 계산하고(캐시와 긴 컨텍스트 단가는 표시 전용), `/pricing` 페이지와 CSV, Markdown, JSON 다운로드, 모델 탐색, Comparison Lab은 `/api/pricing`을 읽습니다.
 
 ## 전체 아키텍처
 
@@ -319,7 +320,7 @@ flowchart TB
   end
 
   subgraph providers[Model Provider Layer]
-    br["Bedrock Runtime: Claude, Nova, OpenAI CRIS"]
+    br["Bedrock Runtime: Claude, Nova, OpenAI CRIS, Seoul in-region"]
     mantle["Bedrock Mantle: OpenAI in-region, /anthropic"]
     cp[Claude Platform on AWS]
     opt["Bedrock Agent Runtime: OptimizePrompt"]
@@ -421,27 +422,27 @@ flowchart LR
 
 | 리소스 | 역할 |
 |--------|------|
-| Bedrock Runtime | Bedrock Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, Haiku 4.5(Global, US 프로파일)와 Nova 2.0 Lite US, 21채널. OpenAI Global, US CRIS 프로파일은 서울, us-east-1 Bedrock Runtime OpenAI 호환 엔드포인트로 호출 |
-| Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna와 GPT 6 Astra, Sol, Luna 인리전(16채널), 패리티 런과 Claude API Features용 `/anthropic` surface는 `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
-| Claude Platform on AWS | `aws-external-anthropic.us-east-2.api.aws` + workspace ID 헤더로 호출하는 Anthropic 9채널 |
-| OpenAI 채널 합계 | 25 = Mantle 인리전 16 + Global CRIS 6 + US CRIS 3, OpenAI 1P direct 경로(5채널)는 v2.19.1부터 휴면, 비노출 |
+| Bedrock Runtime | Bedrock Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Opus 4.8, Opus 4.7, Opus 4.6, Sonnet 5, Sonnet 4.6, Haiku 4.5(Global, US 프로파일), Sonnet 5.5(Global만, v2.32.0), 서울 in-region 온디맨드 Opus 5, Sonnet 5(`bedrock:ap-northeast-2:anthropic.claude-*`, client 리전과 FM id를 키에서 푼다, v2.32.0, ADR-031)와 Nova 2.0 Lite US, 24채널(Global 11 + US 11 + 서울 in-region 2). OpenAI Global, US CRIS 프로파일은 서울, us-east-1 Bedrock Runtime OpenAI 호환 엔드포인트로 호출 |
+| Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna와 GPT 6 Astra, Sol, Luna, GPT 6.1 Sol 인리전(17채널), 패리티 런과 Claude API Features용 `/anthropic` surface는 `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
+| Claude Platform on AWS | `aws-external-anthropic.us-east-2.api.aws` + workspace ID 헤더로 호출하는 Anthropic 10채널 |
+| OpenAI 채널 합계 | 28 = Mantle 인리전 17 + Global CRIS 7 + US CRIS 4, OpenAI 1P direct 경로(5채널)는 v2.19.1부터 휴면, 비노출 |
 | 챗봇 | Claude Sonnet 4.6(`backend/agent/bedrock.py` `CHAT_MODEL_ID`) + 도구 4개, 후속 질문은 Claude Haiku 4.5(`backend/routers/chat.py`) |
 | 인사이트 | Claude Sonnet 4.6(`INSIGHTS_MODEL_ID`)이 최근 6시간 KO, EN 요약 작성 |
 | AgentCore Memory `BedrockMonitorChatMemory` | 대화 컨텍스트 30일 보존, IAM 관리형 정책을 backend 태스크 역할에 연결 |
 | Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize`, `BEDROCK_OPTIMIZE_REGION`(기본 us-east-1) |
 | Amazon SES (us-east-1) | 가입 승인 메일을 관리자 주소로 발송 |
-| 공식 단가 출처 | Bedrock `ListFoundationModelAgreementOffers`(us-east-1, 파운데이션 모델 18개), AWS Price List `GetProducts`(us-east-1, Nova 2.0 Lite), `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS), `https://developers.openai.com/api/docs/pricing.md`(OpenAI 공식 가격, v2.31.0), PricingSync 태스크만 읽음 (ADR-030) |
+| 공식 단가 출처 | Bedrock `ListFoundationModelAgreementOffers`(us-east-1, 파운데이션 모델 20개), AWS Price List `GetProducts`(us-east-1, Nova 2.0 Lite), `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS), `https://developers.openai.com/api/docs/pricing.md`(OpenAI 공식 가격, v2.31.0), PricingSync 태스크만 읽음 (ADR-030) |
 
 ### 스케줄 수집
 
 | 스케줄 | 표현식 | 태스크 명령 | 산출물 |
 |--------|--------|-------------|--------|
-| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | 사이클마다 `ProbeRun` 1개 + `probe_results` 55행, 모두 사이클 카테고리(기본 `ANTHROPIC_CP_PROBE_INTERVAL_S=300`, v2.29.1). `600`이면 `_plan_cycle`이 CP 채널을 두 사이클에 한 번 자체 카테고리 순환으로 선택(사이클마다 46행 또는 55행) |
+| `AutoProberSchedule` | `rate(5 minutes)` | `python -m auto_prober_runner --once` | 사이클마다 `ProbeRun` 1개 + `probe_results` 62행, 모두 사이클 카테고리(기본 `ANTHROPIC_CP_PROBE_INTERVAL_S=300`, v2.29.1). `600`이면 `_plan_cycle`이 CP 채널을 두 사이클에 한 번 자체 카테고리 순환으로 선택(사이클마다 52행 또는 62행) |
 | `InsightsSchedule` | `rate(5 minutes)` | `python -m insights_runner --window 6h` | `Insight` 행(KO, EN) |
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | 모델 × surface 6개 × 피처 19개 실행 증거 셀 |
-| `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 18채널(Mantle 인리전 11 + CRIS 7) × 순차 10회, 호출당 watchdog `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초 |
-| `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39행 × surface 5개 × 모델 5개(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5) = 975셀(프로브 813 + 사전판정 162), 약 9분, 매일 17:30 UTC(02:30 KST) |
-| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널(55채널, v2.31.0부터 표시 전용 OpenAI 공식 가격 8채널 추가)마다 변경 없음 관측, 현재 행의 빈 캐시나 긴 컨텍스트 필드 채우기(`enriched`, v2.31.0), 새 `verified` 단가(모든 필드 변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_try_advisory_lock(917350004)`로 런이 겹치지 않게 한다 — 겹치면 두 번째 런은 즉시 exit 1로 끝난다(런 행 없음) (v2.30.0, ADR-030) |
+| `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 21채널(Mantle 인리전 12 + CRIS 9)을 v2.32.0부터 두 갈래로 동시에 돈다. `cris`(Global, US CRIS 9채널, Bedrock Runtime OpenAI 호환 호스트)와 `mantle`(인리전 12채널, `bedrock-mantle.<region>`)이다. 갈래 안에서는 채널을 하나씩 순차로 측정하고(워밍업 1 + `GPT_BENCH_RUNS` 10회), 호출당 watchdog은 `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초는 두 갈래가 공유한다(넘긴 갈래는 자기 남은 채널만 skip). 끝난 채널은 메인 스레드가 커밋하고, 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(885초, 최선의 상한)가 지나도 도는 갈래는 기다리지 않는다. 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`, 시작하지 못한 채널은 `라벨`로 보고한다 |
+| `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39행 × surface 5개 × 모델 6개(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5) = 1,170셀(프로브 946 + 사전판정 224), 약 11분, 매일 17:30 UTC(02:30 KST) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널(62채널, v2.31.0부터 표시 전용 OpenAI 공식 가격 9채널 추가)마다 변경 없음 관측, 현재 행의 빈 캐시나 긴 컨텍스트 필드 채우기(`enriched`, v2.31.0), 새 `verified` 단가(모든 필드 변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_try_advisory_lock(917350004)`로 런이 겹치지 않게 한다 — 겹치면 두 번째 런은 즉시 exit 1로 끝난다(런 행 없음) (v2.30.0, ADR-030) |
 
 모든 스케줄 태스크는 backend 이미지를 command override로 쓰고 0.5 vCPU / 1 GB이며, 스케줄러 역할의 `ecs:RunTask` 정책은 태스크 정의 family `:*` 와일드카드를 씁니다(ADR-011). PricingSync는 `bedrock:ListFoundationModelAgreementOffers`와 `pricing:GetProducts`만 허용하는 전용 태스크 역할로 돌며 모델 호출 권한이 없습니다.
 
@@ -491,7 +492,7 @@ flowchart LR
 
 ## 핵심 설계 결정
 
-[`docs/decisions/`](./decisions/)의 ADR-001~ADR-030을 참조합니다(012, 014, 015, 016은 결번).
+[`docs/decisions/`](./decisions/)의 ADR-001~ADR-031을 참조합니다(012, 014, 015, 016은 결번).
 
 | ADR | 결정 |
 |-----|------|
@@ -521,6 +522,7 @@ flowchart LR
 | 028 | Claude Opus 5.5와 GPT-6 Sol, Luna: CP 점 버전 가드 `_is_point_release_of`, Sol, Luna Mantle 인리전은 us-east-1만, agreement offer 단가 |
 | 029 | 대시보드 지표 등급: 48시간 p90/p99 기반 카테고리별 절대 임계치, TPS는 낮은 쪽만 판정, `lib/metricGrade.ts` 단일 출처 |
 | 030 | 공식 단가 12시간 자동 동기화와 `model_id` 단위 단가 이력, 프로브 시각 기준 단가로 비용 계산, 50% 안전장치와 관리자 승인 (ADR-025의 소급 재계산 규칙 대체), v2.31.0 부록: 네 번째 출처 OpenAI 요금 문서, 표시 전용 캐시와 긴 컨텍스트 단가, 빈 필드 제자리 채움 `enriched`, v2.31.1 후속: 인용된 참고 자료만 표시, Markdown 머리말 공식 요금 링크, GPT US CRIS = In Region 안내 |
+| 031 | `bedrock:<region>:<fm-id>` 키의 서울 in-region Bedrock 채널(client 리전과 model id는 `_bedrock_target`, 채널 `Bedrock ap-northeast-2`, 단가 채널 `inregion:ap-northeast-2`), Claude Sonnet 5.5(Global + CP)와 GPT-6.1 Sol(Global, US, Mantle us-east-1), 짧은 컨텍스트보다 낮은 offer 긴 컨텍스트 단가는 동기화에서 버림(`_plausible_long`), GPT on AWS 벤치 두 갈래(CRIS, Mantle) 병렬 |
 
 ## 운영
 

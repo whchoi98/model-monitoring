@@ -55,7 +55,10 @@ def test_fixtures_are_sanitized():
     assert names >= {"offers_claude-opus-5-5.json", "offers_claude-sonnet-4-6.json", "offers_claude-haiku-4-5.json",
                      "offers_claude-fable-5-1.json", "offers_gpt-6-astra.json", "offers_gpt-5.4.json",
                      "offers_gpt-5.5.json", "offers_gpt-5.6-terra.json", "offers_gpt-5.6-luna.json",
-                     "pricelist_nova-2-lite.json", "anthropic_pricing.md", "openai_pricing.md"}
+                     "pricelist_nova-2-lite.json", "anthropic_pricing.md", "openai_pricing.md",
+                     # v2.32.0 (2026-09-30): Sonnet 5.5, GPT 6.1 Sol, Seoul in-region (APN2_*_standard) Opus 5 / Sonnet 5
+                     "offers_claude-sonnet-5-5.json", "offers_gpt-6.1-sol.json", "offers_claude-opus-5.json",
+                     "offers_claude-sonnet-5.json"}
     for f in FIXTURES.iterdir():
         text = f.read_text(encoding="utf-8")
         for forbidden in ("offerToken", "legalTerm", "X-Amz", "Security-Token", "awsmp-offer-legal"):
@@ -130,13 +133,24 @@ GPT54_STANDARD = U("2.75", "16.5", cache_read="0.275", long_input="5.5", long_ou
     ("offers_gpt-5.6-luna.json", "inregion:us-east-2", U("0.22", "1.32", cache_read="0.022", cache_write="0.275",
                                                          long_input="0.44", long_output="1.98",
                                                          long_cache_read="0.044", long_cache_write="0.55")),
+    # v2.32.0: Seoul in-region on demand = APN2_*_standard (the same values as USE1_*_standard)
+    ("offers_claude-opus-5.json", "inregion:ap-northeast-2", U("5.5", "27.5", cache_read="0.55", cache_write="6.875",
+                                                               cache_write_1h=11)),
+    ("offers_claude-sonnet-5.json", "inregion:ap-northeast-2", U("2.2", 11, cache_read="0.22", cache_write="2.75",
+                                                                 cache_write_1h="4.4")),
+    ("offers_claude-sonnet-5-5.json", "global", U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4)),
+    # GPT 6.1 Sol flat scheme, read as is: the long output (2 / 2.2) is below the output — pricing_sync drops it
+    ("offers_gpt-6.1-sol.json", "global", U(2, 10, cache_read="0.1", cache_write="2.5", long_input=4, long_output=2,
+                                            long_cache_read="0.2", long_cache_write=5)),
+    ("offers_gpt-6.1-sol.json", "us", U("2.2", 11, cache_read="0.11", cache_write="2.75", long_input="4.4",
+                                        long_output="2.2", long_cache_read="0.22", long_cache_write="5.5")),
 ])
 def test_select_offer_price_from_real_rate_cards(fixture, channel, expected):
     assert select_offer_price(_card(fixture), channel) == expected
 
 
 OFFER_FIXTURES = sorted(f.name for f in FIXTURES.glob("offers_*.json"))
-CHANNELS = ("global", "us", "inregion:us-east-1", "inregion:us-east-2", "inregion:us-west-2")
+CHANNELS = ("global", "us", "inregion:ap-northeast-2", "inregion:us-east-1", "inregion:us-east-2", "inregion:us-west-2")
 
 
 @pytest.mark.parametrize("fixture", OFFER_FIXTURES)
@@ -161,7 +175,7 @@ def test_claude_offers_have_no_long_context_price(fixture):
         assert (price.long_input, price.long_output, price.long_cache_read, price.long_cache_write) == (None,) * 4
 
 
-@pytest.mark.parametrize("channel", ["cp", "inregion:eu-west-1", "inregion:", "bogus"])
+@pytest.mark.parametrize("channel", ["cp", "inregion:eu-west-1", "inregion:ap-northeast-1", "inregion:", "bogus"])
 def test_channels_without_an_offer_rule_get_none(channel):
     assert select_offer_price(_card("offers_gpt-6-astra.json"), channel) is None
 
@@ -307,12 +321,14 @@ def test_selection_order_per_channel():
         ("USE1_InputTokenCount", "8"), ("USE1_OutputTokenCount", "80"),
         ("USE2_input_tokens_standard", "9"), ("USE2_output_tokens_standard", "90"),
         ("USW2_input_tokens_standard", "11"), ("USW2_output_tokens_standard", "110"),
+        ("APN2_input_tokens_standard", "12"), ("APN2_output_tokens_standard", "120"),
     ]]
     assert _drain(card, "global") == [1, 2, 3, 4, 5]
     assert _drain(card, "us") == [6, 7, 8]
     assert _drain(card, "inregion:us-east-1") == [6, 7]
     assert _drain(card, "inregion:us-east-2") == [9, 7]
     assert _drain(card, "inregion:us-west-2") == [11, 7]
+    assert _drain(card, "inregion:ap-northeast-2") == [12, 7]
 
 
 # ---------------------------------------------------------------- AWS Price List
@@ -442,13 +458,14 @@ def test_price_list_fields_that_are_not_objects_raise_price_parse_error(path):
 
 # ---------------------------------------------------------------- Anthropic pricing markdown
 
-CP_EXPECTED = {  # the nine Claude Platform on AWS families: input, output, cache read, 5m write, 1h write
+CP_EXPECTED = {  # the ten Claude Platform on AWS families: input, output, cache read, 5m write, 1h write
     "Claude Fable 5.1": U(10, 50, cache_read="0.25", cache_write="12.5", cache_write_1h=20),
     "Claude Fable 5": U(10, 50, cache_read=1, cache_write="12.5", cache_write_1h=20),
     "Claude Opus 5.5": U(4, 20, cache_read="0.2", cache_write=5, cache_write_1h=8),
     "Claude Opus 5": U(5, 25, cache_read="0.5", cache_write="6.25", cache_write_1h=10),
     "Claude Opus 4.8": U(5, 25, cache_read="0.5", cache_write="6.25", cache_write_1h=10),
     "Claude Opus 4.7": U(5, 25, cache_read="0.5", cache_write="6.25", cache_write_1h=10),
+    "Claude Sonnet 5.5": U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4),
     "Claude Sonnet 5": U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4),
     "Claude Sonnet 4.6": U(3, 15, cache_read="0.3", cache_write="3.75", cache_write_1h=6),
     "Claude Haiku 4.5": U(1, 5, cache_read="0.1", cache_write="1.25", cache_write_1h=2),
@@ -459,7 +476,7 @@ def _doc():
     return parse_anthropic_pricing_md((FIXTURES / "anthropic_pricing.md").read_text(encoding="utf-8"))
 
 
-def test_real_doc_gives_all_nine_claude_platform_on_aws_families():
+def test_real_doc_gives_all_ten_claude_platform_on_aws_families():
     prices = _doc()
     assert sorted(ANTHROPIC_DOC_NAMES.values()) == sorted(CP_EXPECTED)
     assert {name: prices[name] for name in CP_EXPECTED} == CP_EXPECTED
@@ -581,7 +598,9 @@ def test_heading_error_messages_are_unchanged():
 
 # ---------------------------------------------------------------- OpenAI pricing markdown
 
-OPENAI_EXPECTED = {  # "### Standard pricing data" of the 2026-09-27 doc, the eight Bedrock GPT families + a mini model
+OPENAI_EXPECTED = {  # "### Standard pricing data" of the 2026-09-27 doc (+ gpt-6.1-sol, 2026-09-30), nine families + a mini
+    "gpt-6.1-sol": U(2, 10, cache_read="0.1", cache_write="2.5", long_input=4, long_output=15, long_cache_read="0.2",
+                     long_cache_write=5),
     "gpt-6-astra": U(10, 50, cache_read=1, cache_write="12.5", long_input=20, long_output=75, long_cache_read=2,
                      long_cache_write=25),
     "gpt-6-sol": U(2, 10, cache_read="0.2", cache_write="2.5", long_input=4, long_output=15, long_cache_read="0.4",
@@ -612,7 +631,7 @@ def _oa(*rows, header=OA_HEADER, heading="### Standard pricing data"):
     return f"# Pricing\n\n{heading}\n\n" + "\n".join((header, sep) + rows) + "\n"
 
 
-def test_real_openai_doc_gives_the_eight_bedrock_gpt_families():
+def test_real_openai_doc_gives_the_nine_bedrock_gpt_families():
     prices = _openai_doc()
     assert {name: prices[name] for name in OPENAI_EXPECTED} == OPENAI_EXPECTED
     assert prices["gpt-5.5"].cache_write is None and prices["gpt-5.5"].long_cache_write is None   # "-" cells
@@ -698,3 +717,10 @@ def test_openai_duplicate_names_with_the_same_input_output_lose_only_the_conflic
 def test_openai_structure_changes_raise(doc):
     with pytest.raises(PriceParseError):
         parse_openai_pricing_md(doc)
+
+
+def test_sonnet_5_5_has_no_seoul_in_region_price():
+    """Sonnet 5.5 is Global CRIS only in Seoul (INFERENCE_PROFILE only): its offer has no APN2_*_standard."""
+    card = _card("offers_claude-sonnet-5-5.json")
+    assert select_offer_price(card, "inregion:ap-northeast-2") is None
+    assert select_offer_price(card, "us") == U("2.2", 11, cache_read="0.22", cache_write="2.75", cache_write_1h="4.4")

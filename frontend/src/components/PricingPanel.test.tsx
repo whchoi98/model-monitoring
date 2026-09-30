@@ -171,6 +171,27 @@ describe("PricingContent", () => {
     expect(plain(inRegion)).toContain("$2.50 / $15.00 us-west-2[7]");
   });
 
+  test("Claude In Region(서울 ap-northeast-2, v2.32.0)도 GPT처럼 가격과 리전을 한 줄로 표시한다", () => {
+    // 합성 데이터: fixture에 Opus 5 행이 없어 Opus 5.5 행을 복제해 서울 In-Region 원소를 붙인다(운영 단가 핀 아님).
+    const opus55 = pricingFixture.families.find((family) => family.family_key === "claude-opus-5-5")!;
+    const opus5 = {
+      ...opus55, family_key: "claude-opus-5", family: "Claude Opus 5",
+      tiers: {
+        ...opus55.tiers,
+        in_region: [{ regions: ["ap-northeast-2"], ...opus55.tiers.us!, model_ids: ["bedrock:ap-northeast-2:anthropic.claude-opus-5"] }],
+      },
+    };
+    const families = [...pricingFixture.families];
+    families.splice(families.indexOf(opus55) + 1, 0, opus5);
+    const html = render("ko", null, { ...pricingFixture, families });
+    const inRegion = cell(html, "claude-opus-5", "in_region");
+    expect(count(inRegion, "data-price-line")).toBe(1);
+    expect(plain(inRegion)).toContain("$4.40 / $22.00 ap-northeast-2[3]");
+    expect(inRegion).not.toContain("단가 없음");
+    // Opus 5.5 행은 그대로 빈 칸
+    expect(cell(html, "claude-opus-5-5", "in_region")).toContain("단가 없음");
+  });
+
   test("둘째 줄은 프롬프트 캐싱, GPT 셋째 줄은 긴 컨텍스트", () => {
     const ko = render("ko");
     expect(line(cell(ko, "claude-opus-5-5", "global"), "cache")).toBe("캐시 읽기 $0.20, 쓰기 $5.00, 1시간 쓰기 $8.00");

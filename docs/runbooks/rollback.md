@@ -46,6 +46,18 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
+**v2.32.0에서 v2.31.2로 되돌릴 때 (과도 상태)**. v2.32.0은 CDK env(`BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`)를 더한 릴리스라 위 규칙대로
+v2.31.2 tag의 `cdk/`로 되돌린다. DB는 그대로 둔다 — v2.32.0이 남긴 `price_history` 8행(Sonnet 5.5 Global, CP Sonnet 5.5, 서울 in-region 2,
+GPT 6.1 Sol 3, `openai-list:gpt-6.1-sol`)과 새 model_id의 프로브, 벤치, 피처 행은 v2.31.2가 무시하거나 단가 조회에만 쓰고, v2.31.2의
+`/api/pricing`도 정상이다(오프라인 확인: 71행 DB에서 families 19, models 55, references 21). 다만 조회 창이 지날 때까지 화면에 다음이 보인다.
+1. `/reliability`: v2.31.2는 괄호가 리전 코드인 Bedrock 라벨을 모르므로 `Bedrock Claude Opus 5 (ap-northeast-2)`,
+   `Bedrock Claude Sonnet 5 (ap-northeast-2)` 행이 Claude Opus 5와 Sonnet 5의 "Bedrock US" 채널에 섞인다(기본 24시간, 고른 창만큼).
+   그 기간의 US 성공률과 지연 수치는 서울 in-region 측정을 포함한다.
+2. `/cost` channel-compare: `bedrock:ap-northeast-2:*` 키가 "Other" 채널로 잡힌다.
+3. `/claude-features`: 다음 17:30 UTC 런까지 v2.32.0 런(6모델, 1170셀, Sonnet 5.5 포함)이 최신 런으로 보인다.
+4. 대시보드 카드: v2.31.2 `latest_results`의 조회 범위가 짧아 새 채널 카드는 곧 사라진다.
+데이터를 지울 필요는 없다. 다시 v2.32.0 이상으로 올리면 그대로 이어진다.
+
 **v2.30.0을 되돌린 뒤 다시 배포할 때 (PricingSync 로그 그룹)**. v2.30.0은 CDK를 바꾼 릴리스라 위 규칙대로 v2.29.1 tag의 `cdk/`로
 되돌린다. 그러면 PricingSync 스케줄, 태스크 정의, 역할은 지워지지만 로그 그룹 `/ecs/pricingsync`는 이름을 고정했고
 `RemovalPolicy.RETAIN`(`cdk/lib/stacks/scheduler-stack.ts` `buildTaskDef`)이라 계정에 남는다. 이 상태로 v2.30.0 이상을 다시 배포하면

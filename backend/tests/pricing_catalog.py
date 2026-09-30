@@ -1,26 +1,30 @@
-"""pricing 테스트 공용 데이터 — 운영 /api/models(2026-09-26) 활성 55채널 (v2.30.0). 수집 대상 아님."""
+"""pricing 테스트 공용 데이터 — 활성 62채널: 운영 /api/models(2026-09-26) 55채널 (v2.30.0) + v2.32.0 Claude Sonnet 5.5
+(Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5. 수집 대상 아님."""
 
-_CLAUDE = [  # (FM id, family_key, family) — Global, US가 같은 FM id
-    ("anthropic.claude-fable-5-1", "claude-fable-5-1", "Claude Fable 5.1"),
-    ("anthropic.claude-fable-5", "claude-fable-5", "Claude Fable 5"),
-    ("anthropic.claude-opus-5-5", "claude-opus-5-5", "Claude Opus 5.5"),
-    ("anthropic.claude-opus-5", "claude-opus-5", "Claude Opus 5"),
-    ("anthropic.claude-opus-4-8", "claude-opus-4-8", "Claude Opus 4.8"),
-    ("anthropic.claude-opus-4-7", "claude-opus-4-7", "Claude Opus 4.7"),
-    ("anthropic.claude-opus-4-6-v1", "claude-opus-4-6", "Claude Opus 4.6"),
-    ("anthropic.claude-sonnet-5", "claude-sonnet-5", "Claude Sonnet 5"),
-    ("anthropic.claude-sonnet-4-6", "claude-sonnet-4-6", "Claude Sonnet 4.6"),
-    ("anthropic.claude-haiku-4-5-20251001-v1:0", "claude-haiku-4-5", "Claude Haiku 4.5"),
+_GU = ("global", "us")
+_CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
+    ("anthropic.claude-fable-5-1", "claude-fable-5-1", "Claude Fable 5.1", _GU),
+    ("anthropic.claude-fable-5", "claude-fable-5", "Claude Fable 5", _GU),
+    ("anthropic.claude-opus-5-5", "claude-opus-5-5", "Claude Opus 5.5", _GU),
+    ("anthropic.claude-opus-5", "claude-opus-5", "Claude Opus 5", (*_GU, "ap-northeast-2")),
+    ("anthropic.claude-opus-4-8", "claude-opus-4-8", "Claude Opus 4.8", _GU),
+    ("anthropic.claude-opus-4-7", "claude-opus-4-7", "Claude Opus 4.7", _GU),
+    ("anthropic.claude-opus-4-6-v1", "claude-opus-4-6", "Claude Opus 4.6", _GU),
+    ("anthropic.claude-sonnet-5-5", "claude-sonnet-5-5", "Claude Sonnet 5.5", ("global",)),  # us. 프로파일 없음
+    ("anthropic.claude-sonnet-5", "claude-sonnet-5", "Claude Sonnet 5", (*_GU, "ap-northeast-2")),
+    ("anthropic.claude-sonnet-4-6", "claude-sonnet-4-6", "Claude Sonnet 4.6", _GU),
+    ("anthropic.claude-haiku-4-5-20251001-v1:0", "claude-haiku-4-5", "Claude Haiku 4.5", _GU),
 ]
 # CP 디스커버리 id (Opus 4.6은 CP 채널 없음, Haiku는 날짜 접미사)
 _CP_IDS = {
     "claude-fable-5-1": "claude-fable-5-1", "claude-fable-5": "claude-fable-5",
     "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5",
     "claude-opus-4-8": "claude-opus-4-8", "claude-opus-4-7": "claude-opus-4-7",
-    "claude-sonnet-5": "claude-sonnet-5", "claude-sonnet-4-6": "claude-sonnet-4-6",
+    "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-sonnet-4-6": "claude-sonnet-4-6",
     "claude-haiku-4-5": "claude-haiku-4-5-20251001",
 }
 _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전
+    ("openai.gpt-6.1-sol", "gpt-6.1-sol", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
     ("openai.gpt-6-astra", "gpt-6-astra", "GPT 6 Astra", ("global", "us", "us-west-2")),
     ("openai.gpt-6-sol", "gpt-6-sol", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("openai.gpt-6-luna", "gpt-6-luna", "GPT 6 Luna", ("global", "us", "us-east-1")),
@@ -40,11 +44,15 @@ def _channel(region: str) -> str:
     return region if region in ("global", "us") else f"inregion:{region}"
 
 
+def _bedrock_id(fm: str, channel: str) -> str:
+    return f"{channel}.{fm}" if channel in ("global", "us") else f"bedrock:{channel}:{fm}"
+
+
 # model_id → (family_key, family, provider, channel, source_kind, source_ref)
 EXPECTED_IDENTITY: dict[str, tuple[str, str, str, str, str, str]] = {
-    **{f"{p}.{fm}": (fk, fam, "anthropic", p, "offer", fm) for p in ("global", "us") for fm, fk, fam in _CLAUDE},
+    **{_bedrock_id(fm, c): (fk, fam, "anthropic", _channel(c), "offer", fm) for fm, fk, fam, cs in _CLAUDE for c in cs},
     "us.amazon.nova-2-lite-v1:0": ("nova-2-lite", "Nova 2.0 Lite", "amazon", "us", "pricelist", "nova-2-lite"),
-    **{f"anthropic:{_CP_IDS[fk]}": (fk, fam, "anthropic", "cp", "anthropic_doc", fam) for _, fk, fam in _CLAUDE if fk in _CP_IDS},
+    **{f"anthropic:{_CP_IDS[fk]}": (fk, fam, "anthropic", "cp", "anthropic_doc", fam) for _, fk, fam, _ in _CLAUDE if fk in _CP_IDS},
     **{_openai_id(fm, r): (fk, fam, "openai", _channel(r), "offer", fm) for fm, fk, fam, rs in _OPENAI for r in rs},
 }
 
@@ -74,3 +82,5 @@ CP_MODEL_IDS_20260923 = [
     "claude-opus-4-8", "claude-opus-4-7", "claude-sonnet-4-6", "claude-opus-4-6",
     "claude-opus-4-5-20251101", "claude-haiku-4-5-20251001", "claude-sonnet-4-5-20250929",
 ]
+# 2026-09-30 실측 — claude-sonnet-5-5가 claude-sonnet-5보다 먼저(맨 앞) 온다
+CP_MODEL_IDS_20260930 = ["claude-sonnet-5-5", *CP_MODEL_IDS_20260923]

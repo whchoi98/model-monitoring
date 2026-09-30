@@ -141,3 +141,14 @@ Price List API에는 GPT-6 항목이 아직 없다.
   함께 삭제됐다. 비용 조인이 `model_id` 정확 일치라 prefix fallback이 없으므로 "3키를 항상 함께 둔다" 규칙도 필요 없다. 3채널
   seed(`openai:us-west-2:openai.gpt-6-astra`, `openai:us:us.openai.gpt-6-astra` $11 / $55, `openai:global:global.openai.gpt-6-astra`
   $10 / $50)는 v2.29.1 값과 같아 비용은 바뀌지 않는다.
+
+## 후속 (v2.32.0, 2026-09-30) — GPT-6.1 Sol이 유사 리전 `us` 재사용
+
+- GPT-6.1 Sol(ADR-031)의 US CRIS 채널 `openai:us:us.openai.gpt-6.1-sol`(라벨 `OpenAI GPT 6.1 Sol (US)`)은 이 ADR의 유사 리전 `us`를 그대로
+  쓴다. base URL은 기존 `OPENAI_US_BASE_URL`(us-east-1 bedrock-runtime `/openai/v1`)이고 bearer도 `OPENAI_API_KEY` 그대로다. 프로파일 id는
+  prober가 `us.` 접두로 파생하므로 새 env는 모델 id 하나(`BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`)뿐이다. Global CRIS도 기존
+  `OPENAI_GLOBAL_BASE_URL`을 재사용한다.
+- US CRIS 채널은 3개(GPT-6 Astra, Sol, Luna)에서 **4개**가 되고, GPT on AWS 벤치의 US 채널도 4개다(CRIS 갈래 9 = Global 5 + US 4). 2026-09-30
+  라이브는 200(TTFB 950ms), 벤치 요청 형태 2회도 200/200이었다.
+- 프런트 `channelRank`의 OpenAI US 분기(rank 2)는 그대로 GPT-6.1 Sol에도 적용된다. v2.32.0에서 Bedrock 서울 in-region 라벨
+  (`(ap-northeast-2)`)을 rank 3으로 보내는 분기가 그 뒤에 추가됐다 — 분기 순서를 바꾸지 않는다.

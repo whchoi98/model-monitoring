@@ -14,6 +14,7 @@ import { sortResults, isExcludedModel } from "@/lib/sortModels";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { DataEmpty, DataError, DataLoading } from "@/components/DataState";
 import Dialog from "@/components/Dialog";
+import ModelName from "@/components/ModelName";
 import RefreshControls from "@/components/RefreshControls";
 import {
   ChannelType,
@@ -88,7 +89,7 @@ function DetailModal({ model, price, onClose }: {
   const tabRefs = useRef<(HTMLButtonElement | null)[]>([]);
 
   return (
-    <Dialog title={model.name} onClose={onClose}>
+    <Dialog title={<ModelName name={model.name} />} onClose={onClose}>
         {/* 헤더 */}
         <div>
           <div className="flex items-center gap-2 flex-wrap">
@@ -307,10 +308,10 @@ export default function ModelExplorer() {
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-semibold text-gray-100 group-hover:text-blue-300 group-focus-visible:text-blue-300 transition-colors">
-                  {m.name}
+                  <ModelName name={m.name} />
                 </h3>
                 <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded-full border ${CHANNEL_BADGE[ch.type]}`}>
-                  {ch.type === "bedrock" ? (m.id.startsWith("global.") ? "Global" : "US") : ch.type === "anthropic-cp" ? "CP" : ch.type === "openai-1p" ? "1P" : ch.region}
+                  {ch.badge}
                 </span>
               </div>
               <code className="block text-[11px] text-gray-500 break-all mt-1.5">{m.id}</code>

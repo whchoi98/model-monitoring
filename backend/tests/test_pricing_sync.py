@@ -82,7 +82,7 @@ def _nova_items():
 
 
 def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=None, calls=None, opus_extra=None,
-              sol_response=None, pricelist_items=None, openai_md=None, pricelist_args=None):
+              sol_response=None, pricelist_items=None, openai_md=None, pricelist_args=None, more_offers=None):
     calls = [] if calls is None else calls
 
     def track(name):
@@ -98,6 +98,8 @@ def _fetchers(*, sol=("4.4", "22", "4", "20"), sol_offers=1, fail=(), on_call=No
             response = json.loads((FIXTURES / "offers_claude-opus-5-5.json").read_text(encoding="utf-8"))
             response["offers"][0].update(opus_extra or {})
             return response
+        if more_offers and fm_id in more_offers:
+            return json.loads((FIXTURES / more_offers[fm_id]).read_text(encoding="utf-8"))
         assert fm_id == "openai.gpt-5.6-sol", fm_id
         return sol_response if sol_response is not None else _sol_offer(*sol, offers=sol_offers)
 
@@ -792,3 +794,85 @@ def test_default_pricelist_fetcher_queries_every_usagetype_in_order():
                             uts[2]: [{"PriceList": ["d"]}], uts[3]: [{"PriceList": []}]})
     assert _defaults(pricing=pricing).pricelist(*uts) == ["a", "b", "c", "d"]
     assert [c["Filters"][0]["Value"] for c in pricing.calls] == list(uts)
+
+
+# ---------------------------------------------------------------- v2.32.0: implausible long context, Seoul in-region
+
+G61 = ("openai:global:global.openai.gpt-6.1-sol", "openai:us:us.openai.gpt-6.1-sol", "openai:us-east-1:openai.gpt-6.1-sol")
+G61_SEED = {G61[0]: (2.0, 10.0, "offer:offer-wbhj4kycntgkk"), G61[1]: (2.2, 11.0, "offer:offer-wbhj4kycntgkk"),
+            G61[2]: (2.2, 11.0, "offer:offer-wbhj4kycntgkk")}
+G61_EXTRAS = {G61[0]: {"cache_read": 0.1, "cache_write": 2.5}, G61[1]: {"cache_read": 0.11, "cache_write": 2.75},
+              G61[2]: {"cache_read": 0.11, "cache_write": 2.75}}
+
+
+@pytest.mark.parametrize(("price", "dropped"), [
+    (P(2, 10, long_input=4, long_output=2, long_cache_read="0.2", long_cache_write=5), True),   # 2026-09-30 GPT 6.1 Sol
+    (P(2, 10, long_input="1.9", long_output=15), True),                                       # long input below input
+    (P(2, 10, long_input=4, long_output=15, long_cache_read="0.2", long_cache_write=5), False),
+    (P(3, 15, long_input=3, long_output=15), False),                                          # equal is plausible
+    (P(2, 10, cache_read="0.1"), False),                                                      # no long prices at all
+])
+def test_plausible_long_drops_all_four_long_prices_only_when_below_short_context(price, dropped):
+    got = pricing_sync._plausible_long(price, "test")
+    long = (got.long_input, got.long_output, got.long_cache_read, got.long_cache_write)
+    assert (long == (None,) * 4) if dropped else (got == price)
+    assert (got.input, got.output, got.cache_read) == (price.input, price.output, price.cache_read)
+
+
+def test_an_implausible_long_context_offer_price_is_never_stored(Session, caplog):
+    _seed(Session, values=G61_SEED, extras=G61_EXTRAS)
+    caplog.set_level(logging.INFO, logger="pricing_sync")
+    run = _sync(Session, active=_active(*G61), more_offers={"openai.gpt-6.1-sol": "offers_gpt-6.1-sol.json"})
+    assert run.summary["channels"] == {m: "unchanged" for m in sorted(G61)}   # long None = ignored, not "enriched"
+    for model_id in G61:
+        (row,) = _rows(Session, model_id)
+        assert (row.long_input_per_mtok, row.long_output_per_mtok, row.long_cache_read_per_mtok,
+                row.long_cache_write_per_mtok) == (None,) * 4
+    assert any("offers openai.gpt-6.1-sol global: long-context price below the short-context price" in m
+               for m in caplog.messages)
+    assert not any("gpt-6.1-sol" in e for e in run.summary["errors"])      # a warning line, not a run error
+
+
+def test_the_openai_doc_long_context_price_of_gpt_61_sol_is_kept(Session):
+    ol = "openai-list:gpt-6.1-sol"
+    _seed(Session, values={ol: (2.0, 10.0, "openai-pricing")}, extras={})
+    run = _sync(Session, active=_active(ol))
+    assert run.summary["channels"][ol] == "enriched"
+    (row,) = _rows(Session, ol)
+    assert (row.long_input_per_mtok, row.long_output_per_mtok, row.long_cache_read_per_mtok,
+            row.long_cache_write_per_mtok) == (4.0, 15.0, 0.2, 5.0)
+
+
+def test_an_implausible_long_context_doc_price_is_never_stored(Session, caplog):
+    """The doc path applies the same sanity rule as the offers path (settle_doc): a long-context output below the
+    short-context output is dropped with a warning, never stored and never a run error."""
+    ol = "openai-list:gpt-6.1-sol"
+    _seed(Session, values={ol: (2.0, 10.0, "openai-pricing")}, extras={})
+    row_ok = "| gpt-6.1-sol | $2.00 | $0.10 | $2.50 | $10.00 | $4.00 | $0.20 | $5.00 | $15.00 |"
+    row_bad = "| gpt-6.1-sol | $2.00 | $0.10 | $2.50 | $10.00 | $4.00 | $0.20 | $5.00 | $2.00 |"
+    text = (FIXTURES / "openai_pricing.md").read_text(encoding="utf-8")
+    assert text.count(row_ok) == 1
+    caplog.set_level(logging.INFO, logger="pricing_sync")
+    run = _sync(Session, active=_active(ol), openai_md=text.replace(row_ok, row_bad))
+    assert run.summary["channels"][ol] == "enriched"            # the short-context cache fields still fill in
+    (row,) = _rows(Session, ol)
+    assert (row.long_input_per_mtok, row.long_output_per_mtok, row.long_cache_read_per_mtok,
+            row.long_cache_write_per_mtok) == (None,) * 4
+    assert (row.cache_read_per_mtok, row.cache_write_per_mtok) == (0.1, 2.5)
+    assert any("openai_doc gpt-6.1-sol: long-context price below the short-context price" in m for m in caplog.messages)
+    assert not any("gpt-6.1-sol" in e for e in run.summary["errors"])
+
+
+def test_seoul_in_region_shares_one_offer_call_with_the_cris_channels(Session):
+    opus = ("global.anthropic.claude-opus-5", "us.anthropic.claude-opus-5", "bedrock:ap-northeast-2:anthropic.claude-opus-5")
+    src = "offer:offer-f3u6lgbrem3zs"
+    _seed(Session, values={opus[0]: (5.0, 25.0, src), opus[1]: (5.5, 27.5, src), opus[2]: (5.5, 27.5, src)},
+          extras={opus[0]: {"cache_read": 0.5, "cache_write": 6.25, "cache_write_1h": 10.0},
+                  opus[1]: {"cache_read": 0.55, "cache_write": 6.875, "cache_write_1h": 11.0},
+                  opus[2]: {"cache_read": 0.55, "cache_write": 6.875, "cache_write_1h": 11.0}})
+    calls = []
+    run = _sync(Session, active=_active(*opus), calls=calls,
+                more_offers={"anthropic.claude-opus-5": "offers_claude-opus-5.json"})
+    assert calls.count("offers:anthropic.claude-opus-5") == 1
+    assert run.summary["channels"] == {m: "unchanged" for m in sorted(opus)}
+    assert run.summary["sources"]["offers"] == {"calls": 1, "ok": 1, "failed": 0}

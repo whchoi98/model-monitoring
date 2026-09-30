@@ -1,4 +1,4 @@
-"""단가 seed — 활성 55채널 공식 단가 초기값과 model_id 단위 멱등 삽입 (v2.30.0, ADR-030).
+"""단가 seed — 활성 62채널 공식 단가 초기값과 model_id 단위 멱등 삽입 (v2.30.0, ADR-030).
 
 출처(2026-09-26 스파이크, USD per 1M tokens, Standard 입력/출력): Bedrock agreement offer rate card(FM 18개,
 offerId 리전 무관), AWS Price List(Nova 2.0 Lite USE1, 1K tokens × 1000), Anthropic pricing.md(CP 9).
@@ -6,6 +6,9 @@ v2.29.1 대비 교정 11채널(결정 8, 과거까지): Bedrock Claude US 10 = G
 나머지 44채널은 v2.29.1 값과 같다. 새 모델은 pricing_sources.py 매핑과 함께 여기 표를 고친다.
 v2.31.0: 2026-09-27 공식 출처의 표시 전용 캐시, 긴 컨텍스트 단가 seed와 OpenAI 공식 가격 seed(openai-list 채널 8개,
 합계 63채널)를 더했고, v2.30.0 seed 행은 NULL인 확장 열만 seed 값으로 채운다.
+v2.32.0: 2026-09-30 오퍼와 문서로 7채널을 더했다 — Claude Sonnet 5.5(Global, CP), GPT 6.1 Sol(Global, US, us-east-1),
+서울 in-region Claude Opus 5, Sonnet 5(bedrock:ap-northeast-2:<FM id>, APN2_*_standard). 활성 62채널, offer FM 20개,
+openai-list 9개, 합계 71채널.
 """
 
 import logging
@@ -23,7 +26,13 @@ from pricing_sources import (
 
 logger = logging.getLogger(__name__)
 
-SEED_SOURCE_DATE = date(2026, 9, 27)  # seed만 있는 참고 자료의 확인일(as_of) — 2026-09-27 공식 출처로 다시 확인
+SEED_SOURCE_DATE = date(2026, 9, 27)  # seed만 있는 참고 자료의 확인일(as_of) 기본값 — 2026-09-27 공식 출처로 다시 확인
+# 출처별 seed 확인일 — 기본값과 다른 날 확인한 출처만 둔다. 첫 동기화가 관측하기 전에는 이 날짜가 참고 자료의 as_of다.
+# v2.32.0 새 오퍼 두 개는 2026-09-30에 확인했다(2026-09-27에는 오퍼가 없었다).
+SEED_SOURCE_DATES: dict[str, date] = {
+    offer_source_id("offer-5fu2rhus3byrs"): date(2026, 9, 30),  # Claude Sonnet 5.5
+    offer_source_id("offer-wbhj4kycntgkk"): date(2026, 9, 30),  # GPT 6.1 Sol
+}
 # backend 태스크 기동과 PricingSync 러너가 겹쳐도 같은 model_id를 두 번 seed하지 않는다(트랜잭션 잠금).
 # 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
 _SEED_TIMEOUT_SQL = ("SET LOCAL statement_timeout = '30000'", "SET LOCAL lock_timeout = '5000'")
@@ -31,21 +40,26 @@ _SEED_LOCK_SQL = "SELECT pg_advisory_xact_lock(917350003)"
 # v2.31.0 표시 전용 단가 필드 → price_history 열 이름(필드 f의 열은 f"{f}_per_mtok"), EXTRA_FIELDS 순서
 _EXTRA_COLUMN: dict[str, str] = {f: f"{f}_per_mtok" for f in EXTRA_FIELDS}
 
-# Bedrock Claude FM id → (offerId, Global in, Global out, US in, US out). US = USE1_*, Global = APN2_*_global.
-_CLAUDE: dict[str, tuple[str, float, float, float, float]] = {
-    "anthropic.claude-fable-5-1": ("offer-icq4574v6gz3i", 10.0, 50.0, 11.0, 55.0),
-    "anthropic.claude-fable-5": ("offer-vk3fuman5qwzy", 10.0, 50.0, 11.0, 55.0),
-    "anthropic.claude-opus-5-5": ("offer-7sp77cpl4rveu", 4.0, 20.0, 4.4, 22.0),
-    "anthropic.claude-opus-5": ("offer-f3u6lgbrem3zs", 5.0, 25.0, 5.5, 27.5),
-    "anthropic.claude-opus-4-8": ("offer-wdkl4yk6s7uu4", 5.0, 25.0, 5.5, 27.5),
-    "anthropic.claude-opus-4-7": ("offer-sltne4evyuyeu", 5.0, 25.0, 5.5, 27.5),
-    "anthropic.claude-opus-4-6-v1": ("offer-ee7a27hh4hr62", 5.0, 25.0, 5.5, 27.5),
-    "anthropic.claude-sonnet-5": ("offer-2ykemehpsyf7g", 2.0, 10.0, 2.2, 11.0),
-    "anthropic.claude-sonnet-4-6": ("offer-ldnd26nhxx676", 3.0, 15.0, 3.3, 16.5),
-    "anthropic.claude-haiku-4-5-20251001-v1:0": ("offer-fudwqbphlos64", 1.0, 5.0, 1.1, 5.5),
+# Bedrock Claude FM id → (offerId, Global in, Global out, US와 in-region in, out, 채널).
+# Global = APN2_*_global_standard, US = USE1_*_standard, 서울 in-region = APN2_*_standard(US와 같은 값, v2.32.0).
+# 채널: "global" → global.<FM>, "us" → us.<FM>, AWS 리전 → bedrock:<region>:<FM>(in-region 온디맨드).
+_CLAUDE: dict[str, tuple[str, float, float, float, float, tuple[str, ...]]] = {
+    "anthropic.claude-fable-5-1": ("offer-icq4574v6gz3i", 10.0, 50.0, 11.0, 55.0, ("global", "us")),
+    "anthropic.claude-fable-5": ("offer-vk3fuman5qwzy", 10.0, 50.0, 11.0, 55.0, ("global", "us")),
+    "anthropic.claude-opus-5-5": ("offer-7sp77cpl4rveu", 4.0, 20.0, 4.4, 22.0, ("global", "us")),
+    "anthropic.claude-opus-5": ("offer-f3u6lgbrem3zs", 5.0, 25.0, 5.5, 27.5, ("global", "us", "ap-northeast-2")),
+    "anthropic.claude-opus-4-8": ("offer-wdkl4yk6s7uu4", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
+    "anthropic.claude-opus-4-7": ("offer-sltne4evyuyeu", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
+    "anthropic.claude-opus-4-6-v1": ("offer-ee7a27hh4hr62", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
+    # Sonnet 5.5 (v2.32.0): us. 프로파일 없음(2026-09-30 실측) — 오퍼의 USE1_*_standard 2.2 / 11은 채널이 없어 쓰지 않는다
+    "anthropic.claude-sonnet-5-5": ("offer-5fu2rhus3byrs", 2.0, 10.0, 2.2, 11.0, ("global",)),
+    "anthropic.claude-sonnet-5": ("offer-2ykemehpsyf7g", 2.0, 10.0, 2.2, 11.0, ("global", "us", "ap-northeast-2")),
+    "anthropic.claude-sonnet-4-6": ("offer-ldnd26nhxx676", 3.0, 15.0, 3.3, 16.5, ("global", "us")),
+    "anthropic.claude-haiku-4-5-20251001-v1:0": ("offer-fudwqbphlos64", 1.0, 5.0, 1.1, 5.5, ("global", "us")),
 }
 # OpenAI FM id → (offerId, US CRIS와 in-region in, out, Global in, out, 채널 리전)
 _OPENAI: dict[str, tuple[str, float, float, float | None, float | None, tuple[str, ...]]] = {
+    "openai.gpt-6.1-sol": ("offer-wbhj4kycntgkk", 2.2, 11.0, 2.0, 10.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-astra": ("offer-7epta7rbw5aws", 11.0, 55.0, 10.0, 50.0, ("global", "us", "us-west-2")),
     "openai.gpt-6-sol": ("offer-pycji3sz5gpcc", 2.2, 11.0, 2.0, 10.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-luna": ("offer-gmo53nkzc5or6", 0.11, 0.55, 0.1, 0.5, ("global", "us", "us-east-1")),
@@ -57,6 +71,10 @@ _OPENAI: dict[str, tuple[str, float, float, float | None, float | None, tuple[st
 }
 
 
+def _claude_channel_id(fm: str, channel: str) -> str:
+    return f"{channel}.{fm}" if channel in ("global", "us") else f"bedrock:{channel}:{fm}"
+
+
 def _openai_seed(fm: str, region: str, spec: tuple) -> tuple[str, tuple[float, float, str]]:
     offer, r_in, r_out, g_in, g_out, _ = spec
     src = offer_source_id(offer)
@@ -66,10 +84,10 @@ def _openai_seed(fm: str, region: str, spec: tuple) -> tuple[str, tuple[float, f
     return mid, (r_in, r_out, src)
 
 
-# model_id → (input, output, source_id) — CP를 뺀 활성 46채널
+# model_id → (input, output, source_id) — CP를 뺀 활성 52채널
 SEED: dict[str, tuple[float, float, str]] = {
-    **{f"global.{fm}": (g_in, g_out, offer_source_id(o)) for fm, (o, g_in, g_out, _, _) in _CLAUDE.items()},
-    **{f"us.{fm}": (u_in, u_out, offer_source_id(o)) for fm, (o, _, _, u_in, u_out) in _CLAUDE.items()},
+    **{_claude_channel_id(fm, ch): ((g_in, g_out) if ch == "global" else (r_in, r_out)) + (offer_source_id(o),)
+       for fm, (o, g_in, g_out, r_in, r_out, channels) in _CLAUDE.items() for ch in channels},
     "us.amazon.nova-2-lite-v1:0": (0.33, 2.75, pricelist_source_id(NOVA_USAGETYPES["nova-2-lite"][0])),
     **dict(_openai_seed(fm, r, spec) for fm, spec in _OPENAI.items() for r in spec[5]),
 }
@@ -80,7 +98,8 @@ CP_SEED: dict[str, tuple[float, float, str]] = {
     for fk, i, o in (
         ("claude-fable-5-1", 10.0, 50.0), ("claude-fable-5", 10.0, 50.0), ("claude-opus-5-5", 4.0, 20.0),
         ("claude-opus-5", 5.0, 25.0), ("claude-opus-4-8", 5.0, 25.0), ("claude-opus-4-7", 5.0, 25.0),
-        ("claude-sonnet-5", 2.0, 10.0), ("claude-sonnet-4-6", 3.0, 15.0), ("claude-haiku-4-5", 1.0, 5.0),
+        ("claude-sonnet-5-5", 2.0, 10.0), ("claude-sonnet-5", 2.0, 10.0), ("claude-sonnet-4-6", 3.0, 15.0),
+        ("claude-haiku-4-5", 1.0, 5.0),
     )
 }
 
@@ -89,7 +108,7 @@ CP_SEED: dict[str, tuple[float, float, str]] = {
 OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
     fk: (i, o, OPENAI_SOURCE_ID)
     for fk, i, o in (
-        ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0), ("gpt-6-luna", 0.1, 0.5),
+        ("gpt-6.1-sol", 2.0, 10.0), ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0), ("gpt-6-luna", 0.1, 0.5),
         ("gpt-5.6-sol", 4.0, 20.0), ("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2),
         ("gpt-5.5", 5.0, 30.0), ("gpt-5.4", 2.5, 15.0),
     )
@@ -101,8 +120,9 @@ OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
 _CACHE_FIELDS = ("cache_read", "cache_write", "cache_write_1h")
 _GPT_FIELDS = ("cache_read", "cache_write", "long_input", "long_output", "long_cache_read", "long_cache_write")
 
-# Bedrock Claude FM id → (Global, US), 각각 (캐시 읽기, 5분 캐시 쓰기, 1시간 캐시 쓰기).
-# Global = APN2_*_global_standard(레거시 APN2_*_Global), US = USE1_*_standard(레거시 USE1_*)
+# Bedrock Claude FM id → (Global, US와 in-region), 각각 (캐시 읽기, 5분 캐시 쓰기, 1시간 캐시 쓰기).
+# Global = APN2_*_global_standard(레거시 APN2_*_Global), US = USE1_*_standard(레거시 USE1_*),
+# 서울 in-region = APN2_*_standard(US와 같은 값, v2.32.0). 채널은 _CLAUDE의 채널 튜플을 따른다.
 _CLAUDE_CACHE: dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]] = {
     "anthropic.claude-fable-5-1": ((0.25, 12.5, 20.0), (0.275, 13.75, 22.0)),
     "anthropic.claude-fable-5": ((1.0, 12.5, 20.0), (1.1, 13.75, 22.0)),
@@ -111,6 +131,7 @@ _CLAUDE_CACHE: dict[str, tuple[tuple[float, float, float], tuple[float, float, f
     "anthropic.claude-opus-4-8": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
     "anthropic.claude-opus-4-7": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
     "anthropic.claude-opus-4-6-v1": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
+    "anthropic.claude-sonnet-5-5": ((0.2, 2.5, 4.0), (0.22, 2.75, 4.4)),
     "anthropic.claude-sonnet-5": ((0.2, 2.5, 4.0), (0.22, 2.75, 4.4)),
     "anthropic.claude-sonnet-4-6": ((0.3, 3.75, 6.0), (0.33, 4.125, 6.6)),
     "anthropic.claude-haiku-4-5-20251001-v1:0": ((0.1, 1.25, 2.0), (0.11, 1.375, 2.2)),
@@ -119,11 +140,15 @@ _CLAUDE_CACHE: dict[str, tuple[tuple[float, float, float], tuple[float, float, f
 _CP_CACHE: dict[str, tuple[float, float, float]] = {
     "claude-fable-5-1": (0.25, 12.5, 20.0), "claude-fable-5": (1.0, 12.5, 20.0), "claude-opus-5-5": (0.2, 5.0, 8.0),
     "claude-opus-5": (0.5, 6.25, 10.0), "claude-opus-4-8": (0.5, 6.25, 10.0), "claude-opus-4-7": (0.5, 6.25, 10.0),
-    "claude-sonnet-5": (0.2, 2.5, 4.0), "claude-sonnet-4-6": (0.3, 3.75, 6.0), "claude-haiku-4-5": (0.1, 1.25, 2.0),
+    "claude-sonnet-5-5": (0.2, 2.5, 4.0), "claude-sonnet-5": (0.2, 2.5, 4.0), "claude-sonnet-4-6": (0.3, 3.75, 6.0),
+    "claude-haiku-4-5": (0.1, 1.25, 2.0),
 }
 # OpenAI FM id → (standard = US CRIS와 모든 in-region, global = Global CRIS), 각각 _GPT_FIELDS 순서.
 # 캐시 쓰기 = offer cache_write_tokens_30m, 1시간 캐시 쓰기 없음. GPT 5.5, 5.4는 캐시 쓰기와 Global 채널이 없다.
 _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
+    # GPT 6.1 Sol: 2026-09-30 오퍼의 긴 컨텍스트 출력(2.2 / 2)이 짧은 컨텍스트 출력보다 낮다 — 동기화가 긴 컨텍스트
+    # 단가를 버리므로(pricing_sync._plausible_long) seed도 None으로 둔다(None은 동기화가 채울 수 있다)
+    "openai.gpt-6.1-sol": ((0.11, 2.75, None, None, None, None), (0.1, 2.5, None, None, None, None)),
     "openai.gpt-6-astra": ((1.1, 13.75, 22.0, 82.5, 2.2, 27.5), (1.0, 12.5, 20.0, 75.0, 2.0, 25.0)),
     "openai.gpt-6-sol": ((0.22, 2.75, 4.4, 16.5, 0.44, 5.5), (0.2, 2.5, 4.0, 15.0, 0.4, 5.0)),
     "openai.gpt-6-luna": ((0.011, 0.1375, 0.22, 0.825, 0.022, 0.275), (0.01, 0.125, 0.2, 0.75, 0.02, 0.25)),
@@ -135,6 +160,7 @@ _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
 }
 # OpenAI 공식 가격(openai-list:<family_key>) — OpenAI 문서 "### Standard pricing data" 첫 표, _GPT_FIELDS 순서
 _OPENAI_LIST_EXTRA: dict[str, tuple] = {
+    "gpt-6.1-sol": (0.1, 2.5, 4.0, 15.0, 0.2, 5.0),
     "gpt-6-astra": (1.0, 12.5, 20.0, 75.0, 2.0, 25.0),
     "gpt-6-sol": (0.2, 2.5, 4.0, 15.0, 0.4, 5.0),
     "gpt-6-luna": (0.01, 0.125, 0.2, 0.75, 0.02, 0.25),
@@ -159,10 +185,10 @@ def _openai_channel_id(fm: str, region: str) -> str:
     return f"openai:{region}:{region}.{fm}" if region in ("global", "us") else f"openai:{region}:{fm}"
 
 
-# model_id → 확장 필드 — CP와 OpenAI 공식 가격을 뺀 활성 46채널(SEED와 같은 키)
+# model_id → 확장 필드 — CP와 OpenAI 공식 가격을 뺀 활성 52채널(SEED와 같은 키)
 _SEED_EXTRA: dict[str, dict[str, float | None]] = {
-    **{f"global.{fm}": _extra(_CACHE_FIELDS, g) for fm, (g, _) in _CLAUDE_CACHE.items()},
-    **{f"us.{fm}": _extra(_CACHE_FIELDS, u) for fm, (_, u) in _CLAUDE_CACHE.items()},
+    **{_claude_channel_id(fm, ch): _extra(_CACHE_FIELDS, g if ch == "global" else r)
+       for fm, (g, r) in _CLAUDE_CACHE.items() for ch in _CLAUDE[fm][5]},
     **{mid: _extra(("cache_read", "cache_write"), v) for mid, v in _NOVA_CACHE.items()},
     **{_openai_channel_id(fm, region): _extra(_GPT_FIELDS, global_ if region == "global" else standard)
        for fm, (standard, global_) in _OPENAI_EXTRA.items() for region in _OPENAI[fm][5]},

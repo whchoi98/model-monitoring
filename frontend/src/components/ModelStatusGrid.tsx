@@ -11,6 +11,7 @@ import {
   describeGrade, formatMetricValue, roundForDisplay, type GradeRule, type GradeThreshold,
 } from "@/lib/metricGrade";
 import { HealthBadge } from "./MonitoringOverview";
+import ModelName from "./ModelName";
 
 interface Props {
   rows: MonitoringRow[];
@@ -149,7 +150,7 @@ export default function ModelStatusGrid({ rows, onToggleModel, selectedModels, n
             >
               <span className="mb-3 flex items-start justify-between gap-2">
                 <span className="min-w-0">
-                  <span className="block text-sm font-semibold leading-snug text-gray-200">{model.name}</span>
+                  <span className="block text-sm font-semibold leading-snug text-gray-200"><ModelName name={model.name} /></span>
                   <code className="mt-1 block truncate text-[11px] text-gray-500" title={model.id}>{model.id}</code>
                 </span>
                 <HealthBadge health={health} />
