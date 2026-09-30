@@ -7,7 +7,7 @@ import { useChartTheme } from "@/lib/chartTheme";
 import { useTheme } from "@/lib/theme";
 import { useLang, useT } from "@/lib/i18n-context";
 import { formatDateTime } from "@/lib/format";
-import { channelRank } from "@/lib/sortModels";
+import { channelRank, hasAwsRegionSuffix } from "@/lib/sortModels";
 import { DataEmpty } from "./DataState";
 import {
   Area,
@@ -34,7 +34,8 @@ interface Props {
 
 // Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.
 // 매칭 안 되면 family substring 기반 fallback.
-const MODEL_COLORS: Record<string, string> = {
+// 색은 선 패턴(lineDash)과 함께 읽힌다 — 같은 패턴끼리 가까운 색이 되지 않게 고른다(TrendChart.test.ts가 새 채널의 색 차이를 고정).
+export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Fable 5.1 (Global)": "#7dd3fc",
   "Bedrock Claude Fable 5.1 (US)": "#0ea5e9",
   "Bedrock Claude Fable 5 (Global)": "#2dd4bf",
@@ -66,14 +67,15 @@ const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
-  "Anthropic Claude Sonnet 5.5 (US)": "#3730a3",
+  // CP Sonnet 5.5는 CP Sonnet 5(#4338ca)와 같은 점선이라 Sonnet 계열에서 떨어진 짙은 보라 (v2.32.0).
+  "Anthropic Claude Sonnet 5.5 (US)": "#3b0764",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
-  // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널.
-  "OpenAI GPT 6.1 Sol (Global)": "#3bc9db",
-  "OpenAI GPT 6.1 Sol (US)": "#15aabf",
-  "OpenAI GPT 6.1 Sol (us-east-1)": "#1098ad",
+  // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 금색 계열(청록은 Haiku 4.5 Global과 겹친다).
+  "OpenAI GPT 6.1 Sol (Global)": "#aa8f09",
+  "OpenAI GPT 6.1 Sol (US)": "#d9b40f",
+  "OpenAI GPT 6.1 Sol (us-east-1)": "#8f7400",
   // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 3채널.
   "OpenAI GPT 6 Astra (Global)": "#099268",
   "OpenAI GPT 6 Astra (US)": "#2e8b57",
@@ -122,7 +124,7 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Sonnet 4.6", "#8b5cf6"],
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
-  ["GPT 6.1 Sol", "#15aabf"],
+  ["GPT 6.1 Sol", "#d9b40f"],
   ["GPT 6 Astra", "#2e8b57"],
   ["GPT 6 Sol", "#12b886"],
   ["GPT 6 Luna", "#63e6be"],
@@ -133,7 +135,7 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["GPT 5.4", "#34d399"],
 ];
 
-function getColor(modelName: string, theme: "dark" | "light"): string {
+export function getColor(modelName: string, theme: "dark" | "light"): string {
   const base = MODEL_COLORS[modelName] ?? FAMILY_FALLBACK.find(([family]) => modelName.includes(family))?.[1] ?? "#9ca3af";
   const rgb = [1, 3, 5].map((index) => parseInt(base.slice(index, index + 2), 16));
   const brightness = rgb[0] * 0.299 + rgb[1] * 0.587 + rgb[2] * 0.114;
@@ -141,6 +143,20 @@ function getColor(modelName: string, theme: "dark" | "light"): string {
   const adjusted = theme === "light" && brightness > 150 ? rgb.map((value) => Math.round(value * 0.62))
     : theme === "dark" && brightness < 110 ? rgb.map((value) => Math.round(value + (255 - value) * 0.3)) : rgb;
   return `#${adjusted.map((value) => value.toString(16).padStart(2, "0")).join("")}`;
+}
+
+// 선 패턴 = 채널 티어. 범례 스와치도 같은 패턴으로 그린다.
+//   - Anthropic CP: "2 3" (점선)
+//   - Global: 실선
+//   - US (Bedrock US, OpenAI US CRIS): "6 3" (파선)
+//   - 소문자 AWS 리전 서픽스 (Bedrock In-Region "(ap-northeast-2)", OpenAI Mantle "(us-east-1)"): "1 2 6 2" (일점쇄선, v2.32.0)
+// 리전 티어가 실선이던 때는 서울 In-Region 선이 다른 family의 Global 실선과 색으로만 구분됐다.
+export function lineDash(modelName: string): string | undefined {
+  const rank = channelRank(modelName);
+  if (rank === 0) return "2 3";
+  if (hasAwsRegionSuffix(modelName)) return "1 2 6 2";
+  if (rank === 2) return "6 3";
+  return undefined;
 }
 
 function formatUnit(value: number, metric: string): string {
@@ -255,7 +271,7 @@ function TrendChart({ data, metric, title, selectedModels, onToggleModel, cadenc
               type="monotone"
               dataKey={name}
               stroke={stroke}
-              strokeDasharray={channelRank(name) === 0 ? "2 3" : channelRank(name) === 2 ? "6 3" : undefined}
+              strokeDasharray={lineDash(name)}
               strokeWidth={2}
               dot={showDots ? { r: 3 } : ({ key, cx, cy, payload }: { key?: string; cx?: number; cy?: number; payload?: { time: number } }) =>
                 payload && isolated.has(payload.time) && Number.isFinite(cx) && Number.isFinite(cy)
@@ -275,7 +291,9 @@ function TrendChart({ data, metric, title, selectedModels, onToggleModel, cadenc
           <button type="button" key={name} onClick={() => onToggleModel?.(name)}
             aria-pressed={selectedModels?.has(name) ?? false} disabled={!onToggleModel}
             className="inline-flex min-h-8 max-w-full items-center gap-2 rounded-md px-1 text-left text-xs text-gray-400 hover:bg-gray-800 hover:text-gray-200">
-            <span aria-hidden="true" style={{ backgroundColor: getColor(name, theme) }} className="h-0.5 w-4 shrink-0" />
+            <svg aria-hidden="true" width="24" height="4" viewBox="0 0 24 4" className="shrink-0">
+              <line x1="0" y1="2" x2="24" y2="2" stroke={getColor(name, theme)} strokeWidth="2" strokeDasharray={lineDash(name)} />
+            </svg>
             <span className="break-words">{name}</span>
           </button>
         ))}

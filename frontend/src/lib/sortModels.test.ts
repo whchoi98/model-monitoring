@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelRank, familyRank, groupByFamily, isExcludedModel, sortResults } from "./sortModels";
+import { channelRank, familyRank, groupByFamily, hasAwsRegionSuffix, isExcludedModel, sortResults } from "./sortModels";
 
 // Fable 5.1 (v2.22.0) — includes 매칭에서 "Claude Fable 5"가 "Claude Fable 5.1"에 포함되는 접두 충돌 회귀 방지.
 describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
@@ -246,6 +246,16 @@ describe("sortModels — GPT 6.1 Sol", () => {
       "OpenAI GPT 6.1 Sol (us-east-1)",
     ]) {
       expect(isExcludedModel(n)).toBe(false);
+    }
+  });
+});
+
+describe("hasAwsRegionSuffix", () => {
+  it("matches lower-case AWS region suffixes only", () => {
+    expect(hasAwsRegionSuffix("Bedrock Claude Opus 5 (ap-northeast-2)")).toBe(true);
+    expect(hasAwsRegionSuffix("OpenAI GPT 5.4 (us-west-2)")).toBe(true);
+    for (const name of ["Bedrock Claude Opus 5 (Global)", "Bedrock Claude Opus 5 (US)", "OpenAI GPT 5.4 (1P)", "Anthropic Claude Opus 5 (US)"]) {
+      expect(hasAwsRegionSuffix(name)).toBe(false);
     }
   });
 });

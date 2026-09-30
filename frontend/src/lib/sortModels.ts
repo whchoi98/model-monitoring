@@ -46,6 +46,14 @@ export function familyRank(name: string): number {
   return FAMILY_ORDER.length;
 }
 
+// 소문자 AWS 리전 서픽스 — Bedrock In-Region "(ap-northeast-2)"(v2.32.0)과 OpenAI Mantle 리전 "(us-east-1)".
+// 유사 리전 "(Global)", "(US)"와 "(1P)"는 해당하지 않는다.
+const AWS_REGION_SUFFIX = /\([a-z]{2}(?:-[a-z]+)+-\d+\)$/;
+
+export function hasAwsRegionSuffix(name: string): boolean {
+  return AWS_REGION_SUFFIX.test(name);
+}
+
 export function channelRank(name: string): number {
   if (name.startsWith("Anthropic ")) return 0;
   // "(Global)"은 provider 무관 최우선 채널 — Bedrock Global(Claude)과 OpenAI Global
@@ -59,7 +67,7 @@ export function channelRank(name: string): number {
   if (name.startsWith("OpenAI ")) return 3; // OpenAI 리전 채널 티어 (us-east-1 → us-east-2 → us-west-2)
   // Bedrock In-Region(v2.32.0, "Bedrock Claude Opus 5 (ap-northeast-2)") — 소문자 AWS 리전 서픽스는 US 티어 뒤(rank 3).
   // 이 분기가 없으면 기본값 2(Bedrock US)와 동률이 되어 localeCompare가 "(ap-northeast-2)"를 "(US)"보다 앞에 둔다(ICU 실측).
-  if (/\([a-z]{2}(?:-[a-z]+)+-\d+\)$/.test(name)) return 3;
+  if (hasAwsRegionSuffix(name)) return 3;
   return 2; // Bedrock US (default)
 }
 
