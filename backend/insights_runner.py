@@ -13,6 +13,10 @@ ECS Task Definition CMD:
 /stream-regenerate가 backend 프로세스 안에서도 부른다. 예전에는 ProbeResult 엔티티(prompt, output_text 포함)를 .all()로
 적재했고, run_once의 ProbeRun 엔티티 조회는 ProbeRun.results(lazy="selectin")로 그 run들의 결과 엔티티를 한 번 더
 끌어왔다. 지금은 run id만, 결과는 _STATS_COLUMNS만 yield_per로 읽는다. API의 창 상한(24h)은 routers/insights.py에 있다.
+
+시간 상한: yield_per는 PostgreSQL에서 서버 측 커서라 statement_timeout이 FETCH마다 따로 걸린다. 두 통계 조회는
+streamed_read.stream_rows로 전체 경과 시간을 같은 상한(DB_STATEMENT_TIMEOUT_MS, 기본 30초)에 묶고, 넘으면 커서를 닫고
+StreamedReadTimeout을 던진다 — run_once는 except에서 -1(CLI exit 1), stream-regenerate는 error 이벤트로 처리한다.
 """
 
 from __future__ import annotations
@@ -27,6 +31,7 @@ from typing import Any, Dict, Iterable, List
 
 from database import SessionLocal
 from models import Insight, ProbeResult, ProbeRun
+from streamed_read import stream_rows
 from visibility import visible_only
 
 logger = logging.getLogger(__name__)
@@ -39,7 +44,7 @@ _STATS_COLUMNS = (
     ProbeResult.total_latency_ms,
     ProbeResult.tps,
 )
-_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서)
+_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read)
 
 
 def parse_window(spec: str) -> timedelta:
@@ -177,7 +182,7 @@ def collect_stats_for_window(db, window_spec: str) -> Dict[str, Any]:
     delta = parse_window(window_spec)
     since = datetime.now(timezone.utc) - delta
     rows = _stats_query(db).filter(ProbeResult.timestamp >= since).yield_per(_YIELD_PER)
-    return compute_stats(rows)
+    return compute_stats(stream_rows(rows, what=f"insights_runner.collect_stats_for_window window={window_spec!r}"))
 
 
 def run_once(window_spec: str = "6h") -> int:
@@ -206,9 +211,10 @@ def run_once(window_spec: str = "6h") -> int:
             logger.info("최근 %s 동안 auto run 없음 - insight skip", window_spec)
             return 0
 
-        stats = compute_stats(
-            _stats_query(db).filter(ProbeResult.run_id.in_(run_ids)).yield_per(_YIELD_PER)
-        )
+        stats = compute_stats(stream_rows(
+            _stats_query(db).filter(ProbeResult.run_id.in_(run_ids)).yield_per(_YIELD_PER),
+            what=f"insights_runner.run_once window={window_spec!r}",
+        ))
         if not stats:  # 결과 행이 없거나 모두 숨김 라벨
             logger.info("ProbeResult 없음 - insight skip")
             return 0
