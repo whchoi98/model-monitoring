@@ -185,17 +185,14 @@ def collect_stats_for_window(db, window_spec: str) -> Dict[str, Any]:
     return compute_stats(stream_rows(rows, what=f"insights_runner.collect_stats_for_window window={window_spec!r}"))
 
 
-def run_once(window_spec: str = "6h") -> int:
-    """한 번 실행하고 종료. 반환값: 생성된 insight ID (0 = skip, -1 = 실패)."""
-    try:
-        window = parse_window(window_spec)
-    except ValueError as exc:
-        logger.error("%s", exc)
-        return -1
+def _read_stats(window_spec: str, cutoff: datetime) -> Dict[str, Any] | None:
+    """창 안 자동 run의 통계. 없으면 None(로그를 남긴다).
 
-    now = datetime.now(timezone.utc)
-    cutoff = now - window
-
+    읽은 세션은 돌아가기 전에 닫는다 — 읽기 트랜잭션이 끝나고 커넥션이 풀로 돌아가므로, 이어지는 Bedrock 요약(KO, EN) 동안
+    probe_runs, probe_results의 ACCESS SHARE 락과 커넥션을 쥐지 않는다(v2.32.2). 예전에는 이 세션을 저장까지 열어 두어
+    backend 기동의 `ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS …`(ACCESS EXCLUSIVE)가 lock_timeout 5초 뒤
+    LockNotAvailable로 실패했다(2026-09-30, 기동 네 번 중 두 번).
+    """
     db = SessionLocal()
     try:
         # id만 읽는다 — ProbeRun 엔티티는 results(lazy="selectin")로 그 run들의 ProbeResult 엔티티를 함께 끌어온다.
@@ -209,7 +206,7 @@ def run_once(window_spec: str = "6h") -> int:
         ]
         if not run_ids:
             logger.info("최근 %s 동안 auto run 없음 - insight skip", window_spec)
-            return 0
+            return None
 
         stats = compute_stats(stream_rows(
             _stats_query(db).filter(ProbeResult.run_id.in_(run_ids)).yield_per(_YIELD_PER),
@@ -217,6 +214,50 @@ def run_once(window_spec: str = "6h") -> int:
         ))
         if not stats:  # 결과 행이 없거나 모두 숨김 라벨
             logger.info("ProbeResult 없음 - insight skip")
+            return None
+        return stats
+    finally:
+        db.close()
+
+
+def _save_insight(window_start: datetime, window_end: datetime, summary_ko: str, summary_en: str | None,
+                  stats: Dict[str, Any]) -> int:
+    """요약이 끝난 뒤 새 세션의 짧은 트랜잭션 하나로 저장한다. 반환값: insight id."""
+    db = SessionLocal()
+    try:
+        insight = Insight(
+            window_start=window_start,
+            window_end=window_end,
+            summary_md=summary_ko,
+            summary_md_en=summary_en,
+            model_breakdown=stats,
+        )
+        db.add(insight)
+        db.flush()
+        insight_id = insight.id
+        db.commit()
+        return insight_id
+    finally:
+        db.close()
+
+
+def run_once(window_spec: str = "6h") -> int:
+    """한 번 실행하고 종료. 반환값: 생성된 insight ID (0 = skip, -1 = 실패).
+
+    세션 순서(v2.32.2): 통계를 읽은 세션을 닫고 → Bedrock 요약 → 새 세션으로 저장. 요약 동안 DB 트랜잭션이 없다.
+    """
+    try:
+        window = parse_window(window_spec)
+    except ValueError as exc:
+        logger.error("%s", exc)
+        return -1
+
+    now = datetime.now(timezone.utc)
+    cutoff = now - window
+
+    try:
+        stats = _read_stats(window_spec, cutoff)
+        if stats is None:
             return 0
 
         # 한국어와 영어 두 요약을 한 번에 생성 (UI 언어 토글 즉시 반영용).
@@ -228,23 +269,12 @@ def run_once(window_spec: str = "6h") -> int:
             logger.exception("EN insight generation failed; KO만 저장")
             summary_en = None
 
-        insight = Insight(
-            window_start=cutoff,
-            window_end=now,
-            summary_md=summary_ko,
-            summary_md_en=summary_en,
-            model_breakdown=stats,
-        )
-        db.add(insight)
-        db.commit()
-        db.refresh(insight)
-        logger.info("insights_runner: insight id=%d 저장 (window=%s)", insight.id, window_spec)
-        return insight.id
+        insight_id = _save_insight(cutoff, now, summary_ko, summary_en, stats)
+        logger.info("insights_runner: insight id=%d 저장 (window=%s)", insight_id, window_spec)
+        return insight_id
     except Exception:
         logger.exception("insights_runner 실패")
         return -1
-    finally:
-        db.close()
 
 
 def main() -> int:

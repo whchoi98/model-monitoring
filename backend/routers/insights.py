@@ -158,16 +158,21 @@ def regenerate(
 async def stream_regenerate(
     body: RegenerateRequest,
     user: User = Depends(get_current_user),
+    request_db: Session = Depends(get_db),
 ):
     """SSE 스트리밍 인사이트 재생성.
 
     Bedrock Sonnet 4.6 converse_stream으로 토큰 단위 yield → SSE delta 이벤트.
     완료 시 DB에 Insight row 저장 + final 이벤트로 응답 종료.
 
-    Note: db는 Depends(get_db)로 받지 않는다. StreamingResponse 반환 직후 FastAPI가
-    의존성 cleanup으로 session을 close하지만 generator는 그 후에도 계속 실행되어
-    closed session에 대한 silent data loss가 발생. 대신 generator 안에서 SessionLocal()로
-    dedicated session을 생성하고 finally에서 close.
+    Note: generator는 요청 세션을 쓰지 않는다. FastAPI 버전에 따라 요청 의존성 cleanup이 스트림 전(0.115)이나
+    스트림 뒤(0.142)에 세션을 닫으므로, generator 안에서 SessionLocal()로 전용 세션을 만들고 finally에서 close한다.
+
+    락(v2.32.2): Bedrock 스트림(최대 8192토큰, 1~3분) 동안 DB 트랜잭션을 쥐지 않는다. 요청 세션(request_db —
+    get_current_user와 같은 세션, 요청 안에서 의존성이 캐시된다)은 인증의 users 조회를 끝낸 뒤 StreamingResponse를
+    돌려주기 전에 닫고, generator 세션은 통계를 읽은 뒤 rollback해 probe_results 읽기 트랜잭션을 끝낸다. 저장은 스트림이
+    끝난 뒤 짧은 새 트랜잭션이다. 예전에는 스트림 내내 users와 probe_results의 ACCESS SHARE 락이 남아 backend 기동의
+    `ALTER TABLE … ADD COLUMN IF NOT EXISTS`가 lock_timeout 5초 뒤 실패할 수 있었다(2026-09-30).
 
     window는 최대 24h, 넘거나 읽을 수 없으면 스트림을 시작하지 않고 422.
     """
@@ -191,6 +196,8 @@ async def stream_regenerate(
                 logger.exception("stats compute failed")
                 yield f"event: error\ndata: {_json.dumps({'message': str(exc)})}\n\n"
                 return
+            # 읽기 트랜잭션을 끝내고 커넥션을 풀에 돌려준다 — Bedrock 스트림 동안 probe_results 락을 쥐지 않는다(v2.32.2).
+            await asyncio.to_thread(db.rollback)
 
             # 2) Prompt 빌드.
             system_prompt, user_prompt = _build_prompt(window, stats, lang)
@@ -244,6 +251,10 @@ async def stream_regenerate(
                 yield f"event: final\ndata: {_json.dumps({'ok': False, 'error': str(exc)})}\n\n"
         finally:
             db.close()
+
+    # 인증의 users 읽기 트랜잭션을 여기서 끝낸다 — FastAPI 0.142는 이 세션을 스트림이 끝날 때에야 닫는다(v2.32.2).
+    # user는 이 뒤에 쓰지 않는다(close는 객체를 떼어 낼 뿐 만료시키지 않는다).
+    request_db.close()
 
     # chat.py와 동일한 패턴: 우리가 이미 SSE 형식("event: X\ndata: Y\n\n")으로 raw yield하므로
     # EventSourceResponse가 아닌 StreamingResponse를 써야 이중 wrap 안 됨.
