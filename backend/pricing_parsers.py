@@ -70,7 +70,7 @@ _LEGACY_FIELDS: dict[str, str] = {
 
 # Rate cards carry no scale; "Units" is read as USD per 1M tokens (pinned by the GPT-6 Astra fixture).
 _OFFER_UNIT = "Units"
-_REGION_CODES = {"us-east-1": "USE1", "us-east-2": "USE2", "us-west-2": "USW2"}
+_REGION_CODES = {"ap-northeast-2": "APN2", "us-east-1": "USE1", "us-east-2": "USE2", "us-west-2": "USW2"}
 
 # (scheme, region code or "" for the flat scheme, global?) in the spec's selection order.
 _GLOBAL_ORDER = (

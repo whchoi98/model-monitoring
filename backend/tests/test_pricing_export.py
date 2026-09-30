@@ -397,3 +397,16 @@ def test_nine_fixed_notes_with_the_gpt_us_cris_in_region_note_third(lang, note):
     assert fixed[1].startswith("AWS Bedrock - Global CRIS")
     assert "official" not in _TEXT[lang]
     assert f"\n3. {note}\n" in to_markdown(EXPECTED_PAYLOAD, lang)
+
+
+def test_an_anthropic_in_region_cell_fills_the_in_region_column():
+    """v2.32.0: Seoul in-region Claude (bedrock:ap-northeast-2:<FM id>) is an Anthropic In Region element."""
+    payload = copy.deepcopy(EXPECTED_PAYLOAD)
+    tiers = _family(payload, "claude-opus-5-5")["tiers"]
+    tiers["in_region"] = [{"regions": ["ap-northeast-2"], **copy.deepcopy(tiers["us"]),
+                           "model_ids": ["bedrock:ap-northeast-2:anthropic.claude-opus-5-5"]}]
+    ko = to_markdown(payload, "ko")
+    assert ("| 4.4 / 22[^2]<br>캐시 읽기 0.22, 쓰기 5.5, 1시간 쓰기 8.8 | 4.4 / 22 ap-northeast-2[^2]<br>캐시 읽기 0.22, "
+            "쓰기 5.5, 1시간 쓰기 8.8 |") in ko
+    rows = [r for r in to_csv(payload, "ko").split("\n") if r.startswith("anthropic,")]
+    assert rows[-1].startswith("anthropic,Claude Opus 5.5,in_region,ap-northeast-2,bedrock:ap-northeast-2:")

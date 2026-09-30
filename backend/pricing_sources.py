@@ -5,6 +5,7 @@ Lite를 1세대 Nova Lite 단가로 매칭한 오류). CP는 prober _ANTHROPIC_T
 분류할 수 없으면 None(비용 "-"). 새 모델은 이 매핑과 pricing_seed.py를 함께 고친다(tests가 prober 등록으로 잡는다).
 v2.31.0: 표시 전용 "OpenAI 공식 가격" 채널 — 합성 model_id openai-list:<family_key>(AVAILABLE_MODELS, probe_results에는
 없음). active_channels가 활성 OpenAI 패밀리마다 덧붙이고, 출처는 OpenAI 공식 요금 문서(source_kind openai_doc)다.
+v2.32.0: Bedrock in-region 온디맨드 키 bedrock:<region>:<FM id> → channel inregion:<region> (서울 Claude만 허용).
 """
 
 import logging
@@ -20,9 +21,9 @@ PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 
 # frontend/src/lib/sortModels.ts FAMILY_ORDER와 바이트 단위로 같아야 한다(tests가 파일을 읽어 고정).
 FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
-    "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 5", "Claude Sonnet 4.6", "Claude Haiku 4.5",
-    "Nova 2.0 Lite", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra",
-    "GPT 5.6 Luna", "GPT 5.5", "GPT 5.4",
+    "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Sonnet 4.6",
+    "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol",
+    "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5", "GPT 5.4",
 )
 
 
@@ -45,13 +46,15 @@ _BEDROCK_CLAUDE_FM: dict[str, tuple[str, str]] = {
     "anthropic.claude-opus-4-8": ("claude-opus-4-8", "Claude Opus 4.8"),
     "anthropic.claude-opus-4-7": ("claude-opus-4-7", "Claude Opus 4.7"),
     "anthropic.claude-opus-4-6-v1": ("claude-opus-4-6", "Claude Opus 4.6"),
+    "anthropic.claude-sonnet-5-5": ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
     "anthropic.claude-sonnet-5": ("claude-sonnet-5", "Claude Sonnet 5"),
     "anthropic.claude-sonnet-4-6": ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
     "anthropic.claude-haiku-4-5-20251001-v1:0": ("claude-haiku-4-5", "Claude Haiku 4.5"),
 }
 _CLAUDE_FAMILY_NAMES = {fk: fam for fk, fam in _BEDROCK_CLAUDE_FM.values()}
 # CP — prober._ANTHROPIC_TARGETS와 같은 substring, 같은 순서(tests가 고정). family_key = "claude-" + substring.
-_CP_TARGETS = ("fable-5-1", "fable-5", "opus-5-5", "opus-5", "opus-4-8", "opus-4-7", "sonnet-5", "sonnet-4-6", "haiku-4-5")
+_CP_TARGETS = ("fable-5-1", "fable-5", "opus-5-5", "opus-5", "opus-4-8", "opus-4-7", "sonnet-5-5", "sonnet-5", "sonnet-4-6",
+               "haiku-4-5")
 ANTHROPIC_DOC_NAMES: dict[str, str] = {f"claude-{s}": _CLAUDE_FAMILY_NAMES[f"claude-{s}"] for s in _CP_TARGETS}
 ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing.md"
 ANTHROPIC_SOURCE_ID = "anthropic-pricing"
@@ -66,6 +69,7 @@ NOVA_CACHE_USAGETYPES: dict[str, tuple[str, str]] = {
 _PRICELIST_MODEL_IDS = {"us.amazon.nova-2-lite-v1:0": ("nova-2-lite", "Nova 2.0 Lite", "us")}
 # OpenAI offer FM id(= Mantle in-region id) → (family_key, family)
 _OPENAI_FM: dict[str, tuple[str, str]] = {
+    "openai.gpt-6.1-sol": ("gpt-6.1-sol", "GPT 6.1 Sol"),
     "openai.gpt-6-astra": ("gpt-6-astra", "GPT 6 Astra"), "openai.gpt-6-sol": ("gpt-6-sol", "GPT 6 Sol"),
     "openai.gpt-6-luna": ("gpt-6-luna", "GPT 6 Luna"), "openai.gpt-5.6-sol": ("gpt-5.6-sol", "GPT 5.6 Sol"),
     "openai.gpt-5.6-terra": ("gpt-5.6-terra", "GPT 5.6 Terra"), "openai.gpt-5.6-luna": ("gpt-5.6-luna", "GPT 5.6 Luna"),
@@ -76,8 +80,12 @@ _OPENAI_LIST_FAMILIES: dict[str, str] = {fk: fam for fk, fam in _OPENAI_FM.value
 OPENAI_PRICING_URL = "https://developers.openai.com/api/docs/pricing.md"
 OPENAI_SOURCE_ID = "openai-pricing"
 OPENAI_LIST_PREFIX = "openai-list:"
-# in-region은 offer 차원 리전 접두(USE1_/USE2_/USW2_)가 있는 리전만 — 새 리전은 fail-closed(단가 없음).
+# in-region은 offer 차원 리전 접두가 있는 리전만(pricing_parsers._REGION_CODES) — 새 리전은 fail-closed(단가 없음).
+# OpenAI Mantle 인리전(openai:<region>:<FM id>)은 USE1_/USE2_/USW2_, Bedrock 인리전 온디맨드
+# (bedrock:<region>:<FM id>, v2.32.0 서울 Claude Opus 5, Sonnet 5)는 APN2_*_standard.
 _INREGION_REGIONS = ("us-east-1", "us-east-2", "us-west-2")
+_BEDROCK_INREGION_REGIONS = ("ap-northeast-2",)
+BEDROCK_INREGION_PREFIX = "bedrock:"
 
 
 def _is_point_release_of(substring: str, model_id: str) -> bool:
@@ -126,6 +134,14 @@ def price_identity(model_id: str) -> PriceIdentity | None:
         if fm not in _OPENAI_FM:
             return None
         return PriceIdentity(*_OPENAI_FM[fm], "openai", channel, "offer", fm)
+    if model_id.startswith(BEDROCK_INREGION_PREFIX):
+        parts = model_id.split(":", 2)
+        if len(parts) != 3:
+            return None
+        _, region, fm = parts
+        if region not in _BEDROCK_INREGION_REGIONS or fm not in _BEDROCK_CLAUDE_FM:
+            return None  # 모르는 리전, Claude가 아닌 FM(Nova 등), 프로파일 id(global./us.)
+        return PriceIdentity(*_BEDROCK_CLAUDE_FM[fm], "anthropic", f"inregion:{region}", "offer", fm)
     if model_id in _PRICELIST_MODEL_IDS:
         fk, fam, channel = _PRICELIST_MODEL_IDS[model_id]
         return PriceIdentity(fk, fam, "amazon", channel, "pricelist", fk)
