@@ -212,3 +212,18 @@ US CRIS 3; 휴면 1P 5 포함 총계 51 → 60). reliability/cost/analysis/effic
   인용한다(`source` `openai_doc`, `source_id` `openai-pricing`, ADR-030 v2.31.0 부록 §8). 위 v2.30.0 후속의 수동 메모 문장은 2026-09-26
   기준 기록이다. 프로모션 종료 확인은 AWS 모델 카드가 아니라 OpenAI 요금 문서와 agreement offer로 한다(`docs/runbooks/troubleshooting.md`
   "GPT-5.6 Sol 프로모션 종료 확인").
+
+## 후속 (v2.32.0, 2026-09-30) — 점 버전 가드 실증(Sonnet 5.5)과 GPT-6.1 Sol
+
+- **점 버전 가드가 설계대로 동작했다.** 2026-09-30 CP `/v1/models`의 첫 항목이 `claude-sonnet-5-5`였다(그다음 `claude-opus-5-5`,
+  `claude-fable-5-1`, `claude-opus-5`, `claude-sonnet-5` …). `sonnet-5-5` 타깃이 없던 v2.31.2 코드에서도 `_is_point_release_of()`가 이 id를
+  `sonnet-5` 후보에서 뺐으므로 `Anthropic Claude Sonnet 5 (US)`는 계속 실제 `claude-sonnet-5`를 측정했다. 이 ADR이 예고한 "다음 점 버전
+  (예: sonnet-5-5)도 fail-closed"가 실제 출시에서 확인됐고, Opus 5.5 때와 달리 오등록 행과 `label_repair` 정정이 없다.
+- v2.32.0은 `_ANTHROPIC_TARGETS`에 `("sonnet-5-5", "Anthropic Claude Sonnet 5.5 (US)")`를 `sonnet-5` 바로 앞에 넣어 CP 채널을 등록했다
+  (`pricing_sources._CP_TARGETS`도 같은 순서, pytest가 두 목록을 대조). 테스트의 점 버전 예시는 가상의 `claude-sonnet-5-6`으로 옮겼다.
+- 패리티 `_NO_FORCED_TOOL_CHOICE_MARKERS`에 `"sonnet-5-5"`를 더했다(Converse `toolChoice` tool, any 400, auto 200). `"opus-5-5"`를 넣을 때와
+  같은 이유로 `"sonnet-5"`는 넣지 않는다.
+- **GPT-6.1 Sol의 Mantle은 us-east-1만이다.** 2026-09-30 실측에서 us-east-2와 us-west-2는 404, us-east-1은 첫 호출 401 "subscription is being set
+  up"(Marketplace 구독 개시 과도 상태) 뒤 200이었다. GPT-6 Sol, Luna와 같은 리전 분포이고 같은 처리(스펙에서 제외)다. `reasoning_tokens`가
+  0이라 패리티 `_REASONING_MARKERS`에 넣지 않는다(`gpt-6` 미포함 규칙). 벤치에는 편입했고 `_BENCH_SPECS`의 마지막 항목이다. 자세히는
+  ADR-031.

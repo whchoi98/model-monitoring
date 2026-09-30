@@ -22,13 +22,14 @@ services + internal ALB, CloudFront, EventBridge Scheduler tasks and alarms. Cov
 - Always pass the running images: `-c backendImage=<acct>.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-backend-v2:<tag>@sha256:<digest>` and `-c frontendImage=…/bedrock-monitor-frontend:<tag>@sha256:<digest>`. Without them AppServices and Scheduler synth `:latest` of the CDK-managed repos (legacy backend repo included — only a synth warning) and a deploy reverts production. Use the full registry host — a bare repo name resolves to docker.io and the deploy rolls back
 - Deploy app changes with `npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler --require-approval never -c backendImage=… -c frontendImage=…`; without `--exclusively` CDK also deploys upstream stacks that have diffs. Never `npm run deploy` (`cdk deploy --all` with no image context). Procedure: `docs/runbooks/deploy.md`
 - Scheduler `ecs:RunTask` stays on task-def family `:*` (ADR-011) — a pinned revision fails silently after the next deploy. A new scheduled task adds its family to `RunTaskFamilyWildcard` and its task role to `PassTaskRoles`
-- Backend env is defined twice (`backendEnv` in app-services-stack, `buildTaskDef` in scheduler-stack), and `ENABLE_OPENAI_1P` exists in both files — change both, deploy both stacks
+- Backend env is defined twice (`backendEnv` in app-services-stack, `buildTaskDef` in scheduler-stack), and `ENABLE_OPENAI_1P` exists in both files — change both, deploy both stacks (model id envs such as `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.32.0, are pinned on the backend and all six scheduled task defs by jest)
+- Bedrock invoke resources stay `arn:aws:bedrock:*::foundation-model/*` — Seoul in-region on-demand channels (`bedrock:ap-northeast-2:…`, v2.32.0, ADR-031) rely on it; do not narrow by region
 - Some test names are stale ("immutable tag", "X86_64"); the assertions check MUTABLE and CPU/memory only
 
 ## Commands
 ```bash
 cd cdk
-npm test             # jest, synthesizes every stack (~10 s, 85 tests) — CI runs `npx jest --ci`
+npm test             # jest, synthesizes every stack (~10 s, 87 tests) — CI runs `npx jest --ci`
 npm run typecheck    # tsc --noEmit
 npm run lint         # eslint
 npm run synth        # cdk synth --all --quiet (cdk-nag reports in cdk.out/*NagReport.csv)

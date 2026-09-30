@@ -473,3 +473,25 @@ $0이다. 정확한 0은 공식 값이므로 확장 필드에서만 받는다. �
 - (+) GPT 표에서 US CRIS와 In Region 값이 같은 이유가 화면과 Markdown에 적힌다.
 - (−) 앞으로 AWS가 GPT의 US CRIS와 In Region에 다른 단가를 매기면 고정 안내가 틀린다. seed를 고치면 seed 테스트가 드러내지만, 동기화가
   관측한 값만 달라지는 경우는 테스트가 잡지 못하므로 그때는 문구를 사람이 고친다.
+
+## v2.32.0 후속 (2026-09-30)
+
+- **Claude의 첫 in-region 채널**: 서울 in-region Opus 5, Sonnet 5(`bedrock:ap-northeast-2:anthropic.claude-*`, ADR-031)를 `price_identity`가
+  `PriceIdentity(<family_key>, <family>, "anthropic", "inregion:ap-northeast-2", "offer", <FM id>)`로 분류한다(`BEDROCK_INREGION_PREFIX`,
+  `_BEDROCK_INREGION_REGIONS = ("ap-northeast-2",)`, 목록 밖 리전과 Claude가 아닌 FM은 분류하지 않는다 — fail-closed). 파서는 리전 코드 APN2를
+  알아 `inregion:ap-northeast-2`에 `APN2_*_standard`(입력, 출력, 캐시)를 읽는다. 값은 US `USE1_*_standard`와 같다(Opus 5 5.5 / 27.5, Sonnet 5
+  2.2 / 11). seed의 `_CLAUDE`는 FM마다 채널 튜플을 갖고(`_claude_channel_id` — `global`/`us`는 `<channel>.<fm>`, 그 밖은
+  `bedrock:<channel>:<fm>`), 서울 채널은 Global, US 채널과 같은 offer 호출 하나를 쓴다. `/api/pricing`의 Claude `in_region` 셀이 처음 생겼다.
+- **수치**: offer FM 18 → 20(`anthropic.claude-sonnet-5-5` `offer-5fu2rhus3byrs`, `openai.gpt-6.1-sol` `offer-wbhj4kycntgkk`), references 21 → 23,
+  활성 채널 63 → 71(62 + OpenAI 공식 가격 9), `FAMILY_ORDER` 19 → 21(`Claude Sonnet 5.5`는 `Claude Sonnet 5` 앞, `GPT 6.1 Sol`은 `GPT 6 Astra`
+  앞), `ANTHROPIC_DOC_NAMES` 9 → 10, `SEED` 46 → 52, `CP_SEED` 9 → 10, `OPENAI_LIST_SEED` 8 → 9. 오프라인 첫 동기화 리허설(fixture 기준):
+  빈 DB에서 `ensure_seed` 71 → `run_sync` 71 unchanged, v2.31.2 상태(63채널)에서 올리면 `ensure_seed`가 8행을 넣고 71 unchanged, pending 0.
+- **`_plausible_long` 규칙**: 2026-09-30 GPT-6.1 Sol offer의 긴 컨텍스트 출력(`output_tokens_long_ctx_standard` 2.2,
+  `output_tokens_long_ctx_global_standard` 2)이 짧은 컨텍스트 출력(11 / 10)보다 낮다. 같은 offer의 flex 긴 컨텍스트 출력은 16.5 / 15이고
+  OpenAI 요금 문서는 15다. 긴 컨텍스트 입력이나 출력이 짧은 컨텍스트 단가보다 낮으면(`_implausible_long`) 동기화가 그 관측의 long_* 4필드를
+  None으로 만들고 WARNING 한 줄(`pricing sync: <where>: long-context price below the short-context price, long prices dropped`)을 남긴다. offer와
+  문서 경로 모두 적용하고 run errors에는 넣지 않는다(채널은 unchanged). 비교가 None 필드를 무시하므로 저장된 long 값은 그대로, 없던 값은 계속
+  없다. 같은 값은 정상이다. seed도 GPT-6.1 Sol Bedrock 3채널의 long을 None으로 두고, `openai-list:gpt-6.1-sol`은 문서 값 4 / 15를 쓴다.
+  - 한계: 신호는 로그뿐이다. AWS가 요금표를 고치면 다음 동기화에서 long_*가 50% 게이트 없이 `enriched`로 채워진다(처음 알려진 값이라
+    게이트 대상이 아니다). 기존 패밀리의 long 값이 나중에 이상값이 되면 옛 값이 그대로 남는다.
+  - 화면 고정 안내는 추가하지 않았다(골든 Markdown, CSV, 안내 번호, e2e 9개 고정이 모두 바뀐다).
