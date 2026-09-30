@@ -116,13 +116,16 @@ describe("trend chart line encoding", () => {
     }
   });
 
-  test("CP Sonnet 5.5 stays clear of every dotted series and of every Sonnet channel", () => {
+  test("CP Sonnet 5.5 stays clear of every dotted series, every Sonnet channel and every default-selected series", () => {
     const name = "Anthropic Claude Sonnet 5.5 (US)";
     expect(selection).toContain(name);
     expect(nearestSamePattern(name, () => false).delta).toBeGreaterThanOrEqual(MIN_DELTA_E);
     for (const theme of THEMES) {
-      for (const other of CATALOG.filter((label) => label !== name && label.includes("Sonnet 5"))) {
+      for (const other of CATALOG.filter((label) => label !== name && label.includes("Sonnet"))) {
         expect(distance(name, other, theme), `${other} (${theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+      }
+      for (const other of selection.filter((label) => label !== name)) {
+        expect(distance(name, other, theme), `${other} (${theme}, default selection)`).toBeGreaterThanOrEqual(MIN_DELTA_E);
       }
     }
   });
