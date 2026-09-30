@@ -682,9 +682,9 @@ CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
 # 1. 창 상한 — 상한 초과는 422, 화면이 보내는 값은 200
 for q in "analysis/stop-reasons?window=30d" "analysis/stop-reasons?window=31d" "analysis/output-length?window=3650d" \
          "reliability/multi-channel?window=7d" "reliability/multi-channel?window=8d" "efficiency/score?window=30d" \
-         "cost/trend?window=30d" "cost/trend?window=31d" "cost/summary?window=31d" "analysis/stop-reasons?window=0d"; do
+         "cost/trend?window=30d" "cost/trend?window=31d" "cost/summary?window=31d" "analysis/stop-reasons?window=0d" "results/stats?run_id=0"; do
   echo "$q $(curl -s -o /dev/null -w '%{http_code}' "https://$CF_DOMAIN/api/$q")"; done
-# 기댓값: 30d 200, 31d 422, 3650d 422, 7d 200, 8d 422, efficiency 30d 422, cost 30d 200, 31d 422, cost summary 31d 422, 0d 422
+# 기댓값: 30d 200, 31d 422, 3650d 422, 7d 200, 8d 422, efficiency 30d 422, cost 30d 200, 31d 422, cost summary 31d 422, 0d 422, run_id=0 422
 
 # 2. /analysis 메모리 — 7일과 30일 창을 연 뒤 1분 최댓값이 크게 오르지 않고 태스크가 그대로인지
 curl -s -o /dev/null -w '%{http_code} %{time_total}s\n' "https://$CF_DOMAIN/api/analysis/stop-reasons?window=7d"
