@@ -3,6 +3,7 @@
  * 서울 In-Region 선("(ap-northeast-2)")은 리전 티어가 실선이던 때 다른 family의 Global 실선과 색으로만 구분됐다
  * (Opus 5 서울 대 Opus 5.5 Global ΔE 5.8). CP Sonnet 5.5는 CP Sonnet 5와 같은 점선에 ΔE 4.7이었고, GPT 6.1 Sol
  * Global은 Haiku 4.5 Global과 같은 청록 실선(ΔE 6.3)이었다. 색 차이는 테마 보정(getColor)을 거친 값으로 잰다.
+ * CP Sonnet 5.5를 떼어 놓은 짙은 보라(#3b0764)는 다크 차트 카드에서 대비 3.05:1로 묻혀서 대비 하한도 고정한다.
  */
 import { describe, expect, test } from "vitest";
 import { isExcludedModel } from "@/lib/sortModels";
@@ -13,13 +14,31 @@ const THEMES = ["dark", "light"] as const;
 const CATALOG = Object.keys(MODEL_COLORS).filter((name) => !isExcludedModel(name));
 const MIN_DELTA_E = 15;
 
+// Chart card backgrounds: bg-gray-900/50 over the page's bg-gray-950 (globals.css), plus the bare white card in light.
+const CARD_BACKGROUNDS = { dark: ["#0a101d"], light: ["#fafbfd", "#ffffff"] } as const;
+const MIN_CONTRAST = { dark: 4.5, light: 3 } as const;
+
 type Lab = [number, number, number];
 
-function hexToLab(hex: string): Lab {
-  const [r, g, b] = [1, 3, 5].map((index) => {
+/** Linear-light sRGB channels of a #rrggbb colour. */
+function linearRgb(hex: string): number[] {
+  return [1, 3, 5].map((index) => {
     const c = parseInt(hex.slice(index, index + 2), 16) / 255;
     return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   });
+}
+
+/** WCAG 2 contrast ratio from relative luminance. */
+function contrastRatio(first: string, second: string): number {
+  const [hi, lo] = [first, second].map((hex) => {
+    const [r, g, b] = linearRgb(hex);
+    return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+  }).sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+function hexToLab(hex: string): Lab {
+  const [r, g, b] = linearRgb(hex);
   const f = (t: number) => (t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116);
   const x = f((0.4124564 * r + 0.3575761 * g + 0.1804375 * b) / 0.95047);
   const y = f(0.2126729 * r + 0.7151522 * g + 0.072175 * b);
@@ -83,6 +102,13 @@ describe("deltaE2000", () => {
   });
 });
 
+describe("contrastRatio", () => {
+  test("matches the WCAG extremes", () => {
+    expect(contrastRatio("#000000", "#ffffff")).toBeCloseTo(21, 6);
+    expect(contrastRatio("#777777", "#777777")).toBe(1);
+  });
+});
+
 describe("lineDash — one pattern per channel tier", () => {
   test("CP dotted, Global solid, US dashed", () => {
     expect(lineDash("Anthropic Claude Opus 5 (US)")).toBe("2 3");
@@ -126,6 +152,16 @@ describe("trend chart line encoding", () => {
       }
       for (const other of selection.filter((label) => label !== name)) {
         expect(distance(name, other, theme), `${other} (${theme}, default selection)`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+      }
+    }
+  });
+
+  test("CP Sonnet 5.5 keeps a contrast floor on the chart card in both themes", () => {
+    const name = "Anthropic Claude Sonnet 5.5 (US)";
+    for (const theme of THEMES) {
+      for (const card of CARD_BACKGROUNDS[theme]) {
+        expect(contrastRatio(getColor(name, theme), card), `${getColor(name, theme)} on ${card} (${theme})`)
+          .toBeGreaterThanOrEqual(MIN_CONTRAST[theme]);
       }
     }
   });
