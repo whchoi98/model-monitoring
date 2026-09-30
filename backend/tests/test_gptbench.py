@@ -43,6 +43,7 @@ BENCH_ENV = {
     "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID": "openai.gpt-6-astra",
     "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID": "openai.gpt-6-sol",
     "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID": "openai.gpt-6-luna",
+    "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID": "openai.gpt-6.1-sol",
 }
 
 
@@ -96,17 +97,46 @@ def test_bench_channels_includes_gpt6_sol_luna_three_channels_each(bench_env):
         ("GPT 6 Luna", "us", "openai:us:us.openai.gpt-6-luna", "OpenAI GPT 6 Luna (US)"),
         ("GPT 6 Luna", "us-east-1", "openai:us-east-1:openai.gpt-6-luna", "OpenAI GPT 6 Luna (us-east-1)"),
     ]
-    # 목록 끝 6채널 — 데드라인 컷이 신규 채널에 떨어져 기존 12채널 시계열이 끊기지 않는다.
-    assert [c["family"] for c in chans[-6:]] == ["GPT 6 Sol"] * 3 + ["GPT 6 Luna"] * 3
+    # GPT 6 Sol/Luna 6채널 뒤에 GPT 6.1 Sol 3채널(v2.32.0)이 목록 끝 — 데드라인 컷이 신규 채널부터 떨어진다.
+    assert [c["family"] for c in chans[-9:-3]] == ["GPT 6 Sol"] * 3 + ["GPT 6 Luna"] * 3
+    assert [c["family"] for c in chans[-3:]] == ["GPT 6.1 Sol"] * 3
     # GPT 5.6 Sol/Luna는 벤치 대상 아님 ("6 Sol" 부분 문자열 혼동 방지).
     assert not any(c["family"].startswith("GPT 5.6 Sol") or c["family"].startswith("GPT 5.6 Luna")
                    for c in chans)
 
 
+def test_bench_channels_includes_gpt61_sol_three_channels(bench_env):
+    """GPT 6.1 Sol 3채널 편입 (v2.32.0, 2026-09-30 사용자 요청) — Global CRIS, US CRIS, Mantle us-east-1.
+
+    Mantle us-east-2/us-west-2는 404 not_found_error(2026-09-30 실측)라 채널이 생기면 안 된다. 라벨은 prober 등록
+    라벨과 바이트 동일(test_bench_channel_keys_match_prober_registration이 교차 검증).
+    """
+    import gptbench
+
+    sol61 = [c for c in gptbench.bench_channels() if c["family"] == "GPT 6.1 Sol"]
+    assert [(c["region"], c["actual_id"], c["model_id"], c["model_name"]) for c in sol61] == [
+        ("global", "global.openai.gpt-6.1-sol", "openai:global:global.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (Global)"),
+        ("us", "us.openai.gpt-6.1-sol", "openai:us:us.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (US)"),
+        ("us-east-1", "openai.gpt-6.1-sol", "openai:us-east-1:openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (us-east-1)"),
+    ]
+    assert not [c for c in sol61 if c["region"] in ("us-east-2", "us-west-2")]
+
+
+def test_bench_channels_gpt61_sol_needs_its_env(bench_env, monkeypatch):
+    """BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID가 없으면(이미지만 배포) 6.1 Sol 3채널만 조용히 빠지고 18채널은 그대로다."""
+    import gptbench
+
+    monkeypatch.delenv("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID")
+    chans = gptbench.bench_channels()
+    assert len(chans) == 18
+    assert not any(c["family"] == "GPT 6.1 Sol" for c in chans)
+
+
 def test_bench_channels_matrix(bench_env):
     """5.4×3 + 5.5×2(us-west-2 미제공) + terra×4(Global 포함, v2.20.1)
     + astra×3(Global, US CRIS, us-west-2 — v2.25.1)
-    + sol×3 + luna×3(Global, US CRIS, us-east-1 — v2.28.0) = 18채널 (Mantle 인리전 11 + CRIS 7)."""
+    + sol×3 + luna×3(Global, US CRIS, us-east-1 — v2.28.0)
+    + 6.1 sol×3(Global, US CRIS, us-east-1 — v2.32.0) = 21채널 (Mantle 인리전 12 + CRIS 9)."""
     import gptbench
 
     chans = gptbench.bench_channels()
@@ -129,14 +159,17 @@ def test_bench_channels_matrix(bench_env):
         ("openai:global:global.openai.gpt-6-luna", "OpenAI GPT 6 Luna (Global)"),
         ("openai:us:us.openai.gpt-6-luna", "OpenAI GPT 6 Luna (US)"),
         ("openai:us-east-1:openai.gpt-6-luna", "OpenAI GPT 6 Luna (us-east-1)"),
+        ("openai:global:global.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (Global)"),
+        ("openai:us:us.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (US)"),
+        ("openai:us-east-1:openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (us-east-1)"),
     ]
-    assert len(chans) == 18
-    assert sum(1 for c in chans if c["region"] in ("global", "us")) == 7
+    assert len(chans) == 21
+    assert sum(1 for c in chans if c["region"] in ("global", "us")) == 9
     assert sum(1 for c in chans if c["family"] == "GPT 5.5") == 2
     assert not any(c["family"] == "GPT 5.5" and c["region"] == "us-west-2" for c in chans)
     # pseudo-region 채널 id는 접두사 파생, 라벨은 "(Global)"/"(US)" 대문자 (prober 규약).
     glb = [c for c in chans if c["region"] == "global"]
-    assert [c["family"] for c in glb] == ["GPT 5.6 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]
+    assert [c["family"] for c in glb] == ["GPT 5.6 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol"]
 
 
 def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
@@ -157,24 +190,24 @@ def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
 
 
 def test_bench_channels_no_global_env(bench_env, monkeypatch):
-    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Terra, Astra, Sol, Luna)만 조용히 빠진다."""
+    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Terra, Astra, Sol, Luna, 6.1 Sol)만 조용히 빠진다."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 14
+    assert len(chans) == 16
     assert not any(c["region"] == "global" for c in chans)
 
 
 def test_bench_channels_no_us_env(bench_env, monkeypatch):
-    """OPENAI_US_BASE_URL 미설정이면 US CRIS 채널(Astra, Sol, Luna)만 빠지고(KeyError 없이) 나머지 15채널 유지."""
+    """OPENAI_US_BASE_URL 미설정이면 US CRIS 채널(Astra, Sol, Luna, 6.1 Sol)만 빠지고(KeyError 없이) 나머지 17채널 유지."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_US_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 15
+    assert len(chans) == 17
     assert not any(c["region"] == "us" for c in chans)
-    for fam in ("GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"):
+    for fam in ("GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol"):
         assert sum(1 for c in chans if c["family"] == fam) == 2
 
 
@@ -187,11 +220,11 @@ def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
 
     res = gptbench.run_cycle()
-    assert res["rows"] == 36 and res["errors"] == 0  # 18ch × 2
+    assert res["rows"] == 42 and res["errors"] == 0  # 21ch × 2
 
     s = session_factory()
     rows = s.query(models.GptBenchResult).all()
-    assert len(rows) == 36
+    assert len(rows) == 42
     assert all(r.cycle_ts == rows[0].cycle_ts for r in rows)  # 사이클 그룹 키 동일
     assert rows[0].gap_ms == pytest.approx(900.0)
     s.close()
@@ -209,7 +242,7 @@ def test_run_cycle_deadline_skips_channels(bench_env, session_factory, monkeypat
 
     res = gptbench.run_cycle()
     assert res["rows"] == 0
-    assert len(res["skipped_channels"]) == 18
+    assert len(res["skipped_channels"]) == 21
 
 
 def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0, start_min_ago=20):
@@ -271,7 +304,7 @@ def test_trend_series_grouped_by_cycle(session_factory, client):
 
 
 def test_trend_hours_capped_at_ui_max(client):
-    """공개 엔드포인트 — hours 상한 168(UI 최대 7일). 720h 전체 ORM 로드는 18채널에서 ~1 GB RSS(OOM 위험)."""
+    """공개 엔드포인트 — hours 상한 168(UI 최대 7일). 720h 전체 ORM 로드는 21채널에서 ~1.2 GB RSS(OOM 위험)."""
     assert client.get("/api/gptbench/trend?hours=168").status_code == 200
     assert client.get("/api/gptbench/trend?hours=169").status_code == 422
     assert client.get("/api/gptbench/trend?hours=720").status_code == 422
@@ -392,10 +425,10 @@ def test_latest_uses_only_cycle_even_if_fresh(session_factory, client):
 
 
 def test_latest_orders_gpt6_family_first(session_factory, client):
-    """카드 정렬은 family(카탈로그 순) → region — Astra → Sol → Luna → Terra → 5.5 → 5.4,
+    """카드 정렬은 family(최신 순) → region — 6.1 Sol → Astra → Sol → Luna → Terra → 5.5 → 5.4,
     각 family 안에서 리전은 Global, US, 인리전 순.
 
-    fam_rank에 누락된 family는 rank 9로 밀려 맨 뒤에 찍힌다 (v2.25.1 Astra, v2.28.0 Sol/Luna).
+    fam_rank에 누락된 family는 rank 9로 밀려 맨 뒤에 찍힌다 (v2.25.1 Astra, v2.28.0 Sol/Luna, v2.32.0 6.1 Sol).
     """
     s = session_factory()
     cts = datetime.now(timezone.utc) - timedelta(minutes=20)  # 완료 사이클
@@ -413,6 +446,9 @@ def test_latest_orders_gpt6_family_first(session_factory, client):
         ("GPT 6 Sol", "us-east-1", "openai:us-east-1:openai.gpt-6-sol"),
         ("GPT 6 Luna", "us", "openai:us:us.openai.gpt-6-luna"),
         ("GPT 6 Sol", "global", "openai:global:global.openai.gpt-6-sol"),
+        ("GPT 6.1 Sol", "us-east-1", "openai:us-east-1:openai.gpt-6.1-sol"),
+        ("GPT 6.1 Sol", "us", "openai:us:us.openai.gpt-6.1-sol"),
+        ("GPT 6.1 Sol", "global", "openai:global:global.openai.gpt-6.1-sol"),
     ]
     for family, region, model_id in seeded:
         label = "Global" if region == "global" else ("US" if region == "us" else region)
@@ -426,6 +462,9 @@ def test_latest_orders_gpt6_family_first(session_factory, client):
 
     data = client.get("/api/gptbench/latest").json()
     assert [c["model_name"] for c in data["channels"]] == [
+        "OpenAI GPT 6.1 Sol (Global)",
+        "OpenAI GPT 6.1 Sol (US)",
+        "OpenAI GPT 6.1 Sol (us-east-1)",
         "OpenAI GPT 6 Astra (Global)",
         "OpenAI GPT 6 Astra (US)",
         "OpenAI GPT 6 Astra (us-west-2)",
@@ -716,3 +755,297 @@ def test_run_cycle_records_wall_clock_timeout_row(bench_env, session_factory, mo
     assert rows[0].error_message == "WallClockTimeout: wall-clock timeout after 0.1s"
     assert rows[0].gap_ms is None
     s.close()
+
+
+# ---------------------------------------------------------------------------
+# 두 갈래 병렬 (v2.32.0, 2026-09-30 사용자 결정)
+#   cris = 유사 리전 global/us(bedrock-runtime), mantle = 인리전(bedrock-mantle). 두 갈래가 동시에 돌고
+#   갈래 안은 순차, 데드라인은 공유 시각, 넘긴 갈래는 자기 남은 채널만 skip, DB는 메인 스레드만 쓴다.
+# ---------------------------------------------------------------------------
+
+CRIS_ORDER = [
+    "openai:global:global.openai.gpt-5.6-terra",
+    "openai:global:global.openai.gpt-6-astra",
+    "openai:us:us.openai.gpt-6-astra",
+    "openai:global:global.openai.gpt-6-sol",
+    "openai:us:us.openai.gpt-6-sol",
+    "openai:global:global.openai.gpt-6-luna",
+    "openai:us:us.openai.gpt-6-luna",
+    "openai:global:global.openai.gpt-6.1-sol",
+    "openai:us:us.openai.gpt-6.1-sol",
+]
+MANTLE_ORDER = [
+    "openai:us-east-1:openai.gpt-5.4",
+    "openai:us-east-2:openai.gpt-5.4",
+    "openai:us-west-2:openai.gpt-5.4",
+    "openai:us-east-1:openai.gpt-5.5",
+    "openai:us-east-2:openai.gpt-5.5",
+    "openai:us-east-1:openai.gpt-5.6-terra",
+    "openai:us-east-2:openai.gpt-5.6-terra",
+    "openai:us-west-2:openai.gpt-5.6-terra",
+    "openai:us-west-2:openai.gpt-6-astra",
+    "openai:us-east-1:openai.gpt-6-sol",
+    "openai:us-east-1:openai.gpt-6-luna",
+    "openai:us-east-1:openai.gpt-6.1-sol",
+]
+
+
+def _model_key(region, actual_id):
+    return f"openai:{region}:{actual_id}"
+
+
+class _LaneClock:
+    """갈래(스레드)별 가상 시계 — 병렬 실행에서 각 갈래가 보는 경과는 자기 호출 시간의 합이다.
+
+    메인 스레드는 0에 머문다(사이클 시작 시각 = 0).
+    """
+
+    def __init__(self):
+        self._local = threading.local()
+
+    def __call__(self):
+        return getattr(self._local, "t", 0.0)
+
+    def advance(self, seconds):
+        self._local.t = self() + seconds
+
+
+def _recording_session_factory(engine, seen_threads):
+    from sqlalchemy.orm import Session
+
+    class RecordingSession(Session):
+        def add(self, instance, *a, **kw):
+            seen_threads.add(threading.current_thread().name)
+            return super().add(instance, *a, **kw)
+
+        def commit(self):
+            seen_threads.add(threading.current_thread().name)
+            return super().commit()
+
+    return sessionmaker(bind=engine, class_=RecordingSession)
+
+
+def test_bench_lanes_split_by_host_with_gpt61_sol_last(bench_env):
+    """CRIS 9 = Global 5 + US 4, Mantle 12 — 갈래 안 순서는 bench_channels 순서, 각 갈래 끝은 GPT 6.1 Sol."""
+    import gptbench
+
+    chans = gptbench.bench_channels()
+    lanes = gptbench.bench_lanes(chans)
+    assert list(lanes) == ["cris", "mantle"]
+    assert [ch["model_id"] for _, ch in lanes["cris"]] == CRIS_ORDER
+    assert [ch["model_id"] for _, ch in lanes["mantle"]] == MANTLE_ORDER
+    for items in lanes.values():
+        assert items[-1][1]["family"] == "GPT 6.1 Sol"
+        idx = [i for i, _ in items]
+        assert idx == sorted(idx)  # bench_channels 순서를 거른 것
+        assert all(chans[i] is ch for i, ch in items)
+    assert {gptbench.lane_of(c) for c in chans if c["region"] in ("global", "us")} == {"cris"}
+    assert {gptbench.lane_of(c) for c in chans if c["region"] not in ("global", "us")} == {"mantle"}
+
+
+def test_bench_lanes_drop_empty_lane(bench_env, monkeypatch):
+    """CRIS base URL이 없으면 CRIS 갈래 자체가 없다 — 빈 갈래 스레드를 띄우지 않는다."""
+    import gptbench
+
+    monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
+    monkeypatch.delenv("OPENAI_US_BASE_URL")
+    lanes = gptbench.bench_lanes(gptbench.bench_channels())
+    assert list(lanes) == ["mantle"] and len(lanes["mantle"]) == 12
+
+
+def test_run_cycle_runs_both_lanes_in_parallel_each_sequential(bench_env, engine, monkeypatch, caplog):
+    """두 갈래가 동시에 호출 중인 순간이 있어야 한다(Barrier), 갈래 안 호출 순서는 채널 순서 × (워밍업 1 + RUNS),
+    한 갈래의 호출은 한 스레드에서만 나오고, DB는 메인 스레드만 쓴다. 행은 두 갈래 합쳐 정확히 한 번씩 저장된다."""
+    import database
+    import gptbench
+
+    seen_db_threads: set[str] = set()
+    factory = _recording_session_factory(engine, seen_db_threads)
+    monkeypatch.setattr(database, "SessionLocal", factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
+
+    # 두 갈래의 첫 호출이 서로를 기다린다 — 순차 실행이면 5초 뒤 BrokenBarrierError로 사이클이 실패한다.
+    barrier = threading.Barrier(2, timeout=5)
+    first_call_done: set[str] = set()
+    calls: list[tuple[str, str]] = []  # (thread name, model key)
+    lock = threading.Lock()
+    base = _fake_call()
+
+    def call(region, actual_id):
+        name = threading.current_thread().name
+        with lock:
+            first = name not in first_call_done
+            first_call_done.add(name)
+            calls.append((name, _model_key(region, actual_id)))
+        if first:
+            barrier.wait()
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+
+    res = gptbench.run_cycle()
+
+    assert res["rows"] == 42 and res["errors"] == 0 and res["skipped_channels"] == []
+    assert res["channels"] == 21
+    assert {n for n, _ in calls} == {"gptbench-cris", "gptbench-mantle"}
+    per_thread = {n: [k for t, k in calls if t == n] for n in ("gptbench-cris", "gptbench-mantle")}
+    assert per_thread["gptbench-cris"] == [k for k in CRIS_ORDER for _ in range(3)]
+    assert per_thread["gptbench-mantle"] == [k for k in MANTLE_ORDER for _ in range(3)]
+    assert seen_db_threads == {threading.current_thread().name}
+
+    s = factory()
+    rows = s.query(models.GptBenchResult).all()
+    assert len(rows) == 42
+    assert sorted((r.model_id, r.run_no) for r in rows) == sorted(
+        (k, n) for k in CRIS_ORDER + MANTLE_ORDER for n in (1, 2))
+    assert len({r.cycle_ts for r in rows}) == 1
+    s.close()
+
+    done = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
+    assert len(done) == 1 and done[0].startswith("GPT bench cycle done: rows=42 errors=0 skipped=none elapsed=")
+    assert any(r.getMessage() == "GPT bench lanes: cris=9 mantle=12" for r in caplog.records)
+
+
+def test_run_cycle_deadline_is_per_lane(bench_env, session_factory, monkeypatch):
+    """느린 Mantle 갈래만 데드라인을 넘겨 자기 남은 채널을 skip한다 — CRIS 갈래는 끝까지 측정한다.
+
+    가상 시계: Mantle 호출 100s, CRIS 호출 1s, RUNS=2(채널당 3호출), 데드라인 780s.
+    Mantle 채널 0: 0→300, 1: 300→600, 2: 600 통과 → 워밍업 700 → run1 700 통과 → 800 → run2 800 초과 = "(run 2+)",
+    채널 3~11: 채널 전체 skip. CRIS: 9채널 × 3s = 27s, skip 없음.
+    """
+    import database
+    import gptbench
+
+    clock = _LaneClock()
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "_clock", clock)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 780.0)
+    base = _fake_call()
+
+    def call(region, actual_id):
+        clock.advance(1.0 if region in ("global", "us") else 100.0)
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+
+    res = gptbench.run_cycle()
+
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    assert res["skipped_channels"] == (
+        [f"{labels[MANTLE_ORDER[2]]} (run 2+)"] + [labels[k] for k in MANTLE_ORDER[3:]])
+    assert res["skipped_channels"][0] == "OpenAI GPT 5.4 (us-west-2) (run 2+)"
+    assert res["rows"] == 9 * 2 + 2 + 2 + 1  # CRIS 전부 + Mantle 채널 0, 1 전부 + 채널 2의 run 1
+
+    s = session_factory()
+    got = {}
+    for r in s.query(models.GptBenchResult).all():
+        got.setdefault(r.model_id, []).append(r.run_no)
+    s.close()
+    assert {k: sorted(v) for k, v in got.items()} == {
+        **{k: [1, 2] for k in CRIS_ORDER},
+        MANTLE_ORDER[0]: [1, 2], MANTLE_ORDER[1]: [1, 2], MANTLE_ORDER[2]: [1],
+    }
+
+
+def test_run_cycle_skipped_list_follows_channel_order_across_lanes(bench_env, session_factory, monkeypatch):
+    """두 갈래 모두 데드라인을 넘기면 skipped_channels는 도착 순서가 아니라 bench_channels 순서다(결정적 보고)."""
+    import database
+    import gptbench
+
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "one_call", _fake_call())
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", -1.0)  # 즉시 초과 (가상 시계 없이도 결정적)
+
+    res = gptbench.run_cycle()
+    assert res["rows"] == 0
+    assert res["skipped_channels"] == [c["model_name"] for c in gptbench.bench_channels()]
+
+
+def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory, monkeypatch):
+    """watchdog도 풀지 못한 정지 갈래는 데드라인 + 호출 상한 + 여유가 지나면 기다리지 않는다 — 남은 채널은 skip,
+    다른 갈래의 행은 저장, 사이클은 끝난다."""
+    import database
+    import gptbench
+
+    release = threading.Event()
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 0.2)
+    monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gptbench, "LANE_JOIN_GRACE_S", 0.1)
+    base = _fake_call()
+
+    def call(region, actual_id):
+        if region not in ("global", "us"):
+            release.wait(10)  # 테스트 안전판 — 대기 상한(0.4s)이 동작하지 않으면 10초를 다 쓴다
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    try:
+        t0 = time.perf_counter()
+        res = gptbench.run_cycle()
+        assert time.perf_counter() - t0 < 3.0
+    finally:
+        release.set()
+        # 포기한 갈래 스레드를 monkeypatch 복원 전에 끝낸다 — 복원된 데드라인(780s)으로 실제 one_call을 부르지 않도록.
+        for t in threading.enumerate():
+            if t.name == "gptbench-mantle":
+                t.join(5)
+
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    assert res["rows"] == 9
+    assert res["skipped_channels"] == [labels[k] for k in MANTLE_ORDER]
+
+
+def test_run_cycle_lane_crash_keeps_other_lane_and_reraises(bench_env, session_factory, monkeypatch, caplog):
+    """갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고, 사이클 로그를 한 번 남긴 뒤 예외를 다시 던진다."""
+    import database
+    import gptbench
+
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    base = _fake_call()
+
+    def call(region, actual_id):
+        if region not in ("global", "us"):
+            raise RuntimeError("client init failed")
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+
+    with pytest.raises(RuntimeError, match="client init failed"):
+        gptbench.run_cycle()
+
+    s = session_factory()
+    assert sorted(r.model_id for r in s.query(models.GptBenchResult).all()) == sorted(CRIS_ORDER)
+    s.close()
+    done = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
+    assert len(done) == 1 and done[0].startswith("GPT bench cycle done: rows=9 errors=0 skipped=[")
+    assert "OpenAI GPT 6.1 Sol (us-east-1)" in done[0]
+
+
+def test_client_cache_is_shared_safely_across_lanes(bench_env, monkeypatch):
+    """두 갈래가 같은 base URL을 동시에 처음 요청해도 클라이언트는 하나만 만든다(캐시 잠금)."""
+    import gptbench
+
+    created = []
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            time.sleep(0.05)  # 생성 중 다른 스레드가 끼어들 틈
+            created.append(kwargs["base_url"])
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    monkeypatch.setattr(gptbench, "_client_cache", {})
+    got = []
+    threads = [threading.Thread(target=lambda: got.append(gptbench._client_for("us-east-1"))) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(5)
+    assert created == ["http://e1"]
+    assert len(got) == 4 and all(c is got[0] for c in got)

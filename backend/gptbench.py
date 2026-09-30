@@ -1,11 +1,19 @@
-"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 18채널 TTFB/TTFT 정밀 측정 (v2.18.0).
+"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 21채널 TTFB/TTFT 정밀 측정 (v2.18.0).
 
-18채널 = Mantle 인리전 11 + CRIS 7 (GPT 6 Sol/Luna 편입 v2.28.0, 2026-09-23 사용자 결정).
+21채널 = Mantle 인리전 12 + CRIS 9 (GPT 6 Sol/Luna 편입 v2.28.0, GPT 6.1 Sol 편입 v2.32.0 — 2026-09-30 사용자 요청).
 
 docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   TTFB = 요청→첫 스트림 이벤트, TTFT = 요청→첫 output_text.delta, GAP = TTFT−TTFB ≈ thinking.
-  ~55.8k 토큰 고정 프롬프트(prompt cache 유도), 채널당 RUNS회 **순차** 호출 (병렬화 금지 —
-  contention이 레이턴시를 왜곡, 벤치 방법론과 동일 이유).
+  ~55.8k 토큰 고정 프롬프트(prompt cache 유도), 채널당 워밍업 1 + RUNS회 **순차** 호출.
+
+두 갈래 병렬 (v2.32.0, 2026-09-30 사용자 결정): 채널을 호스트별 두 갈래로 나눠 동시에 돈다.
+  - cris   = 유사 리전 global/us 채널 (bedrock-runtime OpenAI 호환 호스트)
+  - mantle = 인리전 채널 (bedrock-mantle.<region> 호스트)
+  갈래 **안**은 지금처럼 채널 하나씩 순차다(갈래 안 병렬화 금지 — 같은 호스트 호출이 겹치면 contention이
+  레이턴시를 왜곡, 벤치 방법론과 동일 이유). 두 갈래는 호스트가 달라 서로의 대기열에 끼지 않는다.
+  사이클 데드라인(CYCLE_DEADLINE_S)은 두 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만
+  건너뛴다. DB는 메인 스레드만 만진다 — 갈래는 끝난 채널의 측정을 큐로 넘기고, 메인이 채널 단위로 커밋한다.
+  배경: 18채널 순차 24시간 실측(96사이클) 중앙값 623초, p90 750초, 최대 790초, 9사이클이 끝 채널을 건너뜀.
 
 auto_prober와 분리된 이유: 측정 지표가 다름(TTFB/GAP은 프로브에 없음) + 고정 대형 프롬프트
 비용 프로파일이 달라 독립 테이블(gpt_bench_results)/스케줄(rate 15 min)로 운영.
@@ -17,7 +25,10 @@ from __future__ import annotations
 
 import logging
 import os
+import queue
+import threading
 import time
+from dataclasses import dataclass, field
 from datetime import datetime, timezone
 
 # 호출당 wall-clock watchdog — v2.28.2에서 prober와 공용 모듈로 옮겼다(동작 동일). 기존 이름을 그대로
@@ -31,14 +42,25 @@ RUNS_PER_CHANNEL = int(os.environ.get("GPT_BENCH_RUNS", "10"))
 # 호출 1회의 wall-clock 상한 (v2.28.0부터 진짜 상한) — httpx timeout(청크 간 read 대기 상한)과
 # _CallWatchdog(호출 전체 경과 상한) 양쪽에 같은 값을 쓴다.
 CALL_TIMEOUT_S = float(os.environ.get("GPT_BENCH_CALL_TIMEOUT", "90"))
-# 사이클 전체 데드라인 — 15분 스케줄 겹침 방지 (초과 시 남은 채널 skip).
+# 사이클 전체 데드라인 — 15분 스케줄 겹침 방지 (초과 시 그 갈래의 남은 채널 skip). 두 갈래가 공유한다.
 CYCLE_DEADLINE_S = float(os.environ.get("GPT_BENCH_DEADLINE", "780"))  # 13 min
+
+# 두 갈래 — 이름은 로그에 그대로 찍힌다.
+LANE_CRIS = "cris"
+LANE_MANTLE = "mantle"
+LANES = (LANE_CRIS, LANE_MANTLE)
+# 갈래 대기 여유 — 마지막으로 통과한 데드라인 판정 뒤에는 호출 1회(CALL_TIMEOUT_S, watchdog 상한)만 더 돈다.
+# 데드라인 + 호출 상한 + 이 여유(기본 885초 < 15분 스케줄)가 지나도 끝나지 않는 갈래는 watchdog도 풀지 못한
+# 정지이므로 기다리지 않고 남은 채널을 skip으로 보고한다 — 사이클이 영영 끝나지 않는 사고 방지.
+LANE_JOIN_GRACE_S = 15.0
+# 데드라인 판정 시계 — 테스트가 갈래별 가상 시계로 바꾼다.
+_clock = time.perf_counter
 
 INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sentence."
 
 # (family, model-id env var, 제공 리전) — prober._OPENAI_MODEL_SPECS의 3P(Mantle) 서브셋.
-# 18채널 = Mantle 인리전 11 + CRIS 7 (v2.28.0).
-# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna).
+# 21채널 = Mantle 인리전 12 + CRIS 9 (v2.32.0).
+# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol).
 # pseudo-region "global" = Global CRIS 채널 (Terra v2.20.1, 2026-08-18 사용자 승인) —
 # 5.4/5.5는 global 프로파일 미지원. pseudo-region "us" = US CRIS (GPT 6 세대 전용 — Astra v2.25.1,
 # Sol/Luna v2.28.0). pseudo-region 채널의 모델 id/라벨은 prober 규약(_OPENAI_PSEUDO_REGIONS)으로 파생한다.
@@ -47,7 +69,10 @@ INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sente
 # 정기 재확인 대상 아님.
 # GPT 6 Sol/Luna는 v2.28.0(2026-09-23) 사용자 결정으로 편입 — Mantle 인리전은 us-east-1 단독
 # (us-east-2/us-west-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님). 목록 **끝**에 두는 이유: 사이클이 데드라인에
-# 걸리면 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에 떨어져 기존 12채널 시계열이 끊기지 않는다.
+# 걸리면 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에 떨어져 기존 채널 시계열이 끊기지 않는다.
+# GPT 6.1 Sol(v2.32.0): Global CRIS(Seoul bedrock-runtime 200), US CRIS(us-east-1 bedrock-runtime 200), Mantle us-east-1(구독 개시 401 후 200).
+# us-east-2/us-west-2는 404로 제외. 목록 끝 = 두 갈래(CRIS, Mantle) 각각의 끝 — 데드라인 컷이 갈래마다 6.1 Sol부터
+# 떨어져 기존 18채널 시계열을 보존한다(v2.32.0부터 갈래 순서는 이 목록 순서를 갈래별로 거른 것).
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),
     ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1", "us-east-2")),
@@ -55,6 +80,7 @@ _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-west-2")),
     ("GPT 6 Sol", "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", ("global", "us", "us-east-1")),
     ("GPT 6 Luna", "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", ("global", "us", "us-east-1")),
+    ("GPT 6.1 Sol", "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", ("global", "us", "us-east-1")),
 ]
 
 # ~55.8k 토큰 고정 컨텍스트 — 벤치 스크립트와 동일 (변경 시 캐시 무효 + 측정 연속성 깨짐 주의).
@@ -77,6 +103,7 @@ _EXTRA = {
 }
 
 _client_cache: dict[str, object] = {}
+_client_lock = threading.Lock()  # 두 갈래 스레드가 캐시를 함께 쓴다
 
 
 def _client_for(region: str):
@@ -84,17 +111,18 @@ def _client_for(region: str):
     from prober import _openai_base_url  # 지연 import — 등록 부작용 없음
 
     base_url = _openai_base_url(region)
-    if base_url not in _client_cache:
-        from openai import OpenAI
-        _client_cache[base_url] = OpenAI(
-            api_key=os.environ["OPENAI_API_KEY"],
-            base_url=base_url,
-            timeout=CALL_TIMEOUT_S,
-            # 측정 호출은 절대 조용히 재시도하지 않는다 — SDK 기본 max_retries=2는 실패를
-            # 숨기고 한 호출의 경과를 최대 3배로 늘린다. 실패는 오류 행으로 드러나야 한다.
-            max_retries=0,
-        )
-    return _client_cache[base_url]
+    with _client_lock:
+        if base_url not in _client_cache:
+            from openai import OpenAI
+            _client_cache[base_url] = OpenAI(
+                api_key=os.environ["OPENAI_API_KEY"],
+                base_url=base_url,
+                timeout=CALL_TIMEOUT_S,
+                # 측정 호출은 절대 조용히 재시도하지 않는다 — SDK 기본 max_retries=2는 실패를
+                # 숨기고 한 호출의 경과를 최대 3배로 늘린다. 실패는 오류 행으로 드러나야 한다.
+                max_retries=0,
+            )
+        return _client_cache[base_url]
 
 
 def bench_channels() -> list[dict]:
@@ -134,6 +162,21 @@ def bench_channels() -> list[dict]:
                 model_name=label,
             ))
     return chans
+
+
+def lane_of(channel: dict) -> str:
+    """채널의 갈래 — 유사 리전(global/us, bedrock-runtime 호스트)이면 CRIS, 인리전(bedrock-mantle)이면 Mantle."""
+    from prober import _OPENAI_PSEUDO_REGIONS  # 지연 import — bench_channels와 같은 이유
+
+    return LANE_CRIS if channel["region"] in _OPENAI_PSEUDO_REGIONS else LANE_MANTLE
+
+
+def bench_lanes(chans: list[dict]) -> dict[str, list[tuple[int, dict]]]:
+    """갈래별 (bench_channels 위치, 채널) 목록 — 갈래 안 순서는 bench_channels 순서, 빈 갈래는 빠진다."""
+    lanes: dict[str, list[tuple[int, dict]]] = {lane: [] for lane in LANES}
+    for index, ch in enumerate(chans):
+        lanes[lane_of(ch)].append((index, ch))
+    return {lane: items for lane, items in lanes.items() if items}
 
 
 def one_call(region: str, actual_id: str) -> dict:
@@ -191,39 +234,112 @@ def one_call(region: str, actual_id: str) -> dict:
                 input_tokens=in_tok, error=err)
 
 
-def run_cycle() -> dict:
-    """1 사이클 = 활성 채널 × RUNS_PER_CHANNEL 순차 호출 → gpt_bench_results 저장.
+@dataclass
+class _ChannelDone:
+    """갈래 → 메인 스레드 메시지. index가 None이면 그 갈래가 끝났다는 뜻(error는 갈래를 멈춘 예외)."""
+    lane: str
+    index: int | None = None               # bench_channels 순서의 위치
+    runs: list[tuple[int, datetime, dict]] = field(default_factory=list)  # (run_no, 완료 시각, one_call 결과)
+    skip: str | None = None                # skipped_channels 표기 — 채널 전체면 라벨, 도중이면 "라벨 (run N+)"
+    error: BaseException | None = None
 
-    반환: {"cycle_ts", "channels", "rows", "errors", "skipped_channels"}.
+
+def _past_deadline(started: float) -> bool:
+    return _clock() - started > CYCLE_DEADLINE_S
+
+
+def _bench_channel(ch: dict, started: float) -> tuple[list[tuple[int, datetime, dict]], str | None]:
+    """채널 하나 = 워밍업 1 + RUNS_PER_CHANNEL회 순차 호출. 반환: (측정 목록, skip 표기 또는 None)."""
+    if _past_deadline(started):
+        return [], ch["model_name"]
+    # 워밍업 1회 (connection/TLS, 캐시 안정화) — 저장하지 않음, 벤치 방법론 동일.
+    one_call(ch["region"], ch["actual_id"])
+    runs: list[tuple[int, datetime, dict]] = []
+    for run_no in range(1, RUNS_PER_CHANNEL + 1):
+        if _past_deadline(started):
+            return runs, f"{ch['model_name']} (run {run_no}+)"
+        r = one_call(ch["region"], ch["actual_id"])
+        runs.append((run_no, datetime.now(timezone.utc), r))
+    return runs, None
+
+
+def _run_lane(lane: str, items: list[tuple[int, dict]], started: float, out: queue.Queue) -> None:
+    """갈래 스레드 — 채널을 순서대로 측정해 끝날 때마다 큐로 넘긴다. DB는 만지지 않는다."""
+    error: BaseException | None = None
+    try:
+        for index, ch in items:
+            runs, skip = _bench_channel(ch, started)
+            out.put(_ChannelDone(lane=lane, index=index, runs=runs, skip=skip))
+    except BaseException as e:  # noqa: BLE001 — 메인 스레드가 다른 갈래를 마친 뒤 다시 던진다
+        error = e
+    finally:
+        logger.info("GPT bench lane done: %s channels=%d elapsed=%.0fs", lane, len(items), _clock() - started)
+        out.put(_ChannelDone(lane=lane, error=error))
+
+
+def run_cycle() -> dict:
+    """1 사이클 = 활성 채널 × RUNS_PER_CHANNEL, 두 갈래(CRIS, Mantle) 병렬 → gpt_bench_results 저장.
+
+    반환: {"cycle_ts", "channels", "rows", "errors", "skipped_channels"} — skipped_channels는 채널 순서.
+    갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를 다시 던진다.
     """
     from database import SessionLocal
     from models import GptBenchResult
 
     cycle_ts = datetime.now(timezone.utc)
-    started = time.perf_counter()
+    started = _clock()
     chans = bench_channels()
     logger.info("GPT bench cycle start: %d channels x %d runs", len(chans), RUNS_PER_CHANNEL)
 
+    lanes = bench_lanes(chans)
+    logger.info("GPT bench lanes: %s", " ".join(f"{lane}={len(items)}" for lane, items in lanes.items()) or "none")
+
     rows = errors = 0
-    skipped: list[str] = []
+    skipped_at: dict[int, str] = {}
+    pending = {lane: {i for i, _ in items} for lane, items in lanes.items()}  # 아직 보고되지 않은 채널
+    lane_error: BaseException | None = None
+    events: queue.Queue = queue.Queue()
+    for lane, items in lanes.items():
+        # daemon — 대기 상한을 넘긴(정지한) 갈래가 러너 프로세스 종료를 붙잡지 않도록.
+        threading.Thread(target=_run_lane, args=(lane, items, started, events),
+                         name=f"gptbench-{lane}", daemon=True).start()
+    wait_cap = CYCLE_DEADLINE_S + CALL_TIMEOUT_S + LANE_JOIN_GRACE_S
     db = SessionLocal()
     try:
-        for ch in chans:
-            if time.perf_counter() - started > CYCLE_DEADLINE_S:
-                skipped.append(ch["model_name"])
+        while pending:
+            remaining = wait_cap - (_clock() - started)
+            if remaining <= 0:
+                for lane, left in pending.items():
+                    logger.error("GPT bench lane %s did not finish within %.0fs - abandoning %d channel(s)",
+                                 lane, wait_cap, len(left))
+                    for i in left:
+                        skipped_at[i] = chans[i]["model_name"]
+                break
+            try:
+                ev = events.get(timeout=min(remaining, 5.0))
+            except queue.Empty:
+                continue
+            if ev.index is None:  # 갈래 종료
+                # 정상 종료면 남은 채널이 없다. 예외로 멈춘 갈래의 못 돈 채널은 skip으로 보고한다.
+                for i in pending.pop(ev.lane, set()):
+                    skipped_at[i] = chans[i]["model_name"]
+                if ev.error is not None:
+                    logger.error("GPT bench lane %s stopped: %s: %s", ev.lane, type(ev.error).__name__, ev.error,
+                                 exc_info=ev.error)
+                    lane_error = lane_error or ev.error
+                continue
+            pending.get(ev.lane, set()).discard(ev.index)
+            ch = chans[ev.index]
+            if ev.skip is not None:
+                skipped_at[ev.index] = ev.skip
+            if not ev.runs and ev.skip == ch["model_name"]:
                 logger.warning("cycle deadline exceeded - skipping %s", ch["model_name"])
                 continue
-            # 워밍업 1회 (connection/TLS·캐시 안정화) — 저장하지 않음, 벤치 방법론 동일.
-            one_call(ch["region"], ch["actual_id"])
-            for run_no in range(1, RUNS_PER_CHANNEL + 1):
-                if time.perf_counter() - started > CYCLE_DEADLINE_S:
-                    skipped.append(f"{ch['model_name']} (run {run_no}+)")
-                    break
-                r = one_call(ch["region"], ch["actual_id"])
+            for run_no, finished_at, r in ev.runs:
                 gap = (r["ttft_ms"] - r["ttfb_ms"]) if (r["ttft_ms"] and r["ttfb_ms"]) else None
                 db.add(GptBenchResult(
                     cycle_ts=cycle_ts,
-                    timestamp=datetime.now(timezone.utc),
+                    timestamp=finished_at,
                     model_id=ch["model_id"],
                     model_name=ch["model_name"],
                     family=ch["family"],
@@ -247,8 +363,11 @@ def run_cycle() -> dict:
     finally:
         db.close()
 
-    elapsed = time.perf_counter() - started
+    skipped = [skipped_at[i] for i in sorted(skipped_at)]
+    elapsed = _clock() - started
     logger.info("GPT bench cycle done: rows=%d errors=%d skipped=%s elapsed=%.0fs",
                 rows, errors, skipped or "none", elapsed)
+    if lane_error is not None:
+        raise lane_error
     return dict(cycle_ts=cycle_ts.isoformat(), channels=len(chans),
                 rows=rows, errors=errors, skipped_channels=skipped)

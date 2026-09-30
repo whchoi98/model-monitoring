@@ -20,7 +20,8 @@ from claude_features.transports import Transport, build_transport
 logger = logging.getLogger(__name__)
 
 # 2026-09-23: 대표 모델에 Opus 5.5 추가 → 런 형태 780 → 975셀 (프로브 813 + 사전판정 162)
-CATALOG_VERSION = "2026-09-23"
+# 2026-09-30: 대표 모델에 Sonnet 5.5 추가(Mantle 미서빙 → N/A) → 런 형태 975 → 1170셀 (프로브 946 + 사전판정 224)
+CATALOG_VERSION = "2026-09-30"
 KEEP_RUNS = 60
 _MAX_WORKERS = 4
 
