@@ -78,9 +78,10 @@ aws logs tail /ecs/backend --since 2h --region $REGION | grep -E '"GET /api/' | 
 
 ## 기동 마이그레이션 블록 실패 — `Migration block failed` `LockNotAvailable` (2026-09-30, v2.32.2에서 수정)
 
-**배경**: backend lifespan은 `create_tables()` 다음에 한 트랜잭션에서 `SET statement_timeout = '30000'`, `SET lock_timeout = '5000'`,
-`pg_advisory_lock(917350001)`을 건 뒤 열 5개(`probe_runs.is_auto`, `users.approved`, `insights.summary_md_en`, `probe_results.category`,
-`probe_results.stop_reason`)를 확인하고, 옛 라벨 삭제 2문장, rename 21문장, 제거 모델 삭제 6문장을 실행한다(`backend/main.py`).
+**배경**: backend lifespan은 `create_tables()` 다음에 한 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`,
+`SET LOCAL lock_timeout = '5000'`, `pg_advisory_xact_lock(917350001)`을 건 뒤 열 5개(`probe_runs.is_auto`, `users.approved`,
+`insights.summary_md_en`, `probe_results.category`, `probe_results.stop_reason`)를 확인하고, 옛 라벨 삭제 2문장, rename 21문장, 제거 모델
+삭제 6문장을 실행한다(`backend/main.py`). 설정 두 개와 advisory 락은 그 트랜잭션 한정이라 커밋이나 롤백에 풀린다(v2.32.2, 아래 조치 3).
 실패해도 기동은 계속하지만(non-fatal) 블록 전체가 롤백되고, 다음 기동에 다시 한다. 운영 DB에는 열 5개가 모두 있고, 삭제와 rename은
 0행으로 예상된다. 그래서 실패 한 번으로 기능이 빠지지는 않는다.
 
@@ -102,11 +103,18 @@ v2.32.2부터 블록은 advisory 락 다음에 카탈로그(`sqlalchemy.inspect`
   문장이다.
   1. `ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS is_auto …`(또는 다른 열)와 `canceling statement due to lock timeout`: v2.32.1 이하
      이미지면 위 배경의 원인이다. v2.32.2 이상이면 그 열이 정말 없는 DB이고, 그 테이블을 읽은 트랜잭션이 5초 넘게 열려 있었다.
-  2. `SELECT pg_advisory_lock(917350001)`와 `canceling statement due to lock timeout`: 다른 세션이 advisory 락을 쥐고 있다. 겹친 기동이거나,
-     앞서 실패한 블록이 남긴 락이다(아래 조치 3).
+  2. `SELECT pg_advisory_xact_lock(917350001)`(v2.32.1 이하는 `SELECT pg_advisory_lock(917350001)`)와 `canceling statement due to lock
+     timeout`: 다른 세션이 advisory 락을 쥐고 있다. 겹친 기동의 블록이 5초 넘게 돌고 있거나, v2.32.1 이하 이미지면 앞서 실패한 블록이
+     남긴 락이다(아래 조치 3).
   3. `DELETE FROM probe_results …`나 `UPDATE probe_results …`와 `canceling statement due to statement timeout`: `probe_results` 스캔이
      30초를 넘었다. 선행 와일드카드 `LIKE` 삭제 2문장은 기동마다 테이블 전체를 읽는다.
-- 빠진 열을 더한 기동은 커밋 뒤 `Startup columns added: <테이블.열>` INFO 한 줄을 남긴다.
+- 빠진 열을 더한 기동은 커밋 뒤 `Startup columns added: <테이블.열>` INFO 한 줄을 남긴다. 블록이 실패하면(커밋 실패 포함) 이 줄은 없다.
+- v2.32.1 이하 이미지는 평범한 기동 뒤에도 세션 설정을 풀 커넥션에 남겼다. 블록의 `SET lock_timeout`(5초)과 `SET statement_timeout`
+  (30초), 성능 인덱스 스레드의 `SET statement_timeout = '600000'`(10분), 라벨 복구의 `SET statement_timeout`(1분)이 그 커넥션을 쓰는
+  이후 요청에 그대로 걸렸다(설정값은 `DB_STATEMENT_TIMEOUT_MS`, 기본 30초, lock_timeout 0). 기동 직후 평범한 조회가
+  `canceling statement due to lock timeout`으로 실패하거나 30초를 넘겨 돌면 이 경우일 수 있다. 다른 세션의 설정은 DB에서 볼 수
+  없으므로 이미지 버전으로 판단한다. v2.32.2부터 블록과 라벨 복구는 `SET LOCAL`, 인덱스 스레드는 끝날 때(실패해도)
+  `RESET statement_timeout`이라 남지 않는다(`backend/tests/test_startup_pool_state.py`).
 
 ### 확인
 
@@ -144,10 +152,13 @@ WHERE l.locktype = 'advisory' AND l.objid = 917350001;
    aws ecs update-service --cluster bedrock-monitor --service backend --force-new-deployment --region $REGION
    ```
 
-3. 2번 서명(advisory 락)이면 락을 쥔 pid를 위 SQL로 본다. 블록이 실패하면 `finally`의 `pg_advisory_unlock`이 이미 중단된 트랜잭션에서
-   실행돼 실패하고, 세션 수준 advisory 락이 그 backend 태스크의 풀 커넥션(state `idle`)에 남는다. 그 커넥션이 재활용(`pool_recycle`
-   300초, 체크아웃 시점)되거나 태스크가 끝나면 풀린다. 약 5분 뒤 다시 기동한다. 두 기동이 5분 안에 이어지면(재배포 반복, 서킷 브레이커
-   교체) 뒤 기동도 같은 서명으로 실패한다.
+3. 2번 서명(advisory 락)이면 락을 쥔 pid를 위 SQL로 본다. v2.32.2부터 락은 트랜잭션 한정(`pg_advisory_xact_lock`)이라 커밋이나
+   롤백에 풀리고 풀 커넥션에 남지 않는다. 쥔 세션은 state `active`나 `idle in transaction`인 다른 기동의 블록이고, 그 블록이 끝나면
+   풀린다. 실패 한 번은 그대로 두고 다음 기동에 다시 한다(조치 1). v2.32.1 이하 이미지는 세션 수준 `pg_advisory_lock`이었다. 블록이
+   실패하면 `finally`의 `pg_advisory_unlock`이 이미 중단된 트랜잭션에서 실행돼 실패하고, 락이 그 backend 태스크의 풀 커넥션(state
+   `idle`)에 남았다. 그 커넥션이 재활용(`pool_recycle` 300초, 체크아웃 시점)되거나 태스크가 끝나야 풀리므로 약 5분 뒤 다시 기동했고,
+   두 기동이 5분 안에 이어지면(재배포 반복, 서킷 브레이커 교체) 뒤 기동도 같은 서명으로 실패했다. 그 이미지에서 쥔 세션이 `idle`이면
+   `SELECT pg_terminate_backend(<pid>)`로 끝내도 된다(그 커넥션은 풀이 다음 체크아웃에서 버린다).
 4. DB에서 열을 직접 추가하지 않는다. 열은 이 블록(`_STARTUP_COLUMNS`)이나 `pricing_seed.ensure_price_columns`처럼 카탈로그를 먼저 보는
    멱등 경로로만 추가한다.
 
