@@ -623,6 +623,7 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | sp
 # 3. GPT on AWS 벤치 21채널, 두 갈래
 aws logs tail /ecs/gptbench --since 30m --region $REGION | grep -E "cycle (start|done)|GPT bench lane|WallClockTimeout"
 # 기댓값: "cycle start: 21 channels x 10 runs", "GPT bench lanes: cris=9 mantle=12",
+#   v2.32.1부터는 "GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3"이다(Mantle 리전마다 한 갈래라 lane done 네 줄, ADR-031 후속).
 #   갈래마다 "GPT bench lane done: <lane> channels=N elapsed=Ns" 한 줄, 끝에 "cycle done: rows=210 errors=0 skipped=none elapsed=…s"
 curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), first: .channels[0].family,
   sol61: [.channels[] | select(.family == "GPT 6.1 Sol") | {model_name, runs, success, cache_hit_rate, median_reasoning_tokens}]}'
