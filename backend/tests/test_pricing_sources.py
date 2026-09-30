@@ -15,11 +15,12 @@ from sqlalchemy import create_engine, inspect
 
 import models
 import prober
+import pricing_parsers
 import pricing_sources as ps
 from pricing_parsers import parse_openai_pricing_md, parse_pricelist
 from pricing_sources import PriceIdentity, active_channels, price_identity, region_of, tier_of
 from tests.pricing_catalog import (
-    ACTIVE_MODELS, CP_MODEL_IDS_20260923, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
+    ACTIVE_MODELS, CP_MODEL_IDS_20260930, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
 )
 
 SORT_MODELS_TS = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "sortModels.ts"
@@ -34,7 +35,7 @@ _ENV = {
     "OPENAI_US_EAST_1_BASE_URL": "https://e1/v1", "OPENAI_US_EAST_2_BASE_URL": "https://e2/v1",
     "OPENAI_US_WEST_2_BASE_URL": "https://w2/v1",
     **{f"BEDROCK_OPENAI_GPT_{k}_MODEL_ID": f"openai.gpt-{v}" for k, v in (
-        ("6_ASTRA", "6-astra"), ("6_SOL", "6-sol"), ("6_LUNA", "6-luna"), ("56_SOL", "5.6-sol"),
+        ("61_SOL", "6.1-sol"), ("6_ASTRA", "6-astra"), ("6_SOL", "6-sol"), ("6_LUNA", "6-luna"), ("56_SOL", "5.6-sol"),
         ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},
     **{f"OPENAI_1P_GPT_{k}_MODEL_ID": f"gpt-{v}" for k, v in (
         ("56_SOL", "5.6-sol"), ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},
@@ -45,7 +46,7 @@ class _FakeAnthropic:
     """_discover_anthropic_models가 부르는 /v1/models만 흉내 낸다(네트워크 없음)."""
 
     def __init__(self, **kwargs):
-        page = SimpleNamespace(data=[SimpleNamespace(id=i) for i in CP_MODEL_IDS_20260923])
+        page = SimpleNamespace(data=[SimpleNamespace(id=i) for i in CP_MODEL_IDS_20260930])
         self.models = SimpleNamespace(list=lambda limit=100: page)
 
 
@@ -77,15 +78,17 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_55_active_channels():
+def test_expected_table_is_the_62_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
-    assert counts == {("anthropic", "global"): 10, ("anthropic", "us"): 10, ("anthropic", "cp"): 9,
-                      ("amazon", "us"): 1, ("openai", "global"): 6, ("openai", "us"): 3, ("openai", "in_region"): 16}
+    assert counts == {("anthropic", "global"): 11, ("anthropic", "us"): 10, ("anthropic", "cp"): 10,
+                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 7, ("openai", "us"): 4,
+                      ("openai", "in_region"): 17}
+    assert len(EXPECTED_IDENTITY) == 62
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_55_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_62_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -101,7 +104,7 @@ def test_registered_catalog_minus_hidden_is_exactly_the_55_channels(monkeypatch)
     active = active_channels(catalog, ["(1P)"])
     listed = [m for m in active if m.startswith(ps.OPENAI_LIST_PREFIX)]
     assert {m: catalog[m] for m in active if m not in listed} == ACTIVE_MODELS  # 라벨까지 prober 규약과 같다
-    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 8개
+    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 9개
 
 
 def test_active_channels_hidden_and_unclassifiable(caplog):
@@ -109,12 +112,12 @@ def test_active_channels_hidden_and_unclassifiable(caplog):
         assert list(active_channels({**HIDDEN_1P_MODELS, **ACTIVE_MODELS}, ["(1P)"])) == list(ACTIVE_MODELS) + OPENAI_LIST_IDS
     assert _warnings(caplog) == []  # 숨김은 조용히 뺀다
     catalog = {"openai:1p:gpt-5.4": "OpenAI GPT 5.4 (1P)",
-               "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
+               "global.anthropic.claude-sonnet-5-6": "Bedrock Claude Sonnet 5.6 (Global)",
                "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)"}
     with caplog.at_level(logging.WARNING, logger="pricing_sources"):
         assert list(active_channels(catalog, [""])) == ["global.anthropic.claude-sonnet-5"]
     warned = " ".join(_warnings(caplog))
-    assert "openai:1p:gpt-5.4" in warned and "claude-sonnet-5-5" in warned
+    assert "openai:1p:gpt-5.4" in warned and "claude-sonnet-5-6" in warned
 
 
 @pytest.mark.parametrize("model_id", [
@@ -129,6 +132,13 @@ def test_active_channels_hidden_and_unclassifiable(caplog):
     "openai-list:", "openai-list:gpt-5.4-mini", "openai-list:gpt-5.4-pro", "openai-list:openai.gpt-5.4",
     "openai-list:GPT-5.4", "openai-list:gpt-5.4 ", "openai-list:claude-opus-5-5", "openai-list:nova-2-lite",
     "openai_list:gpt-5.4", "openai:list:gpt-5.4",
+    # v2.32.0 Bedrock in-region on demand: Seoul Claude FM ids only
+    "bedrock:us-east-1:anthropic.claude-opus-5", "bedrock:ap-northeast-1:anthropic.claude-opus-5",
+    "bedrock:ap-northeast-2:amazon.nova-2-lite-v1:0", "bedrock:ap-northeast-2:global.anthropic.claude-opus-5",
+    "bedrock:ap-northeast-2:anthropic.claude-sonnet-5-6", "bedrock:ap-northeast-2", "bedrock::anthropic.claude-opus-5",
+    "bedrock:ap-northeast-2:openai.gpt-6-sol", "openai:ap-northeast-2:openai.gpt-6-sol",
+    "global.anthropic.claude-sonnet-5-6", "us.anthropic.claude-sonnet-5-5-v1:0", "openai:global:global.openai.gpt-6.2-sol",
+    "openai-list:gpt-6.1-sol-mini",
 ])
 def test_unclassifiable_model_ids_return_none(model_id):
     assert price_identity(model_id) is None
@@ -137,15 +147,19 @@ def test_unclassifiable_model_ids_return_none(model_id):
 def test_cp_point_release_safety():
     fk = {m: price_identity(f"anthropic:{m}") for m in (
         "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-haiku-4-5-20251001",
-        "claude-opus-5-20261015", "claude-fable-5-1-20261015", "claude-sonnet-5-5", "claude-opus-5-6")}
+        "claude-opus-5-20261015", "claude-fable-5-1-20261015", "claude-sonnet-5-5", "claude-sonnet-5",
+        "claude-sonnet-5-5-20261101", "claude-sonnet-5-6", "claude-opus-5-6")}
     assert {m: (i.family_key if i else None) for m, i in fk.items()} == {
         "claude-opus-5": "claude-opus-5", "claude-opus-5-5": "claude-opus-5-5",
         "claude-fable-5": "claude-fable-5", "claude-fable-5-1": "claude-fable-5-1",
         "claude-haiku-4-5-20251001": "claude-haiku-4-5",  # 8자리 날짜 접미사는 점 버전이 아니다
         "claude-opus-5-20261015": "claude-opus-5", "claude-fable-5-1-20261015": "claude-fable-5-1",
-        "claude-sonnet-5-5": None, "claude-opus-5-6": None,  # 타깃 없는 점 버전은 fail-closed
+        "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5",  # v2.32.0 타깃
+        "claude-sonnet-5-5-20261101": "claude-sonnet-5-5",
+        "claude-sonnet-5-6": None, "claude-opus-5-6": None,  # 타깃 없는 점 버전은 fail-closed
     }
-    assert price_identity("global.anthropic.claude-sonnet-5-5") is None
+    assert price_identity("global.anthropic.claude-sonnet-5-5").family_key == "claude-sonnet-5-5"
+    assert price_identity("global.anthropic.claude-sonnet-5-6") is None
 
 
 def test_cp_family_key_does_not_depend_on_target_order(monkeypatch):
@@ -155,10 +169,12 @@ def test_cp_family_key_does_not_depend_on_target_order(monkeypatch):
     assert ps._cp_family_key("claude-opus-5-5") == "claude-opus-5-5"
     assert ps._cp_family_key("claude-fable-5-1-20261015") == "claude-fable-5-1"
     assert ps._cp_family_key("claude-opus-5") == "claude-opus-5"
+    assert ps._cp_family_key("claude-sonnet-5-5") == "claude-sonnet-5-5"
+    assert ps._cp_family_key("claude-sonnet-5") == "claude-sonnet-5"
 
 
 @pytest.mark.parametrize("actual_id", [
-    *CP_MODEL_IDS_20260923, "claude-sonnet-5-5", "claude-opus-5-6", "claude-fable-5-2",
+    *CP_MODEL_IDS_20260930, "claude-sonnet-5-6", "claude-sonnet-5-5-20261101", "claude-opus-5-6", "claude-fable-5-2",
     "claude-opus-5-20261015", "claude-fable-5-1-20261015", "claude-haiku-4-5", "claude-sonnet-4-6-20260101",
 ])
 def test_cp_classification_agrees_with_prober_matching(actual_id):
@@ -175,20 +191,24 @@ def test_cp_targets_and_static_labels_mirror_prober():
         if model_id.startswith(("anthropic:", "openai:")):
             continue  # 런타임 등록 채널은 위 등록 테스트가 본다
         ident = price_identity(model_id)
-        assert label == f"Bedrock {ident.family} ({'Global' if ident.channel == 'global' else 'US'})", model_id
+        suffix = {"global": "Global", "us": "US"}.get(ident.channel) or region_of(ident.channel)  # in-region: 리전
+        assert label == f"Bedrock {ident.family} ({suffix})", model_id
 
 
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 19
+    assert len(ps.FAMILY_ORDER) == 21
+    assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
+    assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
     assert {v[1] for v in EXPECTED_IDENTITY.values()} == set(ps.FAMILY_ORDER)
     assert ps.PROVIDER_ORDER == ("anthropic", "openai", "amazon")
 
 
 def test_tier_of_and_region_of():
-    assert [tier_of(c) for c in ("cp", "openai_list", "global", "us", "inregion:us-west-2")] == [
-        "cp", "openai_list", "global", "us", "in_region"]
+    assert [tier_of(c) for c in ("cp", "openai_list", "global", "us", "inregion:us-west-2", "inregion:ap-northeast-2")] == [
+        "cp", "openai_list", "global", "us", "in_region", "in_region"]
+    assert region_of("inregion:ap-northeast-2") == "ap-northeast-2"
     with pytest.raises(ValueError):
         tier_of("1p")
     assert (region_of("inregion:us-east-1"), region_of("global"), region_of("openai_list")) == ("us-east-1", None, None)
@@ -202,8 +222,8 @@ def test_openai_list_ids_are_classified(family_key):
         family_key, OPENAI_FAMILIES[family_key], "openai", "openai_list", "openai_doc", family_key)
 
 
-def test_openai_list_ids_are_the_eight_bedrock_gpt_families_and_rows_of_the_openai_doc():
-    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 8
+def test_openai_list_ids_are_the_nine_bedrock_gpt_families_and_rows_of_the_openai_doc():
+    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 9
     prices = parse_openai_pricing_md((FIXTURES / "openai_pricing.md").read_text(encoding="utf-8"))
     assert all(price_identity(m).source_ref in prices for m in OPENAI_LIST_IDS)  # exact doc model names
 
@@ -249,7 +269,8 @@ def test_source_metadata_constants():
         "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
         "https://developers.openai.com/api/docs/pricing", "openai-list:",
     )
-    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 9
+    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 10
+    assert ps.ANTHROPIC_DOC_NAMES["claude-sonnet-5-5"] == "Claude Sonnet 5.5"
     assert ps.EPOCH.isoformat() == "1970-01-01T00:00:00+00:00"
     assert ps.DISCLAIMER == {
         "ko": "이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. "
@@ -298,3 +319,24 @@ def test_official_links_and_price_notes():
     assert note["text_en"] == (
         "Promotional price. As of 2026-09-27, the OpenAI pricing page states that it applies at least through 2026-11-21.")
     assert "·" not in note["text_ko"]
+
+
+def test_bedrock_in_region_channels_are_seoul_claude_on_demand():
+    """v2.32.0: bedrock:<aws-region>:<FM id> = Bedrock in-region on demand, priced by the offer's APN2_*_standard."""
+    assert price_identity("bedrock:ap-northeast-2:anthropic.claude-opus-5") == PriceIdentity(
+        "claude-opus-5", "Claude Opus 5", "anthropic", "inregion:ap-northeast-2", "offer", "anthropic.claude-opus-5")
+    assert price_identity("bedrock:ap-northeast-2:anthropic.claude-sonnet-5").family_key == "claude-sonnet-5"
+    # one family row per FM: CRIS and in-region channels share the family_key and the offer (source_ref)
+    idents = {price_identity(m) for m in ("global.anthropic.claude-opus-5", "us.anthropic.claude-opus-5",
+                                          "bedrock:ap-northeast-2:anthropic.claude-opus-5")}
+    assert {(i.family_key, i.source_ref) for i in idents} == {("claude-opus-5", "anthropic.claude-opus-5")}
+    # every in-region region has an offer dimension prefix in the parser (fail-closed otherwise)
+    assert set(ps._INREGION_REGIONS) | set(ps._BEDROCK_INREGION_REGIONS) <= set(pricing_parsers._REGION_CODES)
+
+
+def test_gpt_61_sol_channels_are_their_own_family():
+    for mid, channel in (("openai:global:global.openai.gpt-6.1-sol", "global"), ("openai:us:us.openai.gpt-6.1-sol", "us"),
+                         ("openai:us-east-1:openai.gpt-6.1-sol", "inregion:us-east-1")):
+        assert price_identity(mid) == PriceIdentity("gpt-6.1-sol", "GPT 6.1 Sol", "openai", channel, "offer",
+                                                    "openai.gpt-6.1-sol"), mid
+    assert price_identity("openai:global:global.openai.gpt-6-sol").family_key == "gpt-6-sol"  # never 6.1

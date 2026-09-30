@@ -239,12 +239,12 @@ def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 55 active channels plus the 8 OpenAI official prices."""
+    """build_pricing_payload on the real seeds of the 62 active channels plus the 9 OpenAI official prices."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 63
-    assert pricing_seed.ensure_seed(engine, active) == 63
+    assert len(active) == 71
+    assert pricing_seed.ensure_seed(engine, active) == 71
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -266,13 +266,33 @@ def test_production_references_list_only_cited_sources():
     payload = _production_payload(pricing_sources.PRICE_NOTES)
     _assert_every_reference_is_cited(payload)
     kinds = [r["kind"] for r in payload["references"]]
-    assert len(kinds) == 21
+    assert len(kinds) == 23
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 18, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 20, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(22, "note:gpt-5.4", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(24, "note:gpt-5.4", "manual_note")]
+
+
+def test_production_payload_shows_the_v2_32_channels():
+    payload = _production_payload(pricing_sources.PRICE_NOTES)
+    order = [f["family_key"] for f in payload["families"]]
+    assert order.index("claude-sonnet-5-5") + 1 == order.index("claude-sonnet-5")
+    assert [f["family_key"] for f in payload["families"] if f["provider"] == "openai"][0] == "gpt-6.1-sol"
+    opus5 = _family(payload, "claude-opus-5")["tiers"]
+    (seoul,) = opus5["in_region"]
+    assert (seoul["regions"], seoul["input"], seoul["output"], seoul["cache_read"], seoul["cache_write"],
+            seoul["cache_write_1h"], seoul["long"]) == (["ap-northeast-2"], 5.5, 27.5, 0.55, 6.875, 11, None)
+    assert seoul["footnotes"] == opus5["us"]["footnotes"] == opus5["global"]["footnotes"]  # one offer
+    (seoul,) = _family(payload, "claude-sonnet-5")["tiers"]["in_region"]
+    assert (seoul["regions"], seoul["input"], seoul["output"]) == (["ap-northeast-2"], 2.2, 11)
+    s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
+    assert (s55["us"], s55["in_region"], s55["global"]["input"], s55["cp"]["input"]) == (None, [], 2, 2)
+    g61 = _family(payload, "gpt-6.1-sol")["tiers"]
+    assert [g61[t]["long"] for t in ("global", "us")] + [g61["in_region"][0]["long"]] == [None] * 3
+    assert g61["openai_list"]["long"] == {"input": 4, "output": 15, "cache_read": 0.2, "cache_write": 5}
+    assert payload["models"]["bedrock:ap-northeast-2:anthropic.claude-opus-5"]["input"] == 5.5
