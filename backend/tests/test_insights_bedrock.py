@@ -293,6 +293,9 @@ def test_the_wall_clock_cap_cuts_a_trickling_stream_and_ko_is_kept(dataset, fake
 
 def test_the_call_limit_is_the_cap_or_the_budget_left_minus_the_save_margin(monkeypatch):
     monkeypatch.setattr(insights_runner, "_clock", lambda: 1000.0)
+    # import 시 env에서 읽는 값을 고정한다 — 개발자 셸의 INSIGHTS_CALL_WALL_CLOCK_S가 결과를 바꾸지 않게.
+    monkeypatch.setattr(insights_runner, "INSIGHTS_CALL_WALL_CLOCK_S", 180.0)
+    monkeypatch.setattr(insights_runner, "_SAVE_MARGIN_S", 15.0)
     assert insights_runner._call_limit(None) == 180  # /regenerate 스레드 — 마감 없음
     assert insights_runner._call_limit(1000.0 + 240) == 180  # 240 − 15 = 225초 남음, 상한 180초가 더 짧다
     assert insights_runner._call_limit(1000.0 + 100) == 85  # 100 − 15

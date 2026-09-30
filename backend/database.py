@@ -55,7 +55,7 @@ DATABASE_URL = _build_database_url()
 #     recv()가 실패해 커넥션이 무효화·회수된다. 미설정 시 워커 스레드가 죽은 소켓에서 영원히
 #     블록되어 풀이 영구 고갈된다 (pool_recycle/pre_ping은 체크아웃 중인 커넥션엔 무력).
 #   - statement_timeout: 런타임 쿼리 상한 (기본 30s, DB_STATEMENT_TIMEOUT_MS로 조정).
-#     lifespan 마이그레이션은 main.py에서 자체 SET statement_timeout을 따로 건다.
+#     lifespan 마이그레이션은 main.py에서 자체 SET LOCAL statement_timeout(트랜잭션 한정, v2.32.2)을 따로 건다.
 #     문장 하나의 상한이다 — yield_per로 나눠 읽는 조회(psycopg2 이름 있는 서버 측 커서, DECLARE 뒤 FETCH 반복)는
 #     FETCH마다 따로 걸려 전체가 얼마든지 길어진다. 그 경로(routers reliability, efficiency, cost trend, results stats,
 #     insights_runner)의 전체 경과 시간은 streamed_read.stream_rows가 같은 값(_STATEMENT_TIMEOUT_MS, 호출할 때 읽는다)으로

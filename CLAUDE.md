@@ -44,7 +44,7 @@ Internal ALB
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 62 models × 1 workload preset (round-robin 6 categories);
   │                              Claude Platform on AWS 10채널(anthropic:*)도 매 사이클 같은 카테고리 (v2.29.1 복귀; ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 두 사이클에 한 번 + 자체 회전)
-  ├── Insights Fargate Task    → Sonnet 4.6 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row
+  ├── Insights Fargate Task    → Sonnet 4.6 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row — v2.32.2부터 스트리밍 요약, 한국어와 영어 동시, 호출당 180초 상한, 태스크 예산 240초, Bedrock 호출 전에 읽기 트랜잭션 종료
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0)
   ├── GptBench Fargate Task    → 15분 주기 GPT 21채널(Mantle 인리전 12 + Global/US CRIS 9) × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1, GPT-6 Sol/Luna 6채널 v2.28.0, GPT-6.1 Sol 3채널 v2.32.0).
   │                              v2.32.1부터 호스트별 네 갈래(cris 9 = Global/US CRIS, mantle-us-east-1 6, mantle-us-east-2 3, mantle-us-west-2 3 = Mantle 리전마다 한 갈래)를 동시에 돌리고 갈래 안은 채널 하나씩 순차(워밍업 1 + GPT_BENCH_RUNS), 데드라인은 모든 갈래 공유, DB 저장은 메인 스레드.
@@ -380,8 +380,8 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 
 ### DB 마이그레이션 패턴 (`main.py` lifespan)
 - `engine.begin()` (자동 commit/rollback + connection return)
-- `SET statement_timeout = '30000'` + `SET lock_timeout = '5000'` + `pg_advisory_lock(917350001)` (다중 task 동시 마이그레이션 deadlock 방지; 5초 안에 락을 못 잡으면 블록 포기, 다음 기동에 재시도)
-- 모든 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`
+- `SET LOCAL statement_timeout = '30000'` + `SET LOCAL lock_timeout = '5000'` + `pg_advisory_xact_lock(917350001)` (다중 task 동시 마이그레이션 deadlock 방지; 5초 안에 락을 못 잡으면 블록 포기, 다음 기동에 재시도). v2.32.2부터 트랜잭션 한정 — 커밋이나 롤백에 락과 설정이 함께 풀려, 실패해도 풀 커넥션에 advisory 락이나 세션 SET이 남지 않는다(v2.32.1까지는 실패 시 락이 새어 다음 기동도 5초 뒤 실패, 성공해도 lock_timeout 5초가 풀 커넥션에 남았다). 풀 커넥션에 세션 SET을 남기지 않는다 — 트랜잭션 안은 `SET LOCAL`, AUTOCOMMIT 인덱스 경로(`models.ensure_performance_indexes`)는 finally에서 `RESET statement_timeout`
+- 열 추가는 카탈로그를 먼저 본다 — `main._STARTUP_COLUMNS`를 `sqlalchemy.inspect`로 확인하고 빠진 열에만 `ALTER TABLE ... ADD COLUMN IF NOT EXISTS`를 낸다(v2.32.2). PostgreSQL의 이 ALTER는 열이 이미 있어도 AccessExclusiveLock부터 요청하므로, 확인 없이 내면 다른 세션의 열린 읽기 트랜잭션(예: Bedrock 요약 동안의 Insights)에 막혀 블록 전체가 `lock_timeout`으로 롤백된다(2026-09-30 기동 4번 중 2번). 새 열은 이 목록에 더한다
 - 예: `probe_results.stop_reason TEXT`
 - 기동 마이그레이션이 ~130s 걸릴 수 있어 backend 헬스체크 유예는 300s (`app-services-stack.ts` `healthCheckGracePeriod`, 2026-09-06 서킷 브레이커 롤백 실사고)
 - 새 테이블(`price_history`, `price_sync_runs`, v2.30.0)은 `models.py` ORM + `create_all`로 만든다 — lifespan ALTER 블록에 넣지 않는다. seed(`pricing_seed.ensure_seed`)는 마이그레이션 트랜잭션과 분리된 자체 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `lock_timeout = '5000'`을 건 뒤 `pg_advisory_xact_lock(917350003)`, 동기화 런은 `pg_try_advisory_lock(917350004)`(기다리지 않음 — 점유 중이면 즉시 exit 1, 런 행 없음). 모든 시각은 timezone-aware datetime 바인드 파라미터로 넣는다(SQLite는 DateTime을 문자열로 비교하므로 raw 시각 리터럴 금지). `price_history`의 캐시, 긴 컨텍스트 열 7개(v2.31.0)는 이미 있는 테이블의 새 열이라 `pricing_seed.ensure_price_columns`가 추가한다 — `sqlalchemy.inspect`로 빠진 열이 있을 때만 자체 트랜잭션에서 `SET LOCAL statement_timeout = '30000'`, `lock_timeout = '5000'` 뒤 `ALTER TABLE price_history ADD COLUMN IF NOT EXISTS`(열이 다 있으면 DDL 없음), lifespan은 price seed 바로 앞의 자체 try 블록(`_ensure_price_schema`, 열 추가나 seed가 실패하면 데몬 스레드 `price-schema-retry`가 30초 간격으로 최대 3번 다시 하고 기동은 기다리지 않는다), 러너는 `create_tables()` 바로 뒤에서 부른다
@@ -420,6 +420,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID` / `BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID` | `openai.gpt-6-sol` / `openai.gpt-6-luna` (CDK 주입) | GPT-6 Sol/Luna Mantle 인리전(us-east-1) native id — Global/US 프로파일 id는 prober가 `global.`/`us.` 접두로 파생. 미주입 시 해당 모델 3채널을 조용히 skip하므로 AppServices+Scheduler 양 스택 배포 필수 (v2.27.0, ADR-028) |
 | `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID` | `openai.gpt-6.1-sol` (CDK 주입 — AppServices `backendEnv`와 Scheduler `buildTaskDef` 공용 environment) | GPT-6.1 Sol Mantle 인리전(us-east-1) native id — Global/US 프로파일 id는 prober가 `global.`/`us.` 접두로 파생. 미주입 시 prober와 gptbench가 3채널을 조용히 skip하므로 **양쪽 스택 배포 필수**, 이미지만 배포하면 안 된다 (v2.32.0, ADR-031). Bedrock 서울 in-region 채널(`bedrock:ap-northeast-2:*`)은 리전이 키에 있어 env가 없다 |
 | `GPT_BENCH_RUNS` / `GPT_BENCH_DEADLINE` / `GPT_BENCH_CALL_TIMEOUT` | `10` / `780` / `90` (선택, 미주입) | GPT on AWS 벤치 채널당 호출 수(워밍업 1회 별도) / 사이클 데드라인(초, 모든 갈래가 같은 시각을 공유하고 넘긴 갈래는 자기 남은 채널만 skip — 갈래는 v2.32.1부터 cris와 Mantle 리전마다 한 갈래, v2.32.0은 CRIS와 Mantle 두 갈래) / 호출당 wall-clock 상한(초). 갈래 대기 상한은 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S`(15초) = 기본 885초다. 대기 상한이 지나면 갈래를 기다리지 않는다 — 이미 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`, 시작하지 못한 채널은 `라벨`로 skip에 보고한다(예외로 멈춘 갈래도 같다). 여유 15초는 최선의 상한이다 — watchdog은 스트림이 붙은 뒤에만 끊을 수 있어 연결, 요청 쓰기, 응답 헤더 대기 구간은 클라이언트 timeout이 상한이다. 합계는 15분(900초) 스케줄보다 작게 유지한다 (`gptbench.py`) |
+| `INSIGHTS_CALL_WALL_CLOCK_S` / `INSIGHTS_TASK_BUDGET_S` | `180` / `240` (선택, 미주입) | Insights 요약 호출 1회의 wall-clock 상한(초, 스트리밍 `converse_stream_collect` + `CallWatchdog`) / Insights 스케줄 태스크(CLI) 전체 예산(초, 프로세스 시작부터 — 5분 주기와 겹치지 않게). 한국어와 영어는 동시에 호출하고, 영어가 실패하면 한국어만 저장한다 (`insights_runner.py`, v2.32.2) |
 | `HIDDEN_MODEL_PATTERNS` | `(1P)` | 조회 API에서 숨길 `model_name` 부분 문자열, 쉼표 구분 (`visibility.py`). `""` = 전부 노출 (v2.19.1) |
 | `AGENTCORE_MEMORY_ID` | (CDK 주입, SSM) | 챗봇 AgentCore Memory ID (`agent/memory.py`) — 미설정 시 Memory 기록 skip |
 | `DB_STATEMENT_TIMEOUT_MS` | `30000` | 런타임 쿼리 `statement_timeout` (`database.py`) |
