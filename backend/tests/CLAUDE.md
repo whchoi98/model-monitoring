@@ -24,6 +24,7 @@ No network, no AWS credentials, no PostgreSQL. CI runs the same suite on Python 
 
 ## Gotchas
 - Needs Python ≥ 3.10 (FastAPI evaluates `X | Y` annotations at runtime). The dev host's `python3` is 3.9 and fails; use `python3.12`, which has the requirements installed
+- CI installs the newest FastAPI (0.142 on 2026-09-30, local 0.115). 0.142 re-reads the parameter annotations of routes added with `include_router` on the first request, so a module attribute the test patched after `include_router` (the routers' `datetime` → `FrozenDatetime`) is what the annotation resolves to; `FrozenDatetime.__get_pydantic_core_schema__` hands Pydantic the `datetime` schema
 - Tests import backend modules by top-level name (`import models`, `from agent import tools`); pytest puts `backend/` on `sys.path` because `tests/` is a package and `backend/` is not
 - Never make a test reach a provider: fake the SDK client or stream, as `test_probe_watchdog.py` and `test_openai_probe.py` do
 

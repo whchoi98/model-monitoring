@@ -116,7 +116,8 @@ def _serve(monkeypatch, *seeders):
             yield db
 
     app.dependency_overrides[get_db] = db_override
-    # 라우트를 만든 뒤에 바꾼다 — Query 파라미터 타입(datetime)은 라우트 생성 때 이미 해석됐다.
+    # 라우트를 만든 뒤에 바꾼다 — FastAPI 0.115는 Query 파라미터 타입(datetime)을 include_router 때 이미 해석했다.
+    # 첫 요청 때 다시 해석하는 0.142에서는 FrozenDatetime이 datetime 스키마를 돌려준다(tests/_read_dataset.py).
     for module in (analysis_router, reliability_router, efficiency_router, cost_router, results_router):
         monkeypatch.setattr(module, "datetime", FrozenDatetime)
     monkeypatch.setattr(results_router, "AVAILABLE_MODELS", CATALOG)
