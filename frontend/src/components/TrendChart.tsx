@@ -43,14 +43,18 @@ const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Opus 5.5 (US)": "#e5383b",
   "Bedrock Claude Opus 5 (Global)": "#f43f5e",
   "Bedrock Claude Opus 5 (US)": "#be123c",
+  "Bedrock Claude Opus 5 (ap-northeast-2)": "#fda4af",
   "Bedrock Claude Opus 4.8 (Global)": "#fb7185",
   "Bedrock Claude Opus 4.8 (US)": "#e11d48",
   "Bedrock Claude Opus 4.7 (Global)": "#f97316",
   "Bedrock Claude Opus 4.7 (US)": "#ef4444",
   "Bedrock Claude Opus 4.6 (Global)": "#f59e0b",
   "Bedrock Claude Opus 4.6 (US)": "#ec4899",
+  // Claude Sonnet 5.5 (v2.32.0) — Bedrock Global + CP (us. 프로파일 없음).
+  "Bedrock Claude Sonnet 5.5 (Global)": "#818cf8",
   "Bedrock Claude Sonnet 5 (Global)": "#6366f1",
   "Bedrock Claude Sonnet 5 (US)": "#4f46e5",
+  "Bedrock Claude Sonnet 5 (ap-northeast-2)": "#a5b4fc",
   "Bedrock Claude Sonnet 4.6 (Global)": "#3b82f6",
   "Bedrock Claude Sonnet 4.6 (US)": "#8b5cf6",
   "Bedrock Claude Haiku 4.5 (Global)": "#06b6d4",
@@ -62,9 +66,14 @@ const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
+  "Anthropic Claude Sonnet 5.5 (US)": "#3730a3",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
+  // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널.
+  "OpenAI GPT 6.1 Sol (Global)": "#3bc9db",
+  "OpenAI GPT 6.1 Sol (US)": "#15aabf",
+  "OpenAI GPT 6.1 Sol (us-east-1)": "#1098ad",
   // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 3채널.
   "OpenAI GPT 6 Astra (Global)": "#099268",
   "OpenAI GPT 6 Astra (US)": "#2e8b57",
@@ -99,7 +108,7 @@ const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 5.4 (1P)": "#6ee7b7",
 };
 
-// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에, "Opus 5"는 "Opus 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
+// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에, "Opus 5"는 "Opus 5.5"에, "Sonnet 5"는 "Sonnet 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
 const FAMILY_FALLBACK: [string, string][] = [
   ["Fable 5.1", "#0ea5e9"],
   ["Fable 5", "#0d9488"],
@@ -108,10 +117,12 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Opus 4.8", "#e11d48"],
   ["Opus 4.7", "#ef4444"],
   ["Opus 4.6", "#f59e0b"],
+  ["Sonnet 5.5", "#818cf8"],
   ["Sonnet 5", "#4f46e5"],
   ["Sonnet 4.6", "#8b5cf6"],
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
+  ["GPT 6.1 Sol", "#15aabf"],
   ["GPT 6 Astra", "#2e8b57"],
   ["GPT 6 Sol", "#12b886"],
   ["GPT 6 Luna", "#63e6be"],

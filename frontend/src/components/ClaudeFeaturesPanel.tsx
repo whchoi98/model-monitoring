@@ -2,8 +2,8 @@
 
 // Claude API Features (v2.23.0) — platform.claude.com "Build with Claude" 33피처(+코어 4, Models API)를
 // Claude Platform on AWS / Bedrock Mantle / Bedrock runtime(Messages API · InvokeModel · Converse) 5열에서 실행-증거로 검증.
-// 표 하단 "참조" 블록: Mantle에서 측정 불가한 모델(Fable 5.1 = US GovCloud 전용)을 카탈로그 mantle_reason으로 표기 (v2.23.1).
-// 셀 = 피처 × 엔드포인트(대표 모델 5종 집계, 모델 목록과 순서는 카탈로그 models가 단일 출처) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
+// 표 하단 "참조" 블록: Mantle에서 측정 불가한 모델(Fable 5.1 = US GovCloud 전용, Sonnet 5.5 = Mantle us-east-1 미서빙)을 카탈로그 mantle_reason/mantle_reason_en으로 표기 (v2.23.1, v2.32.0).
+// 셀 = 피처 × 엔드포인트(대표 모델 6종 집계, 모델 목록과 순서는 카탈로그 models가 단일 출처) — 클릭 시 모델별 상세, 문서 기대치 vs 실측 드리프트 배너.
 
 import { Fragment, useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { useLang, useT } from "@/lib/i18n-context";
@@ -660,7 +660,7 @@ export default function ClaudeFeaturesPanel() {
         const notes = [
           ...catalog.models.filter((m) => m.mantle === null).map((m) =>
             lang === "en"
-              ? `Bedrock Mantle / ${m.label}: not measurable — Mantle serves this model only in US GovCloud regions (us-gov-west-1); shown as N/A.`
+              ? `Bedrock Mantle / ${m.label}: ${m.mantle_reason_en ?? "not measurable"} → shown as N/A.`
               : `Bedrock Mantle의 ${m.label}: ${m.mantle_reason ?? "측정 불가"} → N/A로 표기.`),
           L("Data residency (inference_geo): on Amazon Bedrock (incl. Mantle) the inference region is set by the endpoint or inference profile, so the parameter is not applicable — shown as N/A, not Unsupported.",
             "데이터 레지던시(inference_geo): Amazon Bedrock(Mantle 포함)은 엔드포인트 리전/추론 프로파일이 추론 리전을 결정하므로 파라미터가 비적용입니다. 미지원이 아닌 N/A로 표기합니다."),
@@ -681,8 +681,8 @@ export default function ClaudeFeaturesPanel() {
           const models = (catalog?.models ?? []).map((m) => m.label.replace(/^Claude /, ""));
           const list = models.join(", ") || L("the representative models", "대표 모델");
           const na = (catalog?.models ?? []).filter((m) => m.mantle === null).map((m) => m.label.replace(/^Claude /, "")).join(", ");
-          return L(`Each cell aggregates ${list}${na ? ` (${na} is not measurable on Bedrock Mantle — US GovCloud only; see the Note under the table)` : ""}. Click to open per-model evidence: request snapshot, response signal, latency, error.`,
-                   `각 셀은 ${list} 결과를 집계합니다${na ? `(${na}은 Bedrock Mantle에서 측정 불가 — US GovCloud 리전 전용, 표 하단 참조)` : ""}. 클릭하면 모델별 증거(요청 스냅샷, 응답 신호, 지연시간, 오류)를 볼 수 있습니다.`);
+          return L(`Each cell aggregates ${list}${na ? ` (${na}: not measurable on Bedrock Mantle — see the Note under the table)` : ""}. Click to open per-model evidence: request snapshot, response signal, latency, error.`,
+                   `각 셀은 ${list} 결과를 집계합니다${na ? `(Bedrock Mantle에서 측정 불가: ${na}, 표 하단 참조)` : ""}. 클릭하면 모델별 증거(요청 스냅샷, 응답 신호, 지연시간, 오류)를 볼 수 있습니다.`);
         })()}</p>
         <p>3. {L("Drift = documented as available but observed unsupported/broken. Inconclusive = definition accepted but the model did not use the feature. N/A = not applicable by design (e.g. Converse has no field for it; inference_geo on Bedrock). 'Documented' (sky) = the docs say GA/Beta but the endpoint offers no verification path (e.g. 1M context on Mantle/Bedrock) — not a measurement.", "드리프트 = 문서상 제공인데 실측 미지원/오류. Inconclusive = 정의는 수락됐지만 모델이 기능을 쓰지 않음. N/A = 설계상 부적용(예: Converse에 해당 필드 없음, Bedrock의 inference_geo). '문서상 지원'(하늘색) = 문서는 GA/Beta이나 실측 경로가 없는 셀(예: Mantle/Bedrock의 1M 컨텍스트) — 측정값이 아님.")}</p>
         <p>4. {L("Runs daily via EventBridge → Fargate (manual trigger runs inside the backend). Evidence is stored in RDS; the previous run is diffed at the top.", "EventBridge → Fargate로 매일 실행(수동 트리거는 backend 내부). 증거는 RDS에 저장되고 직전 런 대비 변경이 상단에 표시됩니다.")}</p>

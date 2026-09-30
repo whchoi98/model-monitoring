@@ -19,11 +19,13 @@ function groupModels(models: ModelInfo[]): ModelGroup[] {
   //   - Anthropic (CP on AWS): anthropic: prefix (vendor endpoint)
   //   - Bedrock Global Anthropic: global.anthropic.
   //   - Bedrock US Anthropic: us.anthropic.
+  //   - Bedrock In-Region: bedrock:<region>: (v2.32.0)
   //   - Bedrock Nova (1P): us.amazon. / global.amazon.
   const groups: ModelGroup[] = [
     { label: "Anthropic (CP on AWS)", prefix: "anthropic:", models: [] },
     { label: "Bedrock Anthropic (Global)", prefix: "global.anthropic", models: [] },
     { label: "Bedrock Anthropic (US)", prefix: "us.anthropic", models: [] },
+    { label: "Bedrock Anthropic (ap-northeast-2)", prefix: "bedrock:ap-northeast-2:anthropic", models: [] },
     { label: "Bedrock Nova (US)", prefix: "us.amazon", models: [] },
     { label: "Bedrock Nova (Global)", prefix: "global.amazon", models: [] },
     { label: "Other", prefix: "", models: [] },

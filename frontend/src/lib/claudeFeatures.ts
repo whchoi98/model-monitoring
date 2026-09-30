@@ -15,7 +15,7 @@ export interface FeatureDef {
 }
 export interface FeatureGroupDef { id: string; label_ko: string; label_en: string }
 export interface SurfaceDef { id: string; label: string; short: string; group: string; region: string }
-export interface ModelDef { key: string; label: string; cp: string; mantle: string | null; bedrock: string; mantle_reason?: string }
+export interface ModelDef { key: string; label: string; cp: string; mantle: string | null; bedrock: string; mantle_reason?: string; mantle_reason_en?: string }
 export interface FeatureRunInfo {
   id: number; started_at: string | null; finished_at: string | null;
   totals: Record<string, number> | null; catalog_version: string | null; running: boolean;
@@ -218,7 +218,7 @@ export function visibleSegments(summary: SurfaceSummary): SummarySegment[] {
   return SEGMENT_ORDER.filter((seg) => ALWAYS_SEGMENTS.has(seg) || summary.segments[seg] > 0);
 }
 
-/** 런 합계 스트립 (C9): totals의 6 status 키는 합 = 전체 셀(975, v2.28.0~; 이전 780), drift는 verdict 카운트라 status와 겹침 → 별도 필드로 분리. */
+/** 런 합계 스트립 (C9): totals의 6 status 키는 합 = 전체 셀(1170, v2.32.0~; 이전 975, 780), drift는 verdict 카운트라 status와 겹침 → 별도 필드로 분리. */
 export const RUN_STATUS_ORDER: FeatureStatus[] = ["supported", "unsupported", "broken", "inconclusive", "skipped", "not_applicable"];
 export interface RunSummary { total: number; statuses: { status: FeatureStatus; count: number }[]; drift: number }
 
@@ -299,7 +299,7 @@ export interface SurfaceFindings {
   perModel: ModelDocHealth[];
 }
 
-const MANTLE_NA_EN = "Not measurable — Mantle serves this model only in US GovCloud regions (us-gov-west-1); shown as N/A.";
+const MANTLE_NA_EN = "Not measurable on Bedrock Mantle; shown as N/A.";
 
 export function surfaceFindings(cells: FeatureCell[], surface: string, models: ModelDef[], lang: string, modelKey: string | null = null): SurfaceFindings {
   // D5: 모델 칩이 켜져 있으면 셀과 perModel 행을 그 모델로 좁힌다 — 선택되지 않은 모델이 6절에 "문서상 프로브 셀 없음"으로
@@ -343,7 +343,7 @@ export function surfaceFindings(cells: FeatureCell[], surface: string, models: M
     return {
       model_key: m.key, model_label: m.label, supported, probed,
       docHealth: probed === 0 ? null : Math.round((100 * supported) / probed), drift,
-      na_reason: notServed ? (lang === "en" ? MANTLE_NA_EN : (m.mantle_reason ?? "측정 불가")) : null,
+      na_reason: notServed ? (lang === "en" ? (m.mantle_reason_en ?? MANTLE_NA_EN) : (m.mantle_reason ?? "측정 불가")) : null,
     };
   });
 

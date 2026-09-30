@@ -22,8 +22,10 @@ const CHANNEL_BG: Record<string, string> = {
   "Bedrock Global": "bg-orange-500/10 light:bg-gray-900/50 border-orange-500/30 text-orange-300",
   "Bedrock US": "bg-pink-500/10 light:bg-gray-900/50 border-pink-500/30 text-pink-300",
   "Anthropic (CP on AWS)": "bg-purple-500/10 light:bg-gray-900/50 border-purple-500/30 text-purple-300",
-  // OpenAI channels — Global CRIS + Mantle regions + 1P direct (green family).
+  "Bedrock ap-northeast-2": "bg-sky-500/10 light:bg-gray-900/50 border-sky-500/30 text-sky-300",
+  // OpenAI channels — Global CRIS + US CRIS + Mantle regions + 1P direct (green family, US CRIS는 Bedrock US와 같은 pink).
   "OpenAI Global": "bg-cyan-500/10 light:bg-gray-900/50 border-cyan-500/30 text-cyan-300",
+  "OpenAI US": "bg-pink-500/10 light:bg-gray-900/50 border-pink-500/30 text-pink-300",
   "OpenAI us-east-1": "bg-emerald-500/10 light:bg-gray-900/50 border-emerald-500/30 text-emerald-300",
   "OpenAI us-east-2": "bg-green-500/10 light:bg-gray-900/50 border-green-500/30 text-green-300",
   "OpenAI us-west-2": "bg-teal-500/10 light:bg-gray-900/50 border-teal-500/30 text-teal-300",
@@ -85,8 +87,8 @@ export default function ReliabilityPanel() {
           </h1>
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
-              ? "Same model family across Bedrock Global / US, Anthropic CP on AWS, and OpenAI (Global / US cross-region + Mantle regions) channels — for failover decisions."
-              : "동일 모델을 Bedrock Global / US, Anthropic CP on AWS, OpenAI(Global / US 교차 리전 + Mantle 리전) 채널별로 비교 — failover 의사결정용."}
+              ? "Same model family across Bedrock Global / US / Seoul In-Region (ap-northeast-2), Anthropic CP on AWS, and OpenAI (Global / US cross-region + Mantle regions) channels — for failover decisions."
+              : "동일 모델을 Bedrock Global / US / 서울 In-Region(ap-northeast-2), Anthropic CP on AWS, OpenAI(Global / US 교차 리전 + Mantle 리전) 채널별로 비교 — failover 의사결정용."}
           </p>
         </div>
         <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">

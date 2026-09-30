@@ -2,7 +2,8 @@
 // 1차: 모델 family 우선순위 (Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 4.5 > Nova > GPT ...)
 // ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
 // 라벨에도 포함된다 — 더 긴 이름(5.1, 5.5)이 반드시 앞에 와야 함.
-// 2차: 채널 순서 (Anthropic > Global[Bedrock·OpenAI 공통] > US[Bedrock US·OpenAI US CRIS] > OpenAI 리전)
+// "Claude Sonnet 5"도 "Claude Sonnet 5.5" 라벨에 포함된다(v2.32.0).
+// 2차: 채널 순서 (Anthropic > Global[Bedrock·OpenAI 공통] > US[Bedrock US·OpenAI US CRIS] > 리전[Bedrock In-Region (ap-northeast-2), OpenAI Mantle 리전])
 // FAMILY 매칭은 substring `includes` 기반이므로 "Bedrock " prefix 유무에 관계없이 동작.
 // 모델명 라벨은 backend에서 "Bedrock " 또는 "Anthropic " prefix가 붙은 형태로 응답.
 export const FAMILY_ORDER = [
@@ -13,10 +14,12 @@ export const FAMILY_ORDER = [
   "Claude Opus 4.8",
   "Claude Opus 4.7",
   "Claude Opus 4.6",
+  "Claude Sonnet 5.5",
   "Claude Sonnet 5",
   "Claude Sonnet 4.6",
   "Claude Haiku 4.5",
   "Nova 2.0 Lite",
+  "GPT 6.1 Sol",
   "GPT 6 Astra",
   "GPT 6 Sol",
   "GPT 6 Luna",
@@ -54,6 +57,9 @@ export function channelRank(name: string): number {
   // 이 분기 없이 localeCompare에 맡기면 "(us-west-2)"가 "(US)"보다 먼저 정렬된다(ICU 실측).
   if (name.startsWith("OpenAI ") && name.endsWith("(US)")) return 2;
   if (name.startsWith("OpenAI ")) return 3; // OpenAI 리전 채널 티어 (us-east-1 → us-east-2 → us-west-2)
+  // Bedrock In-Region(v2.32.0, "Bedrock Claude Opus 5 (ap-northeast-2)") — 소문자 AWS 리전 서픽스는 US 티어 뒤(rank 3).
+  // 이 분기가 없으면 기본값 2(Bedrock US)와 동률이 되어 localeCompare가 "(ap-northeast-2)"를 "(US)"보다 앞에 둔다(ICU 실측).
+  if (/\([a-z]{2}(?:-[a-z]+)+-\d+\)$/.test(name)) return 3;
   return 2; // Bedrock US (default)
 }
 
