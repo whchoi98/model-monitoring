@@ -247,10 +247,12 @@ def test_ensure_seed_postgres_takes_transaction_advisory_lock_first():
 
 
 def test_lifespan_seeds_after_migration_and_registration_non_fatal():
-    unlock = MAIN_SRC.index("SELECT pg_advisory_unlock(917350001)")
+    # the migration block ends at its failure handler (no unlock statement since v2.32.2: the transaction-scoped advisory lock
+    # is released by the block's commit or rollback)
+    migration = MAIN_SRC.index('logger.exception("Migration block failed')
     register = re.search(r"^\s+_register_openai_models\(\)$", MAIN_SRC, re.M).start()
     call = MAIN_SRC.index(PRICE_SCHEMA_CALL)  # the seed runs inside _ensure_price_schema (v2.31.0)
-    assert unlock < register < call < re.search(r"^\s{4}yield$", MAIN_SRC, re.M).start()
+    assert migration < register < call < re.search(r"^\s{4}yield$", MAIN_SRC, re.M).start()
     fn = MAIN_SRC[MAIN_SRC.index("\ndef _ensure_price_schema("):MAIN_SRC.index("\ndef _retry_price_schema(")]
     seed = fn.index(SEED_CALL)
     block = fn[fn.rindex("    try:\n", 0, seed):fn.index("    except Exception:\n", seed)]
