@@ -755,3 +755,297 @@ def test_run_cycle_records_wall_clock_timeout_row(bench_env, session_factory, mo
     assert rows[0].error_message == "WallClockTimeout: wall-clock timeout after 0.1s"
     assert rows[0].gap_ms is None
     s.close()
+
+
+# ---------------------------------------------------------------------------
+# 두 갈래 병렬 (v2.32.0, 2026-09-30 사용자 결정)
+#   cris = 유사 리전 global/us(bedrock-runtime), mantle = 인리전(bedrock-mantle). 두 갈래가 동시에 돌고
+#   갈래 안은 순차, 데드라인은 공유 시각, 넘긴 갈래는 자기 남은 채널만 skip, DB는 메인 스레드만 쓴다.
+# ---------------------------------------------------------------------------
+
+CRIS_ORDER = [
+    "openai:global:global.openai.gpt-5.6-terra",
+    "openai:global:global.openai.gpt-6-astra",
+    "openai:us:us.openai.gpt-6-astra",
+    "openai:global:global.openai.gpt-6-sol",
+    "openai:us:us.openai.gpt-6-sol",
+    "openai:global:global.openai.gpt-6-luna",
+    "openai:us:us.openai.gpt-6-luna",
+    "openai:global:global.openai.gpt-6.1-sol",
+    "openai:us:us.openai.gpt-6.1-sol",
+]
+MANTLE_ORDER = [
+    "openai:us-east-1:openai.gpt-5.4",
+    "openai:us-east-2:openai.gpt-5.4",
+    "openai:us-west-2:openai.gpt-5.4",
+    "openai:us-east-1:openai.gpt-5.5",
+    "openai:us-east-2:openai.gpt-5.5",
+    "openai:us-east-1:openai.gpt-5.6-terra",
+    "openai:us-east-2:openai.gpt-5.6-terra",
+    "openai:us-west-2:openai.gpt-5.6-terra",
+    "openai:us-west-2:openai.gpt-6-astra",
+    "openai:us-east-1:openai.gpt-6-sol",
+    "openai:us-east-1:openai.gpt-6-luna",
+    "openai:us-east-1:openai.gpt-6.1-sol",
+]
+
+
+def _model_key(region, actual_id):
+    return f"openai:{region}:{actual_id}"
+
+
+class _LaneClock:
+    """갈래(스레드)별 가상 시계 — 병렬 실행에서 각 갈래가 보는 경과는 자기 호출 시간의 합이다.
+
+    메인 스레드는 0에 머문다(사이클 시작 시각 = 0).
+    """
+
+    def __init__(self):
+        self._local = threading.local()
+
+    def __call__(self):
+        return getattr(self._local, "t", 0.0)
+
+    def advance(self, seconds):
+        self._local.t = self() + seconds
+
+
+def _recording_session_factory(engine, seen_threads):
+    from sqlalchemy.orm import Session
+
+    class RecordingSession(Session):
+        def add(self, instance, *a, **kw):
+            seen_threads.add(threading.current_thread().name)
+            return super().add(instance, *a, **kw)
+
+        def commit(self):
+            seen_threads.add(threading.current_thread().name)
+            return super().commit()
+
+    return sessionmaker(bind=engine, class_=RecordingSession)
+
+
+def test_bench_lanes_split_by_host_with_gpt61_sol_last(bench_env):
+    """CRIS 9 = Global 5 + US 4, Mantle 12 — 갈래 안 순서는 bench_channels 순서, 각 갈래 끝은 GPT 6.1 Sol."""
+    import gptbench
+
+    chans = gptbench.bench_channels()
+    lanes = gptbench.bench_lanes(chans)
+    assert list(lanes) == ["cris", "mantle"]
+    assert [ch["model_id"] for _, ch in lanes["cris"]] == CRIS_ORDER
+    assert [ch["model_id"] for _, ch in lanes["mantle"]] == MANTLE_ORDER
+    for items in lanes.values():
+        assert items[-1][1]["family"] == "GPT 6.1 Sol"
+        idx = [i for i, _ in items]
+        assert idx == sorted(idx)  # bench_channels 순서를 거른 것
+        assert all(chans[i] is ch for i, ch in items)
+    assert {gptbench.lane_of(c) for c in chans if c["region"] in ("global", "us")} == {"cris"}
+    assert {gptbench.lane_of(c) for c in chans if c["region"] not in ("global", "us")} == {"mantle"}
+
+
+def test_bench_lanes_drop_empty_lane(bench_env, monkeypatch):
+    """CRIS base URL이 없으면 CRIS 갈래 자체가 없다 — 빈 갈래 스레드를 띄우지 않는다."""
+    import gptbench
+
+    monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
+    monkeypatch.delenv("OPENAI_US_BASE_URL")
+    lanes = gptbench.bench_lanes(gptbench.bench_channels())
+    assert list(lanes) == ["mantle"] and len(lanes["mantle"]) == 12
+
+
+def test_run_cycle_runs_both_lanes_in_parallel_each_sequential(bench_env, engine, monkeypatch, caplog):
+    """두 갈래가 동시에 호출 중인 순간이 있어야 한다(Barrier), 갈래 안 호출 순서는 채널 순서 × (워밍업 1 + RUNS),
+    한 갈래의 호출은 한 스레드에서만 나오고, DB는 메인 스레드만 쓴다. 행은 두 갈래 합쳐 정확히 한 번씩 저장된다."""
+    import database
+    import gptbench
+
+    seen_db_threads: set[str] = set()
+    factory = _recording_session_factory(engine, seen_db_threads)
+    monkeypatch.setattr(database, "SessionLocal", factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
+
+    # 두 갈래의 첫 호출이 서로를 기다린다 — 순차 실행이면 5초 뒤 BrokenBarrierError로 사이클이 실패한다.
+    barrier = threading.Barrier(2, timeout=5)
+    first_call_done: set[str] = set()
+    calls: list[tuple[str, str]] = []  # (thread name, model key)
+    lock = threading.Lock()
+    base = _fake_call()
+
+    def call(region, actual_id):
+        name = threading.current_thread().name
+        with lock:
+            first = name not in first_call_done
+            first_call_done.add(name)
+            calls.append((name, _model_key(region, actual_id)))
+        if first:
+            barrier.wait()
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+
+    res = gptbench.run_cycle()
+
+    assert res["rows"] == 42 and res["errors"] == 0 and res["skipped_channels"] == []
+    assert res["channels"] == 21
+    assert {n for n, _ in calls} == {"gptbench-cris", "gptbench-mantle"}
+    per_thread = {n: [k for t, k in calls if t == n] for n in ("gptbench-cris", "gptbench-mantle")}
+    assert per_thread["gptbench-cris"] == [k for k in CRIS_ORDER for _ in range(3)]
+    assert per_thread["gptbench-mantle"] == [k for k in MANTLE_ORDER for _ in range(3)]
+    assert seen_db_threads == {threading.current_thread().name}
+
+    s = factory()
+    rows = s.query(models.GptBenchResult).all()
+    assert len(rows) == 42
+    assert sorted((r.model_id, r.run_no) for r in rows) == sorted(
+        (k, n) for k in CRIS_ORDER + MANTLE_ORDER for n in (1, 2))
+    assert len({r.cycle_ts for r in rows}) == 1
+    s.close()
+
+    done = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
+    assert len(done) == 1 and done[0].startswith("GPT bench cycle done: rows=42 errors=0 skipped=none elapsed=")
+    assert any(r.getMessage() == "GPT bench lanes: cris=9 mantle=12" for r in caplog.records)
+
+
+def test_run_cycle_deadline_is_per_lane(bench_env, session_factory, monkeypatch):
+    """느린 Mantle 갈래만 데드라인을 넘겨 자기 남은 채널을 skip한다 — CRIS 갈래는 끝까지 측정한다.
+
+    가상 시계: Mantle 호출 100s, CRIS 호출 1s, RUNS=2(채널당 3호출), 데드라인 780s.
+    Mantle 채널 0: 0→300, 1: 300→600, 2: 600 통과 → 워밍업 700 → run1 700 통과 → 800 → run2 800 초과 = "(run 2+)",
+    채널 3~11: 채널 전체 skip. CRIS: 9채널 × 3s = 27s, skip 없음.
+    """
+    import database
+    import gptbench
+
+    clock = _LaneClock()
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "_clock", clock)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 780.0)
+    base = _fake_call()
+
+    def call(region, actual_id):
+        clock.advance(1.0 if region in ("global", "us") else 100.0)
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+
+    res = gptbench.run_cycle()
+
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    assert res["skipped_channels"] == (
+        [f"{labels[MANTLE_ORDER[2]]} (run 2+)"] + [labels[k] for k in MANTLE_ORDER[3:]])
+    assert res["skipped_channels"][0] == "OpenAI GPT 5.4 (us-west-2) (run 2+)"
+    assert res["rows"] == 9 * 2 + 2 + 2 + 1  # CRIS 전부 + Mantle 채널 0, 1 전부 + 채널 2의 run 1
+
+    s = session_factory()
+    got = {}
+    for r in s.query(models.GptBenchResult).all():
+        got.setdefault(r.model_id, []).append(r.run_no)
+    s.close()
+    assert {k: sorted(v) for k, v in got.items()} == {
+        **{k: [1, 2] for k in CRIS_ORDER},
+        MANTLE_ORDER[0]: [1, 2], MANTLE_ORDER[1]: [1, 2], MANTLE_ORDER[2]: [1],
+    }
+
+
+def test_run_cycle_skipped_list_follows_channel_order_across_lanes(bench_env, session_factory, monkeypatch):
+    """두 갈래 모두 데드라인을 넘기면 skipped_channels는 도착 순서가 아니라 bench_channels 순서다(결정적 보고)."""
+    import database
+    import gptbench
+
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "one_call", _fake_call())
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", -1.0)  # 즉시 초과 (가상 시계 없이도 결정적)
+
+    res = gptbench.run_cycle()
+    assert res["rows"] == 0
+    assert res["skipped_channels"] == [c["model_name"] for c in gptbench.bench_channels()]
+
+
+def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory, monkeypatch):
+    """watchdog도 풀지 못한 정지 갈래는 데드라인 + 호출 상한 + 여유가 지나면 기다리지 않는다 — 남은 채널은 skip,
+    다른 갈래의 행은 저장, 사이클은 끝난다."""
+    import database
+    import gptbench
+
+    release = threading.Event()
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 0.2)
+    monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gptbench, "LANE_JOIN_GRACE_S", 0.1)
+    base = _fake_call()
+
+    def call(region, actual_id):
+        if region not in ("global", "us"):
+            release.wait(10)  # 테스트 안전판 — 대기 상한(0.4s)이 동작하지 않으면 10초를 다 쓴다
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    try:
+        t0 = time.perf_counter()
+        res = gptbench.run_cycle()
+        assert time.perf_counter() - t0 < 3.0
+    finally:
+        release.set()
+        # 포기한 갈래 스레드를 monkeypatch 복원 전에 끝낸다 — 복원된 데드라인(780s)으로 실제 one_call을 부르지 않도록.
+        for t in threading.enumerate():
+            if t.name == "gptbench-mantle":
+                t.join(5)
+
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    assert res["rows"] == 9
+    assert res["skipped_channels"] == [labels[k] for k in MANTLE_ORDER]
+
+
+def test_run_cycle_lane_crash_keeps_other_lane_and_reraises(bench_env, session_factory, monkeypatch, caplog):
+    """갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고, 사이클 로그를 한 번 남긴 뒤 예외를 다시 던진다."""
+    import database
+    import gptbench
+
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    base = _fake_call()
+
+    def call(region, actual_id):
+        if region not in ("global", "us"):
+            raise RuntimeError("client init failed")
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+
+    with pytest.raises(RuntimeError, match="client init failed"):
+        gptbench.run_cycle()
+
+    s = session_factory()
+    assert sorted(r.model_id for r in s.query(models.GptBenchResult).all()) == sorted(CRIS_ORDER)
+    s.close()
+    done = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
+    assert len(done) == 1 and done[0].startswith("GPT bench cycle done: rows=9 errors=0 skipped=[")
+    assert "OpenAI GPT 6.1 Sol (us-east-1)" in done[0]
+
+
+def test_client_cache_is_shared_safely_across_lanes(bench_env, monkeypatch):
+    """두 갈래가 같은 base URL을 동시에 처음 요청해도 클라이언트는 하나만 만든다(캐시 잠금)."""
+    import gptbench
+
+    created = []
+
+    class FakeOpenAI:
+        def __init__(self, **kwargs):
+            time.sleep(0.05)  # 생성 중 다른 스레드가 끼어들 틈
+            created.append(kwargs["base_url"])
+
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=FakeOpenAI))
+    monkeypatch.setattr(gptbench, "_client_cache", {})
+    got = []
+    threads = [threading.Thread(target=lambda: got.append(gptbench._client_for("us-east-1"))) for _ in range(4)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join(5)
+    assert created == ["http://e1"]
+    assert len(got) == 4 and all(c is got[0] for c in got)
