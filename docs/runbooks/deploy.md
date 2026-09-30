@@ -620,7 +620,7 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
 # 기댓값: {"anthropic": 10, "bedrock": 24, "openai": 28} (bedrock = Global 11 + US 11 + 서울 in-region 2)
 
-# 3. GPT on AWS 벤치 21채널, 두 갈래
+# 3. GPT on AWS 벤치 21채널, 두 갈래(v2.32.1부터 네 갈래: cris + Mantle 리전마다 한 갈래)
 aws logs tail /ecs/gptbench --since 30m --region $REGION | grep -E "cycle (start|done)|GPT bench lane|WallClockTimeout"
 # 기댓값: "cycle start: 21 channels x 10 runs", "GPT bench lanes: cris=9 mantle=12",
 #   v2.32.1부터는 "GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3"이다(Mantle 리전마다 한 갈래라 lane done 네 줄, ADR-031 후속).
@@ -629,7 +629,8 @@ curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length),
   sol61: [.channels[] | select(.family == "GPT 6.1 Sol") | {model_name, runs, success, cache_hit_rate, median_reasoning_tokens}]}'
 # 기댓값: n 21, first "GPT 6.1 Sol", sol61 3장(Global, US, us-east-1) runs 10, success 10, median_reasoning_tokens 0은 정상
 #   /latest는 시작 후 14분이 지난 사이클만 완료로 본다 — 배포 직후 18장이면 아직 옛 사이클이니 15분 뒤 다시 확인한다.
-#   skipped=에 GPT 6.1 Sol이 찍히면 그 갈래의 데드라인 컷이다(갈래마다 목록 끝). "did not finish within 885s"는 정지한 갈래다.
+#   skipped=에 GPT 6.1 Sol이 찍히면 그 갈래의 데드라인 컷이다(v2.32.0은 갈래마다 목록 끝, v2.32.1부터는 cris와 mantle-us-east-1의 끝이고
+#   mantle-us-east-2는 GPT 5.6 Terra (us-east-2), mantle-us-west-2는 GPT 6 Astra (us-west-2)부터 잘린다). "did not finish within 885s"는 정지한 갈래다.
 
 # 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
 aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'

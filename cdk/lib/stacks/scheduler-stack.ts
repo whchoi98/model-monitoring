@@ -435,9 +435,10 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "GptBenchSchedule", {
-      // 15분 주기 — 21채널 × (워밍업 1 + 10회). v2.32.0부터 두 갈래 병렬(CRIS 9채널 / Mantle 인리전 12채널, 갈래 안은
-      //   순차, GPT 6.1 Sol은 각 갈래 끝). 18채널 순차 실측(2026-09-30 24h) p50 623s, p90 750s, max 790s → 사이클이 약 절반,
-      //   데드라인 13분(780s)은 두 갈래가 공유하고 넘으면 그 갈래의 남은 채널만 skip (사용자 결정 2026-09-30, D2 대체)
+      // 15분 주기 — 21채널 × (워밍업 1 + 10회). 호스트별 갈래 병렬(갈래 안은 순차): v2.32.0은 CRIS 9 / Mantle 12 두 갈래,
+      //   v2.32.1부터 cris 9 + Mantle 리전마다 한 갈래(us-east-1 6, us-east-2 3, us-west-2 3 — GPT 5.4 us-east-2 저하 뒤 사용자 결정).
+      //   18채널 순차 실측(2026-09-30 24h) p50 623s, p90 750s, max 790s. 데드라인 13분(780s)은 모든 갈래가 공유하고 넘으면
+      //   그 갈래의 남은 채널만 skip (사용자 결정 2026-09-30, D2 대체)
       //   겹침 방지: 사이클 데드라인(GPT_BENCH_DEADLINE) + 호출당 wall-clock 상한(GPT_BENCH_CALL_TIMEOUT, 재시도 0회).
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(15)),
       description: "GPT on AWS bench: Mantle TTFB/TTFT every 15 minutes",
