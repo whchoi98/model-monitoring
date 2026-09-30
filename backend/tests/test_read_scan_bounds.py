@@ -268,7 +268,7 @@ def test_response_matches_frozen_golden(env, name):
 # ───────────────────────────────────────────────────────────────────────
 
 ANALYSIS_PATHS = ("/api/analysis/stop-reasons", "/api/analysis/output-length")
-STREAMED_PATHS = ("/api/reliability/multi-channel", "/api/efficiency/score", "/api/cost/trend")
+STREAMED_PATHS = ("/api/reliability/multi-channel", "/api/efficiency/score", "/api/cost/trend", "/api/results/stats")
 _TEXT_COLUMNS = ("probe_results.prompt", "probe_results.output_text")
 _OVER_30D = ["31d", "3650d", "99999h", "721h", "43201m"]
 _OVER_7D = ["8d", "3650d", "99999h", "169h", "10081m"]
@@ -310,11 +310,11 @@ def test_analysis_reads_grouped_counts_not_entities(env, path, query):
 
 
 @pytest.mark.parametrize("path", STREAMED_PATHS)
-@pytest.mark.parametrize("query", ["", "?window=7d"])
+@pytest.mark.parametrize("query", [{}, {"window": "7d", "start_time": _START_7D}])
 def test_streamed_endpoints_read_only_metric_columns_in_batches(env, path, query):
     client, statements = env
     statements.clear()
-    assert client.get(path + query).status_code == 200
+    assert client.get(path, params=query).status_code == 200  # 쓰지 않는 파라미터는 무시된다
     selects = _probe_result_selects(statements)
     assert len(selects) == 1, selects
     sql, opts = selects[0]
@@ -367,6 +367,41 @@ def test_cost_summary_and_channel_compare_stay_uncapped_but_reject_unreadable_wi
     client, _ = env
     assert client.get(path, params={"window": "3650d"}).status_code == 200
     assert client.get(path, params={"window": "1e3h"}).status_code == 422
+
+
+def _stats(client, **params) -> dict:
+    resp = client.get("/api/results/stats", params=params)
+    assert resp.status_code == 200
+    return resp.json()
+
+
+@pytest.mark.parametrize("start_time", ["1970-01-01T00:00:00Z", "1970-01-01T00:00:00", _iso_z(timedelta(days=45))])
+def test_results_stats_start_time_older_than_31_days_is_clamped(env, caplog, start_time):
+    client, _ = env
+    floor = _iso_z(timedelta(days=31))
+    with caplog.at_level("WARNING", logger="routers.results"):
+        body = _stats(client, start_time=start_time)
+    assert body["start_time"] == floor  # 실제로 읽은 하한을 돌려준다
+    assert body["models"] == _stats(client, start_time=floor)["models"]
+    assert "older than" in caplog.text
+    # 데이터셋에 31일보다 오래된 success 행(960h)이 있어야 당김이 의미 있다 — run_id로만 거르면 그 행까지 센다.
+    old_rows = {m["model_id"]: m["count"] for m in _stats(client, run_id=1, start_time="1970-01-01T00:00:00Z")["models"]}
+    assert sum(old_rows.values()) > sum(m["count"] for m in body["models"])
+
+
+@pytest.mark.parametrize("delta", [timedelta(days=30), timedelta(days=30, hours=23)])
+def test_results_stats_start_time_within_31_days_is_kept(env, delta):
+    client, _ = env
+    start_time = _iso_z(delta)
+    assert _stats(client, start_time=start_time)["start_time"] == start_time
+
+
+def test_results_stats_with_run_id_keeps_an_old_start_time(env):
+    """run_id가 있으면 그 run 하나로 한정되므로 start_time을 당기지 않는다."""
+    client, _ = env
+    body = _stats(client, run_id=1, start_time="1970-01-01T00:00:00Z")
+    assert body["start_time"] == "1970-01-01T00:00:00Z"
+    assert body["models"]
 
 
 def test_parse_window_keeps_the_no_unit_fallback_and_accepts_any_size_without_a_cap():
