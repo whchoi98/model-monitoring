@@ -10,8 +10,9 @@ const catalog = [
 
 function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
   const cycle = new Date(Date.now() - 20 * 60_000).toISOString();
-  // 18채널 (v2.28.0) — /api/gptbench/latest 정렬(Astra → Sol → Luna → Terra → 5.5 → 5.4)과 동일.
+  // 21채널 (v2.32.0) — /api/gptbench/latest 정렬(6.1 Sol → Astra → Sol → Luna → Terra → 5.5 → 5.4)과 동일.
   const families = [
+    ["GPT 6.1 Sol", ["Global", "US", "us-east-1"]],
     ["GPT 6 Astra", ["Global", "US", "us-west-2"]],
     ["GPT 6 Sol", ["Global", "US", "us-east-1"]],
     ["GPT 6 Luna", ["Global", "US", "us-east-1"]],
@@ -56,27 +57,45 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/models", (route) => route.fulfill({ json: catalog }));
 });
 
-test("benchmark cards show all 18 channels grouped by generation", async ({ page }) => {
+test("benchmark cards show all 21 channels grouped by generation", async ({ page }) => {
   const data = await mockBenchmark(page);
-  expect(data.latest.channels).toHaveLength(18);
+  expect(data.latest.channels).toHaveLength(21);
   await page.goto("/gpt-on-aws");
   const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
   for (const channel of data.latest.channels) {
     await expect(cards.getByRole("button", { name: channel.model_name, exact: true })).toBeVisible();
   }
-  const gpt6 = cards.getByRole("group", { name: "GPT 6 generation", exact: true });
+  const gpt6 = cards.getByRole("group", { name: "GPT 6.x generation", exact: true });
   const gpt5 = cards.getByRole("group", { name: "GPT 5.x generation", exact: true });
-  await expect(gpt6.getByRole("heading", { level: 3 })).toHaveText(["GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
+  await expect(gpt6.getByRole("heading", { level: 3 })).toHaveText(["GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
   await expect(gpt5.getByRole("heading", { level: 3 })).toHaveText(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"]);
-  await expect(gpt6.getByRole("button")).toHaveCount(9);
+  await expect(gpt6.getByRole("button")).toHaveCount(12);
   await expect(gpt5.getByRole("button")).toHaveCount(9);
-  for (const name of ["OpenAI GPT 6 Sol (Global)", "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (us-east-1)",
+  for (const name of ["OpenAI GPT 6.1 Sol (Global)", "OpenAI GPT 6.1 Sol (US)", "OpenAI GPT 6.1 Sol (us-east-1)",
+    "OpenAI GPT 6 Sol (Global)", "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (us-east-1)",
     "OpenAI GPT 6 Luna (Global)", "OpenAI GPT 6 Luna (US)", "OpenAI GPT 6 Luna (us-east-1)"]) {
     await expect(gpt6.getByRole("button", { name, exact: true })).toBeVisible();
   }
   await expect(cards.getByRole("group", { name: "Other", exact: true })).toHaveCount(0);
   const legend = page.getByRole("list", { name: "Chart legend" }).first();
-  await expect(legend.getByRole("listitem")).toHaveCount(18);
+  await expect(legend.getByRole("listitem")).toHaveCount(21);
+});
+
+test("the four-column GPT 6.x group uses 2x2 at lg and four columns from xl", async ({ page }) => {
+  await mockBenchmark(page);
+  await page.setViewportSize({ width: 1100, height: 900 });
+  await page.goto("/gpt-on-aws");
+  const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
+  const headings = cards.getByRole("group", { name: "GPT 6.x generation", exact: true }).getByRole("heading", { level: 3 });
+  await expect(headings).toHaveCount(4);
+  const rowsOf = async () => new Set((await headings.evaluateAll((items) =>
+    items.map((item) => Math.round(item.getBoundingClientRect().top)))));
+  expect((await rowsOf()).size).toBe(2);
+  await page.setViewportSize({ width: 1440, height: 900 });
+  await expect.poll(async () => (await rowsOf()).size).toBe(1);
+  // 3열 그룹(GPT 5.x)은 기존 lg 3열 그대로
+  const gpt5 = cards.getByRole("group", { name: "GPT 5.x generation", exact: true }).getByRole("heading", { level: 3 });
+  expect(new Set(await gpt5.evaluateAll((items) => items.map((item) => Math.round(item.getBoundingClientRect().top)))).size).toBe(1);
 });
 
 test("benchmark cards with an unknown family land in Other instead of disappearing", async ({ page }) => {
@@ -157,7 +176,8 @@ test("changing benchmark range discards late responses without reloading cards",
     await expect(card).toBeVisible();
     await page.getByRole("button", { name: "3h", exact: true }).click();
     const legend = page.getByRole("list", { name: "Chart legend" }).first();
-    await expect(legend).toContainText("OpenAI GPT 6 Astra (US)");
+    // 3h 응답은 series[1](US 채널), 늦게 온 6h 응답은 series[0](Global 채널) — fixture 순서가 바뀌어도 이름으로 확인한다.
+    await expect(legend).toContainText(data.trend.series[1].model_name);
     release();
     await finished;
     await expect(legend).not.toContainText("Global");
@@ -203,7 +223,8 @@ test("benchmark charts use elapsed time and keep failed or missing cycles as gap
   const chart = page.getByRole("region", { name: "TTFB trend (median per cycle)", exact: true });
   await expect(chart.locator(".recharts-line-curve")).toHaveCount(2);
   expect((await chart.locator(".recharts-line-curve").first().getAttribute("d"))?.match(/M/g)).toHaveLength(2);
-  await page.getByRole("button", { name: "OpenAI GPT 6 Astra (US)", exact: true }).click();
+  // 둘째 시리즈(fixture 순서상 US 채널) 카드를 꺼서 첫째 시리즈만 남긴다.
+  await page.getByRole("button", { name: data.trend.series[1].model_name, exact: true }).click();
   await expect(chart.locator(".recharts-line-curve")).toHaveCount(1);
   expect((await chart.locator(".recharts-line-curve").getAttribute("d"))?.match(/M/g)).toHaveLength(2);
   const dots = chart.locator(".recharts-line-dot");
@@ -226,7 +247,7 @@ test("benchmark charts use elapsed time and keep failed or missing cycles as gap
 test("dense benchmark charts keep isolated successes without ordinary marker nodes", async ({ page }) => {
   const data = await mockBenchmark(page);
   const latest = Date.parse(data.latest.cycle_ts!);
-  // 96 shared cycles across 18 channels exceed the 700-point marker limit.
+  // 96 shared cycles across 21 channels exceed the 700-point marker limit.
   data.trend.series = data.trend.series.map((series, channel) => ({
     ...series,
     points: Array.from({ length: 96 }, (_, index) => {
@@ -358,13 +379,30 @@ test("catalog details support keyboard tabs, copy feedback and focus return", as
   expect(errors).toEqual([]);
 });
 
+test("catalog shows a Seoul In-Region card with its own endpoint and the base model ID in code (v2.32.0)", async ({ page }) => {
+  const inRegion = { id: "bedrock:ap-northeast-2:anthropic.claude-opus-5", name: "Bedrock Claude Opus 5 (ap-northeast-2)" };
+  await page.route("**/api/models", (route) => route.fulfill({ json: [...catalog, inRegion] }));
+  await page.goto("/models");
+  const card = page.getByRole("button", { name: inRegion.name, exact: true });
+  await expect(card).toBeVisible();
+  await expect(card.getByText("In-Region", { exact: true })).toBeVisible();
+  await card.click();
+  const dialog = page.getByRole("dialog", { name: inRegion.name, exact: true });
+  await expect(dialog).toBeVisible();
+  await expect(dialog.getByText("https://bedrock-runtime.ap-northeast-2.amazonaws.com", { exact: true })).toBeVisible();
+  const panel = dialog.getByRole("tabpanel");
+  await expect(panel).toContainText('region_name="ap-northeast-2"');
+  await expect(panel).toContainText('modelId="anthropic.claude-opus-5"');
+  await expect(panel).not.toContainText("bedrock:ap-northeast-2");
+});
+
 test("the phone trend legend tells how many channels are below the fold and desktop stays unchanged", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await mockBenchmark(page);
   await page.goto("/gpt-on-aws");
   const chart = page.getByRole("region", { name: "TTFB trend (median per cycle)", exact: true });
   const list = chart.getByRole("list", { name: "Chart legend" });
-  await expect(list.getByRole("listitem")).toHaveCount(18);
+  await expect(list.getByRole("listitem")).toHaveCount(21);
   const cue = chart.locator("[data-legend-more]");
   await expect(cue).toBeVisible();
   const hidden = await list.evaluate((element) => {
