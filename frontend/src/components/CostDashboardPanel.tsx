@@ -14,6 +14,7 @@ import { projectMonthlyCost } from "@/lib/costProjection";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
+import ModelName from "./ModelName";
 import RefreshControls from "./RefreshControls";
 
 const WINDOW_OPTIONS: { value: string; labelKo: string; labelEn: string }[] = [
@@ -209,7 +210,7 @@ export default function CostDashboardPanel() {
                 {summary.rows.map((r) => (
                   <tr key={r.model_id} className="border-b border-gray-800/50">
                     <td className="py-2 pr-3 text-gray-200" title={r.model_id}>
-                      {r.model_name}
+                      <ModelName name={r.model_name} />
                     </td>
                     <td className="py-2 px-2">
                       <span className={`whitespace-nowrap px-1.5 py-0.5 rounded text-[11px] border ${CHANNEL_COLORS[r.channel] ?? ""}`}>

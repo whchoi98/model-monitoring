@@ -67,8 +67,9 @@ export const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
-  // CP Sonnet 5.5는 CP Sonnet 5(#4338ca)와 같은 점선이라 Sonnet 계열에서 떨어진 짙은 보라 (v2.32.0).
-  "Anthropic Claude Sonnet 5.5 (US)": "#3b0764",
+  // CP Sonnet 5.5는 CP Sonnet 5(#4338ca)와 같은 점선이라 Sonnet 계열에서 떨어진 밝은 자홍 (v2.32.0).
+  // 짙은 보라(#3b0764)는 다크 카드에서 3.05:1로 묻혔다 — 이 색은 다크 8.7:1, 라이트(보정 #8b5e81) 5.1:1.
+  "Anthropic Claude Sonnet 5.5 (US)": "#e098d0",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",

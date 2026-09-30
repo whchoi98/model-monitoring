@@ -58,7 +58,7 @@ test("at 390px the Model Explorer card and dialog title keep the Seoul region co
   expect(await lineSpread(title, "(ap-northeast-2)")).toBeLessThan(4);
 });
 
-test("at 390px the cost table channel badge stays on one line", async ({ page }) => {
+test("at 390px the cost table keeps the Seoul region code and the channel badge on one line", async ({ page }) => {
   await mockSeoul(page);
   const summary: CostSummary = {
     window: "24h", since: "2026-09-29T00:00:00Z", total_cost_usd: 1.2, total_input_tokens: 1200, total_output_tokens: 2400,
@@ -74,6 +74,9 @@ test("at 390px the cost table channel badge stays on one line", async ({ page })
   await page.route("**/api/cost/summary?*", (route) => route.fulfill({ json: summary }));
   await page.route("**/api/cost/channel-compare?*", (route) => route.fulfill({ json: channels }));
   await page.goto("/cost");
+  const name = page.locator("table").getByRole("cell", { name: SEOUL.name, exact: true });
+  await expect(name).toBeVisible();
+  expect(await lineSpread(name, "(ap-northeast-2)")).toBeLessThan(4);
   const badge = page.locator("table").getByText(CHANNEL, { exact: true });
   await expect(badge).toBeVisible();
   expect(await lineSpread(badge, CHANNEL)).toBeLessThan(4);
