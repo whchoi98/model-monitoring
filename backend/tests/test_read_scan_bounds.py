@@ -10,6 +10,11 @@ tests/fixtures/read_goldens_v2320.json에 고정했다. 조회 방식을 바꾼 
 응답을 의도적으로 바꾸는 변경이 아니면 골든을 다시 만들지 않는다(다시 만들 때:
 FREEZE_READ_GOLDENS=1 python3.12 -m pytest tests/test_read_scan_bounds.py -k freeze).
 
+골든 밖 데이터셋: 골든 데이터셋이 가리지 못하는 변이를 따로 잡는다. (1) 지표 값이 모두 있는 실패 행(error, overloaded,
+timeout)을 더해도 success만 세는 응답(분석, 비용 추이, 결과 통계)은 골든 그대로다. (2) id 순서와 시각 순서가 어긋나는
+데이터셋에서 분석 행의 model_name 동률과 counts, percentages 키는 처음 나온 순서(min(id))를 따르고, 결과 통계 라벨은
+가장 최근 시각의 행 중 먼저 본 행의 것이다.
+
 스캔 상한: SQL 캡처(before_cursor_execute)로 probe_results의 Text 열(prompt, output_text)을 SELECT하지 않는지
 확인한다. 분석 두 엔드포인트는 GROUP BY로 센 값만, 신뢰성, 효율성, 비용 추이, 결과 통계는 쓰는 열만 stream_results로
 읽는다. 창 상한(분석과 비용 추이 30d, 신뢰성과 효율성 7d)을 넘거나 읽을 수 없는 window는 DB를 읽기 전에 422이고,
@@ -18,6 +23,7 @@ FREEZE_READ_GOLDENS=1 python3.12 -m pytest tests/test_read_scan_bounds.py -k fre
 
 import json
 import os
+from contextlib import contextmanager
 from datetime import timedelta
 from pathlib import Path
 
@@ -36,7 +42,7 @@ from routers import cost as cost_router
 from routers import efficiency as efficiency_router
 from routers import reliability as reliability_router
 from routers import results as results_router
-from tests._read_dataset import CATALOG, FROZEN_NOW, FrozenDatetime, seed
+from tests._read_dataset import CATALOG, FROZEN_NOW, G, OA, TWIN_B, FrozenDatetime, seed
 
 GOLDEN_PATH = Path(__file__).parent / "fixtures" / "read_goldens_v2320.json"
 FREEZE = os.environ.get("FREEZE_READ_GOLDENS") == "1"
@@ -85,13 +91,15 @@ CASES = {
 }
 
 
-@pytest.fixture()
-def env(monkeypatch):
+@contextmanager
+def _serve(monkeypatch, *seeders):
+    """seeders를 차례로 넣은 SQLite로 다섯 라우터를 띄운다 → (TestClient, SQL 캡처 목록)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine)
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", "(1P)")
-    seed(factory)
+    for fill in seeders:
+        fill(factory)
 
     app = FastAPI()
     for module in (analysis_router, reliability_router, efficiency_router, cost_router, results_router):
@@ -113,10 +121,18 @@ def env(monkeypatch):
         statements.append((statement, dict(context.execution_options)))
 
     event.listen(engine, "before_cursor_execute", record)
-    with TestClient(app) as client:
-        yield client, statements
-    event.remove(engine, "before_cursor_execute", record)
-    engine.dispose()
+    try:
+        with TestClient(app) as client:
+            yield client, statements
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
+        engine.dispose()
+
+
+@pytest.fixture()
+def env(monkeypatch):
+    with _serve(monkeypatch, seed) as served:
+        yield served
 
 
 def _canonical(body) -> str:
@@ -158,6 +174,154 @@ def test_response_matches_frozen_golden(env, name):
     got = resp.json()
     assert got == golden["body"]
     assert _canonical(got) == _canonical(golden["body"])  # dict 키 순서까지
+
+
+# ───────────────────────────────────────────────────────────────────────
+# 골든 밖 데이터셋 — 골든 데이터셋이 가리지 못하는 변이를 잡는다
+# ───────────────────────────────────────────────────────────────────────
+
+# (1) success가 아닌 행에도 지표 값이 모두 있는 데이터셋. 골든 데이터셋의 실패 행은 output_tokens, stop_reason, 지연시간이
+# 모두 NULL이라 output-length에서 status == 'success' 조건을 빼도 응답이 같았다(output_tokens IS NOT NULL이 대신 걸렀다).
+# 창(45m, 6h, 24h, 48h~12h, 7d, 30d) × 카테고리 × run 격자마다 실패 행을 넣으므로 success만 세는 요청은 모두 이 행을 창 안에 둔다.
+NON_SUCCESS_STATUSES = ("error", "overloaded", "timeout")
+FAIL_ONLY = ("anthropic:claude-fail-only", "Anthropic Claude Fail Only (US)")  # 실패 행만 있는 모델
+_NON_SUCCESS_OFFSETS_H = (0.5, 4, 10, 30, 100, 400)
+_NON_SUCCESS_MODELS = (G, OA, TWIN_B, FAIL_ONLY)  # 단가 있는 모델(G, OA, TWIN_B) — 비용 추이도 달라질 수 있다
+_SUCCESS_ONLY_CASES = sorted(
+    name for name in CASES if name.startswith(("stop_reasons_", "output_length_", "cost_trend_", "results_stats_"))
+)
+
+
+def _seed_non_success(factory) -> None:
+    with factory() as db:
+        n = 0
+        for offset in _NON_SUCCESS_OFFSETS_H:
+            for model_id, label in _NON_SUCCESS_MODELS:
+                for category in ("chat-short", "reasoning", "code-gen", None):
+                    for run_id in (1, 2):
+                        db.add(models.ProbeResult(
+                            run_id=run_id, model_id=model_id, model_name=label,
+                            timestamp=FROZEN_NOW - timedelta(hours=offset), prompt="failed " + "z" * 200,
+                            status=NON_SUCCESS_STATUSES[n % 3], ttft_ms=111.1 + n, total_latency_ms=2222.2 + n,
+                            server_latency_ms=1800.5, input_tokens=900 + n, output_tokens=(123, 4000, 777)[n % 3] + n,
+                            tps=55.5, output_text="partial " + "w" * 100,
+                            error_message="WallClockTimeout: probe exceeded 90s wall-clock",
+                            category=category, stop_reason=("max_tokens", "tool_use", "end_turn")[n % 3],
+                        ))
+                        n += 1
+        db.commit()
+
+
+@pytest.fixture()
+def non_success_env(monkeypatch):
+    with _serve(monkeypatch, seed, _seed_non_success) as served:
+        yield served
+
+
+@pytest.mark.skipif(FREEZE, reason="골든을 다시 만드는 중")
+@pytest.mark.parametrize("name", _SUCCESS_ONLY_CASES)
+def test_non_success_rows_with_metrics_leave_success_only_responses_unchanged(non_success_env, name):
+    client, _ = non_success_env
+    resp = client.get(CASES[name])
+    assert resp.status_code == 200
+    assert _canonical(resp.json()) == _canonical(_load_goldens()[name]["body"])
+
+
+@pytest.mark.skipif(FREEZE, reason="골든을 다시 만드는 중")
+def test_non_success_rows_reach_the_windows_of_the_success_only_cases(non_success_env):
+    """위 비교가 헛돌지 않는지 — 상태를 가리지 않는 신뢰성 응답은 90m, 6h, 24h, 7d 모두 실패 행 때문에 달라진다."""
+    client, _ = non_success_env
+    goldens = _load_goldens()
+    for name in ("reliability_90m", "reliability_6h", "reliability_default", "reliability_7d"):
+        assert client.get(CASES[name]).json() != goldens[name]["body"], name
+
+
+# (2) id 순서와 시각 순서가 어긋나는 데이터셋 — 분석 행의 model_name 동률, counts와 percentages 키 순서, 결과 통계의 최신
+# 라벨. 분석의 순서 규칙은 "창 안에서 처음 나온 순서 = min(id)"다(v2.32.1 GROUP BY 전환 때 정했다). 골든 데이터셋은 id 순서가
+# 시각 순서와 같고 쌍둥이 id의 알파벳 순서도 처음 나온 순서와 같아, min(id) 대신 model_id나 가장 이른 시각으로 정렬해도 골든이
+# 그대로였다. 골든과 따로 둔다 — 골든은 v2.32.0 응답이고, 이 순서는 v2.32.0이 DB 행 순서에 맡기던 것을 새로 고정한 것이다.
+TWIN_LABEL = "Anthropic Claude Twin 9 (US)"
+TIE_ZZ = ("anthropic:zz-twin-9", TWIN_LABEL)  # 먼저 나오지만(min id 1) 알파벳으로는 뒤
+TIE_AA = ("anthropic:aa-twin-9", TWIN_LABEL)  # 이 데이터셋에서 가장 이른 시각의 행을 갖지만 id로는 뒤(min id 2)
+STATS_TIE = ("mystery.stats-tie", None)  # 카탈로그 밖 — stats 라벨은 가장 최근 시각의 행 중 먼저 본 행의 라벨
+# (모델, 몇 시간 전, stop_reason, output_tokens, 행 라벨) — 넣는 순서가 곧 id다.
+TIE_ROWS = (
+    (TIE_ZZ, 1, "max_tokens", 900, TWIN_LABEL),          # id 1
+    (TIE_AA, 10, "end_turn", 100, TWIN_LABEL),           # id 2 — 가장 이른 시각
+    (TIE_ZZ, 6, "end_turn", 200, TWIN_LABEL),            # id 3
+    (TIE_AA, 0.5, "tool_use", 50, TWIN_LABEL),           # id 4
+    (TIE_ZZ, 2, None, 250, TWIN_LABEL),                  # id 5 — unknown, GROUP BY에서 zz의 첫 그룹(NULL)
+    (TIE_AA, 3, "max_tokens", 120, TWIN_LABEL),          # id 6
+    (TIE_ZZ, 8, "endTurn", 400, TWIN_LABEL),             # id 7 — end_turn 별칭, GROUP BY에서 "end_turn"(id 3)보다 먼저
+    (TIE_ZZ, 9, "", 10, TWIN_LABEL),                     # id 8 — unknown, zz의 가장 작은 output_tokens
+    (STATS_TIE, 1, "end_turn", 300, "Stats Tie A"),      # id 9 — 가장 최근 시각, 먼저 본 행
+    (STATS_TIE, 1, "end_turn", 300, "Stats Tie B"),      # id 10 — 같은 시각, 나중에 본 행
+    (STATS_TIE, 5, "end_turn", 300, "Stats Tie C"),      # id 11 — 더 이른 시각, 가장 큰 id
+)
+
+
+def _seed_ties(factory) -> None:
+    with factory() as db:
+        db.add(models.ProbeRun(id=1, prompt="auto", status="completed", is_auto=1, created_at=FROZEN_NOW))
+        for row_id, ((model_id, _), offset, reason, out_tok, label) in enumerate(TIE_ROWS, start=1):
+            db.add(models.ProbeResult(
+                id=row_id, run_id=1, model_id=model_id, model_name=label,
+                timestamp=FROZEN_NOW - timedelta(hours=offset), prompt="tie", status="success",
+                ttft_ms=400.0 + row_id, total_latency_ms=1500.0 + row_id, input_tokens=600, output_tokens=out_tok,
+                tps=40.0, output_text="ok", category="chat-short", stop_reason=reason,
+            ))
+        db.commit()
+
+
+@pytest.fixture()
+def tie_env(monkeypatch):
+    with _serve(monkeypatch, _seed_ties) as served:
+        yield served
+
+
+def test_tie_dataset_separates_first_appearance_from_alphabetical_and_timestamp_order():
+    """아래 고정이 헛돌지 않는지 — 쌍둥이의 처음 나온 순서(id), 알파벳 순서, 가장 이른 시각 순서가 서로 다르다."""
+    first_id: dict[str, int] = {}
+    oldest_h: dict[str, float] = {}
+    for row_id, ((model_id, _), offset, *_rest) in enumerate(TIE_ROWS, start=1):
+        first_id.setdefault(model_id, row_id)
+        oldest_h[model_id] = max(oldest_h.get(model_id, 0.0), offset)
+    twins = [TIE_ZZ[0], TIE_AA[0]]
+    assert sorted(twins, key=first_id.__getitem__) == [TIE_ZZ[0], TIE_AA[0]]
+    assert sorted(twins) == [TIE_AA[0], TIE_ZZ[0]]
+    assert sorted(twins, key=lambda m: -oldest_h[m]) == [TIE_AA[0], TIE_ZZ[0]]
+
+
+def test_stop_reason_twin_rows_and_count_keys_follow_first_appearance_by_id(tie_env):
+    client, _ = tie_env
+    stop = client.get("/api/analysis/stop-reasons").json()["rows"]
+    assert [(r["model_name"], r["model_id"]) for r in stop] == [
+        (TWIN_LABEL, TIE_ZZ[0]), (TWIN_LABEL, TIE_AA[0]),
+        ("Stats Tie A", STATS_TIE[0]), ("Stats Tie B", STATS_TIE[0]), ("Stats Tie C", STATS_TIE[0]),
+    ]
+    zz, aa = stop[0], stop[1]
+    # 키 = 정규 키가 처음 나온 id 순서. zz의 end_turn은 별칭 "endTurn"(id 7)보다 "end_turn"(id 3)이 먼저 나왔다.
+    # 알파벳 순서, 행 수 순서, 가장 이른 시각 순서는 셋 다 이 순서와 다르다.
+    assert _canonical(zz["counts"]) == _canonical({"max_tokens": 1, "end_turn": 2, "unknown": 2})
+    assert _canonical(zz["percentages"]) == _canonical({"max_tokens": 20.0, "end_turn": 40.0, "unknown": 40.0})
+    assert _canonical(aa["counts"]) == _canonical({"end_turn": 1, "tool_use": 1, "max_tokens": 1})
+    assert _canonical(aa["percentages"]) == _canonical({"end_turn": 33.3, "tool_use": 33.3, "max_tokens": 33.3})
+
+
+def test_output_length_twin_rows_follow_first_appearance_by_id(tie_env):
+    client, _ = tie_env
+    out = client.get("/api/analysis/output-length").json()["rows"]
+    assert [(r["model_name"], r["model_id"], r["n"]) for r in out if r["model_name"] == TWIN_LABEL] == [
+        (TWIN_LABEL, TIE_ZZ[0], 5), (TWIN_LABEL, TIE_AA[0], 3),
+    ]
+
+
+def test_results_stats_label_is_the_first_row_seen_at_the_latest_timestamp(tie_env):
+    """예전 max(group, key=timestamp)는 가장 최근 시각이 같은 행 중 먼저 본 행을 골랐다 — 더 늦은 id나 더 이른 시각이 아니다."""
+    client, _ = tie_env
+    names = {m["model_id"]: m["model_name"] for m in _stats(client)["models"]}
+    assert names[STATS_TIE[0]] == "Stats Tie A"
+    assert names[TIE_ZZ[0]] == names[TIE_AA[0]] == TWIN_LABEL
 
 
 # ───────────────────────────────────────────────────────────────────────
