@@ -703,6 +703,29 @@ aws logs tail /ecs/gptbench --since 30m --region $REGION | grep -E "cycle (start
 #   (한 호스트가 업스트림에서 느리면 그 갈래의 끝 채널만 잘린다 — 2026-09-30 GPT 5.4 (us-east-2) 저하).
 ```
 
+### 5-8. v2.32.2 배포 경로와 확인 (Insights 트랜잭션과 스트리밍 요약, 기동 마이그레이션)
+
+**배포 경로**: env, IAM, 스키마 변경이 없다(`INSIGHTS_CALL_WALL_CLOCK_S`, `INSIGHTS_TASK_BUDGET_S`는 코드 기본값 180, 240). Insights 태스크 이미지가
+바뀌어야 하므로 §5-7과 같이 digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`를 배포한다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. backend 기동 — 마이그레이션 블록이 Insights 런과 겹쳐도 실패하지 않는다
+aws logs tail /ecs/backend --since 15m --region $REGION | grep -E "Migration block failed|Startup columns added|Application startup complete"
+# 기댓값: "Migration block failed" 없음, "Startup columns added" 없음(열이 다 있다), "Application startup complete"
+
+# 2. Insights — 언어별 소요와 토큰, 태스크 소요, 영어 요약
+aws logs tail /ecs/insights --since 30m --region $REGION | grep -E "insights summary (ko|en)|EN insight generation failed|insight id=|deadline|Traceback"
+curl -s "https://$CF_DOMAIN/api/insights?limit=12" | jq '[.[] | {id, created_at, en: (.summary_md_en != null)}]'
+# 기댓값: 언어별 "insights summary ko|en: …s, output_tokens=…, stop_reason=…" 줄과 "insight id=… 저장", "EN insight generation failed" 없음 또는 드묾,
+#   배포 뒤 insight의 en이 모두 true에 가깝다(이전 24시간은 279건 중 109건 false)
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerInsightsTaskDef --status ACTIVE --region $REGION --query 'families[0]' --output text)
+aws ecs list-tasks --cluster bedrock-monitor --family "$FAM" --desired-status STOPPED --region $REGION --query 'taskArns[:5]' --output text \
+  | xargs -r aws ecs describe-tasks --cluster bedrock-monitor --region $REGION --query 'tasks[].[startedAt,stoppedAt,containers[?name==`insightstaskdef`].exitCode|[0]]' --output text --tasks
+# 기댓값: 태스크 소요 240초 + 기동 안(이전 2분 15초~6분 44초), 다음 스케줄과 겹치지 않는다, exit 0
+```
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`)에는 이미지-only
