@@ -356,7 +356,8 @@ aws ecs stop-task --cluster bedrock-monitor --task <taskArn> --region $REGION \
 인리전 12채널(`bedrock-mantle.<region>`)이고, 갈래 안에서는 채널을 `_BENCH_SPECS` 순서대로 하나씩 측정한다(워밍업 1 +
 `GPT_BENCH_RUNS` 10회). 사이클 데드라인 `GPT_BENCH_DEADLINE`(780초)은 두 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만
 건너뛴다(GPT 6.1 Sol이 갈래마다 끝이라 컷이 신규 채널부터 떨어진다). 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(기본 885초)가
-지나도 끝나지 않는 갈래는 기다리지 않고 남은 채널을 skip으로 보고한다. DB 저장은 메인 스레드가 채널 단위로 한다. 18채널을 한 줄로
+지나도 끝나지 않는 갈래는 기다리지 않는다. 이미 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`,
+시작하지 못한 채널은 `라벨`로 skip에 보고한다. DB 저장은 메인 스레드가 채널 단위로 한다. 18채널을 한 줄로
 순차 측정하던 v2.31.x의 2026-09-30 24시간 실측(96사이클)은 중앙값 623초, p90 750초, 최대 790초였고 9사이클이 끝 채널을 건너뛰었다.
 
 ### 증상
@@ -379,9 +380,10 @@ aws logs tail /ecs/gptbench --since 2h --region $REGION \
 - `cycle deadline exceeded - skipping <라벨>`과 `skipped=[…]`만 있으면 데드라인 컷이다. `lane done`의 `elapsed`가 780초 가까운
   갈래가 원인이다.
 - `GPT bench lane <lane> did not finish within 885s - abandoning N channel(s)`는 watchdog(`GPT_BENCH_CALL_TIMEOUT`)도 풀지 못한
-  정지다. 그 갈래의 남은 채널은 skip으로 보고되고, 스레드는 daemon이라 태스크 종료를 막지 않는다.
-- `GPT bench lane <lane> stopped: <예외>`는 갈래가 예외로 멈춘 것이다. 다른 갈래는 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를
-  다시 던지므로 태스크가 traceback과 함께 비정상 종료한다.
+  정지다(N은 진행 중 채널을 포함한 남은 채널 수). 진행 중이던 채널은 끝난 회차까지 저장되고 `skipped=`에 `라벨 (run N+)`로,
+  시작하지 못한 채널은 `라벨`로 찍힌다. 워밍업에서 멈췄으면 `(run 1+)`다. 스레드는 daemon이라 태스크 종료를 막지 않는다.
+- `GPT bench lane <lane> stopped: <예외>`는 갈래가 예외로 멈춘 것이다. 그 갈래의 진행 중 채널은 끝난 회차까지 저장되고 `라벨 (run N+)`로
+  보고된다. 다른 갈래는 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를 다시 던지므로 태스크가 traceback과 함께 비정상 종료한다.
 
 ### 조치
 

@@ -563,8 +563,10 @@ sequential in `_BENCH_SPECS` order. The task logs `GPT bench lanes: cris=9 mantl
 `GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main thread saves and commits each finished channel. Each call has a wall-clock cap
 (`GPT_BENCH_CALL_TIMEOUT`, default 90 s — an expired call is stored as an error row `WallClockTimeout: …`), the client never retries
 (`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by both lanes; GPT 6.1 Sol is
-last in each lane). A lane still running after deadline + call cap + 15 s (885 s) is abandoned and its channels are reported as
-skipped.
+last in each lane). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
+stored, the runs its in-flight channel already finished are stored and that channel is reported as `label (run N+)`, and the
+channels it never started are reported as `label` (a lane that raises is handled the same way). The 15 s grace is a best-effort
+bound, because the watchdog cannot cut the pre-stream phase (connect, request write, response headers).
 
 ### GET /api/gptbench/latest
 Latest **complete** cycle: `cycle_ts` + `channels[]` scorecards (`model_id`, `model_name`, `family`, `region`, `runs`, `success`,
