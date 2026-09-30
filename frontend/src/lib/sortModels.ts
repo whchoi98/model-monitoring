@@ -83,6 +83,14 @@ export function sortResults<T extends { model_name: string }>(results: T[]): T[]
   });
 }
 
+/**
+ * family 이름(예: "Claude Sonnet 5.5")이 붙은 묶음을 FAMILY_ORDER 순으로 — 모르는 family는 뒤에 알파벳순.
+ * 신뢰성 페이지가 쓴다(backend는 family를 알파벳순으로 보내 "Claude Sonnet 5"가 "Claude Sonnet 5.5"보다 먼저 온다).
+ */
+export function sortByFamily<T extends { family: string }>(groups: readonly T[]): T[] {
+  return [...groups].sort((a, b) => familyRank(a.family) - familyRank(b.family) || a.family.localeCompare(b.family));
+}
+
 /** 정렬 후 family 단위로 그룹화 — 각 family가 별도 row를 차지하도록 UI에서 사용. */
 export function groupByFamily<T extends { model_name: string }>(results: T[]): T[][] {
   const sorted = sortResults(results);

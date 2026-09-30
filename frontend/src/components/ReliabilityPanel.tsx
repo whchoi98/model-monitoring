@@ -6,6 +6,7 @@ import {
   MultiChannelReliability,
 } from "@/lib/api";
 import { useLang } from "@/lib/i18n-context";
+import { sortByFamily } from "@/lib/sortModels";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
@@ -130,7 +131,8 @@ export default function ReliabilityPanel() {
       {!resource.error && !resource.refreshing && data?.families.length === 0 && <DataEmpty />}
       {data && data.families.length > 0 && (
         <div className="space-y-4">
-          {data.families.map((fam) => {
+          {/* 대시보드, 모델 탐색과 같은 family 순서(FAMILY_ORDER) — backend는 알파벳순이라 5가 5.5보다 먼저 온다 */}
+          {sortByFamily(data.families).map((fam) => {
             // family 내 채널 중 최고 성공률 식별 (winner highlight)
             const bestRate = Math.max(
               ...fam.channels.map((c) => c.success_rate ?? 0),

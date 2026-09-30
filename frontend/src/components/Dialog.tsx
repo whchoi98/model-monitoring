@@ -5,7 +5,7 @@ import { useLang } from "@/lib/i18n-context";
 
 /** Native modal semantics provide focus containment, Escape and an inert background. */
 export default function Dialog({ title, onClose, children, className = "max-w-2xl" }: {
-  title: string;
+  title: ReactNode;
   onClose: () => void;
   children: ReactNode;
   className?: string;

@@ -212,7 +212,7 @@ export default function CostDashboardPanel() {
                       {r.model_name}
                     </td>
                     <td className="py-2 px-2">
-                      <span className={`px-1.5 py-0.5 rounded text-[11px] border ${CHANNEL_COLORS[r.channel] ?? ""}`}>
+                      <span className={`whitespace-nowrap px-1.5 py-0.5 rounded text-[11px] border ${CHANNEL_COLORS[r.channel] ?? ""}`}>
                         {r.channel}
                       </span>
                     </td>
