@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelRank, familyRank, groupByFamily, isExcludedModel, sortResults } from "./sortModels";
+import { channelRank, familyRank, groupByFamily, hasAwsRegionSuffix, isExcludedModel, sortByFamily, sortResults } from "./sortModels";
 
 // Fable 5.1 (v2.22.0) — includes 매칭에서 "Claude Fable 5"가 "Claude Fable 5.1"에 포함되는 접두 충돌 회귀 방지.
 describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
@@ -246,6 +246,36 @@ describe("sortModels — GPT 6.1 Sol", () => {
       "OpenAI GPT 6.1 Sol (us-east-1)",
     ]) {
       expect(isExcludedModel(n)).toBe(false);
+    }
+  });
+});
+
+// 신뢰성 페이지(v2.32.0) — backend가 family를 알파벳순으로 보내 "Claude Sonnet 5"가 "Claude Sonnet 5.5"보다 먼저 왔다.
+describe("sortByFamily — reliability family order", () => {
+  it("orders family groups like the dashboard, 5.5 before 5 and 5.1 before 5", () => {
+    const alphabetical = [
+      "Claude Fable 5", "Claude Fable 5.1", "Claude Haiku 4.5", "Claude Opus 5", "Claude Opus 5.5",
+      "Claude Sonnet 5", "Claude Sonnet 5.5", "GPT 6 Sol", "GPT 6.1 Sol", "Nova 2.0 Lite",
+    ].map((family) => ({ family }));
+    expect(sortByFamily(alphabetical).map((group) => group.family)).toEqual([
+      "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5",
+      "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Sol",
+    ]);
+  });
+
+  it("puts unknown families after the known ones, alphabetically, without mutating the input", () => {
+    const groups = [{ family: "Zeta 1" }, { family: "GPT 5.4" }, { family: "Alpha 2" }, { family: "Claude Opus 4.8" }];
+    expect(sortByFamily(groups).map((group) => group.family)).toEqual(["Claude Opus 4.8", "GPT 5.4", "Alpha 2", "Zeta 1"]);
+    expect(groups[0].family).toBe("Zeta 1");
+  });
+});
+
+describe("hasAwsRegionSuffix", () => {
+  it("matches lower-case AWS region suffixes only", () => {
+    expect(hasAwsRegionSuffix("Bedrock Claude Opus 5 (ap-northeast-2)")).toBe(true);
+    expect(hasAwsRegionSuffix("OpenAI GPT 5.4 (us-west-2)")).toBe(true);
+    for (const name of ["Bedrock Claude Opus 5 (Global)", "Bedrock Claude Opus 5 (US)", "OpenAI GPT 5.4 (1P)", "Anthropic Claude Opus 5 (US)"]) {
+      expect(hasAwsRegionSuffix(name)).toBe(false);
     }
   });
 });
