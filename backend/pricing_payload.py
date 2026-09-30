@@ -28,7 +28,7 @@ import pricing_sources
 from models import PriceHistory
 from price_history import as_utc, current_rows, last_finished_run, pending_rows, verification_of
 from pricing_parsers import PRICE_FIELDS
-from pricing_seed import SEED_SOURCE_DATE
+from pricing_seed import SEED_SOURCE_DATE, SEED_SOURCE_DATES
 from pricing_sources import (
     ANTHROPIC_REFERENCE_URL, ANTHROPIC_SOURCE_ID, FAMILY_ORDER, OFFER_REFERENCE_URL, OPENAI_REFERENCE_URL,
     OPENAI_SOURCE_ID, PRICELIST_REFERENCE_URL, PROVIDER_ORDER, PriceIdentity, note_source_id, region_of, tier_of,
@@ -267,7 +267,8 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
     references = []
     for sid, n in sorted(numbers.items(), key=lambda kv: kv[1]):
         observed = [as_utc(r.observed_at) for r in current.values() if r.source_id == sid and r.observed_at is not None]
-        as_of = max(observed).date().isoformat() if observed else SEED_SOURCE_DATE.isoformat()
+        # A source only seed rows cite (no sync has observed it yet) shows its own seed check date, else the default.
+        as_of = (max(observed).date() if observed else SEED_SOURCE_DATES.get(sid, SEED_SOURCE_DATE)).isoformat()
         references.append({"n": n, "id": sid, **_source_reference(sid, cited_by[sid]), "as_of": as_of})
     for note, payload_note, family in manual_notes:
         references.append({

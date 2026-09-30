@@ -26,7 +26,13 @@ from pricing_sources import (
 
 logger = logging.getLogger(__name__)
 
-SEED_SOURCE_DATE = date(2026, 9, 27)  # seed만 있는 참고 자료의 확인일(as_of) — 2026-09-27 공식 출처로 다시 확인
+SEED_SOURCE_DATE = date(2026, 9, 27)  # seed만 있는 참고 자료의 확인일(as_of) 기본값 — 2026-09-27 공식 출처로 다시 확인
+# 출처별 seed 확인일 — 기본값과 다른 날 확인한 출처만 둔다. 첫 동기화가 관측하기 전에는 이 날짜가 참고 자료의 as_of다.
+# v2.32.0 새 오퍼 두 개는 2026-09-30에 확인했다(2026-09-27에는 오퍼가 없었다).
+SEED_SOURCE_DATES: dict[str, date] = {
+    offer_source_id("offer-5fu2rhus3byrs"): date(2026, 9, 30),  # Claude Sonnet 5.5
+    offer_source_id("offer-wbhj4kycntgkk"): date(2026, 9, 30),  # GPT 6.1 Sol
+}
 # backend 태스크 기동과 PricingSync 러너가 겹쳐도 같은 model_id를 두 번 seed하지 않는다(트랜잭션 잠금).
 # 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
 _SEED_TIMEOUT_SQL = ("SET LOCAL statement_timeout = '30000'", "SET LOCAL lock_timeout = '5000'")
