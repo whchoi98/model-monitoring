@@ -966,7 +966,7 @@ def test_run_cycle_skipped_list_follows_channel_order_across_lanes(bench_env, se
 
 def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory, monkeypatch):
     """watchdog도 풀지 못한 정지 갈래는 데드라인 + 호출 상한 + 여유가 지나면 기다리지 않는다 — 남은 채널은 skip,
-    다른 갈래의 행은 저장, 사이클은 끝난다."""
+    다른 갈래의 행은 저장, 사이클은 끝난다. 워밍업에서 멈춘 채널은 시작한 채널이라 "(run 1+)"이다."""
     import database
     import gptbench
 
@@ -990,14 +990,136 @@ def test_run_cycle_abandons_lane_stuck_past_wait_cap(bench_env, session_factory,
         assert time.perf_counter() - t0 < 3.0
     finally:
         release.set()
-        # 포기한 갈래 스레드를 monkeypatch 복원 전에 끝낸다 — 복원된 데드라인(780s)으로 실제 one_call을 부르지 않도록.
-        for t in threading.enumerate():
-            if t.name == "gptbench-mantle":
-                t.join(5)
+        _join_lanes()
 
     labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
     assert res["rows"] == 9
-    assert res["skipped_channels"] == [labels[k] for k in MANTLE_ORDER]
+    assert res["skipped_channels"] == [f"{labels[MANTLE_ORDER[0]]} (run 1+)"] + [labels[k] for k in MANTLE_ORDER[1:]]
+
+
+def _join_lanes():
+    """포기한 갈래 스레드를 monkeypatch 복원 전에 끝낸다 — 복원된 데드라인(780s)으로 실제 one_call을 부르지 않도록."""
+    for t in threading.enumerate():
+        if t.name.startswith("gptbench-"):
+            t.join(5)
+
+
+def _stored_runs(session_factory):
+    s = session_factory()
+    got = {}
+    for r in s.query(models.GptBenchResult).all():
+        got.setdefault(r.model_id, []).append(r.run_no)
+    s.close()
+    return {k: sorted(v) for k, v in got.items()}
+
+
+def test_run_cycle_wait_cap_keeps_finished_runs_of_the_stuck_channel(bench_env, session_factory, monkeypatch, caplog):
+    """Mantle 채널 1이 워밍업과 run 1, 2를 끝낸 뒤 run 3에서 대기 상한을 넘겨 멈춘다(연결, 헤더 대기는 watchdog이
+    못 끊는다). 끝난 run 1, 2는 저장되고 그 채널은 데드라인 skip처럼 "(run 3+)", 시작하지 못한 뒤 채널은 라벨이다."""
+    import database
+    import gptbench
+
+    release = threading.Event()
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 3)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 0.5)
+    monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gptbench, "LANE_JOIN_GRACE_S", 0.1)
+    base = _fake_call()
+    stuck_calls = []  # Mantle 갈래 스레드만 쓴다
+
+    def call(region, actual_id):
+        if _model_key(region, actual_id) == MANTLE_ORDER[1]:
+            stuck_calls.append(actual_id)
+            if len(stuck_calls) == 4:  # 워밍업, run 1, run 2 다음의 run 3
+                release.wait(10)  # 테스트 안전판 — 대기 상한(0.7s)이 동작하지 않으면 10초를 다 쓴다
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+    try:
+        res = gptbench.run_cycle()
+    finally:
+        release.set()
+        _join_lanes()
+
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    assert any(r.getMessage().startswith("GPT bench lane mantle did not finish within") for r in caplog.records)
+    assert _stored_runs(session_factory) == {
+        **{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1, 2, 3], MANTLE_ORDER[1]: [1, 2]}
+    assert res["rows"] == 9 * 3 + 3 + 2
+    assert res["skipped_channels"] == (
+        ["OpenAI GPT 5.4 (us-east-2) (run 3+)"] + [labels[k] for k in MANTLE_ORDER[2:]])
+
+
+def test_run_cycle_wait_cap_stores_channels_already_queued(bench_env, engine, monkeypatch, caplog):
+    """두 갈래는 일찍 끝났는데 메인의 첫 커밋이 대기 상한을 넘겨 멈춘다(RDS 지연, 잠금 대기 등). 이미 큐에 도착한
+    채널은 포기하지 않고 모두 저장한다 — 상한은 기다림을 멈출 뿐 도착한 측정을 버리지 않는다."""
+    import database
+    import gptbench
+    from sqlalchemy.orm import Session
+
+    class StallingSession(Session):
+        stalled = False
+
+        def commit(self):
+            if not StallingSession.stalled:
+                StallingSession.stalled = True
+                _join_lanes()  # 두 갈래가 모든 진행을 큐에 넣고 끝난 뒤
+                time.sleep(0.5)  # 대기 상한(0.4s)을 넘긴다
+            return super().commit()
+
+    factory = sessionmaker(bind=engine, class_=StallingSession)
+    monkeypatch.setattr(database, "SessionLocal", factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 1)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 0.2)
+    monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gptbench, "LANE_JOIN_GRACE_S", 0.1)
+    monkeypatch.setattr(gptbench, "one_call", _fake_call())
+    caplog.set_level("INFO", logger="gptbench")
+
+    res = gptbench.run_cycle()
+
+    assert StallingSession.stalled
+    assert res["rows"] == 21 and res["skipped_channels"] == []
+    assert _stored_runs(factory) == {k: [1] for k in CRIS_ORDER + MANTLE_ORDER}
+    assert not any("did not finish" in r.getMessage() for r in caplog.records)
+
+
+def test_run_cycle_lane_crash_mid_channel_keeps_finished_runs(bench_env, session_factory, monkeypatch, caplog):
+    """갈래가 채널 도중에 예외로 멈춰도 그 채널의 끝난 run은 저장되고 "(run N+)"로 보고된다(대기 상한과 같은 처리)."""
+    import database
+    import gptbench
+
+    monkeypatch.setattr(database, "SessionLocal", session_factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 3)
+    base = _fake_call()
+    first_mantle_calls = []  # Mantle 갈래 스레드만 쓴다
+
+    def call(region, actual_id):
+        if _model_key(region, actual_id) == MANTLE_ORDER[0]:
+            first_mantle_calls.append(actual_id)
+            if len(first_mantle_calls) == 3:  # 워밍업, run 1 다음의 run 2
+                raise RuntimeError("client init failed")
+        return base(region, actual_id)
+
+    monkeypatch.setattr(gptbench, "one_call", call)
+    caplog.set_level("INFO", logger="gptbench")
+    with pytest.raises(RuntimeError, match="client init failed"):
+        gptbench.run_cycle()
+
+    assert _stored_runs(session_factory) == {**{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1]}
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    (done,) = [r.getMessage() for r in caplog.records if r.getMessage().startswith("GPT bench cycle done:")]
+    skipped = ["OpenAI GPT 5.4 (us-east-1) (run 2+)"] + [labels[k] for k in MANTLE_ORDER[1:]]
+    assert done.startswith(f"GPT bench cycle done: rows={9 * 3 + 1} errors=0 skipped={skipped!r} elapsed=")
+
+
+def test_default_wait_cap_stays_below_the_15_minute_schedule():
+    """데드라인 + 호출 상한 + 여유(기본 885초)는 15분(900초) 스케줄보다 작다 — 다음 사이클과 겹치지 않게."""
+    import gptbench
+
+    assert gptbench.CYCLE_DEADLINE_S + gptbench.CALL_TIMEOUT_S + gptbench.LANE_JOIN_GRACE_S < 900
 
 
 def test_run_cycle_lane_crash_keeps_other_lane_and_reraises(bench_env, session_factory, monkeypatch, caplog):

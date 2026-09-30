@@ -12,7 +12,7 @@ docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   갈래 **안**은 지금처럼 채널 하나씩 순차다(갈래 안 병렬화 금지 — 같은 호스트 호출이 겹치면 contention이
   레이턴시를 왜곡, 벤치 방법론과 동일 이유). 두 갈래는 호스트가 달라 서로의 대기열에 끼지 않는다.
   사이클 데드라인(CYCLE_DEADLINE_S)은 두 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만
-  건너뛴다. DB는 메인 스레드만 만진다 — 갈래는 끝난 채널의 측정을 큐로 넘기고, 메인이 채널 단위로 커밋한다.
+  건너뛴다. DB는 메인 스레드만 만진다 — 갈래는 측정을 run 단위로 큐에 넘기고, 메인이 채널 단위로 커밋한다.
   배경: 18채널 순차 24시간 실측(96사이클) 중앙값 623초, p90 750초, 최대 790초, 9사이클이 끝 채널을 건너뜀.
 
 auto_prober와 분리된 이유: 측정 지표가 다름(TTFB/GAP은 프로브에 없음) + 고정 대형 프롬프트
@@ -28,8 +28,9 @@ import os
 import queue
 import threading
 import time
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timezone
+from typing import Callable
 
 # 호출당 wall-clock watchdog — v2.28.2에서 prober와 공용 모듈로 옮겼다(동작 동일). 기존 이름을 그대로
 # 두는 이유: one_call이 모듈 전역 `_CallWatchdog`을 참조하고 테스트가 이 이름을 monkeypatch한다.
@@ -49,9 +50,12 @@ CYCLE_DEADLINE_S = float(os.environ.get("GPT_BENCH_DEADLINE", "780"))  # 13 min
 LANE_CRIS = "cris"
 LANE_MANTLE = "mantle"
 LANES = (LANE_CRIS, LANE_MANTLE)
-# 갈래 대기 여유 — 마지막으로 통과한 데드라인 판정 뒤에는 호출 1회(CALL_TIMEOUT_S, watchdog 상한)만 더 돈다.
-# 데드라인 + 호출 상한 + 이 여유(기본 885초 < 15분 스케줄)가 지나도 끝나지 않는 갈래는 watchdog도 풀지 못한
-# 정지이므로 기다리지 않고 남은 채널을 skip으로 보고한다 — 사이클이 영영 끝나지 않는 사고 방지.
+# 갈래 대기 여유 — 마지막으로 통과한 데드라인 판정 뒤에는 호출 1회가 더 돈다. watchdog은 스트림이 붙은 뒤에만
+# 끊을 수 있어 스트림 전 구간(연결, 본문 쓰기, 응답 헤더 대기)은 클라이언트 connect/write/read timeout이 상한이고,
+# 그래서 그 호출은 CALL_TIMEOUT_S를 넘길 수 있다. 이 여유는 최선의 상한일 뿐 보장이 아니다.
+# 데드라인 + 호출 상한 + 여유(기본 885초)는 15분(900초) 스케줄보다 작게 유지한다. 이 시각이 지나도 끝나지 않은
+# 갈래는 기다리지 않는다 — 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 run을 저장해 "라벨 (run N+)",
+# 시작하지 못한 채널은 라벨로 보고한다. 사이클이 영영 끝나지 않는 사고 방지.
 LANE_JOIN_GRACE_S = 15.0
 # 데드라인 판정 시계 — 테스트가 갈래별 가상 시계로 바꾼다.
 _clock = time.perf_counter
@@ -235,12 +239,17 @@ def one_call(region: str, actual_id: str) -> dict:
 
 
 @dataclass
-class _ChannelDone:
-    """갈래 → 메인 스레드 메시지. index가 None이면 그 갈래가 끝났다는 뜻(error는 갈래를 멈춘 예외)."""
+class _LaneEvent:
+    """갈래 → 메인 스레드 메시지. 진행을 run 단위로 넘긴다 — 갈래가 채널 도중에 멈춰도 끝난 run은 메인에 있다.
+
+    kind: "start" = index 채널 측정 시작(데드라인 판정 통과, 워밍업 직전), "run" = 그 채널의 run 하나 끝남,
+    "done" = 채널 끝, "exit" = 갈래 끝(error는 갈래를 멈춘 예외).
+    """
     lane: str
+    kind: str
     index: int | None = None               # bench_channels 순서의 위치
-    runs: list[tuple[int, datetime, dict]] = field(default_factory=list)  # (run_no, 완료 시각, one_call 결과)
-    skip: str | None = None                # skipped_channels 표기 — 채널 전체면 라벨, 도중이면 "라벨 (run N+)"
+    run: tuple[int, datetime, dict] | None = None  # "run": (run_no, 완료 시각, one_call 결과)
+    skip: str | None = None                # "done": skipped_channels 표기 — 채널 전체면 라벨, 도중이면 "라벨 (run N+)"
     error: BaseException | None = None
 
 
@@ -248,33 +257,39 @@ def _past_deadline(started: float) -> bool:
     return _clock() - started > CYCLE_DEADLINE_S
 
 
-def _bench_channel(ch: dict, started: float) -> tuple[list[tuple[int, datetime, dict]], str | None]:
-    """채널 하나 = 워밍업 1 + RUNS_PER_CHANNEL회 순차 호출. 반환: (측정 목록, skip 표기 또는 None)."""
+def _bench_channel(ch: dict, started: float, emit: Callable[..., None]) -> str | None:
+    """채널 하나 = 워밍업 1 + RUNS_PER_CHANNEL회 순차 호출. 반환: skip 표기 또는 None.
+
+    진행은 emit으로 넘긴다 — emit("start")는 워밍업 직전, emit("run", (run_no, 완료 시각, 결과))는 run이 끝날 때마다.
+    """
     if _past_deadline(started):
-        return [], ch["model_name"]
+        return ch["model_name"]
+    emit("start")
     # 워밍업 1회 (connection/TLS, 캐시 안정화) — 저장하지 않음, 벤치 방법론 동일.
     one_call(ch["region"], ch["actual_id"])
-    runs: list[tuple[int, datetime, dict]] = []
     for run_no in range(1, RUNS_PER_CHANNEL + 1):
         if _past_deadline(started):
-            return runs, f"{ch['model_name']} (run {run_no}+)"
+            return f"{ch['model_name']} (run {run_no}+)"
         r = one_call(ch["region"], ch["actual_id"])
-        runs.append((run_no, datetime.now(timezone.utc), r))
-    return runs, None
+        emit("run", (run_no, datetime.now(timezone.utc), r))
+    return None
 
 
 def _run_lane(lane: str, items: list[tuple[int, dict]], started: float, out: queue.Queue) -> None:
-    """갈래 스레드 — 채널을 순서대로 측정해 끝날 때마다 큐로 넘긴다. DB는 만지지 않는다."""
+    """갈래 스레드 — 채널을 순서대로 측정하며 진행을 run 단위로 큐에 넘긴다. DB는 만지지 않는다."""
     error: BaseException | None = None
     try:
         for index, ch in items:
-            runs, skip = _bench_channel(ch, started)
-            out.put(_ChannelDone(lane=lane, index=index, runs=runs, skip=skip))
+            def emit(kind: str, run: tuple[int, datetime, dict] | None = None, index: int = index) -> None:
+                out.put(_LaneEvent(lane=lane, kind=kind, index=index, run=run))
+
+            skip = _bench_channel(ch, started, emit)
+            out.put(_LaneEvent(lane=lane, kind="done", index=index, skip=skip))
     except BaseException as e:  # noqa: BLE001 — 메인 스레드가 다른 갈래를 마친 뒤 다시 던진다
         error = e
     finally:
         logger.info("GPT bench lane done: %s channels=%d elapsed=%.0fs", lane, len(items), _clock() - started)
-        out.put(_ChannelDone(lane=lane, error=error))
+        out.put(_LaneEvent(lane=lane, kind="exit", error=error))
 
 
 def run_cycle() -> dict:
@@ -282,6 +297,7 @@ def run_cycle() -> dict:
 
     반환: {"cycle_ts", "channels", "rows", "errors", "skipped_channels"} — skipped_channels는 채널 순서.
     갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를 다시 던진다.
+    멈춘 갈래(예외, 대기 상한)의 진행 중 채널은 끝난 run까지 저장하고 "라벨 (run N+)"로 보고한다.
     """
     from database import SessionLocal
     from models import GptBenchResult
@@ -297,6 +313,7 @@ def run_cycle() -> dict:
     rows = errors = 0
     skipped_at: dict[int, str] = {}
     pending = {lane: {i for i, _ in items} for lane, items in lanes.items()}  # 아직 보고되지 않은 채널
+    inflight: dict[str, tuple[int, list[tuple[int, datetime, dict]]]] = {}  # 갈래별 진행 중 채널과 그 채널의 끝난 run
     lane_error: BaseException | None = None
     events: queue.Queue = queue.Queue()
     for lane, items in lanes.items():
@@ -305,61 +322,86 @@ def run_cycle() -> dict:
                          name=f"gptbench-{lane}", daemon=True).start()
     wait_cap = CYCLE_DEADLINE_S + CALL_TIMEOUT_S + LANE_JOIN_GRACE_S
     db = SessionLocal()
-    try:
-        while pending:
-            remaining = wait_cap - (_clock() - started)
-            if remaining <= 0:
-                for lane, left in pending.items():
-                    logger.error("GPT bench lane %s did not finish within %.0fs - abandoning %d channel(s)",
-                                 lane, wait_cap, len(left))
-                    for i in left:
-                        skipped_at[i] = chans[i]["model_name"]
-                break
-            try:
-                ev = events.get(timeout=min(remaining, 5.0))
-            except queue.Empty:
-                continue
-            if ev.index is None:  # 갈래 종료
-                # 정상 종료면 남은 채널이 없다. 예외로 멈춘 갈래의 못 돈 채널은 skip으로 보고한다.
-                for i in pending.pop(ev.lane, set()):
-                    skipped_at[i] = chans[i]["model_name"]
-                if ev.error is not None:
-                    logger.error("GPT bench lane %s stopped: %s: %s", ev.lane, type(ev.error).__name__, ev.error,
-                                 exc_info=ev.error)
-                    lane_error = lane_error or ev.error
-                continue
+
+    def store(index: int, runs: list[tuple[int, datetime, dict]]) -> None:
+        nonlocal rows, errors
+        ch = chans[index]
+        for run_no, finished_at, r in runs:
+            gap = (r["ttft_ms"] - r["ttfb_ms"]) if (r["ttft_ms"] and r["ttfb_ms"]) else None
+            db.add(GptBenchResult(
+                cycle_ts=cycle_ts,
+                timestamp=finished_at,
+                model_id=ch["model_id"],
+                model_name=ch["model_name"],
+                family=ch["family"],
+                region=ch["region"],
+                run_no=run_no,
+                status="error" if r["error"] else "success",
+                ttfb_ms=r["ttfb_ms"],
+                ttft_ms=r["ttft_ms"],
+                gap_ms=gap,
+                input_tokens=r["input_tokens"],
+                cached_tokens=r["cached_tokens"],
+                reasoning_tokens=r["reasoning_tokens"],
+                output_tokens=r["output_tokens"],
+                error_message=r["error"],
+            ))
+            rows += 1
+            if r["error"]:
+                errors += 1
+        db.commit()  # 채널 단위 커밋 — 부분 실패에도 완료 채널은 보존
+
+    def stop_lane(lane: str) -> None:
+        """멈춘 갈래의 남은 채널 보고 — 진행 중 채널은 끝난 run을 저장하고 "라벨 (run N+)", 시작 못 한 채널은 라벨."""
+        left = pending.pop(lane, set())
+        if lane in inflight:
+            index, runs = inflight.pop(lane)
+            left.discard(index)
+            store(index, runs)
+            skipped_at[index] = f"{chans[index]['model_name']} (run {len(runs) + 1}+)"
+        for i in left:
+            skipped_at[i] = chans[i]["model_name"]
+
+    def handle(ev: _LaneEvent) -> None:
+        nonlocal lane_error
+        if ev.kind == "start":
+            inflight[ev.lane] = (ev.index, [])
+        elif ev.kind == "run":
+            inflight[ev.lane][1].append(ev.run)
+        elif ev.kind == "done":
+            _, runs = inflight.pop(ev.lane, (ev.index, []))
             pending.get(ev.lane, set()).discard(ev.index)
             ch = chans[ev.index]
             if ev.skip is not None:
                 skipped_at[ev.index] = ev.skip
-            if not ev.runs and ev.skip == ch["model_name"]:
+            if not runs and ev.skip == ch["model_name"]:
                 logger.warning("cycle deadline exceeded - skipping %s", ch["model_name"])
-                continue
-            for run_no, finished_at, r in ev.runs:
-                gap = (r["ttft_ms"] - r["ttfb_ms"]) if (r["ttft_ms"] and r["ttfb_ms"]) else None
-                db.add(GptBenchResult(
-                    cycle_ts=cycle_ts,
-                    timestamp=finished_at,
-                    model_id=ch["model_id"],
-                    model_name=ch["model_name"],
-                    family=ch["family"],
-                    region=ch["region"],
-                    run_no=run_no,
-                    status="error" if r["error"] else "success",
-                    ttfb_ms=r["ttfb_ms"],
-                    ttft_ms=r["ttft_ms"],
-                    gap_ms=gap,
-                    input_tokens=r["input_tokens"],
-                    cached_tokens=r["cached_tokens"],
-                    reasoning_tokens=r["reasoning_tokens"],
-                    output_tokens=r["output_tokens"],
-                    error_message=r["error"],
-                ))
-                rows += 1
-                if r["error"]:
-                    errors += 1
-            db.commit()  # 채널 단위 커밋 — 부분 실패에도 완료 채널은 보존
+                return
+            store(ev.index, runs)
             logger.info("channel done: %s", ch["model_name"])
+        else:  # "exit" — 정상 종료면 남은 채널이 없다. 예외로 멈춘 갈래는 진행 중 채널과 못 돈 채널을 보고한다.
+            stop_lane(ev.lane)
+            if ev.error is not None:
+                logger.error("GPT bench lane %s stopped: %s: %s", ev.lane, type(ev.error).__name__, ev.error,
+                             exc_info=ev.error)
+                lane_error = lane_error or ev.error
+
+    try:
+        while pending:
+            remaining = wait_cap - (_clock() - started)
+            try:
+                # 대기 상한이 지나면 더 기다리지 않고, 이미 큐에 도착한 진행만 비울 때까지 평소처럼 처리한다
+                # (메인이 DB 지연 등으로 늦어 쌓인 채널도 저장된다).
+                ev = events.get(timeout=min(remaining, 5.0)) if remaining > 0 else events.get_nowait()
+            except queue.Empty:
+                if remaining > 0:
+                    continue
+                for lane in list(pending):
+                    logger.error("GPT bench lane %s did not finish within %.0fs - abandoning %d channel(s)",
+                                 lane, wait_cap, len(pending[lane]))
+                    stop_lane(lane)
+                break
+            handle(ev)
     finally:
         db.close()
 
