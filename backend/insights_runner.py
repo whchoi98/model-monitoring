@@ -1,4 +1,4 @@
-"""인사이트 도출 잡 — EventBridge Scheduler가 30분마다 호출.
+"""인사이트 도출 잡 — EventBridge Scheduler가 5분마다 호출(rate(5 minutes)).
 
 흐름:
   1. 최근 N시간(기본 6h) 자동 run의 ProbeResult에서 통계에 쓰는 다섯 열만 나눠 읽는다.
