@@ -150,3 +150,102 @@ describe("sortModels — GPT 6 Sol / Luna", () => {
     expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 3]);
   });
 });
+
+// Sonnet 5.5 (v2.32.0) — includes 매칭에서 "Claude Sonnet 5"가 "Claude Sonnet 5.5"에 포함되는 접두 충돌 회귀 방지.
+// Sonnet 5.5는 us. 프로파일이 없어 Bedrock Global + CP 2채널이다.
+describe("sortModels — Sonnet 5.5 vs Sonnet 5 family ranking", () => {
+  it("ranks Sonnet 5.5 between Opus 4.6 and Sonnet 5, as separate families", () => {
+    const r55 = familyRank("Bedrock Claude Sonnet 5.5 (Global)");
+    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Opus 4.6 (Global)"));
+    expect(r55).toBeLessThan(familyRank("Bedrock Claude Sonnet 5 (Global)"));
+    expect(familyRank("Anthropic Claude Sonnet 5.5 (US)")).toBe(r55);
+  });
+
+  it("groups Sonnet 5.5 apart from the four Sonnet 5 channels, Anthropic first", () => {
+    const rows = [
+      { model_name: "Bedrock Claude Sonnet 5 (ap-northeast-2)" },
+      { model_name: "Bedrock Claude Sonnet 5 (US)" },
+      { model_name: "Bedrock Claude Sonnet 5.5 (Global)" },
+      { model_name: "Anthropic Claude Sonnet 5 (US)" },
+      { model_name: "Bedrock Claude Sonnet 5 (Global)" },
+      { model_name: "Anthropic Claude Sonnet 5.5 (US)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "Anthropic Claude Sonnet 5.5 (US)",
+      "Bedrock Claude Sonnet 5.5 (Global)",
+      "Anthropic Claude Sonnet 5 (US)",
+      "Bedrock Claude Sonnet 5 (Global)",
+      "Bedrock Claude Sonnet 5 (US)",
+      "Bedrock Claude Sonnet 5 (ap-northeast-2)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([2, 4]);
+  });
+});
+
+// 서울 In-Region (v2.32.0) — "Bedrock <family> (ap-northeast-2)"는 US 티어 뒤 리전 티어(rank 3).
+describe("sortModels — Bedrock In-Region (ap-northeast-2)", () => {
+  it("puts the lowercase AWS region suffix in the region tier, Bedrock US and Nova stay in the US tier", () => {
+    expect(channelRank("Bedrock Claude Opus 5 (ap-northeast-2)")).toBe(3);
+    expect(channelRank("Bedrock Claude Sonnet 5 (ap-northeast-2)")).toBe(3);
+    expect(channelRank("Bedrock Claude Opus 5 (US)")).toBe(2);
+    expect(channelRank("Bedrock Nova 2.0 Lite (US)")).toBe(2);
+    expect(channelRank("Bedrock Claude Opus 5 (Global)")).toBe(1);
+  });
+
+  // 분기가 없으면 rank 2 동률이 되어 localeCompare가 "(ap-northeast-2)"를 "(US)"보다 앞에 둔다(ICU 실측) — 회귀 방지.
+  it("sorts the four Opus 5 channels CP → Global → US → ap-northeast-2", () => {
+    const rows = [
+      { model_name: "Bedrock Claude Opus 5 (ap-northeast-2)" },
+      { model_name: "Bedrock Claude Opus 5 (US)" },
+      { model_name: "Bedrock Claude Opus 5 (Global)" },
+      { model_name: "Anthropic Claude Opus 5 (US)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "Anthropic Claude Opus 5 (US)",
+      "Bedrock Claude Opus 5 (Global)",
+      "Bedrock Claude Opus 5 (US)",
+      "Bedrock Claude Opus 5 (ap-northeast-2)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([4]);
+  });
+});
+
+// GPT 6.1 Sol (v2.32.0) — OpenAI 블록 최상단 family(GPT 6 Astra 앞). 채널은 Global → US → us-east-1.
+describe("sortModels — GPT 6.1 Sol", () => {
+  it("ranks GPT 6.1 Sol after Nova and above GPT 6 Astra, apart from GPT 6 Sol", () => {
+    const r61 = familyRank("OpenAI GPT 6.1 Sol (Global)");
+    expect(r61).toBeGreaterThan(familyRank("Bedrock Nova 2.0 Lite (US)"));
+    expect(r61).toBeLessThan(familyRank("OpenAI GPT 6 Astra (Global)"));
+    expect(r61).not.toBe(familyRank("OpenAI GPT 6 Sol (Global)"));
+  });
+
+  it("sorts the three channels Global → US → us-east-1 as one family", () => {
+    const rows = [
+      { model_name: "OpenAI GPT 6 Sol (Global)" },
+      { model_name: "OpenAI GPT 6.1 Sol (us-east-1)" },
+      { model_name: "OpenAI GPT 6.1 Sol (US)" },
+      { model_name: "OpenAI GPT 6.1 Sol (Global)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "OpenAI GPT 6.1 Sol (Global)",
+      "OpenAI GPT 6.1 Sol (US)",
+      "OpenAI GPT 6.1 Sol (us-east-1)",
+      "OpenAI GPT 6 Sol (Global)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 1]);
+  });
+
+  it("does not hide any of the seven new v2.32.0 channels behind the excluded-family hard filter", () => {
+    for (const n of [
+      "Bedrock Claude Sonnet 5.5 (Global)",
+      "Anthropic Claude Sonnet 5.5 (US)",
+      "Bedrock Claude Opus 5 (ap-northeast-2)",
+      "Bedrock Claude Sonnet 5 (ap-northeast-2)",
+      "OpenAI GPT 6.1 Sol (Global)",
+      "OpenAI GPT 6.1 Sol (US)",
+      "OpenAI GPT 6.1 Sol (us-east-1)",
+    ]) {
+      expect(isExcludedModel(n)).toBe(false);
+    }
+  });
+});

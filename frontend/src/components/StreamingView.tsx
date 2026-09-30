@@ -17,14 +17,18 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Opus 5.5 (Global)": "bg-red-700",
   "Claude Opus 5": "bg-rose-800",
   "Claude Opus 5 (Global)": "bg-rose-700",
+  "Claude Opus 5 (ap-northeast-2)": "bg-rose-900",
   "Claude Opus 4.8": "bg-fuchsia-700",
   "Claude Opus 4.8 (Global)": "bg-fuchsia-600",
   "Claude Opus 4.7": "bg-rose-600",
   "Claude Opus 4.7 (Global)": "bg-rose-500",
   "Claude Opus 4.6": "bg-purple-600",
   "Claude Opus 4.6 (Global)": "bg-purple-500",
+  "Claude Sonnet 5.5": "bg-violet-700",
+  "Claude Sonnet 5.5 (Global)": "bg-violet-600",
   "Claude Sonnet 5": "bg-indigo-600",
   "Claude Sonnet 5 (Global)": "bg-indigo-500",
+  "Claude Sonnet 5 (ap-northeast-2)": "bg-indigo-800",
   "Claude Sonnet 4.6": "bg-blue-600",
   "Claude Sonnet 4.6 (Global)": "bg-blue-500",
   "Claude Haiku 4.5": "bg-cyan-600",
@@ -62,48 +66,57 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 6 Luna (Global)": "bg-sky-900",
   "GPT 6 Luna (US)": "bg-sky-800",
   "GPT 6 Luna (us-east-1)": "bg-blue-900",
+  // GPT 6.1 Sol (v2.32.0)
+  "GPT 6.1 Sol (Global)": "bg-cyan-700",
+  "GPT 6.1 Sol (US)": "bg-cyan-950",
+  "GPT 6.1 Sol (us-east-1)": "bg-teal-950",
 };
 
 function getModelColor(name: string): string {
   return MODEL_COLORS[name] || "bg-gray-600";
 }
 
-function extractModelName(key: string, tokens: Map<string, string>): string {
+export function extractModelName(key: string, tokens: Map<string, string>): string {
   // The key is model_id:iteration. We need to figure out the model name.
   // We'll derive it from the key patterns
   const modelId = key.split(":").slice(0, -1).join(":");
+  // Claude 채널 표기: global.* → " (Global)", bedrock:<region>:<fm id>(In-Region, v2.32.0) → " (<region>)", us.*와 CP는 서픽스 없음(기존).
+  const claudeSuffix = modelId.startsWith("global") ? " (Global)"
+    : modelId.startsWith("bedrock:") ? ` (${modelId.split(":")[1]})` : "";
 
   // "fable-5"는 "fable-5-1"에도 포함 — 5.1 분기가 먼저 와야 함.
   if (modelId.includes("fable-5-1")) {
-    return modelId.startsWith("global") ? "Claude Fable 5.1 (Global)" : "Claude Fable 5.1";
+    return `Claude Fable 5.1${claudeSuffix}`;
   }
   if (modelId.includes("fable-5")) {
-    return modelId.startsWith("global") ? "Claude Fable 5 (Global)" : "Claude Fable 5";
+    return `Claude Fable 5${claudeSuffix}`;
   }
   // "opus-5"는 "opus-5-5"에도 포함 — 5.5 분기가 먼저 와야 함.
   if (modelId.includes("opus-5-5")) {
-    return modelId.startsWith("global") ? "Claude Opus 5.5 (Global)" : "Claude Opus 5.5";
+    return `Claude Opus 5.5${claudeSuffix}`;
   }
   if (modelId.includes("opus-5")) {
-    return modelId.startsWith("global") ? "Claude Opus 5 (Global)" : "Claude Opus 5";
+    return `Claude Opus 5${claudeSuffix}`;
   }
   if (modelId.includes("opus-4-8")) {
-    return modelId.startsWith("global") ? "Claude Opus 4.8 (Global)" : "Claude Opus 4.8";
+    return `Claude Opus 4.8${claudeSuffix}`;
   }
   if (modelId.includes("opus-4-7")) {
-    return modelId.startsWith("global") ? "Claude Opus 4.7 (Global)" : "Claude Opus 4.7";
+    return `Claude Opus 4.7${claudeSuffix}`;
   }
   if (modelId.includes("opus-4-6")) {
-    return modelId.startsWith("global") ? "Claude Opus 4.6 (Global)" : "Claude Opus 4.6";
+    return `Claude Opus 4.6${claudeSuffix}`;
   }
+  // "sonnet-5"는 "sonnet-5-5"에도 포함 — 5.5 분기가 먼저 와야 함.
+  if (modelId.includes("sonnet-5-5")) return `Claude Sonnet 5.5${claudeSuffix}`;
   if (modelId.includes("sonnet-5")) {
-    return modelId.startsWith("global") ? "Claude Sonnet 5 (Global)" : "Claude Sonnet 5";
+    return `Claude Sonnet 5${claudeSuffix}`;
   }
   if (modelId.includes("sonnet-4-6")) {
-    return modelId.startsWith("global") ? "Claude Sonnet 4.6 (Global)" : "Claude Sonnet 4.6";
+    return `Claude Sonnet 4.6${claudeSuffix}`;
   }
   if (modelId.includes("haiku-4-5")) {
-    return modelId.startsWith("global") ? "Claude Haiku 4.5 (Global)" : "Claude Haiku 4.5";
+    return `Claude Haiku 4.5${claudeSuffix}`;
   }
   if (modelId.includes("nova")) return "Nova 2.0 Lite";
   if (modelId.startsWith("openai:")) {
@@ -116,7 +129,8 @@ function extractModelName(key: string, tokens: Map<string, string>): string {
       : rawRegion === "global" ? "Global"
       : rawRegion === "us" ? "US"
       : rawRegion;
-    const fam = modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
+    const fam = modelId.includes("gpt-6.1-sol") ? "GPT 6.1 Sol"
+      : modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
       : modelId.includes("gpt-6-sol") ? "GPT 6 Sol"
       : modelId.includes("gpt-6-luna") ? "GPT 6 Luna"
       : modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
