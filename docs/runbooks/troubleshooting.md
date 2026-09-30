@@ -2,6 +2,66 @@
 
 증상별 확인과 조치. 배포 절차는 [deploy.md](deploy.md), 되돌리기는 [rollback.md](rollback.md)를 본다.
 
+## backend OOM — 전체 API 502/503/504, 컨테이너 exit 137 (2026-09-30 `/analysis`)
+
+**배경**: backend 서비스는 태스크 하나(1024 MiB, desiredCount 1)다. 컨테이너가 메모리 한도를 넘으면 ECS가 SIGKILL로 죽이고(exit
+137), 새 태스크가 헬스체크를 통과할 때까지 `/api/*` 전체가 CloudFront에서 502/503/504다(2026-09-30은 약 1~2분). 2026-09-30 16:01 UTC
+(v2.32.0)에는 공개 `/analysis` 화면이 `/api/analysis/stop-reasons`와 `/api/analysis/output-length`(기본 7d)를 동시에 불렀고, 두 요청이
+창 안의 success 행(약 12만 행)을 `prompt`, `output_text`까지 담은 ORM 엔티티로 모두 읽었다. psycopg2가 결과 전체를 버퍼링하는 몫까지
+요청 하나가 0.3~0.55 GB라 첫 로드에서 메모리가 20%에서 57%로 올랐고, 두 번째 로드에서 OOM이 났다. 같은 유형의 앞선 사고는 2026-09-01
+`/api/results/stats`(기간을 주지 않으면 테이블 전체, v2.22.1에서 24시간 기본값)다.
+
+수정 뒤에는 공개 집계 엔드포인트가 엔티티를 읽지 않는다. 분석 두 엔드포인트는 DB에서 `GROUP BY`로 센 값만 읽고, 신뢰성, 효율성, 비용
+추이, 결과 통계는 쓰는 열만 `yield_per`로 나눠 읽는다(PostgreSQL 서버 측 커서). 창은 화면이 고를 수 있는 가장 긴 창까지다. 분석과 비용
+추이는 30d, 신뢰성과 효율성은 7d이고, 넘거나 읽을 수 없는 `window`는 DB를 읽기 전에 422로 끝난다(`backend/window_spec.py`). 결과 통계는
+`run_id` 없이 31일보다 이른 `start_time`을 31일 전으로 당긴다.
+
+### 증상
+
+- 모든 화면이 불러오기 오류이고 `/api/health`까지 502/503/504다. 몇 분 안에 저절로 돌아온다(새 태스크 기동).
+- ECS 서비스 이벤트에 backend 태스크 정지와 새 태스크 시작이 연달아 있다. 정지한 태스크의 `backend` 컨테이너는 `exitCode` 137,
+  `reason` `OutOfMemoryError: Container killed due to memory usage`다.
+- `/ecs/backend` 로그는 traceback 없이 끊긴다(SIGKILL이라 Python이 남기지 못한다). uvicorn access log는 응답을 보낼 때 찍히므로 OOM을
+  낸 요청 자체는 남지 않고, 직전에 끝난 같은 종류의 요청(2026-09-30은 첫 `/analysis` 로드의 두 요청)이 남는다.
+- 서비스 `MemoryUtilization`이 요청 몇 번에 수십 %씩 계단처럼 오른다.
+
+### 확인
+
+```bash
+REGION=ap-northeast-2
+# 1. 서비스 이벤트 — 태스크 정지와 시작 시각
+aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION \
+  --query 'services[0].events[:10].[createdAt,message]' --output text
+
+# 2. 정지한 태스크의 종료 사유 — 정지한 태스크는 약 1시간만 조회된다. containers[0]은 GuardDuty 사이드카일 수 있어 이름으로 고른다
+for T in $(aws ecs list-tasks --cluster bedrock-monitor --service-name backend --desired-status STOPPED \
+    --region $REGION --query 'taskArns[]' --output text); do
+  aws ecs describe-tasks --cluster bedrock-monitor --tasks "$T" --region $REGION \
+    --query 'tasks[].[stoppedAt,stoppedReason,containers[?name==`backend`].[exitCode,reason]]' --output text
+done
+
+# 3. 메모리 추이(1분 최대값, 사고 전후 1시간) — 계단 모양이면 요청 단위 적재
+aws cloudwatch get-metric-statistics --namespace AWS/ECS --metric-name MemoryUtilization \
+  --dimensions Name=ClusterName,Value=bedrock-monitor Name=ServiceName,Value=backend \
+  --start-time <UTC 시작> --end-time <UTC 끝> --period 60 --statistics Maximum --region $REGION
+
+# 4. OOM 직전에 끝난 요청 — access log의 마지막 줄들(죽인 요청은 응답 전에 끊겨 없다)
+aws logs tail /ecs/backend --since 2h --region $REGION | grep -E '"GET /api/' | tail -40
+```
+
+- 2번이 `exitCode` 137이고 `OutOfMemoryError`면 이 문서의 경우다. 다른 `stoppedReason`(헬스체크 실패, 배포 서킷 브레이커)은
+  [rollback.md](rollback.md)와 [deploy.md](deploy.md)를 본다.
+- 4번 마지막 줄들에 창이 큰 공개 집계 요청(`window=`, `start_time=`, `hours=`)이 몰려 있으면 요청 단위 적재다.
+
+### 조치
+
+- 이미 복구된 뒤라면 할 일은 원인 요청 확인이다. 운영 이미지가 v2.32.0 이하(창 상한 없음)면 이 수정이 들어간 이미지로 배포한다.
+- 새 엔드포인트나 조회를 추가할 때 지킬 것: 공개 집계에서 `db.query(ProbeResult)` 엔티티를 읽지 않는다. 가능하면 SQL로 집계하고,
+  값 목록이 필요하면(백분위) 쓰는 열만 `yield_per`로 읽는다. 창에는 화면 최대값의 상한을 둔다(`window_spec.parse_window`, `Query(le=…)`).
+  응답은 `backend/tests/test_read_scan_bounds.py`의 골든으로 고정돼 있다.
+- 태스크 메모리를 늘리는 것(`cdk/lib/constructs/fargate-service.ts` `memoryMiB`, 기본 1024)은 임시방편이다. 창 상한이 없는
+  엔드포인트는 창을 키우면 다시 넘는다.
+
 ## 단가 열 마이그레이션 실패 — `/api/pricing` 500 `UndefinedColumn` (v2.31.0, ADR-030 v2.31.0 부록)
 
 **배경**: v2.31.0은 이미 있는 `price_history` 테이블에 캐시와 긴 컨텍스트 단가 열 7개(`cache_read_per_mtok`,

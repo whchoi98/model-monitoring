@@ -220,7 +220,9 @@ Latest results across all models.
 
 ### GET /api/results/stats
 Statistics: avg, p50, p95, p99 per model, successful probes only. Optional `start_time`, `end_time`, `run_id`, `category`.
-Without `start_time` and `run_id` the window is the last 24 hours.
+Without `start_time` and `run_id` the window is the last 24 hours. Without `run_id`, a `start_time` older than 31 days is
+read as now − 31 days (the History dialog offers up to 30 days; the extra day absorbs browser clock skew) and the response
+`start_time` is that clamped value.
 
 ---
 
@@ -303,18 +305,26 @@ in v2.31.0 are display-only and never enter `row_cost`, and the `openai-list:<fa
 channel-compare `channel` is `Anthropic (CP on AWS)`, `Bedrock Global`, `Bedrock US`, `Bedrock Nova`, `Bedrock <aws-region>`
 (`bedrock:<region>:<fm-id>` keys, `Bedrock ap-northeast-2` since v2.32.0; a malformed key is `Other`) or `OpenAI`.
 
+`window` is an integer with `m`, `h` or `d` (a value without a unit reads as 24 hours). The trend accepts at most `30d`; a
+longer or unreadable window is HTTP 422 with a Korean `detail`. Summary and channel-compare aggregate in SQL and accept any
+window; only an unreadable one is a 422.
+
 ### GET /api/reliability/multi-channel
 Success rate + error buckets grouped by family/channel. Channels come in the order `Anthropic (CP on AWS)`, `Bedrock Global`,
 `Bedrock US`, `Bedrock <aws-region>` (a Bedrock label whose parenthesis is an AWS region code, e.g. `Bedrock ap-northeast-2` for
 the Seoul in-region channels, v2.32.0; any other non-Global Bedrock label stays in `Bedrock US`), `OpenAI <region>` (`Global`,
-`US`, Mantle regions), other.
+`US`, Mantle regions), other. `window` (default `24h`) accepts at most `7d`, the longest the page offers; a longer or
+unreadable window is HTTP 422.
 
 ### GET /api/efficiency/score
 0-100 weighted Token Efficiency Score per workload category. The cost component averages the per-row cost of successful rows
-that have a price (the unit price in effect at each probe's time, v2.30.0).
+that have a price (the unit price in effect at each probe's time, v2.30.0). `window` (default `24h`) accepts at most `7d`; a
+longer or unreadable window is HTTP 422.
 
 ### GET /api/analysis/stop-reasons · /api/analysis/output-length
-Stop-reason distribution + output-length histograms.
+Stop-reason distribution + output-length histograms, successful probes only. `window` (default `7d`) accepts at most `30d`,
+the longest the page offers; a longer or unreadable window is HTTP 422 (`{"detail": "window는 최대 30d까지 …"}`), and the
+response `window` echoes the request string. Both count in SQL (`GROUP BY` per model and raw value) since the 2026-09-30 OOM.
 
 ---
 
