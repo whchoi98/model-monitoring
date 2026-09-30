@@ -70,18 +70,33 @@ def dataset(monkeypatch):
         engine.dispose()
 
 
+# 지우는 env — 프로필, 재시도 모드와 횟수, defaults_mode(connect_timeout과 재시도 모드를 바꾼다)는 client 설정을, 세션
+# 토큰과 AWS_IGNORE_CONFIGURED_ENDPOINT_URLS는 가짜 Bedrock 연결(서명, endpoint)을 바꾼다.
+_AWS_ENV_UNSET = ("AWS_PROFILE", "AWS_DEFAULT_PROFILE", "AWS_RETRY_MODE", "AWS_MAX_ATTEMPTS", "AWS_DEFAULTS_MODE",
+                  "AWS_SESSION_TOKEN", "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS")
+
+
+def _isolate_aws(monkeypatch, tmp_path) -> None:
+    """개발자 머신의 AWS 설정을 읽지 않는 boto3 — 어느 머신에서나 같은 client 설정이 나온다.
+
+    설정 파일과 자격 증명 파일은 없는 경로로, 위 env는 지운다. 기본 session도 새로 만든다(앞 테스트가 다른 env로 만든
+    session을 쓰지 않게).
+    """
+    monkeypatch.setenv("AWS_REGION", "ap-northeast-2")
+    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "no-config"))
+    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "no-credentials"))
+    for name in _AWS_ENV_UNSET:
+        monkeypatch.delenv(name, raising=False)
+    monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)
+
+
 @pytest.fixture()
 def fake(monkeypatch, tmp_path):
+    _isolate_aws(monkeypatch, tmp_path)
     server = FakeBedrock()
     monkeypatch.setenv("AWS_ENDPOINT_URL_BEDROCK_RUNTIME", server.url)
     monkeypatch.setenv("AWS_ACCESS_KEY_ID", "AKIDEXAMPLE")
     monkeypatch.setenv("AWS_SECRET_ACCESS_KEY", "fake-secret-for-a-local-socket")
-    monkeypatch.setenv("AWS_REGION", "ap-northeast-2")
-    monkeypatch.setenv("AWS_CONFIG_FILE", str(tmp_path / "no-config"))
-    monkeypatch.setenv("AWS_SHARED_CREDENTIALS_FILE", str(tmp_path / "no-credentials"))
-    for name in ("AWS_SESSION_TOKEN", "AWS_PROFILE", "AWS_IGNORE_CONFIGURED_ENDPOINT_URLS"):
-        monkeypatch.delenv(name, raising=False)
-    monkeypatch.setattr(boto3, "DEFAULT_SESSION", None)  # 바꾼 env로 기본 session을 새로 만든다
     monkeypatch.setattr(agent.bedrock, "INSIGHTS_READ_TIMEOUT_S", READ_TIMEOUT_S)
     monkeypatch.setattr(agent.bedrock, "INSIGHTS_CONNECT_TIMEOUT_S", READ_TIMEOUT_S)
     try:
@@ -106,8 +121,31 @@ def _only_saved(factory):
 # ───────────────────────────────────────────────────────────────────────
 
 
-def test_insights_client_is_dedicated_and_the_chat_client_is_unchanged(monkeypatch):
-    monkeypatch.setenv("AWS_REGION", "ap-northeast-2")
+def _developer_aws_setup(monkeypatch, tmp_path) -> None:
+    """개발자 머신에 있을 법한 AWS 설정. 격리하지 않으면 챗봇 client의 재시도 모드, 횟수, connect_timeout이 바뀐다.
+
+    botocore는 자격 증명 파일의 프로필 키도 설정에 합친다 — 그래서 자격 증명 파일의 [default]에 둔 max_attempts도 client에 간다.
+    """
+    config = tmp_path / "developer-config"
+    config.write_text("[default]\nretry_mode = adaptive\nmax_attempts = 7\n"
+                      "[profile dev]\nretry_mode = standard\nmax_attempts = 3\ndefaults_mode = standard\n")
+    credentials = tmp_path / "developer-credentials"
+    credentials.write_text("[default]\naws_access_key_id = AKIDEXAMPLE\naws_secret_access_key = developer-secret\n"
+                           "max_attempts = 4\n"
+                           "[dev]\naws_access_key_id = AKIDEXAMPLE\naws_secret_access_key = developer-secret\n")
+    env = {"AWS_CONFIG_FILE": str(config), "AWS_SHARED_CREDENTIALS_FILE": str(credentials), "AWS_PROFILE": "dev",
+           "AWS_DEFAULT_PROFILE": "dev", "AWS_RETRY_MODE": "adaptive", "AWS_MAX_ATTEMPTS": "9",
+           "AWS_DEFAULTS_MODE": "standard"}
+    for name, value in env.items():
+        monkeypatch.setenv(name, value)
+    monkeypatch.setattr(boto3, "DEFAULT_SESSION", boto3.Session())  # 앞 테스트가 이 설정으로 만들어 둔 기본 session
+
+
+@pytest.mark.parametrize("developer_aws", [False, True], ids=["host-aws-setup", "developer-aws-setup"])
+def test_insights_client_is_dedicated_and_the_chat_client_is_unchanged(monkeypatch, tmp_path, developer_aws):
+    if developer_aws:
+        _developer_aws_setup(monkeypatch, tmp_path)
+    _isolate_aws(monkeypatch, tmp_path)
     client = agent.bedrock.insights_client()
     cfg = client.meta.config
     assert (cfg.connect_timeout, cfg.read_timeout) == (10, 60)
