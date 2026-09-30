@@ -349,16 +349,22 @@ aws ecs stop-task --cluster bedrock-monitor --task <taskArn> --region $REGION \
   신뢰성 화면(`network` 버킷)에 오류로 보이는 것이 의도한 동작이다. 상한 조정이 필요하면 `PROBE_WALL_CLOCK_S`
   env를 바꾼다(모델별 사이클 타임아웃은 max(120초, 상한 + 30초)로 따라간다).
 
-## GPT on AWS 벤치 카드 누락 — `skipped=`, 갈래 정지 (v2.32.0 두 갈래)
+## GPT on AWS 벤치 카드 누락 — `skipped=`, 갈래 정지 (v2.32.1 호스트별 네 갈래)
 
-**배경**: GptBench 태스크(`python -m gptbench_runner --once`, `rate(15 minutes)`)가 GPT 21채널(Mantle 인리전 12 + CRIS 9)을 두
-갈래로 동시에 측정한다(v2.32.0, ADR-031). `cris` 갈래는 Global, US CRIS 9채널(Bedrock Runtime OpenAI 호환 호스트), `mantle` 갈래는
-인리전 12채널(`bedrock-mantle.<region>`)이고, 갈래 안에서는 채널을 `_BENCH_SPECS` 순서대로 하나씩 측정한다(워밍업 1 +
-`GPT_BENCH_RUNS` 10회). 사이클 데드라인 `GPT_BENCH_DEADLINE`(780초)은 두 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만
-건너뛴다(GPT 6.1 Sol이 갈래마다 끝이라 컷이 신규 채널부터 떨어진다). 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(기본 885초)가
-지나도 끝나지 않는 갈래는 기다리지 않는다. 이미 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`,
-시작하지 못한 채널은 `라벨`로 skip에 보고한다. DB 저장은 메인 스레드가 채널 단위로 한다. 18채널을 한 줄로
-순차 측정하던 v2.31.x의 2026-09-30 24시간 실측(96사이클)은 중앙값 623초, p90 750초, 최대 790초였고 9사이클이 끝 채널을 건너뛰었다.
+**배경**: GptBench 태스크(`python -m gptbench_runner --once`, `rate(15 minutes)`)가 GPT 21채널(Mantle 인리전 12 + CRIS 9)을
+호스트별 갈래로 동시에 측정한다(ADR-031). `cris` 갈래는 Global, US CRIS 9채널(Bedrock Runtime OpenAI 호환 호스트)이고, 인리전
+채널은 Mantle 리전(`bedrock-mantle.<region>`)마다 한 갈래 `mantle-<region>`이다. 지금은 `mantle-us-east-1` 6, `mantle-us-east-2` 3,
+`mantle-us-west-2` 3채널이고, 새 Mantle 리전은 코드 수정 없이 자기 갈래를 얻는다. 갈래 안에서는 채널을 `_BENCH_SPECS` 순서대로
+하나씩 측정한다(워밍업 1 + `GPT_BENCH_RUNS` 10회, 같은 호스트 호출은 겹치지 않는다). 사이클 데드라인 `GPT_BENCH_DEADLINE`(780초)은
+모든 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만 건너뛴다(GPT 6.1 Sol은 `cris`와 `mantle-us-east-1` 갈래의 끝이라 그
+갈래의 컷이 신규 채널부터 떨어진다). 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(기본 885초)가 지나도 끝나지 않는 갈래는
+기다리지 않는다. 이미 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`, 시작하지 못한 채널은
+`라벨`로 skip에 보고한다. DB 저장은 메인 스레드가 채널 단위로 한다.
+
+**이력**: 18채널을 한 줄로 순차 측정하던 v2.31.x의 2026-09-30 24시간 실측(96사이클)은 중앙값 623초, p90 750초, 최대 790초였고
+9사이클이 끝 채널을 건너뛰었다. v2.32.0은 `cris` 9, `mantle` 12 두 갈래였다. 배포 뒤 GPT 5.4 (us-east-2)가 업스트림 저하로 느려지자
+(TTFT 중앙값 34초, 11호출 합계 427초, 527초) `mantle` 갈래가 783초, 802초로 데드라인을 넘겨 us-east-1 끝 채널(GPT 6 Sol, GPT 6 Luna,
+GPT 6.1 Sol)이 잘렸다(210행 중 205행, 181행). 그래서 v2.32.1에서 사용자 결정(2026-09-30)으로 Mantle을 리전별 갈래로 나눴다.
 
 ### 증상
 
@@ -375,22 +381,38 @@ aws logs tail /ecs/gptbench --since 2h --region $REGION \
   | grep -E "cycle start|GPT bench lanes|lane done|cycle done|did not finish|lane .* stopped|WallClockTimeout|deadline exceeded"
 ```
 
-- 정상: `GPT bench lanes: cris=9 mantle=12`, 갈래마다 `GPT bench lane done: <lane> channels=N elapsed=Ns` 한 줄, 끝에
-  `GPT bench cycle done: rows=210 errors=0 skipped=none elapsed=…s`.
+- 정상: `GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3`, 갈래마다
+  `GPT bench lane done: <lane> channels=N elapsed=Ns` 한 줄(네 줄), 끝에 `GPT bench cycle done: rows=210 errors=0 skipped=none elapsed=…s`.
+  채널별 실측 기준 `lane done` elapsed는 `mantle-us-east-1` 약 240초, `mantle-us-east-2` 약 590초(느린 GPT 5.4 포함),
+  `mantle-us-west-2` 약 80초이고, `cris`는 v2.32.0 실측 409초, 443초다. 사이클 elapsed는 가장 느린 갈래가 정한다.
+- **느린 호스트 하나 찾기**: 한 갈래의 `lane done` elapsed만 780초 가까이 가고 다른 갈래는 일찍 끝나면 그 갈래의 호스트(리전) 하나가
+  느린 것이다. `skipped=`에는 그 갈래의 뒤 채널만 찍힌다(예: `mantle-us-east-2`면 GPT 5.5, GPT 5.6 Terra의 us-east-2). 어느 채널이
+  느린지는 그 리전 채널의 TTFT로 본다.
+
+  ```bash
+  curl -s https://d36s7ml54xwemr.cloudfront.net/api/gptbench/latest \
+    | jq -r '.channels[] | select(.region=="us-east-2") | "\(.model_name) ttft=\(.median_ttft_ms) p95=\(.p95_ttft_ms)"'
+  ```
+
+  2026-09-30 사례는 GPT 5.4 (us-east-2) TTFT 중앙값 34초였다.
 - `cycle deadline exceeded - skipping <라벨>`과 `skipped=[…]`만 있으면 데드라인 컷이다. `lane done`의 `elapsed`가 780초 가까운
   갈래가 원인이다.
-- `GPT bench lane <lane> did not finish within 885s - abandoning N channel(s)`는 watchdog(`GPT_BENCH_CALL_TIMEOUT`)도 풀지 못한
-  정지다(N은 skip으로 보고되는 채널 수이고, 측정이 덜 끝난 진행 중 채널을 포함한다. 다 측정한 진행 중 채널은 완료로 저장돼 세지 않는다). 진행 중이던 채널은 끝난 회차까지 저장되고 `skipped=`에 `라벨 (run N+)`로,
-  시작하지 못한 채널은 `라벨`로 찍힌다. 워밍업에서 멈췄으면 `(run 1+)`다. 스레드는 daemon이라 태스크 종료를 막지 않는다.
+- `GPT bench lane <lane> did not finish within 885s - abandoning N channel(s)`(예: `GPT bench lane mantle-us-east-2 …`)는
+  watchdog(`GPT_BENCH_CALL_TIMEOUT`)도 풀지 못한 정지다(N은 skip으로 보고되는 그 갈래의 채널 수이고, 측정이 덜 끝난 진행 중 채널을
+  포함한다. 다 측정한 진행 중 채널은 완료로 저장돼 세지 않는다). 진행 중이던 채널은 끝난 회차까지 저장되고 `skipped=`에
+  `라벨 (run N+)`로, 시작하지 못한 채널은 `라벨`로 찍힌다. 워밍업에서 멈췄으면 `(run 1+)`다. 스레드는 daemon이라 태스크 종료를
+  막지 않는다.
 - `GPT bench lane <lane> stopped: <예외>`는 갈래가 예외로 멈춘 것이다. 그 갈래의 진행 중 채널은 끝난 회차까지 저장되고 `라벨 (run N+)`로
   보고된다. 다른 갈래는 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를 다시 던지므로 태스크가 traceback과 함께 비정상 종료한다.
 
 ### 조치
 
-- 데드라인 컷이 반복되면 GptBench task env로 `GPT_BENCH_RUNS`(채널당 호출 수, 기본 10)를 줄이는 것이 첫 레버다.
-  `GPT_BENCH_DEADLINE`은 올릴 여유가 없다 — 기본값에서 데드라인 780초 + 호출 상한 90초 + 15초 = 885초라 15분 스케줄(900초)까지
-  15초뿐이다. 데드라인을 올려야 하면 `GPT_BENCH_CALL_TIMEOUT`을 같은 만큼 낮춰 합계를 900초 미만으로 유지한다. 대안 비교(갈래 수,
-  주기 변경)는 ADR-031 Options "21채널 벤치 데드라인"에 있다.
-- 같은 채널이 매 사이클 `WallClockTimeout`이면 그 채널 호스트 문제다. 갈래를 나눈 이유(호스트가 다르면 서로의 대기열에 끼지 않는다)대로
-  다른 갈래의 채널은 영향을 받지 않는다.
+- 컷이 한 갈래에만 반복되면 그 호스트의 업스트림 저하다. 다른 갈래는 영향을 받지 않고 컷은 그 갈래의 뒤 채널에만 떨어지므로 코드로
+  고칠 것이 없다. 위 TTFT 확인으로 원인 채널을 기록하고 회복을 기다린다.
+- 여러 갈래에서 데드라인 컷이 반복되면 GptBench task env로 `GPT_BENCH_RUNS`(채널당 호출 수, 기본 10)를 줄이는 것이 첫 레버다(전 채널의
+  표본 수가 바뀐다). `GPT_BENCH_DEADLINE`은 올릴 여유가 없다 — 기본값에서 데드라인 780초 + 호출 상한 90초 + 15초 = 885초라 15분
+  스케줄(900초)까지 15초뿐이다. 데드라인을 올려야 하면 `GPT_BENCH_CALL_TIMEOUT`을 같은 만큼 낮춰 합계를 900초 미만으로 유지한다.
+  대안 비교(갈래 수, 주기 변경)는 ADR-031 Options "21채널 벤치 데드라인"과 Decision 5의 v2.32.1 후속에 있다.
+- 같은 채널이 매 사이클 `WallClockTimeout`이면 그 채널 호스트 문제다. 갈래를 호스트별로 나눴으므로(호스트가 다르면 서로의 대기열에
+  끼지 않는다) 다른 갈래의 채널은 영향을 받지 않는다. v2.32.1부터 Mantle 리전도 갈래가 따로라 다른 Mantle 리전 채널도 영향을 받지 않는다.
 - 갈래 예외는 코드 결함이다. traceback을 보관하고 `backend/gptbench.py`를 고친다. 그 사이클의 다른 갈래 결과는 이미 저장돼 있다.

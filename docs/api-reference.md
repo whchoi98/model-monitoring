@@ -558,13 +558,19 @@ Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --o
 Mantle in-region 12 + CRIS 9: GPT 5.4 (us-east-1, us-east-2, us-west-2), GPT 5.5 (us-east-1, us-east-2), GPT 5.6 Terra (Global,
 us-east-1, us-east-2, us-west-2), GPT 6 Astra (Global, US, us-west-2), GPT 6 Sol and GPT 6 Luna (Global, US, us-east-1), GPT 6.1 Sol
 (Global, US, us-east-1, v2.32.0) — with a fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per
-channel. Since v2.32.0 the cycle runs two lanes at the same time, `cris` (the 9 Global and US CRIS channels on the Bedrock Runtime
-OpenAI-compatible hosts) and `mantle` (the 12 in-region channels on `bedrock-mantle.<region>`); inside a lane the channels stay
-sequential in `_BENCH_SPECS` order. The task logs `GPT bench lanes: cris=9 mantle=12` at start and
-`GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main thread saves and commits each finished channel. Each call has a wall-clock cap
+channel. The cycle runs one lane per host at the same time: `cris` (the 9 Global and US CRIS channels on the Bedrock Runtime
+OpenAI-compatible hosts, kept as one lane) and one `mantle-<region>` lane per Mantle region (`bedrock-mantle.<region>`), today
+`mantle-us-east-1` (6), `mantle-us-east-2` (3) and `mantle-us-west-2` (3). The lane name comes from the channel region, so a new
+Mantle region gets its own lane. Inside a lane the channels stay sequential in `_BENCH_SPECS` order, so calls to one host never
+overlap. The task logs `GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3` at start and
+`GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main thread saves and commits each finished channel. From
+per-channel timings the lanes take about 240 s (us-east-1), 590 s (us-east-2, with the slow GPT 5.4) and 80 s (us-west-2).
+v2.32.0 ran two lanes, `cris` 9 and `mantle` 12; v2.32.1 split `mantle` per region after GPT 5.4 (us-east-2) slowed on
+2026-09-30 and pushed the single Mantle lane past the deadline (783 s, 802 s), which cut the us-east-1 tail channels (user
+decision). Each call has a wall-clock cap
 (`GPT_BENCH_CALL_TIMEOUT`, default 90 s — an expired call is stored as an error row `WallClockTimeout: …`), the client never retries
-(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by both lanes; GPT 6.1 Sol is
-last in each lane). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
+(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by all lanes; GPT 6.1 Sol is
+last in the lanes it belongs to, `cris` and `mantle-us-east-1`). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
 stored, the runs its in-flight channel already finished are stored and that channel is reported as `label (run N+)`, and the
 channels it never started are reported as `label` (a lane that raises is handled the same way). The 15 s grace is a best-effort
 bound, because the watchdog cannot cut the pre-stream phase (connect, request write, response headers).
