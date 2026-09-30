@@ -9,6 +9,9 @@ probe_results 행을 prompt, output_text까지 담은 ORM 엔티티로 모두 �
 tests/fixtures/read_goldens_v2320.json에 고정했다. 조회 방식을 바꾼 뒤에도 키 순서까지 같아야 한다.
 응답을 의도적으로 바꾸는 변경이 아니면 골든을 다시 만들지 않는다(다시 만들 때:
 FREEZE_READ_GOLDENS=1 python3.12 -m pytest tests/test_read_scan_bounds.py -k freeze).
+
+스캔 상한: SQL 캡처(before_cursor_execute)로 probe_results의 Text 열(prompt, output_text)을 SELECT하지 않는지,
+창 상한을 넘는 요청이 DB를 읽기 전에 422로 끝나는지 확인한다. 분석 두 엔드포인트는 GROUP BY로 센 값만 읽는다.
 """
 
 import json
@@ -17,13 +20,14 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
 import pytest
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
 import models
+import window_spec
 from database import get_db
 from pricing_sources import EPOCH
 from routers import analysis as analysis_router
@@ -257,3 +261,82 @@ def test_response_matches_frozen_golden(env, name):
     got = resp.json()
     assert got == golden["body"]
     assert _canonical(got) == _canonical(golden["body"])  # dict 키 순서까지
+
+
+# ───────────────────────────────────────────────────────────────────────
+# 스캔 상한 — SELECT 열과 창 상한
+# ───────────────────────────────────────────────────────────────────────
+
+ANALYSIS_PATHS = ("/api/analysis/stop-reasons", "/api/analysis/output-length")
+_TEXT_COLUMNS = ("probe_results.prompt", "probe_results.output_text")
+
+
+def _probe_result_selects(statements) -> list[str]:
+    return [sql for sql, _ in statements if "FROM probe_results" in sql]
+
+
+@pytest.mark.parametrize("path", ANALYSIS_PATHS)
+@pytest.mark.parametrize("query", ["", "?window=30d&category=reasoning"])
+def test_analysis_reads_grouped_counts_not_entities(env, path, query):
+    client, statements = env
+    statements.clear()
+    assert client.get(path + query).status_code == 200
+    selects = _probe_result_selects(statements)
+    assert len(selects) == 1, selects
+    sql = selects[0]
+    for column in (*_TEXT_COLUMNS, "probe_results.error_message", "probe_results.id AS probe_results_id"):
+        assert column not in sql, sql
+    assert "GROUP BY" in sql, sql
+
+
+@pytest.mark.parametrize("path", ANALYSIS_PATHS)
+@pytest.mark.parametrize("window", ["31d", "3650d", "99999h", "721h", "43201m"])
+def test_analysis_window_over_30_days_is_rejected_before_any_scan(env, path, window):
+    client, statements = env
+    statements.clear()
+    resp = client.get(f"{path}?window={window}")
+    assert resp.status_code == 422
+    assert "30d" in resp.json()["detail"]
+    assert _probe_result_selects(statements) == []
+
+
+UNREADABLE_WINDOWS = [
+    "xd", "1e3h", "d",
+    pytest.param("99999999999d", id="timedelta-overflow"),
+    pytest.param("9" * 5000 + "h", id="5000-digit-int"),
+]
+
+
+@pytest.mark.parametrize("path", ANALYSIS_PATHS)
+@pytest.mark.parametrize("window", UNREADABLE_WINDOWS)
+def test_analysis_unreadable_window_is_422_not_500(env, path, window):
+    client, statements = env
+    statements.clear()
+    resp = client.get(f"{path}?window={window}")
+    assert resp.status_code == 422
+    assert "window" in resp.json()["detail"]
+    assert _probe_result_selects(statements) == []
+
+
+@pytest.mark.parametrize("path", ANALYSIS_PATHS)
+@pytest.mark.parametrize("window", ["30d", "720h", "43200m", "30D", " 7d "])
+def test_analysis_window_up_to_30_days_is_accepted(env, path, window):
+    client, _ = env
+    resp = client.get(path, params={"window": window})
+    assert resp.status_code == 200
+    assert resp.json()["window"] == window  # 요청 문자열을 그대로 돌려준다
+    assert resp.json()["rows"]
+
+
+def test_parse_window_keeps_the_no_unit_fallback_and_accepts_any_size_without_a_cap():
+    assert window_spec.parse_window("") == timedelta(hours=24)
+    assert window_spec.parse_window("abc") == timedelta(hours=24)  # 단위가 없으면 예전처럼 24h
+    assert window_spec.parse_window("7") == timedelta(hours=24)
+    assert window_spec.parse_window(" 7D ") == timedelta(days=7)
+    assert window_spec.parse_window("45m") == timedelta(minutes=45)
+    assert window_spec.parse_window("3650d") == timedelta(days=3650)  # 상한 없는 호출(cost summary)
+    cap = timedelta(days=30)
+    assert window_spec.parse_window("30d", max_window=cap) == cap
+    with pytest.raises(HTTPException) as exc:
+        window_spec.parse_window("31d", max_window=cap)
+    assert exc.value.status_code == 422
