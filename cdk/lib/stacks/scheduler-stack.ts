@@ -96,6 +96,7 @@ export class SchedulerStack extends cdk.Stack {
           actions: ["bedrock:InvokeModel", "bedrock:InvokeModelWithResponseStream", "bedrock:CountTokens"],
           // global.* inference profile은 cross-region 라우팅이라 region-less foundation-model
           // ARN 권한도 필요.
+          // 서울 in-region 온디맨드 FM(ap-northeast-2::foundation-model/anthropic.claude-*, v2.32.0)도 이 패턴으로 허용 (ADR-031).
           resources: [
             `arn:aws:bedrock:*::foundation-model/*`,
             `arn:aws:bedrock:${this.region}:${this.account}:inference-profile/*`,
@@ -241,7 +242,7 @@ export class SchedulerStack extends cdk.Stack {
           // US CRIS(us.openai.*)도 bedrock-mantle 호스트 미지원 — us-east-1 bedrock-runtime
           // OpenAI-compat 엔드포인트로만 호출 가능. GPT-6 Astra US 채널용 (v2.25.0, ADR-027).
           OPENAI_US_BASE_URL: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
-          // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 모델(5종, Opus 5.5 포함)이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
+          // Mantle /anthropic 리전 — ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측), 대표 모델 6종 중 Mantle 대상(Fable 5, Opus 5.5, Opus 5, Sonnet 5 — v2.32.0)이 서빙되는 us-east-1로 고정(사용자 결정). 패리티 messages_mantle도 같은 env를 읽음
           // MCP 커넥터 프로브용 공개 read-only MCP 서버 (서버 장애는 inconclusive로 격리).
           MANTLE_ANTHROPIC_REGION: "us-east-1",
           FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
@@ -257,6 +258,8 @@ export class SchedulerStack extends cdk.Stack {
           // 2026-09-23 사용자 결정으로 제외). 프로파일 id는 prober가 파생 (ADR-028).
           BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID: "openai.gpt-6-sol",
           BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID: "openai.gpt-6-luna",
+          // GPT-6.1 Sol (v2.32.0) — Mantle 인리전 us-east-1만(us-east-2/us-west-2 404 — 제외). 프로파일 id는 prober가 파생 (ADR-031).
+          BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID: "openai.gpt-6.1-sol",
           // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.
           ...(ENABLE_OPENAI_1P ? {
             OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
@@ -320,7 +323,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/parityrun",
     );
 
-    // GPT on AWS 벤치 (v2.18.0) — GPT 18채널(Mantle 인리전 11 + CRIS 7, v2.28.0) × 10회 TTFB/TTFT 측정, 15분 주기.
+    // GPT on AWS 벤치 (v2.18.0) — GPT 21채널(Mantle 인리전 12 + CRIS 9 — GPT-6.1 Sol Global/US/us-east-1 v2.32.0) × 10회 TTFB/TTFT 측정, 15분 주기.
     // OpenAI bearer 키(secret)만 사용 — bedrock IAM 불필요하지만 autoprober role 재사용 (패턴 통일).
     const gptBenchTaskDef = buildTaskDef(
       "GptBenchTaskDef",
@@ -330,8 +333,8 @@ export class SchedulerStack extends cdk.Stack {
     );
 
     // Claude API Features 검증 (v2.23.0) — 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)
-    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 5모델 실행-증거, 일 1회
-    //   = 813 + 162 = 975셀 (v2.28.0, Opus 5.5 편입).
+    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 6모델 실행-증거, 일 1회
+    //   = 946 + 224 = 1170셀 (v2.32.0, Sonnet 5.5 편입 — Mantle 미서빙 N/A. 서빙하면 983 + 187).
     // bedrock:* + bedrock-mantle:* IAM 체인이 필요하므로 autoprober role 재사용. CP는 API 키(secret).
     const featuresTaskDef = buildTaskDef(
       "FeaturesVerifyTaskDef",
@@ -340,7 +343,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/features",
     );
 
-    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 55채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
+    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 62채널(v2.32.0) + OpenAI 공식 가격 9채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
     // price_history에 기록한다(50% 초과 변화는 검토 대기). 같은 env/secret(buildTaskDef 기본값)으로 CP 디스커버리와
     // OpenAI 채널 등록을 AutoProber와 똑같이 해야 활성 채널 집합이 맞는다. extraEnvironment 없음.
     const pricingSyncTaskDef = buildTaskDef(
@@ -432,7 +435,9 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "GptBenchSchedule", {
-      // 15분 주기 — 18채널 × (워밍업 1 + 10회) 예측 p50 ~10분, p90 ~12분, 데드라인 13분 (v2.28.0, 12채널 실측 p50 6.4분)
+      // 15분 주기 — 21채널 × (워밍업 1 + 10회). v2.32.0부터 두 갈래 병렬(CRIS 9채널 / Mantle 인리전 12채널, 갈래 안은
+      //   순차, GPT 6.1 Sol은 각 갈래 끝). 18채널 순차 실측(2026-09-30 24h) p50 623s, p90 750s, max 790s → 사이클이 약 절반,
+      //   데드라인 13분(780s)은 두 갈래가 공유하고 넘으면 그 갈래의 남은 채널만 skip (사용자 결정 2026-09-30, D2 대체)
       //   겹침 방지: 사이클 데드라인(GPT_BENCH_DEADLINE) + 호출당 wall-clock 상한(GPT_BENCH_CALL_TIMEOUT, 재시도 0회).
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(15)),
       description: "GPT on AWS bench: Mantle TTFB/TTFT every 15 minutes",
@@ -447,13 +452,13 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "FeaturesVerifySchedule", {
-      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 813 프로브 + 162 사전판정 = 975셀 (v2.28.0, Opus 5.5 편입)
-      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 5 모델,
+      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 946 프로브 + 224 사전판정 = 1170셀 (v2.32.0, Sonnet 5.5 편입)
+      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 6 모델,
       //   캐싱·부정 제어 포함 API 호출 수와 토큰 비용은 4모델 시절(≈ 800 호출, $5~7, Fable 지배)보다 프로브 수에 비례해 증가
       // v2.29.0 (사용자 요청 2026-09-23 "1일 한번 턴"): 매일 17:30 UTC(= 02:30 KST) 고정 cron. rate(24 hours)도 하루
       //   한 번이었지만(스케줄 생성 시각 기준, 약 17:28 UTC) 시각이 명시되지 않아 수동 트리거 런과 겹치면 하루 두 번처럼 보였다.
       schedule: scheduler.ScheduleExpression.cron({ minute: "30", hour: "17", timeZone: cdk.TimeZone.ETC_UTC }),
-      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 5 models, daily at 17:30 UTC",
+      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 6 models, daily at 17:30 UTC",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: featuresTaskDef,
         vpcSubnets: props.appSubnets,
@@ -465,7 +470,7 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     const pricingSyncSchedule = new scheduler.Schedule(this, "PricingSyncSchedule", {
-      // 12시간 주기 (v2.30.0, 사용자 결정 2026-09-26) — offers FM 18개 순차 약 25초 + Price List 1회 + Anthropic 문서 1회.
+      // 12시간 주기 (v2.30.0, 사용자 결정 2026-09-26) — offers FM 20개 순차 약 28초(v2.32.0 — 서울 in-region은 기존 FM 오퍼 재사용) + Price List 1회 + Anthropic 문서 1회 + OpenAI 문서 1회.
       //   런 전체 상한 300초(SYNC_DEADLINE_S), pg_try_advisory_lock(917350004)로 수동 실행과 겹치지 않는다
       //   (기다리지 않는 잠금 — 겹치면 두 번째 런은 즉시 exit 1, 런 행 없음).
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.hours(12)),

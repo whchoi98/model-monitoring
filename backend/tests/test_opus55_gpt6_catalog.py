@@ -58,19 +58,23 @@ def test_cp_discovery_with_live_model_order_labels_every_id_correctly():
         "opus-5": "claude-opus-5",
         "opus-4-8": "claude-opus-4-8",
         "opus-4-7": "claude-opus-4-7",
+        "sonnet-5-5": None,  # v2.32.0 타깃 — 2026-09-23 목록에는 아직 없다
         "sonnet-5": "claude-sonnet-5",
         "sonnet-4-6": "claude-sonnet-4-6",
         "haiku-4-5": "claude-haiku-4-5-20251001",
     }
     # 한 id가 두 라벨로 등록되는 일이 없어야 한다
-    assert len(set(matched.values())) == len(matched)
+    found = [v for v in matched.values() if v is not None]
+    assert len(set(found)) == len(found)
 
 
 def test_point_release_without_target_never_hijacks_base_label():
-    # 타깃이 아직 없는 미래 점 버전(sonnet-5-5)이 먼저 와도 Sonnet 5 라벨은 claude-sonnet-5로.
-    assert prober._match_anthropic_model("sonnet-5", ["claude-sonnet-5-5", "claude-sonnet-5"]) == "claude-sonnet-5"
+    # 타깃이 아직 없는 미래 점 버전(sonnet-5-6)이 먼저 와도 Sonnet 5 라벨은 claude-sonnet-5로.
+    # (sonnet-5-5는 v2.32.0부터 자기 타깃이 있어 예시를 한 단계 올렸다 — 가드 회귀 방지 유지)
+    assert "sonnet-5-6" not in dict(prober._ANTHROPIC_TARGETS)
+    assert prober._match_anthropic_model("sonnet-5", ["claude-sonnet-5-6", "claude-sonnet-5"]) == "claude-sonnet-5"
     # 점 버전만 서빙되면 base 라벨은 등록하지 않는다 (None → warning 후 skip).
-    assert prober._match_anthropic_model("sonnet-5", ["claude-sonnet-5-5"]) is None
+    assert prober._match_anthropic_model("sonnet-5", ["claude-sonnet-5-6"]) is None
     assert prober._match_anthropic_model("opus-5", ["claude-opus-5-5"]) is None
 
 
@@ -100,6 +104,11 @@ def test_opus55_reasoning_and_forced_tool_choice_flags():
     # Opus 5는 forced tool_choice 유지 — 마커가 opus-5 전체로 번지면 안 된다
     assert supports_forced_tool_choice("us.anthropic.claude-opus-5") is True
     assert supports_forced_tool_choice("anthropic:claude-opus-5") is True
+    # Sonnet 5.5는 forced tool/any 400(2026-09-30 실측, v2.32.0) — "sonnet-5-5" 마커가 Sonnet 5로 번지면 안 된다
+    assert supports_forced_tool_choice("global.anthropic.claude-sonnet-5-5") is False
+    assert supports_forced_tool_choice("anthropic:claude-sonnet-5-5") is False
+    assert supports_forced_tool_choice("global.anthropic.claude-sonnet-5") is True
+    assert supports_forced_tool_choice("anthropic.claude-sonnet-5") is True  # 서울 in-region FM id(runner가 넘기는 값)
     # 패리티 reasoning 셀 규칙은 Opus 5와 동일(비적용)
     assert is_reasoning_capable("global.anthropic.claude-opus-5-5") == is_reasoning_capable("global.anthropic.claude-opus-5")
 

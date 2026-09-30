@@ -102,8 +102,11 @@ def _normalize_target_model_id(model_id: str) -> str:
     → 첫 prefix 제거해 plain foundation-model ID로 시도.
     예: `global.anthropic.claude-opus-4-7` → `anthropic.claude-opus-4-7`
         `us.amazon.nova-2-lite-v1:0` → `amazon.nova-2-lite-v1:0`
+        `bedrock:ap-northeast-2:anthropic.claude-opus-5` → `anthropic.claude-opus-5`
     이미 plain ID면 그대로.
     """
+    if model_id.startswith("bedrock:"):  # in-region 키 bedrock:<region>:<FM id> → FM id (v2.32.0)
+        return model_id.split(":", 2)[-1]
     parts = model_id.split(".", 1)
     if len(parts) == 2 and parts[0] in ("global", "us", "eu", "apac"):
         return parts[1]

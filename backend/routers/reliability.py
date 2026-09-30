@@ -53,18 +53,24 @@ def _percentile(values: list[float], pct: float) -> Optional[float]:
 #  "Bedrock Nova 2.0 Lite (US)"         → family="Nova 2.0 Lite",     channel="Bedrock US"
 #  "OpenAI GPT 5.4 (us-east-1)"         → family="GPT 5.4",           channel="OpenAI us-east-1"
 #  "OpenAI GPT 5.5 (1P)"                → family="GPT 5.5",           channel="OpenAI 1P"
+#  "Bedrock Claude Opus 5 (ap-northeast-2)" → family="Claude Opus 5", channel="Bedrock ap-northeast-2" (in-region 온디맨드)
+#  "OpenAI GPT 6.1 Sol (Global)"        → family="GPT 6.1 Sol",       channel="OpenAI Global"
 _LABEL_RE = re.compile(r"^(Bedrock|Anthropic|OpenAI)\s+(.+?)\s+\(([^)]+)\)$")
+# Bedrock 라벨 괄호가 AWS 리전 코드면 in-region 채널(v2.32.0). "(Global)"과 리전 코드가 아닌 나머지는 지금처럼 US.
+_AWS_REGION_RE = re.compile(r"^[a-z]{2}(?:-[a-z]+)+-\d+$")
 
-# 채널 표시 순서: Anthropic → Bedrock Global → Bedrock US → OpenAI(Mantle 리전 + 1P) → 기타.
+# 채널 표시 순서: Anthropic → Bedrock Global → Bedrock US → Bedrock in-region(<aws-region>) → OpenAI(Global/US CRIS + Mantle 리전 + 1P) → 기타.
 _FIXED_CHANNEL_ORDER = {"Anthropic (CP on AWS)": 0, "Bedrock Global": 1, "Bedrock US": 2}
 
 
 def _channel_sort_key(channel: str) -> tuple[int, str]:
     if channel in _FIXED_CHANNEL_ORDER:
         return (_FIXED_CHANNEL_ORDER[channel], channel)
+    if channel.startswith("Bedrock "):
+        return (3, channel)  # Bedrock in-region ("Bedrock ap-northeast-2", v2.32.0) — Global/US는 위 고정 표에서 먼저 걸린다
     if channel.startswith("OpenAI"):
-        return (3, channel)  # OpenAI Mantle 리전들 + 1P direct
-    return (4, channel)      # 미분류 → 마지막
+        return (4, channel)  # OpenAI Global/US CRIS + Mantle 리전들 + 1P direct
+    return (5, channel)      # 미분류 → 마지막
 
 
 def _parse_label(name: str) -> tuple[str, str]:
@@ -78,9 +84,11 @@ def _parse_label(name: str) -> tuple[str, str]:
         # OpenAI — region(paren 내용)이 채널 식별자. Mantle: us-east-1/2/west-2, 1P direct: "1P".
         channel = f"OpenAI {region}"
     else:
-        # Bedrock — region에 따라 Global / US
+        # Bedrock — region에 따라 Global / in-region(<aws-region>) / US
         if "Global" in region:
             channel = "Bedrock Global"
+        elif _AWS_REGION_RE.match(region):
+            channel = f"Bedrock {region}"  # "Bedrock ap-northeast-2" (v2.32.0) — US에 합치면 서울 성공률이 US에 섞인다
         else:
             channel = "Bedrock US"
     return family, channel

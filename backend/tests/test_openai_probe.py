@@ -83,6 +83,7 @@ def _isolate_ambient_openai_env(monkeypatch):
         "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID",
         "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID",
         "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID",
+        "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID",
     ):
         monkeypatch.delenv(env, raising=False)
 
