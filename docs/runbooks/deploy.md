@@ -337,7 +337,7 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.ca
 ### 5-2. v2.29.0 배포 경로와 확인 (CP 10분 주기, FeaturesVerify 고정 cron)
 
 > v2.29.1부터 CP 기본 주기는 다시 매 사이클이다(§5-3). 아래 CP 확인(2~4번과 대시보드, 카테고리 항목, 사용량 상한 항목의
-> 시간당 54개)은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
+> 시간당 54개 — v2.32.0부터 CP 10채널이라 60개, 로그는 "10 due")은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
 > 그대로 유효하다.
 
 **배포 경로**: CDK 변경이 있다(FeaturesVerify 스케줄 `rate(24 hours)` → `cron(30 17 * * ? *)` Etc/UTC, AutoProber task def

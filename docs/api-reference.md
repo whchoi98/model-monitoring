@@ -435,8 +435,9 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   `openai_doc`, `manual_note`; `official_page` appears only as the fallback for a cited `source_id` of unknown format, which is
   listed with the id as its title and `url: null` so the footnote still resolves), bilingual titles (`openai-pricing` is "OpenAI
   API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title names the family, e.g. "<family> promotion
-  (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source, or the seed date 2026-09-27;
-  `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
+  (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source; before any sync observes it, the
+  source's seed check date from `pricing_seed.SEED_SOURCE_DATES` (2026-09-30 for the v2.32.0 Claude Sonnet 5.5 and GPT-6.1 Sol
+  offers), else the default seed date 2026-09-27; `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
   box and the Markdown export header carry them.
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
   last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels, plus one display-only
