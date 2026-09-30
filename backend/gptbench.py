@@ -1,6 +1,6 @@
-"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 18채널 TTFB/TTFT 정밀 측정 (v2.18.0).
+"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 21채널 TTFB/TTFT 정밀 측정 (v2.18.0).
 
-18채널 = Mantle 인리전 11 + CRIS 7 (GPT 6 Sol/Luna 편입 v2.28.0, 2026-09-23 사용자 결정).
+21채널 = Mantle 인리전 12 + CRIS 9 (GPT 6 Sol/Luna 편입 v2.28.0, GPT 6.1 Sol 편입 v2.32.0 — 2026-09-30 사용자 요청).
 
 docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   TTFB = 요청→첫 스트림 이벤트, TTFT = 요청→첫 output_text.delta, GAP = TTFT−TTFB ≈ thinking.
@@ -37,8 +37,8 @@ CYCLE_DEADLINE_S = float(os.environ.get("GPT_BENCH_DEADLINE", "780"))  # 13 min
 INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sentence."
 
 # (family, model-id env var, 제공 리전) — prober._OPENAI_MODEL_SPECS의 3P(Mantle) 서브셋.
-# 18채널 = Mantle 인리전 11 + CRIS 7 (v2.28.0).
-# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna).
+# 21채널 = Mantle 인리전 12 + CRIS 9 (v2.32.0).
+# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol).
 # pseudo-region "global" = Global CRIS 채널 (Terra v2.20.1, 2026-08-18 사용자 승인) —
 # 5.4/5.5는 global 프로파일 미지원. pseudo-region "us" = US CRIS (GPT 6 세대 전용 — Astra v2.25.1,
 # Sol/Luna v2.28.0). pseudo-region 채널의 모델 id/라벨은 prober 규약(_OPENAI_PSEUDO_REGIONS)으로 파생한다.
@@ -47,7 +47,9 @@ INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sente
 # 정기 재확인 대상 아님.
 # GPT 6 Sol/Luna는 v2.28.0(2026-09-23) 사용자 결정으로 편입 — Mantle 인리전은 us-east-1 단독
 # (us-east-2/us-west-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님). 목록 **끝**에 두는 이유: 사이클이 데드라인에
-# 걸리면 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에 떨어져 기존 12채널 시계열이 끊기지 않는다.
+# 걸리면 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에 떨어져 기존 채널 시계열이 끊기지 않는다.
+# GPT 6.1 Sol(v2.32.0): Global CRIS(Seoul bedrock-runtime 200), US CRIS(us-east-1 bedrock-runtime 200), Mantle us-east-1(구독 개시 401 후 200).
+# us-east-2/us-west-2는 404로 제외. 목록 끝 — 데드라인 컷이 6.1 Sol부터 떨어져 기존 18채널 시계열을 보존한다.
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),
     ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1", "us-east-2")),
@@ -55,6 +57,7 @@ _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-west-2")),
     ("GPT 6 Sol", "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", ("global", "us", "us-east-1")),
     ("GPT 6 Luna", "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", ("global", "us", "us-east-1")),
+    ("GPT 6.1 Sol", "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", ("global", "us", "us-east-1")),
 ]
 
 # ~55.8k 토큰 고정 컨텍스트 — 벤치 스크립트와 동일 (변경 시 캐시 무효 + 측정 연속성 깨짐 주의).

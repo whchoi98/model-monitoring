@@ -43,6 +43,7 @@ BENCH_ENV = {
     "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID": "openai.gpt-6-astra",
     "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID": "openai.gpt-6-sol",
     "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID": "openai.gpt-6-luna",
+    "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID": "openai.gpt-6.1-sol",
 }
 
 
@@ -96,17 +97,46 @@ def test_bench_channels_includes_gpt6_sol_luna_three_channels_each(bench_env):
         ("GPT 6 Luna", "us", "openai:us:us.openai.gpt-6-luna", "OpenAI GPT 6 Luna (US)"),
         ("GPT 6 Luna", "us-east-1", "openai:us-east-1:openai.gpt-6-luna", "OpenAI GPT 6 Luna (us-east-1)"),
     ]
-    # 목록 끝 6채널 — 데드라인 컷이 신규 채널에 떨어져 기존 12채널 시계열이 끊기지 않는다.
-    assert [c["family"] for c in chans[-6:]] == ["GPT 6 Sol"] * 3 + ["GPT 6 Luna"] * 3
+    # GPT 6 Sol/Luna 6채널 뒤에 GPT 6.1 Sol 3채널(v2.32.0)이 목록 끝 — 데드라인 컷이 신규 채널부터 떨어진다.
+    assert [c["family"] for c in chans[-9:-3]] == ["GPT 6 Sol"] * 3 + ["GPT 6 Luna"] * 3
+    assert [c["family"] for c in chans[-3:]] == ["GPT 6.1 Sol"] * 3
     # GPT 5.6 Sol/Luna는 벤치 대상 아님 ("6 Sol" 부분 문자열 혼동 방지).
     assert not any(c["family"].startswith("GPT 5.6 Sol") or c["family"].startswith("GPT 5.6 Luna")
                    for c in chans)
 
 
+def test_bench_channels_includes_gpt61_sol_three_channels(bench_env):
+    """GPT 6.1 Sol 3채널 편입 (v2.32.0, 2026-09-30 사용자 요청) — Global CRIS, US CRIS, Mantle us-east-1.
+
+    Mantle us-east-2/us-west-2는 404 not_found_error(2026-09-30 실측)라 채널이 생기면 안 된다. 라벨은 prober 등록
+    라벨과 바이트 동일(test_bench_channel_keys_match_prober_registration이 교차 검증).
+    """
+    import gptbench
+
+    sol61 = [c for c in gptbench.bench_channels() if c["family"] == "GPT 6.1 Sol"]
+    assert [(c["region"], c["actual_id"], c["model_id"], c["model_name"]) for c in sol61] == [
+        ("global", "global.openai.gpt-6.1-sol", "openai:global:global.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (Global)"),
+        ("us", "us.openai.gpt-6.1-sol", "openai:us:us.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (US)"),
+        ("us-east-1", "openai.gpt-6.1-sol", "openai:us-east-1:openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (us-east-1)"),
+    ]
+    assert not [c for c in sol61 if c["region"] in ("us-east-2", "us-west-2")]
+
+
+def test_bench_channels_gpt61_sol_needs_its_env(bench_env, monkeypatch):
+    """BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID가 없으면(이미지만 배포) 6.1 Sol 3채널만 조용히 빠지고 18채널은 그대로다."""
+    import gptbench
+
+    monkeypatch.delenv("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID")
+    chans = gptbench.bench_channels()
+    assert len(chans) == 18
+    assert not any(c["family"] == "GPT 6.1 Sol" for c in chans)
+
+
 def test_bench_channels_matrix(bench_env):
     """5.4×3 + 5.5×2(us-west-2 미제공) + terra×4(Global 포함, v2.20.1)
     + astra×3(Global, US CRIS, us-west-2 — v2.25.1)
-    + sol×3 + luna×3(Global, US CRIS, us-east-1 — v2.28.0) = 18채널 (Mantle 인리전 11 + CRIS 7)."""
+    + sol×3 + luna×3(Global, US CRIS, us-east-1 — v2.28.0)
+    + 6.1 sol×3(Global, US CRIS, us-east-1 — v2.32.0) = 21채널 (Mantle 인리전 12 + CRIS 9)."""
     import gptbench
 
     chans = gptbench.bench_channels()
@@ -129,14 +159,17 @@ def test_bench_channels_matrix(bench_env):
         ("openai:global:global.openai.gpt-6-luna", "OpenAI GPT 6 Luna (Global)"),
         ("openai:us:us.openai.gpt-6-luna", "OpenAI GPT 6 Luna (US)"),
         ("openai:us-east-1:openai.gpt-6-luna", "OpenAI GPT 6 Luna (us-east-1)"),
+        ("openai:global:global.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (Global)"),
+        ("openai:us:us.openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (US)"),
+        ("openai:us-east-1:openai.gpt-6.1-sol", "OpenAI GPT 6.1 Sol (us-east-1)"),
     ]
-    assert len(chans) == 18
-    assert sum(1 for c in chans if c["region"] in ("global", "us")) == 7
+    assert len(chans) == 21
+    assert sum(1 for c in chans if c["region"] in ("global", "us")) == 9
     assert sum(1 for c in chans if c["family"] == "GPT 5.5") == 2
     assert not any(c["family"] == "GPT 5.5" and c["region"] == "us-west-2" for c in chans)
     # pseudo-region 채널 id는 접두사 파생, 라벨은 "(Global)"/"(US)" 대문자 (prober 규약).
     glb = [c for c in chans if c["region"] == "global"]
-    assert [c["family"] for c in glb] == ["GPT 5.6 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]
+    assert [c["family"] for c in glb] == ["GPT 5.6 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol"]
 
 
 def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
@@ -157,24 +190,24 @@ def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
 
 
 def test_bench_channels_no_global_env(bench_env, monkeypatch):
-    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Terra, Astra, Sol, Luna)만 조용히 빠진다."""
+    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Terra, Astra, Sol, Luna, 6.1 Sol)만 조용히 빠진다."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 14
+    assert len(chans) == 16
     assert not any(c["region"] == "global" for c in chans)
 
 
 def test_bench_channels_no_us_env(bench_env, monkeypatch):
-    """OPENAI_US_BASE_URL 미설정이면 US CRIS 채널(Astra, Sol, Luna)만 빠지고(KeyError 없이) 나머지 15채널 유지."""
+    """OPENAI_US_BASE_URL 미설정이면 US CRIS 채널(Astra, Sol, Luna, 6.1 Sol)만 빠지고(KeyError 없이) 나머지 17채널 유지."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_US_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 15
+    assert len(chans) == 17
     assert not any(c["region"] == "us" for c in chans)
-    for fam in ("GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"):
+    for fam in ("GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol"):
         assert sum(1 for c in chans if c["family"] == fam) == 2
 
 
@@ -187,11 +220,11 @@ def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
 
     res = gptbench.run_cycle()
-    assert res["rows"] == 36 and res["errors"] == 0  # 18ch × 2
+    assert res["rows"] == 42 and res["errors"] == 0  # 21ch × 2
 
     s = session_factory()
     rows = s.query(models.GptBenchResult).all()
-    assert len(rows) == 36
+    assert len(rows) == 42
     assert all(r.cycle_ts == rows[0].cycle_ts for r in rows)  # 사이클 그룹 키 동일
     assert rows[0].gap_ms == pytest.approx(900.0)
     s.close()
@@ -209,7 +242,7 @@ def test_run_cycle_deadline_skips_channels(bench_env, session_factory, monkeypat
 
     res = gptbench.run_cycle()
     assert res["rows"] == 0
-    assert len(res["skipped_channels"]) == 18
+    assert len(res["skipped_channels"]) == 21
 
 
 def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0, start_min_ago=20):
@@ -271,7 +304,7 @@ def test_trend_series_grouped_by_cycle(session_factory, client):
 
 
 def test_trend_hours_capped_at_ui_max(client):
-    """공개 엔드포인트 — hours 상한 168(UI 최대 7일). 720h 전체 ORM 로드는 18채널에서 ~1 GB RSS(OOM 위험)."""
+    """공개 엔드포인트 — hours 상한 168(UI 최대 7일). 720h 전체 ORM 로드는 21채널에서 ~1.2 GB RSS(OOM 위험)."""
     assert client.get("/api/gptbench/trend?hours=168").status_code == 200
     assert client.get("/api/gptbench/trend?hours=169").status_code == 422
     assert client.get("/api/gptbench/trend?hours=720").status_code == 422
@@ -392,10 +425,10 @@ def test_latest_uses_only_cycle_even_if_fresh(session_factory, client):
 
 
 def test_latest_orders_gpt6_family_first(session_factory, client):
-    """카드 정렬은 family(카탈로그 순) → region — Astra → Sol → Luna → Terra → 5.5 → 5.4,
+    """카드 정렬은 family(최신 순) → region — 6.1 Sol → Astra → Sol → Luna → Terra → 5.5 → 5.4,
     각 family 안에서 리전은 Global, US, 인리전 순.
 
-    fam_rank에 누락된 family는 rank 9로 밀려 맨 뒤에 찍힌다 (v2.25.1 Astra, v2.28.0 Sol/Luna).
+    fam_rank에 누락된 family는 rank 9로 밀려 맨 뒤에 찍힌다 (v2.25.1 Astra, v2.28.0 Sol/Luna, v2.32.0 6.1 Sol).
     """
     s = session_factory()
     cts = datetime.now(timezone.utc) - timedelta(minutes=20)  # 완료 사이클
@@ -413,6 +446,9 @@ def test_latest_orders_gpt6_family_first(session_factory, client):
         ("GPT 6 Sol", "us-east-1", "openai:us-east-1:openai.gpt-6-sol"),
         ("GPT 6 Luna", "us", "openai:us:us.openai.gpt-6-luna"),
         ("GPT 6 Sol", "global", "openai:global:global.openai.gpt-6-sol"),
+        ("GPT 6.1 Sol", "us-east-1", "openai:us-east-1:openai.gpt-6.1-sol"),
+        ("GPT 6.1 Sol", "us", "openai:us:us.openai.gpt-6.1-sol"),
+        ("GPT 6.1 Sol", "global", "openai:global:global.openai.gpt-6.1-sol"),
     ]
     for family, region, model_id in seeded:
         label = "Global" if region == "global" else ("US" if region == "us" else region)
@@ -426,6 +462,9 @@ def test_latest_orders_gpt6_family_first(session_factory, client):
 
     data = client.get("/api/gptbench/latest").json()
     assert [c["model_name"] for c in data["channels"]] == [
+        "OpenAI GPT 6.1 Sol (Global)",
+        "OpenAI GPT 6.1 Sol (US)",
+        "OpenAI GPT 6.1 Sol (us-east-1)",
         "OpenAI GPT 6 Astra (Global)",
         "OpenAI GPT 6 Astra (US)",
         "OpenAI GPT 6 Astra (us-west-2)",

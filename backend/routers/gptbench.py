@@ -127,9 +127,9 @@ def latest(db: Session = Depends(get_db)):
             median_reasoning_tokens=_median([r.reasoning_tokens for r in ok]),
             last_error=(errs[-1].error_message if errs else None),
         ))
-    # 정렬: family(카탈로그 순, GPT 6 세대 → 5.x) → region. 누락된 family는 rank 9로 맨 뒤.
-    fam_rank = {"GPT 6 Astra": 0, "GPT 6 Sol": 1, "GPT 6 Luna": 2,
-                "GPT 5.6 Terra": 3, "GPT 5.5": 4, "GPT 5.4": 5}
+    # 정렬: family(최신 순, GPT 6.1 → GPT 6 세대 → 5.x) → region. 누락된 family는 rank 9로 맨 뒤.
+    fam_rank = {"GPT 6.1 Sol": 0, "GPT 6 Astra": 1, "GPT 6 Sol": 2, "GPT 6 Luna": 3,
+                "GPT 5.6 Terra": 4, "GPT 5.5": 5, "GPT 5.4": 6}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
@@ -137,14 +137,14 @@ def latest(db: Session = Depends(get_db)):
 @router.get("/trend", response_model=TrendResponse)
 def trend(
     # 상한 168h = UI 최대 범위(GptOnAwsPanel RANGE_OPTIONS 7일). 공개 엔드포인트라 상한이 곧
-    # 1요청 메모리 상한이다 — 720h(30일)는 18채널에서 ~1 GB RSS까지 올라 1 GiB 태스크 OOM 위험
+    # 1요청 메모리 상한이다 — 720h(30일)는 21채널에서 ~1.2 GB RSS까지 올라 1 GiB 태스크 OOM 위험
     # (2026-09-01 /api/results/stats OOM과 같은 패턴).
     hours: int = Query(24, ge=1, le=168),
     db: Session = Depends(get_db),
 ):
     """시간 범위 내 사이클별 median 시계열 — 그래프용.
 
-    최대 범위(7일)에서 96사이클/일 × 18채널 × 10행 ≈ 12만 행을 읽는다. ORM 객체 대신 집계에 쓰는
+    최대 범위(7일)에서 96사이클/일 × 21채널 × 10행 ≈ 14만 행을 읽는다. ORM 객체 대신 집계에 쓰는
     7개 컬럼만 튜플로 읽어 행당 메모리를 줄이고(identity map·인스턴스 상태 없음), median은
     Python에서 계산한다.
     """
