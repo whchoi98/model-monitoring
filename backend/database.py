@@ -56,6 +56,10 @@ DATABASE_URL = _build_database_url()
 #     블록되어 풀이 영구 고갈된다 (pool_recycle/pre_ping은 체크아웃 중인 커넥션엔 무력).
 #   - statement_timeout: 런타임 쿼리 상한 (기본 30s, DB_STATEMENT_TIMEOUT_MS로 조정).
 #     lifespan 마이그레이션은 main.py에서 자체 SET statement_timeout을 따로 건다.
+#     문장 하나의 상한이다 — yield_per로 나눠 읽는 조회(psycopg2 이름 있는 서버 측 커서, DECLARE 뒤 FETCH 반복)는
+#     FETCH마다 따로 걸려 전체가 얼마든지 길어진다. 그 경로(routers reliability, efficiency, cost trend, results stats,
+#     insights_runner)의 전체 경과 시간은 streamed_read.stream_rows가 같은 값(_STATEMENT_TIMEOUT_MS, 호출할 때 읽는다)으로
+#     묶고, 넘으면 커서를 닫는다(라우터는 503, 2026-09-30). yield_per를 새로 쓰는 조회도 stream_rows를 거친다.
 #   - connect_timeout: 커넥션 수립 자체의 상한.
 # psycopg2(libpq) 전용 파라미터라 postgresql URL에만 적용한다.
 _STATEMENT_TIMEOUT_MS = int(os.environ.get("DB_STATEMENT_TIMEOUT_MS", "30000"))
