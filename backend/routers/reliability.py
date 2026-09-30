@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import ProbeResult
+from streamed_read import stream_rows_or_503
 from visibility import visible_only
 from window_spec import parse_window
 
@@ -28,7 +29,7 @@ router = APIRouter(prefix="/api/reliability", tags=["reliability"])
 # 창 상한 = /reliability 화면의 가장 긴 창(1h, 6h, 24h, 7d 중 7d). 넘는 창은 422 (window_spec).
 # 공개 엔드포인트라 상한이 곧 요청 하나의 스캔 상한이다 — 2026-09-30 /analysis OOM과 같은 경로.
 _MAX_WINDOW = timedelta(days=7)
-_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서)
+_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read, 넘으면 503)
 
 
 def _percentile(values: list[float], pct: float) -> Optional[float]:
@@ -161,6 +162,7 @@ def get_multi_channel(
         .filter(ProbeResult.timestamp >= since)
         .yield_per(_YIELD_PER)
     )
+    rows = stream_rows_or_503(rows, route=f"GET /api/reliability/multi-channel window={window!r}")
 
     # family → channel → bucket
     agg: dict[str, dict[str, dict]] = {}

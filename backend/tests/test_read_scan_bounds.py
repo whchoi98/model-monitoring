@@ -34,7 +34,9 @@ from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 
+import database
 import models
+import streamed_read
 import window_spec
 from database import get_db
 from routers import analysis as analysis_router
@@ -394,6 +396,59 @@ def test_reliability_reads_error_message_only_for_failed_rows(env):
     assert client.get("/api/reliability/multi-channel?window=7d").status_code == 200
     (sql, _), = _probe_result_selects(statements)
     assert "CASE WHEN (probe_results.status != ?) THEN probe_results.error_message END" in sql, sql
+
+
+# 나눠 읽는 조회의 전체 시간 상한. statement_timeout은 문장 하나의 상한이라 서버 측 커서(yield_per)에는 FETCH마다 따로
+# 걸린다 — 네 엔드포인트는 streamed_read.stream_rows_or_503이 같은 상한(database._STATEMENT_TIMEOUT_MS)으로 전체 경과
+# 시간을 재고, 넘으면 커서를 닫고 503이다(2026-09-30 v2.32.1 통합 리뷰). 가짜 시계는 부를 때마다 1초씩 가고 상한은 5초다 —
+# 시작 시각을 한 번 잰 뒤 행마다 재므로 여섯 번째 행(경과 6초)에서 멈춘다.
+_STREAMED_DEFAULT_GOLDENS = {
+    "/api/reliability/multi-channel": "reliability_default",
+    "/api/efficiency/score": "efficiency_default",
+    "/api/cost/trend": "cost_trend_default",
+    "/api/results/stats": "results_stats_default",
+}
+
+
+@pytest.fixture()
+def slow_clock(monkeypatch):
+    ticks = {"now": 0.0, "calls": 0}
+
+    def clock() -> float:
+        ticks["calls"] += 1
+        ticks["now"] += 1.0
+        return ticks["now"]
+
+    monkeypatch.setattr(streamed_read, "_clock", clock)
+    monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", 5000)
+    return ticks
+
+
+@pytest.mark.parametrize("path", STREAMED_PATHS)
+def test_streamed_read_past_the_statement_timeout_is_503_mid_stream(env, slow_clock, caplog, monkeypatch, path):
+    client, statements = env
+    statements.clear()
+    with caplog.at_level("WARNING", logger="streamed_read"):
+        resp = client.get(path)
+    assert resp.status_code == 503
+    assert _canonical(resp.json()) == _canonical(
+        {"detail": "DB 조회가 5초 안에 끝나지 않아 중단했습니다. 잠시 후 다시 시도해 주세요."}
+    )
+    (record,) = [r for r in caplog.records if r.name == "streamed_read"]
+    assert record.levelname == "WARNING"
+    message = record.getMessage()
+    assert message.startswith(f"streamed read over the 5s limit, aborted: GET {path} "), message
+    assert message.endswith("(elapsed 6.0s, 5 rows)"), message
+    assert len(_probe_result_selects(statements)) == 1
+    assert slow_clock["calls"] == 7  # 시작 1 + 행 6 — 여섯 번째 행에서 멈췄다
+
+    # 같은 요청을 상한 안에서 — 창 안의 행이 5행보다 훨씬 많고(중간에서 멈춘 것이다), 응답은 골든 그대로다.
+    monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", 10**9)
+    slow_clock["calls"] = 0
+    resp = client.get(path)
+    assert resp.status_code == 200
+    assert _canonical(resp.json()) == _canonical(_load_goldens()[_STREAMED_DEFAULT_GOLDENS[path]]["body"])
+    assert slow_clock["calls"] - 1 > 6 * 5
 
 
 @pytest.mark.parametrize(("path", "window"), [(p, w) for p, (_, over, _) in WINDOW_CAPS.items() for w in over])

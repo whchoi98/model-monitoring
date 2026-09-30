@@ -26,6 +26,7 @@ from database import get_db
 from models import ProbeResult
 from visibility import hidden_patterns
 from price_history import as_utc, with_row_cost
+from streamed_read import stream_rows_or_503
 from window_spec import parse_window
 
 logger = logging.getLogger(__name__)
@@ -36,7 +37,7 @@ router = APIRouter(prefix="/api/cost", tags=["cost"])
 # 합친 모델별 행만 받아 메모리는 O(모델)이지만, 창만큼 probe_results와 price_history 조인을 훑으므로 같은 상한을 둔다.
 # trend는 화면 호출자가 없다.
 _MAX_WINDOW = timedelta(days=30)
-_YIELD_PER = 2000  # trend가 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서)
+_YIELD_PER = 2000  # trend가 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read, 넘으면 503)
 
 
 def _channel(model_id: str) -> str:
@@ -241,6 +242,7 @@ def get_cost_trend(
         .filter(*[~ProbeResult.model_name.contains(p) for p in hidden_patterns()])
         .yield_per(_YIELD_PER)
     )
+    rows = stream_rows_or_503(rows, route=f"GET /api/cost/trend window={window!r}")
 
     bucket_seconds = bucket_min * 60
     points_map: dict[tuple[str, str], float] = {}

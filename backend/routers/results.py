@@ -13,6 +13,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from models import ProbeResult
 from prober import AVAILABLE_MODELS
+from streamed_read import stream_rows_or_503
 from visibility import visible_only
 from schemas import ModelStats, ProbeResultResponse, StatsResponse
 
@@ -23,7 +24,7 @@ _DEFAULT_STATS_WINDOW = timedelta(hours=24)
 # 브라우저가 자기 시계로 계산해 보내므로 거부(422)하지 않고 하한으로 당겨 읽으며, 응답 start_time은 당긴 값이다
 # (기본 24h 창처럼 실제로 쓴 하한을 돌려준다). start_time=1970-01-01이 보존 테이블 전체를 읽던 경로(2026-09-30 점검).
 _MAX_STATS_LOOKBACK = timedelta(days=31)
-_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서)
+_YIELD_PER = 2000  # 한 번에 가져오는 행 수(PostgreSQL은 서버 측 커서 — 전체 시간 상한은 streamed_read, 넘으면 503)
 # run_id는 1 이상만 받는다(0, 음수 → 422). stats는 기본 창과 31일 하한을 run_id is None으로 고르고 run_id 필터는 값이
 # 참일 때만 걸었으므로, run_id=0이 두 상한을 모두 건너뛰고 보존 중인 success 행 전체를 읽었다(2026-09-30 통합 리뷰).
 # 목록(list_results)에도 같은 규칙을 둔다. 프런트엔드는 run_id를 참일 때만 보낸다(frontend/src/lib/api.ts).
@@ -122,7 +123,12 @@ def get_stats(
 
     # model_id별로 행 수, 지표 값 목록(행 순서 그대로), 가장 최근 행의 라벨만 누적한다.
     model_groups: dict[str, dict] = {}
-    for model_id, row_name, ts, ttft, latency, tps, server_latency in query.yield_per(_YIELD_PER):
+    rows = stream_rows_or_503(
+        query.yield_per(_YIELD_PER),
+        route=(f"GET /api/results/stats start_time={start_time} end_time={end_time} run_id={run_id} "
+               f"category={category!r}"),
+    )
+    for model_id, row_name, ts, ttft, latency, tps, server_latency in rows:
         g = model_groups.get(model_id)
         if g is None:
             g = model_groups[model_id] = {"count": 0, "latest": (ts, row_name),
