@@ -340,6 +340,9 @@ WINDOW_CAPS = {
     "/api/reliability/multi-channel": ("7d", _OVER_7D, ["7d", "168h", "10080m", "7D", " 24h "]),
     "/api/efficiency/score": ("7d", _OVER_7D, ["7d", "168h", "10080m", "7D", " 24h "]),
     "/api/cost/trend": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
+    # 비용 화면(24h 기본, 1h~30d)이 부른다. SQL 집계라 메모리는 O(모델)이지만 스캔은 창에 비례한다 — 추이와 같은 30d.
+    "/api/cost/summary": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
+    "/api/cost/channel-compare": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
 }
 UNREADABLE_WINDOWS = [
     "xd", "1e3h", "d",
@@ -353,7 +356,8 @@ def _probe_result_selects(statements) -> list[tuple[str, dict]]:
 
 
 def _items(body: dict) -> list:
-    return body.get("rows") or body.get("families") or body.get("models") or body.get("points") or []
+    return (body.get("rows") or body.get("families") or body.get("models") or body.get("points")
+            or body.get("channels") or [])
 
 
 @pytest.mark.parametrize("path", ANALYSIS_PATHS)
@@ -419,7 +423,7 @@ NON_POSITIVE_WINDOWS = [
     "0d", "0h", "0m", "-0d", "-5d", "-1m", " -24H ",
     pytest.param("-99999999d", id="negative-overflow"),
 ]
-_ALL_WINDOW_PATHS = [*WINDOW_CAPS, "/api/cost/summary", "/api/cost/channel-compare"]
+_ALL_WINDOW_PATHS = list(WINDOW_CAPS)  # window를 받는 공개 조회 엔드포인트 전부
 
 
 @pytest.mark.parametrize("path", _ALL_WINDOW_PATHS)
@@ -435,7 +439,7 @@ def test_zero_or_negative_window_is_422_before_any_scan(env, path, window):
 
 @pytest.mark.parametrize("path", _ALL_WINDOW_PATHS)
 def test_window_past_the_datetime_range_is_422_not_500(env, path):
-    """timedelta로는 읽히지만(999999999일) now - 창이 서기 1년보다 이른 창 — 예전 상한 없는 cost summary는 500이었다."""
+    """timedelta로는 읽히지만(999999999일) now - 창이 서기 1년보다 이른 창 — 예전 상한 없던 cost summary는 500이었다."""
     client, statements = env
     statements.clear()
     resp = client.get(path, params={"window": "999999999d"})
@@ -451,14 +455,6 @@ def test_window_up_to_the_cap_is_accepted(env, path, window):
     assert resp.status_code == 200
     assert resp.json()["window"] == window  # 요청 문자열을 그대로 돌려준다
     assert _items(resp.json())
-
-
-@pytest.mark.parametrize("path", ["/api/cost/summary", "/api/cost/channel-compare"])
-def test_cost_summary_and_channel_compare_stay_uncapped_but_reject_unreadable_windows(env, path):
-    """SQL 집계(모델별 행)라 메모리가 창 길이와 무관하다 — 상한 없이 예전처럼 받고, 읽을 수 없는 값만 500 대신 422."""
-    client, _ = env
-    assert client.get(path, params={"window": "3650d"}).status_code == 200
-    assert client.get(path, params={"window": "1e3h"}).status_code == 422
 
 
 def _stats(client, **params) -> dict:
@@ -502,7 +498,7 @@ def test_parse_window_keeps_the_no_unit_fallback_and_accepts_long_windows_withou
     assert window_spec.parse_window("7") == timedelta(hours=24)
     assert window_spec.parse_window(" 7D ") == timedelta(days=7)
     assert window_spec.parse_window("45m") == timedelta(minutes=45)
-    assert window_spec.parse_window("3650d") == timedelta(days=3650)  # 상한 없는 호출(cost summary)
+    assert window_spec.parse_window("3650d") == timedelta(days=3650)  # 상한 없는 호출
     cap = timedelta(days=30)
     assert window_spec.parse_window("30d", max_window=cap) == cap
     with pytest.raises(HTTPException) as exc:
