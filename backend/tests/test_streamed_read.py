@@ -12,6 +12,8 @@ database.py가 커넥션마다 거는 statement_timeout(DB_STATEMENT_TIMEOUT_MS,
 - SQLite 실제 커서: 멈춘 뒤 DBAPI 커서가 닫혀 있다(테스트가 안쪽 생성기를 붙잡고 있어 GC가 대신 닫을 수 없다).
 - PostgreSQL 증명(TEST_PG_URL이 있을 때만): 행마다 pg_sleep을 부르는 조회에서 statement_timeout 1초는 한 번에 받는
   조회만 취소하고 yield_per 조회는 끝까지 읽는다. stream_rows는 1초 근처에서 멈추고 pg_cursors가 비어 있다.
+  실제 라우트(/api/reliability/multi-channel, probe_results를 행마다 자는 뷰로 바꾼 스키마)도 1초 근처에서 503이고
+  커넥션이 풀로 돌아온다. 상한을 끄면 같은 라우트가 statement_timeout 1초 아래에서 끝까지 읽는다.
   예: docker run -d --rm --name <이름> -p 127.0.0.1:55432:5432 -e POSTGRES_PASSWORD=pg postgres:16 뒤
   TEST_PG_URL=postgresql://postgres:pg@127.0.0.1:55432/postgres python3.12 -m pytest tests/test_streamed_read.py
 """
@@ -19,9 +21,11 @@ database.py가 커넥션마다 거는 statement_timeout(DB_STATEMENT_TIMEOUT_MS,
 import os
 import sqlite3
 import time
+from datetime import datetime, timezone
 
 import pytest
-from fastapi import HTTPException
+from fastapi import FastAPI, HTTPException
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine, event, func, text
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import sessionmaker
@@ -30,6 +34,7 @@ from sqlalchemy.pool import StaticPool
 import database
 import models
 import streamed_read
+from routers import reliability as reliability_router
 from streamed_read import StreamedReadTimeout, stream_rows, stream_rows_or_503
 
 
@@ -231,17 +236,24 @@ _PG_TIMEOUT_MS = 1000
 
 
 @pytest.fixture()
-def pg_session():
+def pg_url():
     if not PG_URL:
         pytest.skip("TEST_PG_URL이 없다 — 로컬 PostgreSQL이 있을 때만 돈다")
-    engine = create_engine(PG_URL, connect_args={"options": f"-c statement_timeout={_PG_TIMEOUT_MS}",
-                                                 "connect_timeout": 3})
+    probe = create_engine(PG_URL, connect_args={"connect_timeout": 3})
     try:
-        with engine.connect() as conn:
+        with probe.connect() as conn:
             conn.execute(text("SELECT 1"))
     except OperationalError as exc:
-        engine.dispose()
         pytest.skip(f"PostgreSQL에 연결할 수 없다: {exc.orig}")
+    finally:
+        probe.dispose()
+    return PG_URL
+
+
+@pytest.fixture()
+def pg_session(pg_url):
+    engine = create_engine(pg_url, connect_args={"options": f"-c statement_timeout={_PG_TIMEOUT_MS}",
+                                                 "connect_timeout": 3})
     factory = sessionmaker(bind=engine)
     try:
         with factory() as db:
@@ -293,3 +305,76 @@ def test_pg_stream_rows_aborts_near_the_limit_and_closes_the_server_side_cursor(
     assert _open_cursors(db) == 0  # CLOSE됐다 — 커넥션은 트랜잭션 안에서 그대로
     assert db.execute(text("SELECT 1")).scalar() == 1
     assert "pg proof" in caplog.text
+
+
+# 실제 라우트 — probe_results를 행마다 30ms 자는 뷰로 바꾼 스키마에서 /api/reliability/multi-channel을 부른다.
+_E2E_SCHEMA = "streamed_read_e2e"
+_E2E_ROWS, _E2E_SLEEP_S = 80, 0.03  # 끝까지 2.4초
+
+
+@pytest.fixture()
+def pg_slow_reliability(pg_url, monkeypatch):
+    admin = create_engine(pg_url)
+    with admin.begin() as conn:
+        conn.execute(text(f"DROP SCHEMA IF EXISTS {_E2E_SCHEMA} CASCADE"))
+        conn.execute(text(f"CREATE SCHEMA {_E2E_SCHEMA}"))
+    engine = create_engine(pg_url, connect_args={
+        "options": f"-c statement_timeout={_PG_TIMEOUT_MS} -c search_path={_E2E_SCHEMA}", "connect_timeout": 3})
+    try:
+        models.Base.metadata.create_all(engine)
+        factory = sessionmaker(bind=engine)
+        with factory() as db:
+            db.add(models.ProbeRun(id=1, prompt="auto", status="completed", is_auto=1))
+            now = datetime.now(timezone.utc)
+            db.add_all(models.ProbeResult(run_id=1, model_id="global.anthropic.claude-sonnet-5",
+                                          model_name="Bedrock Claude Sonnet 5 (Global)", timestamp=now,
+                                          prompt="p", status="success", ttft_ms=500.0, total_latency_ms=1500.0,
+                                          tps=40.0) for _ in range(_E2E_ROWS))
+            db.commit()
+        with engine.begin() as conn:
+            conn.execute(text("CREATE FUNCTION slow_true() RETURNS boolean LANGUAGE plpgsql VOLATILE AS "
+                              f"$$ BEGIN PERFORM pg_sleep({_E2E_SLEEP_S}); RETURN true; END $$"))
+            conn.execute(text("ALTER TABLE probe_results RENAME TO probe_results_base"))
+            conn.execute(text("CREATE VIEW probe_results AS SELECT * FROM probe_results_base WHERE slow_true()"))
+
+        app = FastAPI()
+        app.include_router(reliability_router.router)
+
+        def db_override():
+            with factory() as db:
+                yield db
+
+        app.dependency_overrides[database.get_db] = db_override
+        monkeypatch.setattr(reliability_router, "_YIELD_PER", 5)  # FETCH 5행 = 0.15초 < statement_timeout 1초
+        monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", _PG_TIMEOUT_MS)  # 엔진의 statement_timeout과 같은 값
+        with TestClient(app) as client:
+            yield client, engine
+    finally:
+        engine.dispose()
+        with admin.begin() as conn:
+            conn.execute(text(f"DROP SCHEMA IF EXISTS {_E2E_SCHEMA} CASCADE"))
+        admin.dispose()
+
+
+def test_pg_reliability_route_answers_503_near_the_limit_and_returns_its_connection(pg_slow_reliability, monkeypatch,
+                                                                                    caplog):
+    client, engine = pg_slow_reliability
+    url = "/api/reliability/multi-channel?window=1h"
+    started = time.monotonic()
+    with caplog.at_level("WARNING", logger="streamed_read"):
+        resp = client.get(url)
+    elapsed = time.monotonic() - started
+    assert resp.status_code == 503
+    assert resp.json() == {"detail": "DB 조회가 1초 안에 끝나지 않아 중단했습니다. 잠시 후 다시 시도해 주세요."}
+    assert elapsed < 1.8 < _E2E_ROWS * _E2E_SLEEP_S
+    assert "GET /api/reliability/multi-channel window='1h'" in caplog.text
+    assert engine.pool.checkedout() == 0  # 커넥션이 풀로 돌아왔다
+
+    # 상한을 끄면(0) 같은 라우트가 statement_timeout 1초 아래에서 2.4초 동안 끝까지 읽는다 — FETCH마다 따로 걸린다.
+    monkeypatch.setattr(database, "_STATEMENT_TIMEOUT_MS", 0)
+    started = time.monotonic()
+    resp = client.get(url)
+    assert resp.status_code == 200
+    assert time.monotonic() - started > 2 * _PG_TIMEOUT_MS / 1000
+    (family,) = resp.json()["families"]
+    assert family["channels"][0]["samples"] == _E2E_ROWS
