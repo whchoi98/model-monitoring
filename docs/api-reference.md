@@ -213,7 +213,7 @@ Returns available model list.
 ### GET /api/results?model_id=X&run_id=N&start_time=…&end_time=…&limit=100&offset=0
 Query stored probe results (manual and automatic), newest first. All filters are optional: `model_id`, `run_id`,
 `start_time` / `end_time` (ISO 8601, inclusive bounds on the result `timestamp`), `limit` (default 100, 1–1000), `offset`
-(default 0). Rows whose label matches `HIDDEN_MODEL_PATTERNS` (default `(1P)`, the dormant 1P channels) are excluded.
+(default 0). `run_id` must be 1 or more; 0 and negatives are HTTP 422 (v2.32.1). Rows whose label matches `HIDDEN_MODEL_PATTERNS` (default `(1P)`, the dormant 1P channels) are excluded.
 
 ### GET /api/results/latest
 Latest results across all models.
@@ -224,7 +224,8 @@ Without `start_time` and `run_id` the window is the last 24 hours. Without `run_
 read as now − 31 days (the History dialog offers up to 30 days; the extra day absorbs browser clock skew) and the response
 `start_time` is that clamped value. So without `run_id`, an `end_time` older than now − 31 days yields an empty result
 (`"models": []`, HTTP 200) even when `start_time` is older still: the clamped range ends before it starts. Pass `run_id` to
-read an older run; with `run_id` neither bound is clamped.
+read an older run; with `run_id` neither bound is clamped. `run_id` must be 1 or more (0 and negatives are HTTP 422, v2.32.1 —
+`run_id=0` used to skip both the 24-hour default and the floor and read every retained row).
 
 ---
 
@@ -320,6 +321,12 @@ accept at most `30d`, the longest the Cost page offers. A longer window, one of 
 is HTTP 422 with a Korean `detail` before any query; before v2.32.1 every `window=` endpoint accepted any window (0 and negative windows returned empty 200s, unreadable or out-of-range ones 500s)
 (`3650d` scanned the whole retained table), a negative one returned empty totals and an overflowing one was a 500. The same
 rules hold for every `window=` below, each with its own cap.
+
+**Streamed reads (v2.32.1).** `/api/reliability/multi-channel`, `/api/efficiency/score`, `/api/cost/trend` and `/api/results/stats`
+read their rows in batches through a server-side cursor, where the database `statement_timeout` (`DB_STATEMENT_TIMEOUT_MS`,
+30 s) applies to each FETCH only. `streamed_read.stream_rows_or_503` bounds the whole read by the same limit: past it the
+cursor is closed and the response is HTTP 503 with a Korean `detail` ("DB 조회가 30초 안에 끝나지 않아 중단했습니다. 잠시 후 다시 시도해
+주세요."). The check runs between rows, so the worst case is the limit plus one FETCH.
 
 ### GET /api/reliability/multi-channel
 Success rate + error buckets grouped by family/channel. Channels come in the order `Anthropic (CP on AWS)`, `Bedrock Global`,
