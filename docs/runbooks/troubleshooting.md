@@ -14,8 +14,8 @@
 수정 뒤에는 공개 집계 엔드포인트가 엔티티를 읽지 않는다. 분석 두 엔드포인트는 DB에서 `GROUP BY`로 센 값만 읽고, 신뢰성, 효율성, 비용
 추이, 결과 통계는 쓰는 열만 `yield_per`로 나눠 읽는다(PostgreSQL 서버 측 커서). 창은 화면이 고를 수 있는 가장 긴 창까지다. 분석과 비용
 (요약, 채널 비교, 추이)은 30d, 신뢰성과 효율성은 7d다. 이를 넘는 `window`, 0 이하인 `window`(`0h`, `-5d`), 읽을 수 없는 `window`, now − 창이
-datetime 범위를 벗어나는 `window`는 DB를 읽기 전에 422로 끝난다(`backend/window_spec.py`). 예전에는 0과 음수 창이 빈 응답(200)을, 아주
-큰 음수 창이 500을 냈고, 비용 요약과 채널 비교는 창 상한이 없었다. 결과 통계는 `run_id` 없이 31일보다 이른 `start_time`을 31일 전으로
+datetime 범위를 벗어나는 `window`는 DB를 읽기 전에 422로 끝난다(`backend/window_spec.py`). 예전(v2.32.0)에는 `?window=`를 받는 공개 조회
+엔드포인트 모두 창 상한이 없었고, 0과 음수 창은 빈 응답(200), 읽을 수 없거나 datetime 범위를 넘는 창은 500이었다. 결과 통계는 `run_id` 없이 31일보다 이른 `start_time`을 31일 전으로
 당긴다(그래서 `end_time`까지 31일보다 이르면 빈 결과다).
 
 JWT 엔드포인트인 인사이트 재생성(`POST /api/insights/regenerate`, `/api/insights/stream-regenerate`)도 backend 프로세스 안에서

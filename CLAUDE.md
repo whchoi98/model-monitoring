@@ -74,6 +74,7 @@ model-monitoring/
 │   ├── stream_watchdog.py   # 스트림 wall-clock watchdog — prober·gptbench 공용 (v2.28.2)
 │   ├── label_repair.py      # 기동 시 저장 행 model_name을 카탈로그 라벨로 정정 (v2.22.1)
 │   ├── visibility.py        # 조회 노출 필터 — HIDDEN_MODEL_PATTERNS (기본 `(1P)`) (v2.19.1)
+│   ├── window_spec.py       # 공개 조회 ?window= 파서 parse_window(max_window) — 상한 초과, 0 이하, 읽을 수 없는 창, datetime 범위 초과는 422, 단위 없는 값은 24h (analysis와 cost 30d, reliability와 efficiency 7d, v2.32.1)
 │   ├── tests/               # pytest (python3.12)
 │   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P), AVAILABLE_MODELS (62개 활성 + 1P 5개 휴면, Bedrock in-region 키 bedrock:<region>:<fm-id> v2.32.0), retry, stop_reason capture
 │   ├── pricing_sources.py   # 단가 순수 데이터 — price_identity(model_id → family/채널/출처), 오퍼 FM id, Anthropic 문서 모델명, Price List usagetype 매핑(NOVA_CACHE_USAGETYPES 포함), OpenAI 공식 가격 합성 채널(`openai-list:<family_key>`, channel `openai_list`, OPENAI_PRICING_URL), PROVIDER_ORDER(Anthropic → OpenAI → Amazon, v2.31.0), FAMILY_ORDER(프런트와 동일, pytest 고정), DISCLAIMER, OFFICIAL_LINKS(Markdown 머리말 공식 요금 링크 3개, `PricingPanel.tsx` `OFFICIAL_LINKS`와 같은 순서, pytest 고정 — v2.31.1에서 인용되지 않던 OFFICIAL_PAGES 대체), PRICE_NOTES(GPT-5.6 Sol 프로모션, OpenAI 문서 인용) (v2.30.0)

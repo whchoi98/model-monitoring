@@ -271,8 +271,8 @@ in a backend thread and returns at once: `{"triggered": true, "message": "..."}`
 regeneration is running. Poll `GET /api/insights/latest` for the result.
 
 `window` is `<n>h` or `<n>d`, longer than 0 and at most 24 hours (`24h` or `1d`; the Insights panel sends `6h`). Anything
-else, such as `25h`, `2d`, `0h`, `45m` or `abc`, is HTTP 422 with a Korean `detail` (`{"detail": "window는 최대 24h까지 …"}`),
-and no thread starts. The statistics read only the five columns `compute_stats` uses (`model_name`, `status`, `ttft_ms`,
+else is HTTP 422 before any work, and no thread starts. The Korean `detail` names the cause: `window는 최대 24h까지 …` for
+`25h` or `2d`, `window는 0보다 길어야 합니다 …` for `0h`, `window 값을 읽을 수 없습니다 …` for `45m` or `abc`. The statistics read only the five columns `compute_stats` uses (`model_name`, `status`, `ttft_ms`,
 `total_latency_ms`, `tps`) of the window's automatic runs, in batches (2026-09-30). The scheduled Insights task
 (`python -m insights_runner --window 6h`) is not capped.
 
@@ -317,7 +317,7 @@ channel-compare `channel` is `Anthropic (CP on AWS)`, `Bedrock Global`, `Bedrock
 
 `window` is an integer with `m`, `h` or `d` (a value without a unit reads as 24 hours). Summary, channel-compare and trend
 accept at most `30d`, the longest the Cost page offers. A longer window, one of 0 or less (`0h`, `-5d`) or an unreadable one
-is HTTP 422 with a Korean `detail` before any query; before 2026-09-30 summary and channel-compare accepted any window
+is HTTP 422 with a Korean `detail` before any query; before v2.32.1 every `window=` endpoint accepted any window (0 and negative windows returned empty 200s, unreadable or out-of-range ones 500s)
 (`3650d` scanned the whole retained table), a negative one returned empty totals and an overflowing one was a 500. The same
 rules hold for every `window=` below, each with its own cap.
 
