@@ -1,11 +1,11 @@
 /**
  * Model Explorer (v2.9.0) — 모델 ID에서 호출 채널·네이티브 ID·코드 예제·링크를 유도하는
- * 순수 로직 테스트. 6개 provider path의 키 스킴(ADR-019/020/027)을 고정한다.
+ * 순수 로직 테스트. 7개 provider path의 키 스킴(ADR-019/020/027/031)을 고정한다.
  */
 import { describe, expect, test } from "vitest";
 import { channelOf, nativeId, codeExamples, modelLinks } from "./modelExplorer";
 
-describe("channelOf — 6개 provider path 판별", () => {
+describe("channelOf — 7개 provider path 판별", () => {
   test("Bedrock Global 프로파일", () => {
     const ch = channelOf("global.anthropic.claude-fable-5");
     expect(ch.type).toBe("bedrock");
@@ -52,6 +52,24 @@ describe("channelOf — 6개 provider path 판별", () => {
     expect(ch.endpoint).toBe("https://bedrock-mantle.us-west-2.api.aws/openai/v1");
     expect(ch.region).toBe("us-west-2");
   });
+  test("Bedrock In-Region 온디맨드(v2.32.0) — bedrock:<region>:<fm id>", () => {
+    const ch = channelOf("bedrock:ap-northeast-2:anthropic.claude-opus-5");
+    // type은 bedrock 유지 — 필터와 배지 색이 기존 Bedrock 카드와 같게 적용된다.
+    expect(ch.type).toBe("bedrock");
+    expect(ch.region).toBe("ap-northeast-2");
+    expect(ch.badge).toBe("In-Region");
+    expect(ch.endpoint).toBe("https://bedrock-runtime.ap-northeast-2.amazonaws.com");
+    expect(ch.label).toContain("In-Region");
+  });
+  test("카드 배지 — 기존 6종 회귀 (ModelExplorer 카드의 예전 삼항식과 같은 값)", () => {
+    expect(channelOf("global.anthropic.claude-fable-5").badge).toBe("Global");
+    expect(channelOf("us.anthropic.claude-haiku-4-5-20251001-v1:0").badge).toBe("US");
+    expect(channelOf("anthropic:claude-sonnet-5").badge).toBe("CP");
+    expect(channelOf("openai:1p:gpt-5.5").badge).toBe("1P");
+    expect(channelOf("openai:global:global.openai.gpt-6.1-sol").badge).toBe("Global");
+    expect(channelOf("openai:us:us.openai.gpt-6.1-sol").badge).toBe("US");
+    expect(channelOf("openai:us-east-1:openai.gpt-6.1-sol").badge).toBe("us-east-1");
+  });
 });
 
 describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
@@ -73,6 +91,10 @@ describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
   test("OpenAI US CRIS는 us. 접두사 포함 프로파일 id", () => {
     expect(nativeId("openai:us:us.openai.gpt-6-astra")).toBe("us.openai.gpt-6-astra");
     expect(nativeId("openai:us-west-2:openai.gpt-6-astra")).toBe("openai.gpt-6-astra");
+  });
+  test("Bedrock In-Region은 기본 모델 ID (접두 제거, FM id의 :는 보존)", () => {
+    expect(nativeId("bedrock:ap-northeast-2:anthropic.claude-sonnet-5")).toBe("anthropic.claude-sonnet-5");
+    expect(nativeId("bedrock:ap-northeast-2:anthropic.claude-haiku-4-5-20251001-v1:0")).toBe("anthropic.claude-haiku-4-5-20251001-v1:0");
   });
 });
 
@@ -133,6 +155,22 @@ describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () 
     expect(ex[0].code).toContain("ABSK");
     expect(ex[0].description).toContain("cross-region");
   });
+  test("Bedrock In-Region → 세 탭 모두 기본 모델 ID와 그 리전, 키 접두는 노출하지 않는다", () => {
+    const ex = codeExamples("bedrock:ap-northeast-2:anthropic.claude-sonnet-5");
+    expect(ex.map((e) => e.api)).toEqual(["Converse API", "InvokeModel API", "Messages API"]);
+    for (const e of ex) {
+      expect(e.code).toContain('"anthropic.claude-sonnet-5"');
+      expect(e.code).not.toContain("bedrock:");
+    }
+    expect(ex[0].code).toContain('region_name="ap-northeast-2"');
+    expect(ex[1].code).toContain('region_name="ap-northeast-2"');
+    expect(ex[2].code).toContain('AnthropicBedrock(aws_region="ap-northeast-2")');
+  });
+  test("프로파일 모델의 코드 예제 리전은 기존과 같다 (ap-northeast-2)", () => {
+    const ex = codeExamples("us.anthropic.claude-opus-5");
+    expect(ex[0].code).toContain('region_name="ap-northeast-2"');
+    expect(ex[2].code).toContain('AnthropicBedrock(aws_region="ap-northeast-2")');
+  });
 });
 
 describe("modelLinks — 문서·대시보드 링크", () => {
@@ -152,6 +190,11 @@ describe("modelLinks — 문서·대시보드 링크", () => {
   test("OpenAI 1P는 OpenAI 문서 링크", () => {
     const urls = modelLinks("openai:1p:gpt-5.5", "OpenAI GPT 5.5 (1P)").map((l) => l.url).join(" ");
     expect(urls).toContain("platform.openai.com");
+  });
+  test("Bedrock In-Region은 그 리전 콘솔 링크 + Anthropic 문서", () => {
+    const urls = modelLinks("bedrock:ap-northeast-2:anthropic.claude-opus-5", "Bedrock Claude Opus 5 (ap-northeast-2)").map((l) => l.url).join(" ");
+    expect(urls).toContain("region=ap-northeast-2");
+    expect(urls).toContain("docs.claude.com");
   });
   test("Anthropic CP는 Anthropic 문서 링크", () => {
     const urls = modelLinks("anthropic:claude-sonnet-5", "Anthropic Claude Sonnet 5 (US)").map((l) => l.url).join(" ");

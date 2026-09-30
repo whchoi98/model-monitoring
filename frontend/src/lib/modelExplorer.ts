@@ -1,7 +1,8 @@
 // Model Explorer (v2.9.0) — 모델 ID에서 호출 채널·네이티브 ID·코드 예제·문서 링크를 유도.
 //
-// 6개 provider path의 키 스킴 (ADR-019/020/027, backend prober.py와 동일):
+// 7개 provider path의 키 스킴 (ADR-019/020/027, backend prober.py와 동일):
 //   global.* / us.*            → Bedrock inference profile (boto3 converse_stream)
+//   bedrock:<region>:<fm id>   → Bedrock In-Region 온디맨드 (기본 모델 ID, 추론 프로파일 없음 — v2.32.0, ADR-031)
 //   anthropic:<id>             → Anthropic CP on AWS (anthropic SDK + vendor endpoint)
 //   openai:<region>:openai.<m> → OpenAI via Bedrock Mantle (openai SDK + mantle base_url)
 //   openai:global:global.openai.<m> → OpenAI Bedrock global CRIS (openai SDK +
@@ -21,6 +22,8 @@ export interface ChannelInfo {
   endpoint: string;
   /** 참고 리전 표기 */
   region: string;
+  /** 카드 배지 — Global / US / In-Region / CP / 1P / Mantle 리전 */
+  badge: string;
 }
 
 export interface CodeExample {
@@ -45,6 +48,7 @@ export function channelOf(modelId: string): ChannelInfo {
       label: "Anthropic (CP on AWS)",
       endpoint: "https://aws-external-anthropic.us-east-2.api.aws",
       region: "us-east-2",
+      badge: "CP",
     };
   }
   if (modelId.startsWith("openai:1p:")) {
@@ -53,6 +57,7 @@ export function channelOf(modelId: string): ChannelInfo {
       label: "OpenAI 1P (direct)",
       endpoint: "https://api.openai.com/v1",
       region: "글로벌 라우팅 (리전 없음)",
+      badge: "1P",
     };
   }
   if (modelId.startsWith("openai:global:")) {
@@ -64,6 +69,7 @@ export function channelOf(modelId: string): ChannelInfo {
       endpoint: "https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1",
       // 카드 배지에 그대로 노출되므로 다른 채널("us-east-1"/"1P")처럼 짧은 식별자 유지.
       region: "Global",
+      badge: "Global",
     };
   }
   if (modelId.startsWith("openai:us:")) {
@@ -75,6 +81,7 @@ export function channelOf(modelId: string): ChannelInfo {
       endpoint: "https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1",
       // 카드 배지에 그대로 노출되므로 다른 채널("Global"/"us-east-1"/"1P")처럼 짧은 식별자 유지.
       region: "US",
+      badge: "US",
     };
   }
   if (modelId.startsWith("openai:")) {
@@ -84,6 +91,18 @@ export function channelOf(modelId: string): ChannelInfo {
       label: `OpenAI (Bedrock Mantle, ${region})`,
       endpoint: `https://bedrock-mantle.${region}.api.aws/openai/v1`,
       region,
+      badge: region,
+    };
+  }
+  if (modelId.startsWith("bedrock:")) {
+    // In-Region 온디맨드(v2.32.0) — 추론 프로파일 없이 기본 모델 ID를 그 리전 bedrock-runtime에 직접 호출 (prober와 동일).
+    const region = modelId.split(":")[1];
+    return {
+      type: "bedrock",
+      label: `Bedrock (In-Region, ${region})`,
+      endpoint: `https://bedrock-runtime.${region}.amazonaws.com`,
+      region,
+      badge: "In-Region",
     };
   }
   const isGlobal = modelId.startsWith("global.");
@@ -92,13 +111,14 @@ export function channelOf(modelId: string): ChannelInfo {
     label: isGlobal ? "Bedrock (Global 프로파일)" : "Bedrock (US 프로파일)",
     endpoint: "bedrock-runtime (ap-northeast-2에서 호출)",
     region: isGlobal ? "global cross-region" : "us cross-region",
+    badge: isGlobal ? "Global" : "US",
   };
 }
 
 /** 실제 API 호출에 넣는 모델 ID. */
 export function nativeId(modelId: string): string {
   if (modelId.startsWith("anthropic:")) return modelId.slice("anthropic:".length);
-  if (modelId.startsWith("openai:")) return modelId.split(":").slice(2).join(":");
+  if (modelId.startsWith("openai:") || modelId.startsWith("bedrock:")) return modelId.split(":").slice(2).join(":");
   return modelId; // Bedrock 프로파일 ID 그대로
 }
 
@@ -108,6 +128,7 @@ export function codeExamples(modelId: string, lang: ExplorerLang = "ko"): CodeEx
   const ch = channelOf(modelId);
   const id = nativeId(modelId);
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  const bedrockRegion = modelId.startsWith("bedrock:") ? ch.region : "ap-northeast-2";
 
   if (ch.type === "bedrock") {
     const converse: CodeExample = {
@@ -118,7 +139,7 @@ export function codeExamples(modelId: string, lang: ExplorerLang = "ko"): CodeEx
       language: "python",
       code: `import boto3
 
-client = boto3.client("bedrock-runtime", region_name="ap-northeast-2")
+client = boto3.client("bedrock-runtime", region_name="${bedrockRegion}")
 
 response = client.converse_stream(
     modelId="${id}",
@@ -143,7 +164,7 @@ for event in response["stream"]:
         language: "python",
         code: `import boto3, json
 
-client = boto3.client("bedrock-runtime", region_name="ap-northeast-2")
+client = boto3.client("bedrock-runtime", region_name="${bedrockRegion}")
 
 response = client.invoke_model(
     modelId="${id}",
@@ -165,7 +186,7 @@ print(result["content"][0]["text"])`,
         code: `from anthropic import AnthropicBedrock
 
 ${L("# Via Bedrock — AWS credentials (SigV4), no Anthropic API key required", "# Bedrock 경유 — AWS 자격 증명(SigV4) 사용, Anthropic API 키 불필요")}
-client = AnthropicBedrock(aws_region="ap-northeast-2")
+client = AnthropicBedrock(aws_region="${bedrockRegion}")
 
 with client.messages.stream(
     model="${id}",
@@ -274,9 +295,11 @@ export function modelLinks(modelId: string, modelName: string, lang: ExplorerLan
   ];
 
   if (ch.type === "bedrock") {
+    // In-Region 키는 그 리전 콘솔, 프로파일 키는 기존과 같이 호출 리전(ap-northeast-2) 콘솔.
+    const consoleRegion = modelId.startsWith("bedrock:") ? ch.region : "ap-northeast-2";
     links.push(
       { label: L("AWS Bedrock supported models docs", "AWS Bedrock 지원 모델 문서"), url: "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html" },
-      { label: L("Bedrock console (model catalog)", "Bedrock 콘솔 (모델 카탈로그)"), url: "https://console.aws.amazon.com/bedrock/home?region=ap-northeast-2#/model-catalog" },
+      { label: L("Bedrock console (model catalog)", "Bedrock 콘솔 (모델 카탈로그)"), url: `https://console.aws.amazon.com/bedrock/home?region=${consoleRegion}#/model-catalog` },
       { label: L("Bedrock pricing", "Bedrock 요금"), url: "https://aws.amazon.com/bedrock/pricing/" },
     );
     if (modelId.includes("anthropic")) {

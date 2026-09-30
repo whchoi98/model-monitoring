@@ -310,7 +310,7 @@ export default function ModelExplorer() {
                   {m.name}
                 </h3>
                 <span className={`shrink-0 px-2 py-0.5 text-[11px] font-medium rounded-full border ${CHANNEL_BADGE[ch.type]}`}>
-                  {ch.type === "bedrock" ? (m.id.startsWith("global.") ? "Global" : "US") : ch.type === "anthropic-cp" ? "CP" : ch.type === "openai-1p" ? "1P" : ch.region}
+                  {ch.badge}
                 </span>
               </div>
               <code className="block text-[11px] text-gray-500 break-all mt-1.5">{m.id}</code>

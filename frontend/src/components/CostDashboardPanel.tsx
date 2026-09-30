@@ -29,6 +29,8 @@ const CHANNEL_COLORS: Record<string, string> = {
   "Bedrock US": "bg-pink-500/15 text-pink-300 border-pink-500/30",
   "Bedrock Nova": "bg-lime-500/15 text-lime-300 border-lime-500/30",
   "Anthropic (CP on AWS)": "bg-purple-500/15 text-purple-300 border-purple-500/30",
+  "Bedrock ap-northeast-2": "bg-sky-500/15 text-sky-300 border-sky-500/30",
+  "OpenAI": "bg-emerald-500/15 text-emerald-300 border-emerald-500/30",
 };
 
 export default function CostDashboardPanel() {
@@ -269,8 +271,8 @@ export default function CostDashboardPanel() {
             {lang === "en" ? "Channel comparison" : "채널 비교"}:
           </span>{" "}
           {lang === "en"
-            ? "Bedrock Global / US use cross-region inference profiles; Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). See "
-            : "Bedrock Global / US는 cross-region inference profile, Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 채널별 단가는 "}
+            ? "Bedrock Global / US use cross-region inference profiles and Bedrock ap-northeast-2 calls the Seoul Region on demand with the base model ID (In-Region); Anthropic (CP on AWS) uses the vendor's external endpoint (aws-external-anthropic.*.api.aws). See "
+            : "Bedrock Global / US는 cross-region inference profile, Bedrock ap-northeast-2는 서울 리전 In-Region 온디맨드(기본 모델 ID), Anthropic CP on AWS는 vendor external endpoint(aws-external-anthropic.*.api.aws)를 사용합니다. 채널별 단가는 "}
           <Link href="/pricing" className="text-blue-400 hover:underline">{lang === "en" ? "Unit Prices" : "비용 단가"}</Link>
           {lang === "en" ? " for per-channel prices." : " 메뉴를 참고하세요."}
         </p>
