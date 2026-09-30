@@ -268,7 +268,7 @@ def test_response_matches_frozen_golden(env, name):
 # ───────────────────────────────────────────────────────────────────────
 
 ANALYSIS_PATHS = ("/api/analysis/stop-reasons", "/api/analysis/output-length")
-STREAMED_PATHS = ("/api/reliability/multi-channel", "/api/efficiency/score")
+STREAMED_PATHS = ("/api/reliability/multi-channel", "/api/efficiency/score", "/api/cost/trend")
 _TEXT_COLUMNS = ("probe_results.prompt", "probe_results.output_text")
 _OVER_30D = ["31d", "3650d", "99999h", "721h", "43201m"]
 _OVER_7D = ["8d", "3650d", "99999h", "169h", "10081m"]
@@ -278,6 +278,7 @@ WINDOW_CAPS = {
     "/api/analysis/output-length": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
     "/api/reliability/multi-channel": ("7d", _OVER_7D, ["7d", "168h", "10080m", "7D", " 24h "]),
     "/api/efficiency/score": ("7d", _OVER_7D, ["7d", "168h", "10080m", "7D", " 24h "]),
+    "/api/cost/trend": ("30d", _OVER_30D, ["30d", "720h", "43200m", "30D", " 7d "]),
 }
 UNREADABLE_WINDOWS = [
     "xd", "1e3h", "d",
@@ -291,7 +292,7 @@ def _probe_result_selects(statements) -> list[tuple[str, dict]]:
 
 
 def _items(body: dict) -> list:
-    return body.get("rows") or body.get("families") or body.get("models") or []
+    return body.get("rows") or body.get("families") or body.get("models") or body.get("points") or []
 
 
 @pytest.mark.parametrize("path", ANALYSIS_PATHS)
@@ -358,6 +359,14 @@ def test_window_up_to_the_cap_is_accepted(env, path, window):
     assert resp.status_code == 200
     assert resp.json()["window"] == window  # 요청 문자열을 그대로 돌려준다
     assert _items(resp.json())
+
+
+@pytest.mark.parametrize("path", ["/api/cost/summary", "/api/cost/channel-compare"])
+def test_cost_summary_and_channel_compare_stay_uncapped_but_reject_unreadable_windows(env, path):
+    """SQL 집계(모델별 행)라 메모리가 창 길이와 무관하다 — 상한 없이 예전처럼 받고, 읽을 수 없는 값만 500 대신 422."""
+    client, _ = env
+    assert client.get(path, params={"window": "3650d"}).status_code == 200
+    assert client.get(path, params={"window": "1e3h"}).status_code == 422
 
 
 def test_parse_window_keeps_the_no_unit_fallback_and_accepts_any_size_without_a_cap():
