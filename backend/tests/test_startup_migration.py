@@ -20,6 +20,19 @@ def test_migration_block_sets_lock_timeout_before_advisory_lock():
     assert st < lt < adv, "lock_timeout must be set right after statement_timeout and before the advisory lock"
 
 
+def test_migration_block_checks_the_catalog_before_adding_columns():
+    """열 추가는 advisory 락 다음, 첫 DELETE 앞의 확인 함수만 한다 (2026-09-30 LockNotAvailable, test_startup_column_guard.py).
+
+    lifespan이 ALTER TABLE을 직접 실행하면 열이 이미 있어도 ACCESS EXCLUSIVE를 요청해 읽기 트랜잭션 하나에 5초 막힌다.
+    """
+    body = MAIN_SRC[MAIN_SRC.index("async def lifespan("):MAIN_SRC.index("\ndef _ensure_price_schema(")]
+    adv = body.index("SELECT pg_advisory_lock(917350001)")
+    guard = body.index("_add_missing_startup_columns(conn)")
+    first_dml = body.index("DELETE FROM probe_results")
+    assert adv < guard < first_dml
+    assert re.search(r'text\(f?"ALTER TABLE', body) is None
+
+
 def test_probe_results_declares_model_name_index():
     names = {idx.name for idx in models.ProbeResult.__table__.indexes}
     assert "ix_probe_results_model_name" in names

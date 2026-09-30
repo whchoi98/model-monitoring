@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import text
 
 from database import create_tables, engine, SessionLocal
@@ -39,6 +40,42 @@ logger = logging.getLogger(__name__)
 PRICE_SCHEMA_RETRY_ATTEMPTS = 3
 PRICE_SCHEMA_RETRY_INTERVAL_S = 30.0
 
+# lifespan 마이그레이션 블록이 확인하는 열 (테이블, 열, ADD COLUMN 타입). 운영 DB에는 v2 초기부터 모두 있다.
+_STARTUP_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("probe_runs", "is_auto", "INTEGER DEFAULT 0"),
+    ("users", "approved", "INTEGER DEFAULT 0"),
+    ("insights", "summary_md_en", "TEXT"),
+    ("probe_results", "category", "TEXT"),     # Phase 3 Workload Preset
+    ("probe_results", "stop_reason", "TEXT"),  # Output Analysis (stop_reason 분포 + output 길이 통계)
+)
+
+
+def _add_missing_startup_columns(conn) -> list[str]:
+    """_STARTUP_COLUMNS 중 빠진 열만 더하고, 더한 열을 "테이블.열"로 _STARTUP_COLUMNS 순서대로 돌려준다 (v2.32.2).
+
+    ALTER TABLE … ADD COLUMN IF NOT EXISTS는 PostgreSQL에서 열이 있는지 보기 전에 ACCESS EXCLUSIVE 락부터 요청한다. 그래서 열이
+    이미 있어도 그 테이블을 읽는 트랜잭션 하나에 lock_timeout까지 막히고, 기다리는 동안 뒤에 온 평범한 읽기까지 줄을 세운다
+    (2026-09-30 운영 기동 4번 중 2번, Insights 태스크가 probe_runs, probe_results를 쥔 동안 5초 뒤 LockNotAvailable). 여기서는
+    카탈로그(sqlalchemy inspect, 테이블마다 한 번)로 먼저 확인해 있는 열에는 DDL을 내지 않는다. 호출부 트랜잭션에서 advisory 락
+    다음에 읽으므로 앞선 기동이 커밋한 열은 보인다. 앞선 기동의 unlock과 커밋 사이(unlock이 커밋보다 먼저다)에 겹치면 아직 안 보이는
+    열에 ALTER를 내게 되는데, 그 ALTER는 앞선 커밋을 기다린 뒤 IF NOT EXISTS로 no-op이 된다. 빠진 열은 PostgreSQL에서 v2.32.1과 같은
+    문장(IF NOT EXISTS 포함)으로 더하고, 그 ALTER는 예전처럼 lock_timeout까지 기다릴 수 있다. 그 밖의 방언(SQLite 테스트)은
+    IF NOT EXISTS 없이 더한다.
+    """
+    inspector = sa_inspect(conn)
+    if_not_exists = " IF NOT EXISTS" if conn.dialect.name == "postgresql" else ""
+    present: dict[str, set[str]] = {}
+    added: list[str] = []
+    for table, column, ddl in _STARTUP_COLUMNS:
+        if table not in present:
+            present[table] = {col["name"] for col in inspector.get_columns(table)}
+        if column in present[table]:
+            continue
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN{if_not_exists} {column} {ddl}"))
+        present[table].add(column)
+        added.append(f"{table}.{column}")
+    return added
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -66,16 +103,13 @@ async def lifespan(app: FastAPI):
             # 요청한다. 다른 세션이 락을 쥐고 있으면 이 요청이 대기열에 서고, 그 뒤의 모든 읽기까지
             # 함께 막힌다(2026-09-06 배포 창마다 /api/insights/latest 30s 타임아웃 연쇄). 5초 안에
             # 못 잡으면 블록을 포기하고 기동을 계속한다 — 마이그레이션은 다음 기동에 재시도.
+            # v2.32.2부터 있는 열에는 ALTER를 내지 않으므로(_add_missing_startup_columns) 이 대기는 열이 정말 빠진 기동에만 생긴다.
             conn.execute(text("SET lock_timeout = '5000'"))
             conn.execute(text("SELECT pg_advisory_lock(917350001)"))
             try:
-                conn.execute(text("ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS is_auto INTEGER DEFAULT 0"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approved INTEGER DEFAULT 0"))
-                conn.execute(text("ALTER TABLE insights ADD COLUMN IF NOT EXISTS summary_md_en TEXT"))
-                # Phase 3 Workload Preset
-                conn.execute(text("ALTER TABLE probe_results ADD COLUMN IF NOT EXISTS category TEXT"))
-                # Output Analysis (stop_reason 분포 + output 길이 통계)
-                conn.execute(text("ALTER TABLE probe_results ADD COLUMN IF NOT EXISTS stop_reason TEXT"))
+                # 열 5개는 카탈로그로 먼저 확인하고 빠진 열만 더한다 (2026-09-30 Insights 읽기 트랜잭션 아래 LockNotAvailable).
+                # 아래 DELETE, UPDATE의 테이블 락은 ROW EXCLUSIVE라 다른 트랜잭션의 읽기, 쓰기와 충돌하지 않는다.
+                added_columns = _add_missing_startup_columns(conn)
                 # 2026-05-20: 사용자 요청으로 Opus 4.5 + Sonnet 4.5를 모니터링 대상에서 제외 — 옛 row 삭제.
                 conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Opus 4.5%'"))
                 conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Sonnet 4.5%'"))
@@ -123,6 +157,8 @@ async def lifespan(app: FastAPI):
                     conn.execute(text("SELECT pg_advisory_unlock(917350001)"))
                 except Exception:
                     pass
+        if added_columns:  # 커밋된 뒤에만 남긴다
+            logger.info("Startup columns added: %s", ", ".join(added_columns))
     except Exception:
         logger.exception("Migration block failed (non-fatal, backend continues)")
 
