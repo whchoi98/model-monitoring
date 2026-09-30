@@ -253,15 +253,49 @@ def test_the_wall_clock_cap_cuts_a_trickling_stream_and_ko_is_kept(dataset, fake
     assert "exceeded the 1s wall-clock limit" in caplog.text
 
 
-def test_the_call_limit_shrinks_to_the_task_budget(dataset, fake, monkeypatch):
-    monkeypatch.setattr(insights_runner, "_SAVE_MARGIN_S", 0.3)
+def test_the_call_limit_is_the_cap_or_the_budget_left_minus_the_save_margin(monkeypatch):
+    monkeypatch.setattr(insights_runner, "_clock", lambda: 1000.0)
+    assert insights_runner._call_limit(None) == 180  # /regenerate 스레드 — 마감 없음
+    assert insights_runner._call_limit(1000.0 + 240) == 180  # 240 − 15 = 225초 남음, 상한 180초가 더 짧다
+    assert insights_runner._call_limit(1000.0 + 100) == 85  # 100 − 15
+
+
+def test_the_call_limit_shrinks_to_the_task_budget(dataset, fake, monkeypatch, caplog):
+    """호출 상한(마감 − 지금 − 저장 여유)이 워치독까지 가서 스트림을 끊는다.
+
+    _result는 마감에서 워커를 포기하므로 run_once의 반환값과 소요 시간만 보면 상한이 마감을 무시해도(180초) 통과한다. 그래서
+    converse_stream_collect에 넘어간 wall_clock_s를 직접 보고, KO를 끝낸 것이 마감 대기가 아니라 워치독(StreamWallClockTimeout,
+    마감 0.5초 전)인지 본다.
+    """
+    margin = 0.5
+    monkeypatch.setattr(insights_runner, "_SAVE_MARGIN_S", margin)
     monkeypatch.setattr(insights_runner, "_MIN_CALL_S", 0.1)
     fake.scripts = {"ko": [_trickle()], "en": [_trickle()]}
     started = time.monotonic()
-    assert insights_runner.run_once("6h", deadline=started + 1.5) == -1  # 호출 상한 약 1.2초 → KO 실패
-    assert time.monotonic() - started < 1.5 + 0.5  # 마감 안에 끝났다
+    deadline = started + 2.0
+    calls: list[tuple[str, float, float]] = []  # (system, 넘어간 상한, 그 시각의 마감 − 지금 − 저장 여유)
+    collect = agent.bedrock.converse_stream_collect
+
+    def spy(messages, **kw):
+        calls.append((kw["system"], kw["wall_clock_s"], deadline - time.monotonic() - margin))
+        return collect(messages, **kw)
+
+    monkeypatch.setattr(agent.bedrock, "converse_stream_collect", spy)
+    with caplog.at_level("INFO"):
+        assert insights_runner.run_once("6h", deadline=deadline) == -1  # 상한 약 1.5초 → KO 실패
+    assert time.monotonic() - started < 2.0 + 0.5  # 마감 안에 끝났다
     assert _saved(dataset) == []
-    assert len(fake.by_lang("ko")) == 1
+    # 두 언어 모두 상한이 예산 크기로 줄었다 — 180초도, 저장 여유를 빼지 않은 2초도 아니다
+    assert sorted(system for system, _, _ in calls) == sorted([insights_runner.SUMMARY_SYSTEM_KO,
+                                                               insights_runner.SUMMARY_SYSTEM_EN])
+    for _, limit, budget_left in calls:
+        assert limit == pytest.approx(budget_left, abs=0.05)
+    # 그 상한에서 워치독이 KO 소켓을 끊었다 — 마감에서 워커를 포기한 것이 아니다
+    (ko,) = fake.by_lang("ko")
+    assert _wait_outcome(ko, "aborted") == "aborted" and ko.sent_deltas < 20
+    assert re.search(r"insights summary ko failed after \d+\.\ds \(attempt 1\): StreamWallClockTimeout", caplog.text), \
+        caplog.text
+    assert "did not finish before the task deadline" not in caplog.text
 
 
 def test_a_header_wait_past_the_deadline_is_abandoned_and_ko_is_saved(dataset, fake, monkeypatch, caplog):
