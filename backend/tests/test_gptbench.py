@@ -1115,6 +1115,60 @@ def test_run_cycle_lane_crash_mid_channel_keeps_finished_runs(bench_env, session
     assert done.startswith(f"GPT bench cycle done: rows={9 * 3 + 1} errors=0 skipped={skipped!r} elapsed=")
 
 
+@pytest.mark.parametrize("stop", ["wait_cap", "crash"])
+def test_run_cycle_lane_stopped_after_all_runs_is_not_skipped(bench_env, engine, monkeypatch, caplog, stop):
+    """Mantle 채널 1이 run을 RUNS_PER_CHANNEL개 모두 끝낸 뒤 "done" 직전에 갈래가 멈춘다(대기 상한, 예외).
+    측정은 다 끝났으므로 "done"을 받은 것과 같다 — run 1~3 저장, skipped_channels에 없고("(run 4+)" 아님),
+    시작하지 못한 뒤 채널만 라벨이다. DB는 메인 스레드만 쓴다."""
+    import database
+    import gptbench
+
+    release = threading.Event()
+    seen_db_threads: set[str] = set()
+    factory = _recording_session_factory(engine, seen_db_threads)
+    monkeypatch.setattr(database, "SessionLocal", factory)
+    monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 3)
+    monkeypatch.setattr(gptbench, "CYCLE_DEADLINE_S", 0.5)
+    monkeypatch.setattr(gptbench, "CALL_TIMEOUT_S", 0.1)
+    monkeypatch.setattr(gptbench, "LANE_JOIN_GRACE_S", 0.1)
+    monkeypatch.setattr(gptbench, "one_call", _fake_call())
+    bench_channel = gptbench._bench_channel
+
+    def stop_before_done(ch, started, emit):
+        skip = bench_channel(ch, started, emit)  # "start"와 "run" 3개는 이미 큐에 있다
+        if ch["model_id"] == MANTLE_ORDER[1]:
+            if stop == "crash":
+                raise RuntimeError("lane stopped before done")
+            release.wait(10)  # 테스트 안전판 — 대기 상한(0.7s)이 동작하지 않으면 10초를 다 쓴다
+        return skip
+
+    monkeypatch.setattr(gptbench, "_bench_channel", stop_before_done)
+    caplog.set_level("INFO", logger="gptbench")
+    try:
+        if stop == "crash":
+            with pytest.raises(RuntimeError, match="lane stopped before done"):
+                gptbench.run_cycle()
+        else:
+            res = gptbench.run_cycle()
+    finally:
+        release.set()
+        _join_lanes()
+
+    labels = {c["model_id"]: c["model_name"] for c in gptbench.bench_channels()}
+    skipped = [labels[k] for k in MANTLE_ORDER[2:]]
+    if stop == "wait_cap":
+        assert res["rows"] == 9 * 3 + 3 + 3 and res["skipped_channels"] == skipped
+        assert any(r.getMessage().startswith("GPT bench lane mantle did not finish within") for r in caplog.records)
+    assert _stored_runs(factory) == {
+        **{k: [1, 2, 3] for k in CRIS_ORDER}, MANTLE_ORDER[0]: [1, 2, 3], MANTLE_ORDER[1]: [1, 2, 3]}
+    assert seen_db_threads == {threading.current_thread().name}
+    messages = [r.getMessage() for r in caplog.records]
+    assert f"channel done: {labels[MANTLE_ORDER[1]]}" in messages
+    assert not any("(run 4+)" in m for m in messages)
+    (done,) = [m for m in messages if m.startswith("GPT bench cycle done:")]
+    assert done.startswith(f"GPT bench cycle done: rows={9 * 3 + 3 + 3} errors=0 skipped={skipped!r} elapsed=")
+
+
 def test_default_wait_cap_stays_below_the_15_minute_schedule():
     """데드라인 + 호출 상한 + 여유(기본 885초)는 15분(900초) 스케줄보다 작다 — 다음 사이클과 겹치지 않게."""
     import gptbench

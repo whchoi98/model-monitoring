@@ -298,6 +298,7 @@ def run_cycle() -> dict:
     반환: {"cycle_ts", "channels", "rows", "errors", "skipped_channels"} — skipped_channels는 채널 순서.
     갈래가 예기치 않은 예외로 멈추면 다른 갈래를 끝까지 저장하고 사이클 로그를 남긴 뒤 그 예외를 다시 던진다.
     멈춘 갈래(예외, 대기 상한)의 진행 중 채널은 끝난 run까지 저장하고 "라벨 (run N+)"로 보고한다.
+    run을 모두 끝내고 "done"만 못 보낸 채널은 끝난 채널이다(skip 아님).
     """
     from database import SessionLocal
     from models import GptBenchResult
@@ -352,7 +353,13 @@ def run_cycle() -> dict:
         db.commit()  # 채널 단위 커밋 — 부분 실패에도 완료 채널은 보존
 
     def stop_lane(lane: str) -> None:
-        """멈춘 갈래의 남은 채널 보고 — 진행 중 채널은 끝난 run을 저장하고 "라벨 (run N+)", 시작 못 한 채널은 라벨."""
+        """멈춘 갈래의 남은 채널 보고 — 진행 중 채널은 끝난 run을 저장하고 "라벨 (run N+)", 시작 못 한 채널은 라벨.
+
+        진행 중 채널이 run을 RUNS_PER_CHANNEL개 모두 끝냈으면 "done"만 오지 않은 것이다 — "done"을 받은 것과 같이
+        처리한다(저장, skip 아님).
+        """
+        if lane in inflight and len(inflight[lane][1]) >= RUNS_PER_CHANNEL:
+            handle(_LaneEvent(lane=lane, kind="done", index=inflight[lane][0]))
         left = pending.pop(lane, set())
         if lane in inflight:
             index, runs = inflight.pop(lane)
