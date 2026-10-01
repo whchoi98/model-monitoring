@@ -94,18 +94,31 @@ def db_env(monkeypatch):
 
 @pytest.fixture()
 def bedrock_calls(monkeypatch):
-    """converse_blocking, converse_stream_text 대역 — 보낸 (system, user 텍스트)를 모은다."""
-    calls: list[dict] = []
+    """converse_stream_collect(run_once), converse_stream_text(stream-regenerate) 대역 — 보낸 (system, user 텍스트)를 모은다.
 
-    def blocking(messages, *, model_id, system=None, max_tokens=2048, temperature=0.1):
-        calls.append({"system": system, "user": messages[0]["content"][0]["text"]})
-        return f"summary {len(calls)}"
+    run_once는 v2.32.2부터 KO와 EN을 두 워커 스레드에서 동시에 부르므로 기록 순서가 정해져 있지 않다 — _run_once_outputs가
+    골든과 같은 KO, EN 순서로 정렬한다. 인사이트 경로는 비스트림 converse_blocking을 쓰지 않는다(60초 read timeout 경로).
+    """
+    calls: list[dict] = []
+    lock = threading.Lock()
+
+    def collect(messages, *, model_id, system=None, max_tokens=2048, temperature=0.1, wall_clock_s=None, client=None):
+        with lock:
+            calls.append({"system": system, "user": messages[0]["content"][0]["text"]})
+            n = len(calls)
+        return agent.bedrock.StreamedText(text=f"summary {n}", stop_reason="end_turn", input_tokens=1, output_tokens=1,
+                                          elapsed_s=0.0)
+
+    def blocking(*args, **kwargs):
+        raise AssertionError("인사이트 경로가 비스트림 converse_blocking을 불렀다")
 
     def stream(messages, *, model_id, system=None, max_tokens=2048, temperature=0.1):
         calls.append({"system": system, "user": messages[0]["content"][0]["text"]})
         yield "부분 1"
         yield "부분 2"
 
+    monkeypatch.setattr(agent.bedrock, "converse_stream_collect", collect)
+    monkeypatch.setattr(agent.bedrock, "insights_client", lambda: object())
     monkeypatch.setattr(agent.bedrock, "converse_blocking", blocking)
     monkeypatch.setattr(agent.bedrock, "converse_stream_text", stream)
     return calls
@@ -134,7 +147,8 @@ def _run_once_outputs(factory, calls: list) -> dict:
     assert insight_id > 0
     with factory() as db:
         breakdown = db.get(models.Insight, insight_id).model_breakdown
-    return {"calls": list(calls), "model_breakdown": breakdown}
+    order = {insights_runner.SUMMARY_SYSTEM_KO: 0, insights_runner.SUMMARY_SYSTEM_EN: 1}  # KO, EN — 동시 호출이라 정렬한다
+    return {"calls": sorted(calls, key=lambda c: order[c["system"]]), "model_breakdown": breakdown}
 
 
 def _load_goldens() -> dict:
@@ -363,7 +377,8 @@ def test_cli_window_stays_uncapped_for_the_scheduled_task(db_env, bedrock_calls,
     """스케줄 태스크(--window 6h, 기본값도 6h)와 운영자가 CLI로 돌리는 긴 창은 API 상한과 무관하다."""
     assert insights_runner.run_once("3d") > 0
     started: list[str] = []
-    monkeypatch.setattr(insights_runner, "run_once", lambda window_spec="6h": started.append(window_spec) or 1)
+    monkeypatch.setattr(insights_runner, "run_once",
+                        lambda window_spec="6h", **kwargs: started.append(window_spec) or 1)  # kwargs = 예산 마감(v2.32.2)
     for argv, expected in ((["insights_runner"], "6h"), (["insights_runner", "--window", "3d"], "3d")):
         monkeypatch.setattr(sys, "argv", argv)
         assert insights_runner.main() == 0

@@ -171,7 +171,14 @@ async def _chat_generator(
     session_id: str,
     db: Session,
 ) -> AsyncIterator[str]:
-    """Bedrock + tool loop를 SSE 청크 생성기로 변환."""
+    """Bedrock + tool loop를 SSE 청크 생성기로 변환.
+
+    db(요청 세션)는 도구만 쓴다. Bedrock hop, follow-up, AgentCore Memory 기록 동안 읽기 트랜잭션을 쥐지 않도록 시작할 때와
+    도구 호출마다 rollback한다(v2.32.2) — 쥐고 있으면 probe_runs, probe_results, users의 ACCESS SHARE 락이 스트림 내내 남아
+    backend 기동의 `ALTER TABLE … ADD COLUMN IF NOT EXISTS`가 lock_timeout 뒤 실패한다. 도구 결과는 dict라 rollback이
+    만료시키는 ORM 객체를 들고 있지 않는다.
+    """
+    db.rollback()  # 인증의 users 조회(FastAPI 0.142는 이 세션을 스트림이 끝날 때 닫는다)
     # 1) 사용자 메시지 emit (immediate ack).
     yield sse_event(
         "user",
@@ -253,6 +260,7 @@ async def _chat_generator(
                 {"name": tu["name"], "input": tu["input"], "toolUseId": tu["toolUseId"]},
             )
             result = _invoke_tool(tu["name"], tu["input"], db)
+            db.rollback()  # 도구의 읽기 트랜잭션을 끝낸다 — 다음 도구나 hop 전에(실패한 조회의 트랜잭션도 정리된다)
             tool_results_content.append(
                 {
                     "toolResult": {

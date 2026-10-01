@@ -10,6 +10,7 @@ from typing import Optional
 
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import inspect as sa_inspect
 from sqlalchemy import text
 
 from database import create_tables, engine, SessionLocal
@@ -39,6 +40,42 @@ logger = logging.getLogger(__name__)
 PRICE_SCHEMA_RETRY_ATTEMPTS = 3
 PRICE_SCHEMA_RETRY_INTERVAL_S = 30.0
 
+# lifespan 마이그레이션 블록이 확인하는 열 (테이블, 열, ADD COLUMN 타입). 운영 DB에는 v2 초기부터 모두 있다.
+_STARTUP_COLUMNS: tuple[tuple[str, str, str], ...] = (
+    ("probe_runs", "is_auto", "INTEGER DEFAULT 0"),
+    ("users", "approved", "INTEGER DEFAULT 0"),
+    ("insights", "summary_md_en", "TEXT"),
+    ("probe_results", "category", "TEXT"),     # Phase 3 Workload Preset
+    ("probe_results", "stop_reason", "TEXT"),  # Output Analysis (stop_reason 분포 + output 길이 통계)
+)
+
+
+def _add_missing_startup_columns(conn) -> list[str]:
+    """_STARTUP_COLUMNS 중 빠진 열만 더하고, 더한 열을 "테이블.열"로 _STARTUP_COLUMNS 순서대로 돌려준다 (v2.32.2).
+
+    ALTER TABLE … ADD COLUMN IF NOT EXISTS는 PostgreSQL에서 열이 있는지 보기 전에 ACCESS EXCLUSIVE 락부터 요청한다. 그래서 열이
+    이미 있어도 그 테이블을 읽는 트랜잭션 하나에 lock_timeout까지 막히고, 기다리는 동안 뒤에 온 평범한 읽기까지 줄을 세운다
+    (2026-09-30 운영 기동 4번 중 2번, Insights 태스크가 probe_runs, probe_results를 쥔 동안 5초 뒤 LockNotAvailable). 여기서는
+    카탈로그(sqlalchemy inspect, 테이블마다 한 번)로 먼저 확인해 있는 열에는 DDL을 내지 않는다. 호출부 트랜잭션에서 advisory 락
+    (pg_advisory_xact_lock) 다음에 읽는다. 앞선 기동의 트랜잭션 락은 그 커밋이 보이게 된 뒤에 풀리고 카탈로그 조회는 락을 잡은 뒤의
+    새 문장(READ COMMITTED)이라, 앞선 기동이 더한 열은 보인다(세션 락을 finally에서 풀면 unlock이 커밋보다 먼저라, 그 틈에 겹친
+    기동은 아직 안 보이는 열에 ALTER를 낸다). 빠진 열은 PostgreSQL에서 v2.32.1과 같은 문장(IF NOT EXISTS 포함)으로 더하고, 그
+    ALTER는 예전처럼 lock_timeout까지 기다릴 수 있다. 그 밖의 방언(SQLite 테스트)은 IF NOT EXISTS 없이 더한다.
+    """
+    inspector = sa_inspect(conn)
+    if_not_exists = " IF NOT EXISTS" if conn.dialect.name == "postgresql" else ""
+    present: dict[str, set[str]] = {}
+    added: list[str] = []
+    for table, column, ddl in _STARTUP_COLUMNS:
+        if table not in present:
+            present[table] = {col["name"] for col in inspector.get_columns(table)}
+        if column in present[table]:
+            continue
+        conn.execute(text(f"ALTER TABLE {table} ADD COLUMN{if_not_exists} {column} {ddl}"))
+        present[table].add(column)
+        added.append(f"{table}.{column}")
+    return added
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -52,77 +89,71 @@ async def lifespan(app: FastAPI):
 
     # Migrations - advisory lock으로 동시 deploy 시 lock 경합 회피.
     # 두 task가 rolling 중 lifespan에서 동일 UPDATE/DELETE를 동시 실행하면 row lock 무한 대기 가능.
-    # pg_advisory_lock(N)으로 한 번에 한 task만 마이그레이션 실행하도록 serialize.
+    # advisory lock(917350001)으로 한 번에 한 task만 마이그레이션 실행하도록 serialize.
     # 마이그레이션은 try/except로 감싸 backend startup이 절대 hang되지 않도록 보호.
     # statement_timeout으로 개별 쿼리 최대 30초 제한.
     # 실패해도 backend는 시작 — 마이그레이션은 다음 배포 또는 수동으로 retry.
-    # 별도 short-lived connection으로 마이그레이션 실행.
-    # engine.connect()의 pool connection을 사용하면 leak 가능 → 별도 raw 연결 권장.
-    # 그러나 raw psycopg2 import 회피를 위해 dispose 패턴 사용.
+    # 설정 두 개와 advisory 락은 이 트랜잭션 한정이다(SET LOCAL, pg_advisory_xact_lock — v2.32.2). 블록이 쓴 커넥션은 풀로
+    # 돌아간다. v2.32.1의 세션 수준 SET은 그 커넥션의 이후 요청을 5초 lock_timeout, 30초 statement_timeout으로 돌게 했고,
+    # 세션 락(pg_advisory_lock)은 블록이 실패하면 finally의 unlock이 중단된 트랜잭션에서 실패해 그 커넥션에 남아, 커넥션이
+    # 재활용될 때까지 다음 태스크의 기동을 lock_timeout 뒤 실패시켰다. 트랜잭션 락은 커밋이나 롤백에 풀리므로 unlock이 없다.
     try:
         with engine.begin() as conn:  # begin은 commit/rollback 자동 + 연결 항상 반환
-            conn.execute(text("SET statement_timeout = '30000'"))
+            conn.execute(text("SET LOCAL statement_timeout = '30000'"))
             # lock_timeout: ALTER TABLE … ADD COLUMN IF NOT EXISTS는 no-op이어도 ACCESS EXCLUSIVE 락을
             # 요청한다. 다른 세션이 락을 쥐고 있으면 이 요청이 대기열에 서고, 그 뒤의 모든 읽기까지
             # 함께 막힌다(2026-09-06 배포 창마다 /api/insights/latest 30s 타임아웃 연쇄). 5초 안에
             # 못 잡으면 블록을 포기하고 기동을 계속한다 — 마이그레이션은 다음 기동에 재시도.
-            conn.execute(text("SET lock_timeout = '5000'"))
-            conn.execute(text("SELECT pg_advisory_lock(917350001)"))
-            try:
-                conn.execute(text("ALTER TABLE probe_runs ADD COLUMN IF NOT EXISTS is_auto INTEGER DEFAULT 0"))
-                conn.execute(text("ALTER TABLE users ADD COLUMN IF NOT EXISTS approved INTEGER DEFAULT 0"))
-                conn.execute(text("ALTER TABLE insights ADD COLUMN IF NOT EXISTS summary_md_en TEXT"))
-                # Phase 3 Workload Preset
-                conn.execute(text("ALTER TABLE probe_results ADD COLUMN IF NOT EXISTS category TEXT"))
-                # Output Analysis (stop_reason 분포 + output 길이 통계)
-                conn.execute(text("ALTER TABLE probe_results ADD COLUMN IF NOT EXISTS stop_reason TEXT"))
-                # 2026-05-20: 사용자 요청으로 Opus 4.5 + Sonnet 4.5를 모니터링 대상에서 제외 — 옛 row 삭제.
-                conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Opus 4.5%'"))
-                conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Sonnet 4.5%'"))
-                _label_renames = [
-                    ("Claude Opus 4.7 (Global)", "Bedrock Claude Opus 4.7 (Global)"),
-                    ("Claude Opus 4.6 (Global)", "Bedrock Claude Opus 4.6 (Global)"),
-                    ("Claude Sonnet 4.6 (Global)", "Bedrock Claude Sonnet 4.6 (Global)"),
-                    ("Claude Haiku 4.5 (Global)", "Bedrock Claude Haiku 4.5 (Global)"),
-                    ("Claude Opus 4.7 (US)", "Bedrock Claude Opus 4.7 (US)"),
-                    ("Claude Opus 4.6 (US)", "Bedrock Claude Opus 4.6 (US)"),
-                    ("Claude Sonnet 4.6 (US)", "Bedrock Claude Sonnet 4.6 (US)"),
-                    ("Claude Haiku 4.5 (US)", "Bedrock Claude Haiku 4.5 (US)"),
-                    ("Nova 2.0 Lite (US)", "Bedrock Nova 2.0 Lite (US)"),
-                    ("Claude Opus 4.7 (US, 1P)", "Bedrock Claude Opus 4.7 (US)"),
-                    ("Claude Opus 4.6 (US, 1P)", "Bedrock Claude Opus 4.6 (US)"),
-                    ("Claude Sonnet 4.6 (US, 1P)", "Bedrock Claude Sonnet 4.6 (US)"),
-                    ("Claude Haiku 4.5 (US, 1P)", "Bedrock Claude Haiku 4.5 (US)"),
-                    ("Nova Lite (US, 1P)", "Bedrock Nova Lite (US)"),
-                    ("Nova 2.0 Lite (US, 1P)", "Bedrock Nova 2.0 Lite (US)"),
-                    ("Claude Opus 4.7 (CP on AWS)", "Anthropic Claude Opus 4.7 (US)"),
-                    ("Claude Sonnet 4.6 (CP on AWS)", "Anthropic Claude Sonnet 4.6 (US)"),
-                    ("Claude Haiku 4.5 (CP on AWS)", "Anthropic Claude Haiku 4.5 (US)"),
-                    ("Claude Opus 4.7 (Anthropic API)", "Anthropic Claude Opus 4.7 (US)"),
-                    ("Claude Sonnet 4.6 (Anthropic API)", "Anthropic Claude Sonnet 4.6 (US)"),
-                    ("Claude Haiku 4.5 (Anthropic API)", "Anthropic Claude Haiku 4.5 (US)"),
-                ]
-                for old_name, new_name in _label_renames:
-                    conn.execute(
-                        text("UPDATE probe_results SET model_name = :new WHERE model_name = :old"),
-                        {"new": new_name, "old": old_name},
-                    )
-                for removed in (
-                    "Nova Pro (US, 1P)", "Bedrock Nova Pro (US)",
-                    "Nova Lite (US, 1P)", "Bedrock Nova Lite (US)",
-                    "Nova 2.0 Lite (Global)", "Bedrock Nova 2.0 Lite (Global)",
-                ):
-                    conn.execute(
-                        text("DELETE FROM probe_results WHERE model_name = :n"),
-                        {"n": removed},
-                    )
-                # engine.begin()이 자동 commit하므로 explicit commit 불필요
-            finally:
-                # advisory_unlock은 connection이 죽으면 자동 해제됨 — 실패해도 무시
-                try:
-                    conn.execute(text("SELECT pg_advisory_unlock(917350001)"))
-                except Exception:
-                    pass
+            # v2.32.2부터 있는 열에는 ALTER를 내지 않으므로(_add_missing_startup_columns) 이 대기는 열이 정말 빠진 기동에만 생긴다.
+            # advisory 락을 기다리는 것도 이 5초가 상한이다(겹친 기동은 5초 뒤 블록을 포기한다).
+            conn.execute(text("SET LOCAL lock_timeout = '5000'"))
+            conn.execute(text("SELECT pg_advisory_xact_lock(917350001)"))
+            # 열 5개는 카탈로그로 먼저 확인하고 빠진 열만 더한다 (2026-09-30 Insights 읽기 트랜잭션 아래 LockNotAvailable).
+            # 아래 DELETE, UPDATE의 테이블 락은 ROW EXCLUSIVE라 다른 트랜잭션의 읽기, 쓰기와 충돌하지 않는다.
+            added_columns = _add_missing_startup_columns(conn)
+            # 2026-05-20: 사용자 요청으로 Opus 4.5 + Sonnet 4.5를 모니터링 대상에서 제외 — 옛 row 삭제.
+            conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Opus 4.5%'"))
+            conn.execute(text("DELETE FROM probe_results WHERE model_name LIKE '%Sonnet 4.5%'"))
+            _label_renames = [
+                ("Claude Opus 4.7 (Global)", "Bedrock Claude Opus 4.7 (Global)"),
+                ("Claude Opus 4.6 (Global)", "Bedrock Claude Opus 4.6 (Global)"),
+                ("Claude Sonnet 4.6 (Global)", "Bedrock Claude Sonnet 4.6 (Global)"),
+                ("Claude Haiku 4.5 (Global)", "Bedrock Claude Haiku 4.5 (Global)"),
+                ("Claude Opus 4.7 (US)", "Bedrock Claude Opus 4.7 (US)"),
+                ("Claude Opus 4.6 (US)", "Bedrock Claude Opus 4.6 (US)"),
+                ("Claude Sonnet 4.6 (US)", "Bedrock Claude Sonnet 4.6 (US)"),
+                ("Claude Haiku 4.5 (US)", "Bedrock Claude Haiku 4.5 (US)"),
+                ("Nova 2.0 Lite (US)", "Bedrock Nova 2.0 Lite (US)"),
+                ("Claude Opus 4.7 (US, 1P)", "Bedrock Claude Opus 4.7 (US)"),
+                ("Claude Opus 4.6 (US, 1P)", "Bedrock Claude Opus 4.6 (US)"),
+                ("Claude Sonnet 4.6 (US, 1P)", "Bedrock Claude Sonnet 4.6 (US)"),
+                ("Claude Haiku 4.5 (US, 1P)", "Bedrock Claude Haiku 4.5 (US)"),
+                ("Nova Lite (US, 1P)", "Bedrock Nova Lite (US)"),
+                ("Nova 2.0 Lite (US, 1P)", "Bedrock Nova 2.0 Lite (US)"),
+                ("Claude Opus 4.7 (CP on AWS)", "Anthropic Claude Opus 4.7 (US)"),
+                ("Claude Sonnet 4.6 (CP on AWS)", "Anthropic Claude Sonnet 4.6 (US)"),
+                ("Claude Haiku 4.5 (CP on AWS)", "Anthropic Claude Haiku 4.5 (US)"),
+                ("Claude Opus 4.7 (Anthropic API)", "Anthropic Claude Opus 4.7 (US)"),
+                ("Claude Sonnet 4.6 (Anthropic API)", "Anthropic Claude Sonnet 4.6 (US)"),
+                ("Claude Haiku 4.5 (Anthropic API)", "Anthropic Claude Haiku 4.5 (US)"),
+            ]
+            for old_name, new_name in _label_renames:
+                conn.execute(
+                    text("UPDATE probe_results SET model_name = :new WHERE model_name = :old"),
+                    {"new": new_name, "old": old_name},
+                )
+            for removed in (
+                "Nova Pro (US, 1P)", "Bedrock Nova Pro (US)",
+                "Nova Lite (US, 1P)", "Bedrock Nova Lite (US)",
+                "Nova 2.0 Lite (Global)", "Bedrock Nova 2.0 Lite (Global)",
+            ):
+                conn.execute(
+                    text("DELETE FROM probe_results WHERE model_name = :n"),
+                    {"n": removed},
+                )
+            # engine.begin()이 자동 commit(실패하면 rollback)하므로 explicit commit 불필요 — 그때 advisory 락과 SET LOCAL도 풀린다
+        if added_columns:  # 커밋된 뒤에만 남긴다
+            logger.info("Startup columns added: %s", ", ".join(added_columns))
     except Exception:
         logger.exception("Migration block failed (non-fatal, backend continues)")
 
@@ -287,7 +318,7 @@ app = FastAPI(
     title="Bedrock Model Monitoring",
     description="Monitor latency, throughput, and reliability of AWS Bedrock LLM models.",
     # OpenAPI(/docs)에 노출되는 런타임 버전 — 릴리스 시 CLAUDE.md "Version strings" 목록과 함께 범프.
-    version="2.32.1",
+    version="2.32.2",
     lifespan=lifespan,
 )
 

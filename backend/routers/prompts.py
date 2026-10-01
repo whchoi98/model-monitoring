@@ -117,12 +117,17 @@ def _normalize_target_model_id(model_id: str) -> str:
 def optimize_prompt(
     payload: OptimizePromptRequest,
     user: User = Depends(get_current_user),
+    db: Session = Depends(get_db),
 ):
     """Bedrock Simple Prompt Optimization (OptimizePrompt API).
 
     bedrock-agent-runtime.optimize_prompt 호출 → analyzePromptEvent + optimizedPromptEvent
     event stream을 한 번에 모아 JSON으로 반환 (UI는 동기 호출).
+
+    db는 get_current_user와 같은 요청 세션이다. OptimizePrompt를 부르기 전에 닫아 인증의 users 읽기 트랜잭션을 끝낸다
+    (v2.32.2) — 호출 동안 users 락을 쥐면 backend 기동의 `ALTER TABLE users ADD COLUMN IF NOT EXISTS`가 기다린다.
     """
+    db.close()
     client = _get_optimize_client()
     normalized_id = _normalize_target_model_id(payload.target_model_id)
     try:
