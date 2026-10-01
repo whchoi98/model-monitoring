@@ -25,7 +25,7 @@ EXISTS`(ACCESS EXCLUSIVE)가 lock_timeout 5초 뒤 LockNotAvailable로 실패했
 Bedrock 호출 (v2.32.2, 2026-09-30): 비스트림 converse는 생성이 끝나야 첫 바이트가 와서, 요약 5.4k~6.3k토큰(55~75초)이
 기본 read timeout 60초에 자주 걸렸다(EN 24시간 109/279건 실패, legacy 재시도 5회로 태스크 6~7분 → 5분 주기와 겹침).
 지금은:
-  - agent.bedrock.insights_client(connect 10초, read 60초, standard 재시도 2회)로 converse_stream을 받는다
+  - agent.bedrock.insights_client(connect 10초, read 60초, standard 모드 총 2회 시도 — 재시도 1회)로 converse_stream을 받는다
     (converse_stream_collect). read timeout은 청크 사이 대기 상한이고, 호출 전체는 wall-clock 상한으로 끊는다.
   - 호출 상한 = min(INSIGHTS_CALL_WALL_CLOCK_S(기본 180초 — max_tokens 8192를 정상 처리량의 절반, 초당 약 45토큰으로
     만드는 시간), 마감 − 지금 − _SAVE_MARGIN_S). 마감은 CLI만 건다: main()이 INSIGHTS_TASK_BUDGET_S(기본 240초) 뒤로
@@ -237,7 +237,15 @@ def _summarize_both(window_label: str, stats: Dict[str, Any], deadline: float | 
     pool = ThreadPoolExecutor(max_workers=len(_LANGS), thread_name_prefix="insights-summary")
     try:
         futures = {lang: pool.submit(_summarize_prompt, client, lang, *prompts[lang], deadline) for lang in _LANGS}
-        summary_ko = _result(futures["ko"], "ko", deadline)  # 실패하면 EN을 기다리지 않는다 — run_once가 -1
+        try:
+            summary_ko = _result(futures["ko"], "ko", deadline)
+        except Exception:
+            if deadline is None:
+                # backend 안 /regenerate 경로 — EN 워커가 끝날 때까지 기다린 뒤 던진다(결과는 버린다). 먼저 돌아가면
+                # _is_regenerating이 풀려 다음 /regenerate가 Bedrock 호출을 겹친다(v2.32.2 통합 리뷰). 대기 상한은
+                # 그 호출의 wall-clock 상한이다. CLI(마감 있음)는 기다리지 않는다 — run_once가 -1, _finish의 os._exit.
+                futures["en"].exception()
+            raise
         try:
             summary_en = _result(futures["en"], "en", deadline)
         except Exception:

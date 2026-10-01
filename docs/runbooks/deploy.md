@@ -716,7 +716,7 @@ aws logs tail /ecs/backend --since 15m --region $REGION | grep -E "Migration blo
 # 기댓값: "Migration block failed" 없음, "Startup columns added" 없음(열이 다 있다), "Application startup complete"
 
 # 2. Insights — 언어별 소요와 토큰, 태스크 소요, 영어 요약
-aws logs tail /ecs/insights --since 30m --region $REGION | grep -E "insights summary (ko|en)|EN insight generation failed|insight id=|deadline|Traceback"
+aws logs tail /ecs/insights --since 30m --region $REGION | grep -E "insights summary|EN insight generation failed|insights_runner 실패|task budget|deadline|insight id=|Traceback"
 curl -s "https://$CF_DOMAIN/api/insights?limit=12" | jq '[.[] | {id, created_at, en: (.summary_md_en != null)}]'
 # 기댓값: 언어별 "insights summary ko|en: …s, output_tokens=…, stop_reason=…" 줄과 "insight id=… 저장", "EN insight generation failed" 없음 또는 드묾,
 #   배포 뒤 insight의 en이 모두 true에 가깝다(이전 24시간은 279건 중 109건 false)

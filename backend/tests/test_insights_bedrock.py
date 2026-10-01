@@ -487,3 +487,39 @@ def test_module_entrypoint_backstop_ends_a_hung_summary_with_exit_1(tmp_path):
     assert "UNREACHABLE" not in proc.stdout
     assert "insights_runner: task budget 0.3s + 0.2s grace passed, exiting 1" in proc.stderr
     assert time.monotonic() - started < 30
+
+
+@pytest.mark.parametrize("deadline_in", [None, 30.0], ids=["in-process-regenerate", "cli-with-deadline"])
+def test_a_ko_failure_waits_for_the_en_worker_only_without_a_deadline(monkeypatch, deadline_in):
+    """backend 안 /regenerate(마감 없음)에서는 KO가 먼저 실패해도 EN 워커가 끝난 뒤에 돌아간다 — 먼저 돌아가면
+    _is_regenerating이 풀려 다음 /regenerate가 Bedrock 호출을 겹친다(v2.32.2 통합 리뷰). CLI(마감 있음)는 기다리지 않고
+    -1로 끝나며 _finish의 os._exit가 남은 워커를 정리한다."""
+    import threading
+
+    from agent import bedrock
+
+    en_done = threading.Event()
+
+    def fake_summarize(client, lang, system, user, deadline):
+        if lang == "ko":
+            raise RuntimeError("ko failed")
+        time.sleep(0.6)
+        en_done.set()
+        return "en"
+
+    monkeypatch.setattr(bedrock, "insights_client", lambda: object())
+    monkeypatch.setattr(insights_runner, "_summarize_prompt", fake_summarize)
+    deadline = None if deadline_in is None else insights_runner._clock() + deadline_in
+    started = time.monotonic()
+    with pytest.raises(RuntimeError, match="ko failed"):
+        insights_runner._summarize_both("6h", {"m": {"total": 1}}, deadline)
+    elapsed = time.monotonic() - started
+    if deadline_in is None:
+        assert en_done.is_set() and elapsed >= 0.55
+        # 일을 마친 풀 스레드는 shutdown(wait=False) 뒤 곧 끝난다 — 생성 중인 워커가 남지 않는다.
+        for t in [t for t in threading.enumerate() if t.name.startswith("insights-summary")]:
+            t.join(1.0)
+            assert not t.is_alive()
+    else:
+        assert not en_done.is_set() and elapsed < 0.4
+    en_done.wait(2)

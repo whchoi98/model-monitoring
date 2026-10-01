@@ -65,7 +65,7 @@ Backend ↔ Bedrock (Seoul region inference profiles us.*, global.* + 서울 in-
 ```text
 model-monitoring/
 ├── backend/
-│   ├── main.py              # FastAPI entrypoint + lifespan (DB migration with pg_advisory_lock + statement_timeout + lock_timeout)
+│   ├── main.py              # FastAPI entrypoint + lifespan (DB migration: SET LOCAL statement_timeout/lock_timeout + pg_advisory_xact_lock + _STARTUP_COLUMNS catalog check, v2.32.2)
 │   ├── auto_prober.py       # run_cycle() — EventBridge가 호출하는 1회성 함수 (NOT daemon); 멈춘 모델은 오류 행 + run completed (v2.28.2); _plan_cycle = CP 주기 노브(기본 매 사이클, 600이면 두 사이클에 한 번 + 자체 회전 — v2.29.0, 기본값 v2.29.1)
 │   ├── probe_cadence.py     # 채널별 수집 주기 — ANTHROPIC_CP_PROBE_INTERVAL_S(기본 300 = 매 사이클, v2.29.1), interval_for(), channel_intervals() (v2.29.0)
 │   ├── latest_results.py    # /latest와 챗봇 공용, 모델별 최신 자동 행 (모델 주기 기준 bounded 범위, v2.29.0)

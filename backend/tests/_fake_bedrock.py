@@ -184,9 +184,11 @@ class FakeBedrock:
             "usage": {"inputTokens": 1, "outputTokens": 1, "totalTokens": 2},
             "metrics": {"latencyMs": int(b.delay_s * 1000)},
         }).encode()
+        # 마지막 바이트를 보내기 전에 기록한다 — 보낸 뒤 기록하면 클라이언트가 먼저 끝내고 테스트가 'open'을 읽는다
+        # (CPU 부하에서 재현된 경합, v2.32.2 통합 리뷰). 전송이 실패하면 except OSError가 'aborted'로 덮는다.
+        req.outcome, req.finished = "completed", time.monotonic()
         conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/json\r\nConnection: close\r\n"
                      + f"Content-Length: {len(payload)}\r\n\r\n".encode() + payload)
-        req.outcome = "completed"
 
     def _stream(self, conn: socket.socket, req: Request, s: Stream) -> None:
         conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Type: application/vnd.amazon.eventstream\r\n"
@@ -211,5 +213,5 @@ class FakeBedrock:
         send("metadata", {"usage": {"inputTokens": s.input_tokens, "outputTokens": s.output_tokens,
                                     "totalTokens": s.input_tokens + s.output_tokens},
                           "metrics": {"latencyMs": 1234}})
+        req.outcome, req.finished = "completed", time.monotonic()  # 종료 청크 전에 — _blocking과 같은 이유
         conn.sendall(b"0\r\n\r\n")
-        req.outcome = "completed"

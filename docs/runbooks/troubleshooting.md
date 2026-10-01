@@ -50,7 +50,7 @@ curl -s "https://$CF_DOMAIN/api/insights?limit=10" | jq '[.[] | {id, created_at,
 
 # 2. 언어별 결과(v2.32.2) — 소요 시간, 출력 토큰, 재시도, 실패, 예산 초과, 저장
 aws logs tail /ecs/insights --since 1h --region $REGION \
-  | grep -E "insights summary|EN insight generation failed|insights_runner 실패|task budget|insight id="
+  | grep -E "insights summary|EN insight generation failed|insights_runner 실패|task budget|deadline|insight id="
 
 # 3. 태스크 길이 — 정지한 태스크는 약 1시간만 조회된다. 컨테이너 이름은 insightstaskdef(containers[0]은 GuardDuty 사이드카일 수 있다)
 FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerInsightsTaskDef --status ACTIVE \
