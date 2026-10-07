@@ -322,7 +322,7 @@ ORDER BY l.granted DESC, xact_age DESC;
 
 ## 비용 단가 동기화 실패 — "자동 확인 안 됨" 배지 (v2.30.0, ADR-030)
 
-**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 4개에서 활성 62채널과 OpenAI 공식
+**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 4개에서 활성 66채널(v2.33.0)과 OpenAI 공식
 가격 9채널(표시 전용 `openai-list:<family_key>`, v2.31.0)의 단가(입력, 출력, 캐시, 긴 컨텍스트)를 읽는다. Bedrock agreement offer rate
 card(Bedrock Claude 23 + OpenAI 28, FM 20개를 순차 호출, 서울 in-region 2채널은 `APN2_*_standard`, v2.32.0), AWS Price List API(Nova 2.0 Lite), Anthropic
 `https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS 10), OpenAI
@@ -377,7 +377,7 @@ done
 | 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → OpenAI 문서(v2.31.0) → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`, `developers.openai.com`)를 확인한다 |
 | 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_try_advisory_lock(917350004)`로 수동 실행과 스케줄 실행이 겹치지 않게 한다. 기다리지 않는 잠금이라 두 번째 런은 즉시 끝난다). 앞 런이 끝난 뒤 다시 실행한다 |
 | seed 또는 테이블 준비 실패 | 로그에 `pricing_sync_runner: create_tables failed`, `pricing_sync_runner: ensure_price_columns failed`(v2.31.0, 위 "단가 열 마이그레이션 실패"), `pricing_sync_runner: ensure_seed failed — sync skipped` 중 하나와 예외 traceback 한 묶음, 런 요약 줄 없음, 새 런 행 없음(`last_sync`가 그대로), exit code 1 | 동기화 전에 멈춘 것이다. 먼저 DB 연결(RDS 상태, 태스크 보안 그룹, DB secret)을 확인한다. `ensure_seed` 예외가 `canceling statement due to lock timeout`이면 seed 잠금 `pg_advisory_xact_lock(917350003)`을 5초(`lock_timeout`) 안에 못 잡은 것이다. 같은 잠금을 쓰는 backend 기동 seed와 겹쳤으면 backend 배포가 끝난 뒤 다시 실행한다. 반복되면 잠금을 쥔 세션을 찾는다(`SELECT a.pid, a.state, a.xact_start, a.query FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = 917350003`). `canceling statement due to statement timeout`이면 30초 안에 끝나지 않은 느린 쿼리다 |
-| CP 디스커버리 실패 | CP 10셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 61 active channels`(평소 71 = 62 + OpenAI 공식 가격 9, v2.31.x에서는 54와 63, v2.30.0에서는 46과 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
+| CP 디스커버리 실패 | CP 11셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 64 active channels`(평소 75 = 66 + OpenAI 공식 가격 9, v2.33.0. v2.32.x에서는 61과 71, v2.31.x에서는 54와 63, v2.30.0에서는 46과 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
 
 ### 조치
 
@@ -485,7 +485,7 @@ prober 루프(4회 시도)와 anthropic SDK(시도마다 2회 더)가 재시도�
 
 ### 증상
 
-- 대시보드 CP 카드 10장(`Anthropic Claude … (US)`, v2.32.0부터 Sonnet 5.5 포함)이 모두 "오류", 이상 징후 박스에 CP 채널이 나란히 뜬다. Bedrock Claude
+- 대시보드 CP 카드 11장(`Anthropic Claude … (US)`, v2.32.0부터 Sonnet 5.5, v2.33.0부터 Haiku 5.5 포함)이 모두 "오류", 이상 징후 박스에 CP 채널이 나란히 뜬다. Bedrock Claude
   (`Bedrock Claude …`)와 OpenAI 채널은 정상이다.
 - 오류 행 `error_message`(서명):
   `Unexpected: Error code: 429 - {'type': 'error', 'error': {'type': 'rate_limit_error', 'message': "You have reached your API usage limits: your organization has crossed its monthly API usage threshold, set based on your organization's API tier. You will regain access on 2026-10-01 at 00:00 UTC.", 'details': {'error_code': 'enforced_spend_limit_reached'}}, …}`
@@ -503,7 +503,7 @@ aws logs filter-log-events --region $REGION --log-group-name /ecs/autoprober \
   --start-time $(( ($(date +%s) - 3600) * 1000 )) --filter-pattern '"usage cap reached"' --query 'length(events)'
 aws logs filter-log-events --region $REGION --log-group-name /ecs/autoprober \
   --start-time $(( ($(date +%s) - 3600) * 1000 )) --filter-pattern '"Retryable error for anthropic:"' --query 'length(events)'
-# 기댓값(v2.32.0 기본값): 첫 번째 ≈ 120(10채널 × 12회/시간, ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 ≈ 60), 두 번째 0
+# 기댓값(v2.33.0 기본값): 첫 번째 ≈ 132(11채널 × 12회/시간, ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 ≈ 66), 두 번째 0
 
 # 2. 대시보드에 보이는 마지막 오류 — "regain access on <날짜>"가 상한 해제 시각
 curl -s "https://$CF_DOMAIN/api/auto-probe/anomalies?hours=1" \
@@ -516,11 +516,11 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/anomalies?hours=1" \
   오류로 남는 것이 정상이며, 해제 뒤 첫 CP 사이클(기본 최대 5분, 600 설정이면 최대 10분)에 자동으로 정상으로 돌아온다.
 - 더 빨리 복구하려면 Anthropic Console에서 조직의 API 등급 또는 사용량 한도를 올린다(조직 관리자 권한). 키 교체나 재배포는
   필요 없다.
-- CP 채널을 끄지 않는다 — 오류 행이 상한 기간을 기록하는 증거이고, 재시도가 없어 기본 주기에서도 호출은 시간당 120회다(v2.32.0, 10채널).
+- CP 채널을 끄지 않는다 — 오류 행이 상한 기간을 기록하는 증거이고, 재시도가 없어 기본 주기에서도 호출은 시간당 132회다(v2.33.0, 11채널. v2.32.0은 10채널 120회).
   상한 기간에 호출을 줄여야 하면 AutoProber task env `ANTHROPIC_CP_PROBE_INTERVAL_S=600`(초, 5분 단위로 반올림)을 CDK에서
   넣고 backend 서비스에도 같은 값을 넣은 뒤(`/api/auto-probe/status` `channel_intervals` 표시용) digest 고정
   AppServices + Scheduler 경로로 배포한다. 그러면 v2.29.0처럼 CP만 두 사이클에 한 번, 카테고리를 따로 순환하며 시간당
-  60회가 된다(v2.32.0, 10채널. v2.29.0 당시 9채널은 54회. 확인은 `deploy.md` §5-2의 3~4번). 상한이 풀리면 300으로 되돌린다. 600 모드에서는 대시보드가 `/status`를
+  66회가 된다(v2.33.0, 11채널. v2.32.0 10채널은 60회, v2.29.0 당시 9채널은 54회. 확인은 `deploy.md` §5-2의 3~4번). 상한이 풀리면 300으로 되돌린다. 600 모드에서는 대시보드가 `/status`를
   받기 전에(첫 `/status` 요청이 실패하면 다음 새로고침에서 성공할 때까지) 10분을 넘긴 CP 카드를 잠시 "수집 지연"으로 표시할
   수 있다. v2.29.1 대시보드는 `/status` 전에 600을 가정하지 않기 때문이며, `/status`가 오면 600 기준으로 돌아온다.
 - 로그에 `usage cap reached` 대신 `Retryable error for anthropic:`가 계속 보이면 상한 메시지 문구가 바뀐 것이다 —

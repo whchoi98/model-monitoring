@@ -36,8 +36,9 @@ def region_for(surface: str) -> str:
     return os.environ.get(meta["region_env"], meta["default_region"])
 
 
-# 대표 모델 6종 (2026-09-05 4종 + 2026-09-23 Opus 5.5 + 2026-09-30 Sonnet 5.5). mantle=None → 측정 불가(Fable 5.1은 US GovCloud 전용,
-# Sonnet 5.5는 Mantle us-east-1 미서빙 — V3). 사유는 mantle_reason(KO)과 mantle_reason_en(EN), 프런트가 그대로 표시한다.
+# 대표 모델 7종 (2026-09-05 4종 + 2026-09-23 Opus 5.5 + 2026-09-30 Sonnet 5.5 + 2026-10-07 Haiku 5.5). mantle=None → 측정 불가
+# (Fable 5.1은 US GovCloud 전용, Sonnet 5.5와 Haiku 5.5는 Mantle us-east-1 미서빙 — V3). 사유는 mantle_reason(KO)과
+# mantle_reason_en(EN), 프런트가 그대로 표시한다. Haiku는 2026-09-05 대표에서 빠졌지만 Haiku 5.5는 2026-10-07 사용자 결정으로 넣는다.
 MODELS: list[dict] = [
     {"key": "fable-5-1", "label": "Claude Fable 5.1", "cp": "claude-fable-5-1", "mantle": None,
      "bedrock": "global.anthropic.claude-fable-5-1",
@@ -55,6 +56,10 @@ MODELS: list[dict] = [
      "mantle_reason_en": "Not measurable — Mantle us-east-1 does not serve anthropic.claude-sonnet-5-5 (404 not_found_error, measured 2026-09-30; claude-sonnet-5 returns 200 there)"},
     {"key": "sonnet-5", "label": "Claude Sonnet 5", "cp": "claude-sonnet-5", "mantle": "anthropic.claude-sonnet-5",
      "bedrock": "global.anthropic.claude-sonnet-5"},
+    {"key": "haiku-5-5", "label": "Claude Haiku 5.5", "cp": "claude-haiku-5-5", "mantle": None,
+     "bedrock": "global.anthropic.claude-haiku-5-5",
+     "mantle_reason": "측정 불가 — Mantle us-east-1이 anthropic.claude-haiku-5-5를 서빙하지 않음 (404 not_found_error, 2026-10-07 실측. 같은 리전 claude-sonnet-5는 200)",
+     "mantle_reason_en": "Not measurable — Mantle us-east-1 does not serve anthropic.claude-haiku-5-5 (404 not_found_error, measured 2026-10-07; claude-sonnet-5 returns 200 there)"},
 ]
 MODEL_KEYS = [m["key"] for m in MODELS]
 _MODEL_BY_KEY = {m["key"]: m for m in MODELS}
@@ -154,8 +159,8 @@ FEATURES: list[dict] = [
        {"cp": "ga", "mantle": "unknown", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
        "Bedrock: strict 도구가 'Extra inputs are not permitted' (실측 2026-09-05) — structured outputs와 동일 제약"),
     _f("extended_thinking", "model", "확장 추론(budget)", "Extended thinking (budget_tokens)",
-       "대표 모델은 전부 adaptive-only(Opus 5.5, Sonnet 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
-       "All representative models are adaptive-only (incl. Opus 5.5, Sonnet 5.5) → documented 400; exact rejection → not_applicable",
+       "대표 모델은 전부 adaptive-only(Opus 5.5, Sonnet 5.5, Haiku 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
+       "All representative models are adaptive-only (incl. Opus 5.5, Sonnet 5.5, Haiku 5.5) → documented 400; exact rejection → not_applicable",
        _DOC + "build-with-claude/thinking", ALL, "negative"),
     # --- server-side tools ---
     _f("advisor_tool", "server_tools", "Advisor 도구", "Advisor tool", "advisor_20260301 → server_tool_use + advisor result",

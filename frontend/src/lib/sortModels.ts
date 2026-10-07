@@ -1,5 +1,5 @@
 // 모델 카드/이력 정렬 공통 유틸.
-// 1차: 모델 family 우선순위 (Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 4.5 > Nova > GPT ...)
+// 1차: 모델 family 우선순위 (Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Haiku 4.5 > Nova > GPT ...)
 // ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
 // 라벨에도 포함된다 — 더 긴 이름(5.1, 5.5)이 반드시 앞에 와야 함.
 // "Claude Sonnet 5"도 "Claude Sonnet 5.5" 라벨에 포함된다(v2.32.0).
@@ -17,6 +17,7 @@ export const FAMILY_ORDER = [
   "Claude Sonnet 5.5",
   "Claude Sonnet 5",
   "Claude Sonnet 4.6",
+  "Claude Haiku 5.5",
   "Claude Haiku 4.5",
   "Nova 2.0 Lite",
   "GPT 6.1 Sol",

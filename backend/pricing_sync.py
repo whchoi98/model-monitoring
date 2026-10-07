@@ -48,6 +48,7 @@ from pricing_sources import (
     OPENAI_PRICING_URL,
     OPENAI_SOURCE_ID,
     PriceIdentity,
+    keeps_long_context,
     offer_source_id,
     pricelist_source_id,
 )
@@ -213,11 +214,12 @@ def _quantized(price: UnitPrice) -> UnitPrice:
 _LONG_FIELDS = ("long_input", "long_output", "long_cache_read", "long_cache_write")
 
 
-def _gpt_long_only(price: UnitPrice, ident: PriceIdentity) -> UnitPrice:
-    """Long-context prices are GPT-only. The offer allow-list accepts `_long_ctx` names on any FM, so a non-OpenAI
-    channel's long_* fields are dropped here, before _quantized, and never reach price_history, /api/pricing or the
-    exports (the doc parsers and the Price List never produce long_* for Claude or Nova)."""
-    if ident.provider == "openai":
+def _long_context_gate(price: UnitPrice, ident: PriceIdentity) -> UnitPrice:
+    """Long-context prices are kept for GPT and for the Claude families priced by prompt length
+    (pricing_sources.CLAUDE_LONG_CONTEXT_FAMILIES — Claude Haiku 5.5, v2.33.0). The offer allow-list accepts `_long_ctx`
+    names on any FM and the Anthropic doc parser reads Haiku 5.5's "over 100,000 tokens" row, so every other channel's
+    long_* fields are dropped here and never reach price_history, /api/pricing or the exports."""
+    if keeps_long_context(ident):
         return price
     return replace(price, **dict.fromkeys(_LONG_FIELDS))
 
@@ -338,11 +340,11 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
         return value, None
 
     def settle(members, price: UnitPrice | None, reason: str | None, source_id: str | None) -> None:
-        for model_id, _ in members:
+        for model_id, ident in members:
             if price is None:
                 channels[model_id] = f"skipped:{reason}"
             else:
-                observed[model_id] = _Observed(price, source_id)
+                observed[model_id] = _Observed(_long_context_gate(price, ident), source_id)
 
     def settle_doc(source: str, doc_groups, table: dict[str, UnitPrice], reason: str | None, source_id: str) -> None:
         """A doc table's prices are quantized per looked-up model only: an untracked row with an odd value (a $0.00
@@ -416,7 +418,7 @@ def _fetch_all(active: Mapping[str, PriceIdentity], fetchers: Fetchers, clock, s
                 for model_id, ident in members:
                     price = select_offer_price(rate_card, ident.channel)
                     prices[model_id] = None if price is None else _quantized(
-                        _plausible_long(_gpt_long_only(price, ident), f"offers {fm_id} {ident.channel}"))
+                        _plausible_long(_long_context_gate(price, ident), f"offers {fm_id} {ident.channel}"))
             except Exception as exc:  # noqa: BLE001 — any parser error only skips this FM's channels
                 offers_list = response.get("offers") if isinstance(response, dict) else None
                 reason = "offer_count" if isinstance(offers_list, list) and len(offers_list) != 1 else "parse_failed"

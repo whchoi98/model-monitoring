@@ -30,7 +30,7 @@ class UnitPrice:
     cache_read: Decimal | None = None       # cache hit / cached input
     cache_write: Decimal | None = None      # Claude 5-minute write, OpenAI "cache writes", Nova cache write
     cache_write_1h: Decimal | None = None   # Claude 1-hour write
-    long_input: Decimal | None = None       # GPT long context (above OpenAI's short-context limit)
+    long_input: Decimal | None = None       # long context: GPT above OpenAI's short-context limit, Claude Haiku 5.5 over 100K
     long_output: Decimal | None = None
     long_cache_read: Decimal | None = None
     long_cache_write: Decimal | None = None
@@ -270,6 +270,9 @@ _MODEL_PRICING_HEADING_RE = re.compile(r"^##\s+Model pricing\s*$")
 _SUP_RE = re.compile(r"<sup>.*?</sup>", re.IGNORECASE | re.DOTALL)
 # trailing parenthesis group, one nesting level — covers "([limited availability](https://…))"
 _TRAILING_PAREN_RE = re.compile(r"\s*\((?:[^()]|\([^()]*\))*\)\s*$")
+# Prompt-length tiers of one model (Claude Haiku 5.5, v2.33.0): "(for prompts up to 100,000 tokens)" is the standard
+# price and "(for prompts over 100,000 tokens)" the long-context price of the same cleaned name.
+_PROMPT_TIER_RE = re.compile(r"\(for prompts (?P<tier>up to|over) [\d,]+ tokens\)\s*$", re.IGNORECASE)
 _PRICE_CELL_RE = re.compile(r"^\$(\d+(?:\.\d+)?) / MTok$")
 _SEPARATOR_CELL_RE = re.compile(r"^:?-+:?$")
 _COL_MODEL = "model"
@@ -391,7 +394,10 @@ def parse_anthropic_pricing_md(markdown: str) -> dict[str, UnitPrice]:
 
     Columns are found by header name ("Model", "Base input tokens", "Output tokens", and the optional
     "Cache hits and refreshes", "5m cache writes", "1h cache writes"), `<sup>` is removed from name and value
-    cells, and the trailing parenthesis group (incl. a markdown link) is removed from the name. Rows whose
+    cells, and the trailing parenthesis group (incl. a markdown link) is removed from the name. A model priced by
+    prompt length has two rows, "(for prompts up to N tokens)" and "(for prompts over N tokens)": the first is its
+    standard price and the second fills long_input, long_output, long_cache_read and long_cache_write (5-minute
+    write) of the same name; an "over" row without its "up to" row is ignored (v2.33.0). Rows whose
     input or output is not exactly "$<n> / MTok" are skipped; such an optional cell is None. A name that
     appears twice with a different input or output is dropped; with the same input and output it is kept and a
     cache price that differs between the rows is None. Callers look names up by exact match only.
@@ -404,17 +410,29 @@ def parse_anthropic_pricing_md(markdown: str) -> dict[str, UnitPrice]:
         raise PriceParseError(f"pricing table headers not recognised: {header}") from None
     extra = {field: header.index(col) for col, field in _ANTHROPIC_CACHE_COLUMNS.items() if col in header}
 
+    long_rows: list[tuple[str, UnitPrice]] = []
+
     def pairs():
         for cells in _rows(table, header):
             name = _clean_model_name(cells[i_model])
             p_in, p_out = _price_cell(cells[i_in]), _price_cell(cells[i_out])
             if not name or p_in is None or p_out is None:
                 continue
-            yield name, UnitPrice(input=p_in, output=p_out, **{f: _price_cell(cells[i]) for f, i in extra.items()})
+            price = UnitPrice(input=p_in, output=p_out, **{f: _price_cell(cells[i]) for f, i in extra.items()})
+            tier = _PROMPT_TIER_RE.search(_SUP_RE.sub("", cells[i_model]).strip())
+            if tier and tier.group("tier").lower() == "over":
+                long_rows.append((name, price))
+                continue
+            yield name, price
 
     prices = _unambiguous(pairs())
     if not prices:
         raise PriceParseError("pricing table has no parseable rows")
+    longs = _unambiguous(iter(long_rows))
+    for name, long in longs.items():
+        if name in prices:
+            prices[name] = replace(prices[name], long_input=long.input, long_output=long.output,
+                                   long_cache_read=long.cache_read, long_cache_write=long.cache_write)
     return prices
 
 

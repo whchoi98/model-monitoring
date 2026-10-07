@@ -118,6 +118,9 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
     "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)",
     "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
+    # Haiku 5.5 (v2.33.0, 2026-10-07 출시·실측): Global(Seoul 호출)과 us.(us-east-1) 모두 200, 서울 평문 id는 INFERENCE_PROFILE 전용.
+    # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "haiku-5". forced tool_choice(any)는 200.
+    "global.anthropic.claude-haiku-5-5": "Bedrock Claude Haiku 5.5 (Global)",
     "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
     # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용 — 예외: Seoul Opus 5, Sonnet 5는 2026-09-30부터 ON_DEMAND(아래 In-Region 블록).
@@ -128,9 +131,11 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
     "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
-    # us.anthropic.claude-sonnet-5-5는 없음(2026-09-30 네 US 리전 프로파일 목록 부재, "model identifier is invalid") — 의도적 미등록.
+    # Sonnet 5.5 US (v2.33.0): 2026-09-30에는 us. 프로파일이 없었고 2026-10-07 us-east-1/us-east-2/us-west-2에 생겼다(us-east-1 converse 200).
+    "us.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (US)",
     "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
     "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
+    "us.anthropic.claude-haiku-5-5": "Bedrock Claude Haiku 5.5 (US)",
     "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
     # Bedrock - In-Region 온디맨드 (v2.32.0, 2026-09-30 실측, ADR-031): Seoul list-foundation-models가
     # anthropic.claude-opus-5 / anthropic.claude-sonnet-5를 ON_DEMAND로 표시, converse_stream 200, temperature 400.
@@ -161,6 +166,7 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("sonnet-5-5", "Anthropic Claude Sonnet 5.5 (US)"),  # v2.32.0 — CP /v1/models 첫 항목(2026-09-30)
     ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
     ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
+    ("haiku-5-5", "Anthropic Claude Haiku 5.5 (US)"),  # v2.33.0 — CP /v1/models 첫 항목(2026-10-07)
     ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
 ]
 
@@ -310,7 +316,8 @@ def _anthropic_actual_id(model_id: str) -> str:
 # "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)도, "opus-5"는 opus-5-5(Opus 5.5)도 포함한다
 # (Opus 5.5 temperature 400은 2026-09-23 converse_stream 실측).
 # "sonnet-5"는 sonnet-5-5(Sonnet 5.5)도, in-region 키 bedrock:ap-northeast-2:anthropic.claude-{opus,sonnet}-5도 포함한다(모두 2026-09-30 temperature 400 실측) — 판정은 키 전체 문자열로 한다.
-_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "opus-5", "fable-5", "sonnet-5")
+# "haiku-5"는 haiku-5-5(Haiku 5.5, 2026-10-07 temperature 400 실측) — haiku-4-5는 해당하지 않는다(v2.33.0).
+_REASONING_MODEL_PATTERNS = ("opus-4-7", "opus-4-8", "opus-5", "fable-5", "sonnet-5", "haiku-5")
 
 
 def _is_reasoning_model(model_id: str) -> bool:

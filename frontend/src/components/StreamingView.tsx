@@ -31,6 +31,8 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Sonnet 5 (ap-northeast-2)": "bg-indigo-800",
   "Claude Sonnet 4.6": "bg-blue-600",
   "Claude Sonnet 4.6 (Global)": "bg-blue-500",
+  "Claude Haiku 5.5": "bg-orange-700",
+  "Claude Haiku 5.5 (Global)": "bg-orange-600",
   "Claude Haiku 4.5": "bg-cyan-600",
   "Claude Haiku 4.5 (Global)": "bg-cyan-500",
   "Nova 2.0 Lite": "bg-amber-600",
@@ -115,6 +117,7 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
   if (modelId.includes("sonnet-4-6")) {
     return `Claude Sonnet 4.6${claudeSuffix}`;
   }
+  if (modelId.includes("haiku-5-5")) return `Claude Haiku 5.5${claudeSuffix}`;
   if (modelId.includes("haiku-4-5")) {
     return `Claude Haiku 4.5${claudeSuffix}`;
   }

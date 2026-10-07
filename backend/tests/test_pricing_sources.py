@@ -20,7 +20,7 @@ import pricing_sources as ps
 from pricing_parsers import parse_openai_pricing_md, parse_pricelist
 from pricing_sources import PriceIdentity, active_channels, price_identity, region_of, tier_of
 from tests.pricing_catalog import (
-    ACTIVE_MODELS, CP_MODEL_IDS_20260930, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
+    ACTIVE_MODELS, CP_MODEL_IDS_20261007, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
 )
 
 SORT_MODELS_TS = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "sortModels.ts"
@@ -46,7 +46,7 @@ class _FakeAnthropic:
     """_discover_anthropic_models가 부르는 /v1/models만 흉내 낸다(네트워크 없음)."""
 
     def __init__(self, **kwargs):
-        page = SimpleNamespace(data=[SimpleNamespace(id=i) for i in CP_MODEL_IDS_20260930])
+        page = SimpleNamespace(data=[SimpleNamespace(id=i) for i in CP_MODEL_IDS_20261007])
         self.models = SimpleNamespace(list=lambda limit=100: page)
 
 
@@ -78,17 +78,17 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_62_active_channels():
+def test_expected_table_is_the_66_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
-    assert counts == {("anthropic", "global"): 11, ("anthropic", "us"): 10, ("anthropic", "cp"): 10,
+    assert counts == {("anthropic", "global"): 12, ("anthropic", "us"): 12, ("anthropic", "cp"): 11,
                       ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 7, ("openai", "us"): 4,
                       ("openai", "in_region"): 17}
-    assert len(EXPECTED_IDENTITY) == 62
+    assert len(EXPECTED_IDENTITY) == 66
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_62_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_66_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -174,7 +174,7 @@ def test_cp_family_key_does_not_depend_on_target_order(monkeypatch):
 
 
 @pytest.mark.parametrize("actual_id", [
-    *CP_MODEL_IDS_20260930, "claude-sonnet-5-6", "claude-sonnet-5-5-20261101", "claude-opus-5-6", "claude-fable-5-2",
+    *CP_MODEL_IDS_20261007, "claude-haiku-5-6", "claude-haiku-5-5-20261101", "claude-sonnet-5-6", "claude-sonnet-5-5-20261101", "claude-opus-5-6", "claude-fable-5-2",
     "claude-opus-5-20261015", "claude-fable-5-1-20261015", "claude-haiku-4-5", "claude-sonnet-4-6-20260101",
 ])
 def test_cp_classification_agrees_with_prober_matching(actual_id):
@@ -198,7 +198,7 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 21
+    assert len(ps.FAMILY_ORDER) == 22
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
     assert {v[1] for v in EXPECTED_IDENTITY.values()} == set(ps.FAMILY_ORDER)
@@ -269,7 +269,9 @@ def test_source_metadata_constants():
         "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
         "https://developers.openai.com/api/docs/pricing", "openai-list:",
     )
-    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 10
+    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 11
+    assert ps.ANTHROPIC_DOC_NAMES["claude-haiku-5-5"] == "Claude Haiku 5.5"
+    assert ps.CLAUDE_LONG_CONTEXT_FAMILIES == frozenset({"claude-haiku-5-5"})
     assert ps.ANTHROPIC_DOC_NAMES["claude-sonnet-5-5"] == "Claude Sonnet 5.5"
     assert ps.EPOCH.isoformat() == "1970-01-01T00:00:00+00:00"
     assert ps.DISCLAIMER == {
@@ -307,7 +309,13 @@ def test_official_links_and_price_notes():
     ]
     # v2.31.1: references list only cited sources — the fixed official pages are gone
     assert not hasattr(ps, "OFFICIAL_PAGES") and not hasattr(ps, "official_source_id")
-    (note,) = ps.PRICE_NOTES
+    note, conflict = ps.PRICE_NOTES
+    assert set(conflict) == {"family_key", "kind", "expected", "text_ko", "text_en", "source", "source_id"}
+    assert (conflict["family_key"], conflict["kind"], conflict["source"], conflict["source_id"]) == (
+        "claude-sonnet-5-5", "doc_conflict", "anthropic_doc", ps.ANTHROPIC_SOURCE_ID)
+    assert conflict["expected"] == {"cp": {"cache_read": 0.1}}
+    assert "$0.10" in conflict["text_ko"] and "$0.20" in conflict["text_ko"] and "·" not in conflict["text_ko"]
+    assert "$0.10" in conflict["text_en"] and "$0.20" in conflict["text_en"]
     assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source", "source_id"}
     assert (note["family_key"], note["kind"], note["min_until"], note["source"], note["source_id"]) == (
         "gpt-5.6-sol", "promo", "2026-11-21", "openai_doc", "openai-pricing")

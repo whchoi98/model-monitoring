@@ -239,12 +239,12 @@ def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 62 active channels plus the 9 OpenAI official prices."""
+    """build_pricing_payload on the real seeds of the 66 active channels plus the 9 OpenAI official prices."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 71
-    assert pricing_seed.ensure_seed(engine, active) == 71
+    assert len(active) == 75
+    assert pricing_seed.ensure_seed(engine, active) == 75
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -266,16 +266,16 @@ def test_production_references_list_only_cited_sources():
     payload = _production_payload(pricing_sources.PRICE_NOTES)
     _assert_every_reference_is_cited(payload)
     kinds = [r["kind"] for r in payload["references"]]
-    assert len(kinds) == 23
+    assert len(kinds) == 24  # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0)
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 20, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 21, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(24, "note:gpt-5.4", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(25, "note:gpt-5.4", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
@@ -291,7 +291,8 @@ def test_production_payload_shows_the_v2_32_channels():
     (seoul,) = _family(payload, "claude-sonnet-5")["tiers"]["in_region"]
     assert (seoul["regions"], seoul["input"], seoul["output"]) == (["ap-northeast-2"], 2.2, 11)
     s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
-    assert (s55["us"], s55["in_region"], s55["global"]["input"], s55["cp"]["input"]) == (None, [], 2, 2)
+    # US is a v2.33.0 channel (2026-10-07); no Seoul in-region
+    assert (s55["us"]["input"], s55["in_region"], s55["global"]["input"], s55["cp"]["input"]) == (2.2, [], 2, 2)
     g61 = _family(payload, "gpt-6.1-sol")["tiers"]
     assert [g61[t]["long"] for t in ("global", "us")] + [g61["in_region"][0]["long"]] == [None] * 3
     assert g61["openai_list"]["long"] == {"input": 4, "output": 15, "cache_read": 0.2, "cache_write": 5}
@@ -304,6 +305,11 @@ V2_32_NEW_CHANNELS = {
     "global.anthropic.claude-sonnet-5-5", "anthropic:claude-sonnet-5-5",
     "bedrock:ap-northeast-2:anthropic.claude-opus-5", "bedrock:ap-northeast-2:anthropic.claude-sonnet-5",
 }
+# v2.33.0 channels (2026-10-07) — not in a v2.31.2 database either
+V2_33_NEW_CHANNELS = {
+    "global.anthropic.claude-haiku-5-5", "us.anthropic.claude-haiku-5-5", "anthropic:claude-haiku-5-5",
+    "us.anthropic.claude-sonnet-5-5",
+}
 
 
 def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_check():
@@ -314,7 +320,8 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
     models.Base.metadata.create_all(engine)
     Session = sessionmaker(bind=engine)
     active = active_channels(ACTIVE_MODELS, [])
-    old = {m: i for m, i in active.items() if m not in V2_32_NEW_CHANNELS and i.family_key != "gpt-6.1-sol"}
+    old = {m: i for m, i in active.items()
+           if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS and i.family_key != "gpt-6.1-sol"}
     assert len(old) == 63
     try:
         assert pricing_seed.ensure_seed(engine, old) == 63
@@ -324,7 +331,7 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
             for row in s.query(models.PriceHistory):
                 row.observed_at = synced
             s.commit()
-        assert pricing_seed.ensure_seed(engine, active) == 8  # the upgrade: backend lifespan seeds the new rows
+        assert pricing_seed.ensure_seed(engine, active) == 12  # the upgrade: backend lifespan seeds the new rows (8 + 4)
         with Session() as s:
             payload = build_pricing_payload(s, active, now=datetime(2026, 9, 30, 13, 0, tzinfo=timezone.utc))
     finally:
@@ -332,8 +339,9 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 23
+    assert len(as_of) == 24
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
+    assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol
     assert set(as_of.values()) == {"2026-09-29"}  # incl. the offers and docs the other new rows cite
     s55 = _family(payload, "claude-sonnet-5-5")["tiers"]

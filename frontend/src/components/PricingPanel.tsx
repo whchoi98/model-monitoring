@@ -77,8 +77,8 @@ const NOTES: { en: string; ko: string }[] = [
     ko: "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
   },
   {
-    en: "GPT long-context prices apply to requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5)",
-    ko: "GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다",
+    en: "Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5) and to Claude Haiku 5.5 prompts over 100K tokens",
+    ko: "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
   },
   {
     en: "The OpenAI official price is OpenAI's direct API price and is not used for cost calculations",
@@ -108,6 +108,7 @@ const BADGE_CLASS: Record<PricingBadge["kind"], string> = {
   pending: "border-sky-500/40 bg-sky-500/10 text-sky-300",
   promo: "border-purple-500/40 bg-purple-500/10 text-purple-300",
   promo_check: "border-rose-500/40 bg-rose-500/10 text-rose-300",
+  doc_conflict: "border-orange-500/40 bg-orange-500/10 text-orange-300",
 };
 // Short labels never wrap. Promotion labels are longer than a phone-width column in English, so they wrap only between
 // words (their date stays whole).
@@ -116,6 +117,7 @@ const BADGE_WRAP: Record<PricingBadge["kind"], string> = {
   pending: "whitespace-nowrap",
   promo: "break-keep",
   promo_check: "break-keep",
+  doc_conflict: "whitespace-nowrap",
 };
 
 /** Text whose price pairs and hyphenated tokens never wrap inside; `tail` (a footnote, "↗") stays with the last word. */
@@ -501,7 +503,7 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
           <span className={LEGEND_TERM}>{L("input / output", "입력 / 출력")}</span>,{" "}
           <span className={LEGEND_TERM}>{L("USD per 1M tokens", "1M 토큰당 USD")}</span>.{" "}
           {L("Second line", "둘째 줄")}: <span className={LEGEND_TERM}>{L("prompt caching", "프롬프트 캐싱")}</span>.{" "}
-          {L("Third line on GPT rows", "GPT 셋째 줄")}: <span className={LEGEND_TERM}>{L("long context", "긴 컨텍스트")}</span>
+          {L("Third line on GPT and Claude Haiku 5.5 rows", "GPT와 Claude Haiku 5.5 셋째 줄")}: <span className={LEGEND_TERM}>{L("long context", "긴 컨텍스트")}</span>
         </p>
       )}
 

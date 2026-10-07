@@ -166,13 +166,31 @@ def test_cache_and_long_context_dimensions_never_change_input_and_output(fixture
             assert all(getattr(base, f) is None for f in EXTRA_FIELDS)
 
 
-@pytest.mark.parametrize("fixture", [f for f in OFFER_FIXTURES if "claude" in f])
+@pytest.mark.parametrize("fixture", [f for f in OFFER_FIXTURES if "claude" in f and "haiku-5-5" not in f])
 def test_claude_offers_have_no_long_context_price(fixture):
     card = _card(fixture)
     for channel in ("global", "us"):
         price = select_offer_price(card, channel)
         assert price.cache_read is not None and price.cache_write is not None and price.cache_write_1h is not None
         assert (price.long_input, price.long_output, price.long_cache_read, price.long_cache_write) == (None,) * 4
+
+
+def test_haiku_55_offer_has_long_context_prices_over_100k_tokens():
+    """Claude Haiku 5.5 (2026-10-07) is priced by prompt length: the `_long_ctx` dimensions are 5x every price."""
+    card = _card("offers_claude-haiku-5-5.json")
+    assert select_offer_price(card, "global") == U(
+        "0.1", "0.5", cache_read="0.01", cache_write="0.125", cache_write_1h="0.2",
+        long_input="0.5", long_output="2.5", long_cache_read="0.05", long_cache_write="0.625")
+    assert select_offer_price(card, "us") == U(
+        "0.11", "0.55", cache_read="0.011", cache_write="0.1375", cache_write_1h="0.22",
+        long_input="0.55", long_output="2.75", long_cache_read="0.055", long_cache_write="0.6875")
+
+
+def test_sonnet_55_offer_on_20261007_cuts_cache_read_and_adds_us():
+    """2026-10-07 Sonnet 5.5 rate card: cache read 0.2 -> 0.1 (Global), and USE1_*_standard for the new US channel."""
+    card = _card("offers_claude-sonnet-5-5_20261007.json")
+    assert select_offer_price(card, "global") == U(2, 10, cache_read="0.1", cache_write="2.5", cache_write_1h=4)
+    assert select_offer_price(card, "us") == U("2.2", 11, cache_read="0.11", cache_write="2.75", cache_write_1h="4.4")
 
 
 @pytest.mark.parametrize("channel", ["cp", "inregion:eu-west-1", "inregion:ap-northeast-1", "inregion:", "bogus"])
@@ -468,6 +486,8 @@ CP_EXPECTED = {  # the ten Claude Platform on AWS families: input, output, cache
     "Claude Sonnet 5.5": U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4),
     "Claude Sonnet 5": U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4),
     "Claude Sonnet 4.6": U(3, 15, cache_read="0.3", cache_write="3.75", cache_write_1h=6),
+    "Claude Haiku 5.5": U("0.10", "0.50", cache_read="0.01", cache_write="0.125", cache_write_1h="0.20",
+                          long_input="0.50", long_output="2.50", long_cache_read="0.05", long_cache_write="0.625"),
     "Claude Haiku 4.5": U(1, 5, cache_read="0.1", cache_write="1.25", cache_write_1h=2),
 }
 
@@ -476,7 +496,7 @@ def _doc():
     return parse_anthropic_pricing_md((FIXTURES / "anthropic_pricing.md").read_text(encoding="utf-8"))
 
 
-def test_real_doc_gives_all_ten_claude_platform_on_aws_families():
+def test_real_doc_gives_all_eleven_claude_platform_on_aws_families():
     prices = _doc()
     assert sorted(ANTHROPIC_DOC_NAMES.values()) == sorted(CP_EXPECTED)
     assert {name: prices[name] for name in CP_EXPECTED} == CP_EXPECTED
@@ -485,7 +505,8 @@ def test_real_doc_gives_all_ten_claude_platform_on_aws_families():
     # never read
     assert prices["Claude Sonnet 5"].input == D(2) and prices["Claude Opus 5"].input == D(5)
     assert prices["Claude Fable 5.1"].cache_read == D("0.25") and prices["Claude Opus 5.5"].cache_read == D("0.2")
-    assert all(p.long_input is None and p.long_output is None for p in prices.values())
+    # only Haiku 5.5 is priced by prompt length: its "(for prompts over 100,000 tokens)" row is its long context
+    assert [n for n, p in prices.items() if p.long_input is not None or p.long_output is not None] == ["Claude Haiku 5.5"]
 
 
 def test_trailing_parentheses_with_markdown_links_are_removed_from_names():

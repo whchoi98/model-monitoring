@@ -18,6 +18,12 @@ describe("extractModelName", () => {
     expect(name("anthropic:claude-sonnet-5-5:2")).toBe("Claude Sonnet 5.5");
     expect(name("us.anthropic.claude-sonnet-5:1")).toBe("Claude Sonnet 5");
   });
+  test("Haiku 5.5(v2.33.0)는 Haiku 4.5와 구분되고, Sonnet 5.5 US도 5.5로 읽는다", () => {
+    expect(name("global.anthropic.claude-haiku-5-5:1")).toBe("Claude Haiku 5.5 (Global)");
+    expect(name("us.anthropic.claude-haiku-5-5:1")).toBe("Claude Haiku 5.5");
+    expect(name("anthropic:claude-haiku-5-5:2")).toBe("Claude Haiku 5.5");
+    expect(name("us.anthropic.claude-sonnet-5-5:1")).toBe("Claude Sonnet 5.5");
+  });
   test("GPT 6.1 Sol 3채널과 GPT 6 Sol은 서로 구분된다", () => {
     expect(name("openai:global:global.openai.gpt-6.1-sol:1")).toBe("GPT 6.1 Sol (Global)");
     expect(name("openai:us:us.openai.gpt-6.1-sol:1")).toBe("GPT 6.1 Sol (US)");

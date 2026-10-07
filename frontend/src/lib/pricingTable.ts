@@ -3,7 +3,9 @@
 // 정렬과 각주 번호는 백엔드(GET /api/pricing)가 정한다. 여기서는 다시 정렬하거나 번호를 매기지 않는다.
 
 import { parseTimestamp } from "./format";
-import type { PricingFamily, PricingModelPrice, PricingNote, PricingPriceFields, PricingTier } from "./types";
+import type {
+  PricingDocConflictNote, PricingFamily, PricingModelPrice, PricingNote, PricingPriceFields, PricingPromoNote, PricingTier,
+} from "./types";
 
 export type PricingTierKey = "cp" | "openai_list" | "global" | "us" | "in_region";
 
@@ -185,20 +187,40 @@ export function utcDate(value: string | null | undefined): string | null {
  * touch or keyboard users. `ref` is the reference id whose footnote carries the note's source (promotions only).
  */
 export type PricingBadge = {
-  kind: "unverified" | "pending" | "promo" | "promo_check";
+  kind: "unverified" | "pending" | "promo" | "promo_check" | "doc_conflict";
   label: string;
   detail: string;
   ref?: string;
 };
 
-/** Notes that name a prior price for this tier, narrowed to that tier's prior price only. */
+const has = (record: object, key: string) => Object.prototype.hasOwnProperty.call(record, key);
+
+/** Notes that name this tier (a promotion's prior price, a doc conflict's expected value), narrowed to this tier. */
 export function notesForTier(notes: PricingNote[], tier: PricingTierKey): PricingNote[] {
-  return notes
-    .filter((note) => Object.prototype.hasOwnProperty.call(note.prior_price, tier))
-    .map((note) => ({ ...note, prior_price: { [tier]: note.prior_price[tier] } }));
+  const out: PricingNote[] = [];
+  for (const note of notes) {
+    if (note.kind === "promo" && has(note.prior_price, tier)) {
+      out.push({ ...note, prior_price: { [tier]: note.prior_price[tier] } });
+    } else if (note.kind === "doc_conflict" && has(note.expected, tier)) {
+      out.push({ ...note, expected: { [tier]: note.expected[tier] } });
+    }
+  }
+  return out;
 }
 
-function priorPriceText(note: PricingNote, lang: "ko" | "en"): string {
+/** "캐시 읽기 $0.10" — the expected values of a doc-conflict note narrowed to one tier. */
+function expectedText(note: PricingDocConflictNote, lang: "ko" | "en"): string {
+  const labels = lang === "en"
+    ? { cache_read: "cache read", cache_write: "cache write", cache_write_1h: "1h cache write" }
+    : { cache_read: "캐시 읽기", cache_write: "캐시 쓰기", cache_write_1h: "1시간 캐시 쓰기" };
+  return Object.values(note.expected)
+    .flatMap((fields) => (Object.keys(labels) as (keyof typeof labels)[])
+      .filter((field) => isSet(fields[field]))
+      .map((field) => `${labels[field]} ${formatUnitPrice(fields[field] as number)}`))
+    .join(", ");
+}
+
+function priorPriceText(note: PricingPromoNote, lang: "ko" | "en"): string {
   const entries = Object.entries(note.prior_price);
   if (entries.length === 1) return formatPricePair(entries[0][1]);
   return entries
@@ -210,8 +232,9 @@ function priorPriceText(note: PricingNote, lang: "ko" | "en"): string {
 }
 
 /**
- * Badges for one price cell, in display order: not auto-verified, pending review, promotion.
- * A promotion whose `min_until` date (UTC) has passed turns into a "check whether it ended" badge.
+ * Badges for one price cell, in display order: not auto-verified, pending review, promotion, doc conflict.
+ * A promotion whose `min_until` date (UTC) has passed turns into a "check whether it ended" badge. A doc conflict
+ * (v2.33.0) shows the value the page text gives ("문서 본문과 발표: 캐시 읽기 $0.10") and footnotes the pricing page.
  */
 export function tierBadges(tier: PricingTier, notes: PricingNote[], lang: "ko" | "en", today: Date): PricingBadge[] {
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
@@ -232,6 +255,11 @@ export function tierBadges(tier: PricingTier, notes: PricingNote[], lang: "ko" |
   }
   const todayUtc = today.toISOString().slice(0, 10);
   for (const note of notes) {
+    if (note.kind === "doc_conflict") {
+      const detail = `${L("Page text and announcement:", "문서 본문과 발표:")} ${expectedText(note, lang)}`;
+      badges.push({ kind: "doc_conflict", label: L("Source mismatch", "문서 불일치"), detail, ref: note.source_id });
+      continue;
+    }
     if (note.kind !== "promo") continue;
     // The note's own text is its source's reference (the OpenAI pricing page, or a manual note); the cell links to
     // that footnote instead of repeating it.

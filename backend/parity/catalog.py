@@ -159,7 +159,9 @@ FEATURE_IDS = [f["id"] for f in FEATURES]
 # (Astra 2026-09-09, Sol/Luna 2026-09-23 실측 — Sol/Luna는 effort high에서만 13~18) → 넣으면 "미지원" 오판.
 # "sonnet-5"는 sonnet-5-5(Sonnet 5.5)와 in-region 키 bedrock:ap-northeast-2:anthropic.claude-sonnet-5도 포함한다.
 # gpt-6.1-sol은 "gpt-5"에 걸리지 않아 제외가 유지된다(reasoning_tokens 0, 2026-09-30).
-_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "gpt-5")  # "fable-5"는 fable-5-1도 포함
+# "haiku-5"는 Claude Haiku 5.5(v2.33.0) — Sonnet 5.5처럼 adaptive 전용(thinking.type.enabled 400, 2026-10-07 실측)이라
+# Sonnet 5.5와 같은 판정을 받게 넣는다. haiku-4-5는 걸리지 않는다. forced tool_choice는 200이라 아래 마커에는 넣지 않는다.
+_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "haiku-5", "gpt-5")  # "fable-5"는 fable-5-1도 포함
 
 # forced tool_choice(type "tool"/"any")를 400으로 거부하는 모델 — tool_use 프로브는 auto + 프롬프트
 # 지시로 대체한다 (도구 왕복 자체는 검증). Claude Fable 5.1(2026-08-31 출시):

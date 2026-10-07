@@ -61,6 +61,7 @@ def test_cp_discovery_with_live_model_order_labels_every_id_correctly():
         "sonnet-5-5": None,  # v2.32.0 타깃 — 2026-09-23 목록에는 아직 없다
         "sonnet-5": "claude-sonnet-5",
         "sonnet-4-6": "claude-sonnet-4-6",
+        "haiku-5-5": None,  # v2.33.0 타깃 — 2026-09-23 목록에는 아직 없다
         "haiku-4-5": "claude-haiku-4-5-20251001",
     }
     # 한 id가 두 라벨로 등록되는 일이 없어야 한다
