@@ -51,13 +51,18 @@ export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Opus 4.7 (US)": "#ef4444",
   "Bedrock Claude Opus 4.6 (Global)": "#f59e0b",
   "Bedrock Claude Opus 4.6 (US)": "#ec4899",
-  // Claude Sonnet 5.5 (v2.32.0) — Bedrock Global + CP (us. 프로파일 없음).
+  // Claude Sonnet 5.5 (v2.32.0) — Bedrock Global + CP, US는 2026-10-07에 us. 프로파일이 생겨 v2.33.0에 더했다.
+  // US 파선은 보라, 남색이 Sonnet 5 US 파선과 ΔE 15 안쪽이거나 다크 카드 대비 4.5:1 아래라 계열 밖 올리브(같은 패턴 최근접 ΔE 18.7).
   "Bedrock Claude Sonnet 5.5 (Global)": "#818cf8",
+  "Bedrock Claude Sonnet 5.5 (US)": "#504800",
   "Bedrock Claude Sonnet 5 (Global)": "#6366f1",
   "Bedrock Claude Sonnet 5 (US)": "#4f46e5",
   "Bedrock Claude Sonnet 5 (ap-northeast-2)": "#a5b4fc",
   "Bedrock Claude Sonnet 4.6 (Global)": "#3b82f6",
   "Bedrock Claude Sonnet 4.6 (US)": "#8b5cf6",
+  // Claude Haiku 5.5 (v2.33.0) — 따뜻한 계열 한 패밀리(Global 적갈색 실선, US 주황 파선, CP 금색 점선). 청록과 보라는 Haiku 4.5가 쓴다.
+  "Bedrock Claude Haiku 5.5 (Global)": "#aa5533",
+  "Bedrock Claude Haiku 5.5 (US)": "#cc6600",
   "Bedrock Claude Haiku 4.5 (Global)": "#06b6d4",
   "Bedrock Claude Haiku 4.5 (US)": "#a855f7",
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
@@ -72,6 +77,7 @@ export const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Sonnet 5.5 (US)": "#e098d0",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
   "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
+  "Anthropic Claude Haiku 5.5 (US)": "#ddbb11",
   "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
   // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 금색 계열(청록은 Haiku 4.5 Global과 겹친다).
   // 라이트 테마가 밝은 US를 어둡게 보정해 밝기 순서는 테마마다 다르지만, 두 테마 모두 세 채널 쌍이 CIEDE2000 16 이상 떨어진다.
@@ -124,6 +130,7 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Sonnet 5.5", "#818cf8"],
   ["Sonnet 5", "#4f46e5"],
   ["Sonnet 4.6", "#8b5cf6"],
+  ["Haiku 5.5", "#aa5533"],
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
   ["GPT 6.1 Sol", "#d9b40f"],

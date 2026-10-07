@@ -1,5 +1,6 @@
-"""pricing 테스트 공용 데이터 — 활성 62채널: 운영 /api/models(2026-09-26) 55채널 (v2.30.0) + v2.32.0 Claude Sonnet 5.5
-(Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5. 수집 대상 아님."""
+"""pricing 테스트 공용 데이터 — 활성 66채널: 운영 /api/models(2026-09-26) 55채널 (v2.30.0) + v2.32.0 Claude Sonnet 5.5
+(Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5 + v2.33.0 Claude Haiku 5.5
+(Global, US, CP), Claude Sonnet 5.5 US. 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
@@ -10,9 +11,10 @@ _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS
     ("anthropic.claude-opus-4-8", "claude-opus-4-8", "Claude Opus 4.8", _GU),
     ("anthropic.claude-opus-4-7", "claude-opus-4-7", "Claude Opus 4.7", _GU),
     ("anthropic.claude-opus-4-6-v1", "claude-opus-4-6", "Claude Opus 4.6", _GU),
-    ("anthropic.claude-sonnet-5-5", "claude-sonnet-5-5", "Claude Sonnet 5.5", ("global",)),  # us. 프로파일 없음
+    ("anthropic.claude-sonnet-5-5", "claude-sonnet-5-5", "Claude Sonnet 5.5", _GU),  # us.는 2026-10-07부터(v2.33.0)
     ("anthropic.claude-sonnet-5", "claude-sonnet-5", "Claude Sonnet 5", (*_GU, "ap-northeast-2")),
     ("anthropic.claude-sonnet-4-6", "claude-sonnet-4-6", "Claude Sonnet 4.6", _GU),
+    ("anthropic.claude-haiku-5-5", "claude-haiku-5-5", "Claude Haiku 5.5", _GU),
     ("anthropic.claude-haiku-4-5-20251001-v1:0", "claude-haiku-4-5", "Claude Haiku 4.5", _GU),
 ]
 # CP 디스커버리 id (Opus 4.6은 CP 채널 없음, Haiku는 날짜 접미사)
@@ -21,7 +23,7 @@ _CP_IDS = {
     "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5",
     "claude-opus-4-8": "claude-opus-4-8", "claude-opus-4-7": "claude-opus-4-7",
     "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-sonnet-4-6": "claude-sonnet-4-6",
-    "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+    "claude-haiku-5-5": "claude-haiku-5-5", "claude-haiku-4-5": "claude-haiku-4-5-20251001",
 }
 _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전
     ("openai.gpt-6.1-sol", "gpt-6.1-sol", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
@@ -84,3 +86,5 @@ CP_MODEL_IDS_20260923 = [
 ]
 # 2026-09-30 실측 — claude-sonnet-5-5가 claude-sonnet-5보다 먼저(맨 앞) 온다
 CP_MODEL_IDS_20260930 = ["claude-sonnet-5-5", *CP_MODEL_IDS_20260923]
+# 2026-10-07 실측 — claude-haiku-5-5가 맨 앞에 온다(v2.33.0)
+CP_MODEL_IDS_20261007 = ["claude-haiku-5-5", *CP_MODEL_IDS_20260930]

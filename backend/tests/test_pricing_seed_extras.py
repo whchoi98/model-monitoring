@@ -14,25 +14,31 @@ from pricing_seed import ensure_seed, seed_extra, seed_rows
 from pricing_sources import EPOCH, OPENAI_SOURCE_ID, active_channels
 from tests.pricing_catalog import ACTIVE_MODELS
 
-ACTIVE = active_channels(ACTIVE_MODELS, ["(1P)"])  # 활성 62채널 + OpenAI 공식 가격 9채널(openai-list:<family_key>)
+ACTIVE = active_channels(ACTIVE_MODELS, ["(1P)"])  # 활성 66채널 + OpenAI 공식 가격 9채널(openai-list:<family_key>)
 COLUMNS = [f"{f}_per_mtok" for f in EXTRA_FIELDS]
 CACHE = ("cache_read", "cache_write", "cache_write_1h")
 GPT = ("cache_read", "cache_write", "long_input", "long_output", "long_cache_read", "long_cache_write")
 N = None
 
 # Interface Contract C8 — pricing_seed의 표와 따로 적는다(표를 옮겨 적다 틀리면 여기서 잡힌다).
-CLAUDE_GLOBAL = {  # 캐시 읽기, 5분 쓰기, 1시간 쓰기 — Bedrock Global = Claude Platform on AWS(Anthropic 문서)
+CLAUDE_GLOBAL = {  # 캐시 읽기, 5분 쓰기, 1시간 쓰기 — Bedrock Global = Claude Platform on AWS(Anthropic 문서), 예외는 CLAUDE_CP
     "claude-fable-5-1": (0.25, 12.5, 20), "claude-fable-5": (1, 12.5, 20), "claude-opus-5-5": (0.2, 5, 8),
     "claude-opus-5": (0.5, 6.25, 10), "claude-opus-4-8": (0.5, 6.25, 10), "claude-opus-4-7": (0.5, 6.25, 10),
-    "claude-opus-4-6": (0.5, 6.25, 10), "claude-sonnet-5-5": (0.2, 2.5, 4), "claude-sonnet-5": (0.2, 2.5, 4),
-    "claude-sonnet-4-6": (0.3, 3.75, 6), "claude-haiku-4-5": (0.1, 1.25, 2),
+    "claude-opus-4-6": (0.5, 6.25, 10), "claude-sonnet-5-5": (0.1, 2.5, 4), "claude-sonnet-5": (0.2, 2.5, 4),
+    "claude-sonnet-4-6": (0.3, 3.75, 6), "claude-haiku-5-5": (0.01, 0.125, 0.2), "claude-haiku-4-5": (0.1, 1.25, 2),
 }
+# CP가 Bedrock Global과 다른 패밀리 — Sonnet 5.5 캐시 읽기는 2026-10-07 offer가 0.1로 내렸지만 Anthropic 문서 표는 0.2(v2.33.0)
+CLAUDE_CP = {**CLAUDE_GLOBAL, "claude-sonnet-5-5": (0.2, 2.5, 4)}
 CLAUDE_US = {  # US CRIS와 서울 in-region(APN2_*_standard, v2.32.0) — 같은 값
     "claude-fable-5-1": (0.275, 13.75, 22), "claude-fable-5": (1.1, 13.75, 22), "claude-opus-5-5": (0.22, 5.5, 8.8),
     "claude-opus-5": (0.55, 6.875, 11), "claude-opus-4-8": (0.55, 6.875, 11), "claude-opus-4-7": (0.55, 6.875, 11),
-    "claude-opus-4-6": (0.55, 6.875, 11), "claude-sonnet-5": (0.22, 2.75, 4.4),
-    "claude-sonnet-4-6": (0.33, 4.125, 6.6), "claude-haiku-4-5": (0.11, 1.375, 2.2),
+    "claude-opus-4-6": (0.55, 6.875, 11), "claude-sonnet-5-5": (0.11, 2.75, 4.4), "claude-sonnet-5": (0.22, 2.75, 4.4),
+    "claude-sonnet-4-6": (0.33, 4.125, 6.6), "claude-haiku-5-5": (0.011, 0.1375, 0.22), "claude-haiku-4-5": (0.11, 1.375, 2.2),
 }
+# 긴 컨텍스트(100K 토큰 초과) 입력, 출력, 캐시 읽기, 캐시 쓰기 — Claude는 Haiku 5.5만(v2.33.0), CP = Global
+CLAUDE_LONG = {"claude-haiku-5-5": {"global": (0.5, 2.5, 0.05, 0.625), "cp": (0.5, 2.5, 0.05, 0.625),
+                                    "us": (0.55, 2.75, 0.055, 0.6875)}}
+LONG = ("long_input", "long_output", "long_cache_read", "long_cache_write")
 GPT_STANDARD = {  # US CRIS와 모든 in-region 채널 — GPT 순서
     "gpt-6.1-sol": (0.11, 2.75, N, N, N, N),  # 오퍼의 긴 컨텍스트 출력이 짧은 컨텍스트보다 낮다: 긴 컨텍스트 없음
     "gpt-6-astra": (1.1, 13.75, 22, 82.5, 2.2, 27.5), "gpt-6-sol": (0.22, 2.75, 4.4, 16.5, 0.44, 5.5),
@@ -64,7 +70,9 @@ def _expected(ident) -> dict:
     if ident.provider == "amazon":
         named = NOVA
     elif ident.provider == "anthropic":
-        named = dict(zip(CACHE, (CLAUDE_GLOBAL if ident.channel in ("global", "cp") else CLAUDE_US)[ident.family_key]))
+        table = {"global": CLAUDE_GLOBAL, "cp": CLAUDE_CP}.get(ident.channel, CLAUDE_US)
+        named = dict(zip(CACHE, table[ident.family_key]))
+        named.update(zip(LONG, CLAUDE_LONG.get(ident.family_key, {}).get(ident.channel, ())))
     elif ident.channel == "openai_list":
         named = dict(zip(GPT, OPENAI_LIST[ident.family_key][2:]))
     else:
@@ -98,8 +106,8 @@ def _add(eng, model_id, inp, out, status="seed", **extras):
         s.commit()
 
 
-def test_the_active_set_has_62_channels_plus_nine_openai_list_channels():
-    assert len(ACTIVE) == 71
+def test_the_active_set_has_66_channels_plus_nine_openai_list_channels():
+    assert len(ACTIVE) == 75
     assert sorted(i.family_key for i in ACTIVE.values() if i.channel == "openai_list") == sorted(OPENAI_LIST)
 
 
@@ -125,7 +133,7 @@ def test_seed_extra_returns_a_copy():
 
 def test_new_seed_rows_carry_the_extras_and_a_rerun_changes_nothing(engine, caplog):
     with caplog.at_level(logging.INFO, logger="pricing_seed"):
-        assert ensure_seed(engine, ACTIVE) == 71
+        assert ensure_seed(engine, ACTIVE) == 75
     rows = _rows(engine)
     assert set(rows) == set(ACTIVE)
     for model_id, row in rows.items():
@@ -146,7 +154,7 @@ def test_v230_seed_rows_get_only_their_null_extras_filled(engine, caplog):
     _add(engine, OPUS46_US, 5.0, 25.0)                           # not the seed value (5.5 / 27.5): left alone
     _add(engine, SOL_G, 4.0, 20.0, status="verified")            # only status='seed' rows are filled
     with caplog.at_level(logging.INFO, logger="pricing_seed"):
-        assert ensure_seed(engine, ACTIVE) == 71 - 7              # the return value still counts inserted rows only
+        assert ensure_seed(engine, ACTIVE) == 75 - 7              # the return value still counts inserted rows only
     assert "Price seed filled cache/long-context fields on 5 rows" in caplog.messages
     rows = _rows(engine)
     for model_id in (OPUS_G, GPT54_E1, NOVA_ID, CP_HAIKU):
@@ -176,7 +184,7 @@ def test_a_value_committed_between_the_snapshot_and_the_update_is_kept(engine):
             raced.append(statement)
             cursor.execute("UPDATE price_history SET cache_read_per_mtok = 0.3 WHERE model_id = ?", (OPUS_G,))
 
-    assert ensure_seed(engine, ACTIVE) == 71 - 1
+    assert ensure_seed(engine, ACTIVE) == 75 - 1
     event.remove(engine, "before_cursor_execute", concurrent_sync)
     assert raced, "the fill UPDATE never ran"
     row = _rows(engine)[OPUS_G]

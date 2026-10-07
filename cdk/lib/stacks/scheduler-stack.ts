@@ -333,8 +333,8 @@ export class SchedulerStack extends cdk.Stack {
     );
 
     // Claude API Features 검증 (v2.23.0) — 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)
-    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 6모델 실행-증거, 일 1회
-    //   = 946 + 224 = 1170셀 (v2.32.0, Sonnet 5.5 편입 — Mantle 미서빙 N/A. 서빙하면 983 + 187).
+    //   × 5 surface(CP on AWS / Mantle `/anthropic` / Bedrock runtime Messages API·InvokeModel·Converse) × 대표 7모델 실행-증거, 일 1회
+    //   = 1079 + 286 = 1365셀 (v2.33.0, Haiku 5.5 편입 — Sonnet 5.5와 Haiku 5.5는 Mantle 미서빙 N/A. v2.32.0은 946 + 224 = 1170).
     // bedrock:* + bedrock-mantle:* IAM 체인이 필요하므로 autoprober role 재사용. CP는 API 키(secret).
     const featuresTaskDef = buildTaskDef(
       "FeaturesVerifyTaskDef",
@@ -343,7 +343,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/features",
     );
 
-    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 62채널(v2.32.0) + OpenAI 공식 가격 9채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
+    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 66채널(v2.33.0) + OpenAI 공식 가격 9채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
     // price_history에 기록한다(50% 초과 변화는 검토 대기). 같은 env/secret(buildTaskDef 기본값)으로 CP 디스커버리와
     // OpenAI 채널 등록을 AutoProber와 똑같이 해야 활성 채널 집합이 맞는다. extraEnvironment 없음.
     const pricingSyncTaskDef = buildTaskDef(
@@ -453,13 +453,13 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "FeaturesVerifySchedule", {
-      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 946 프로브 + 224 사전판정 = 1170셀 (v2.32.0, Sonnet 5.5 편입)
-      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 6 모델,
+      // 일 1회 (사용자 결정 2026-09-05) — 1런 = 1079 프로브 + 286 사전판정 = 1365셀 (v2.33.0, Haiku 5.5 편입)
+      //   (39행 = 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 7 모델,
       //   캐싱·부정 제어 포함 API 호출 수와 토큰 비용은 4모델 시절(≈ 800 호출, $5~7, Fable 지배)보다 프로브 수에 비례해 증가
       // v2.29.0 (사용자 요청 2026-09-23 "1일 한번 턴"): 매일 17:30 UTC(= 02:30 KST) 고정 cron. rate(24 hours)도 하루
       //   한 번이었지만(스케줄 생성 시각 기준, 약 17:28 UTC) 시각이 명시되지 않아 수동 트리거 런과 겹치면 하루 두 번처럼 보였다.
       schedule: scheduler.ScheduleExpression.cron({ minute: "30", hour: "17", timeZone: cdk.TimeZone.ETC_UTC }),
-      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 6 models, daily at 17:30 UTC",
+      description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 7 models, daily at 17:30 UTC",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: featuresTaskDef,
         vpcSubnets: props.appSubnets,

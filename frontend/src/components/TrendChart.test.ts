@@ -176,6 +176,22 @@ describe("trend chart line encoding", () => {
     }
   });
 
+  test("v2.33.0 channels (Haiku 5.5, Sonnet 5.5 US) stay clear of other models with the same pattern and keep the contrast floor", () => {
+    const added = ["Bedrock Claude Haiku 5.5 (Global)", "Bedrock Claude Haiku 5.5 (US)", "Anthropic Claude Haiku 5.5 (US)",
+      "Bedrock Claude Sonnet 5.5 (US)"];
+    for (const name of added) {
+      expect(CATALOG).toContain(name);
+      const nearest = nearestSamePattern(name, (other) => other.includes("Haiku 5.5"));
+      expect(nearest.delta, `${name} vs ${nearest.other} (${nearest.theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+      for (const theme of THEMES) {
+        for (const card of CARD_BACKGROUNDS[theme]) {
+          expect(contrastRatio(getColor(name, theme), card), `${name} on ${card} (${theme})`)
+            .toBeGreaterThanOrEqual(MIN_CONTRAST[theme]);
+        }
+      }
+    }
+  });
+
   test("GPT 6.1 Sol channels read as one family (one hue, three distinct steps in both themes)", () => {
     const names = ["(Global)", "(US)", "(us-east-1)"].map((channel) => `OpenAI GPT 6.1 Sol ${channel}`);
     const hues = names.map((name) => {

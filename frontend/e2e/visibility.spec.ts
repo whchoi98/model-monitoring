@@ -3,13 +3,13 @@ import { mockApi } from "./fixtures";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-// 운영 규모 카탈로그(v2.32.0, 활성 62채널 = Claude 33 + Nova 1 + OpenAI 28).
-// Sonnet 5.5는 us. 프로파일이 없어 Global + CP, 서울 In-Region(ap-northeast-2)은 Opus 5와 Sonnet 5만, Opus 4.6은 CP 없음.
-const claudeFamilies = ["Fable 5.1", "Fable 5", "Opus 5.5", "Opus 5", "Opus 4.8", "Opus 4.7", "Opus 4.6", "Sonnet 5.5", "Sonnet 5", "Sonnet 4.6", "Haiku 4.5"];
+// 운영 규모 카탈로그(v2.33.0, 활성 66채널 = Claude 37 + Nova 1 + OpenAI 28).
+// 서울 In-Region(ap-northeast-2)은 Opus 5와 Sonnet 5만, Opus 4.6은 CP 없음. Haiku 5.5와 Sonnet 5.5 US는 v2.33.0.
+const claudeFamilies = ["Fable 5.1", "Fable 5", "Opus 5.5", "Opus 5", "Opus 4.8", "Opus 4.7", "Opus 4.6", "Sonnet 5.5", "Sonnet 5", "Sonnet 4.6", "Haiku 5.5", "Haiku 4.5"];
 const modelNames = [
   ...claudeFamilies.flatMap((family) => [
     `Bedrock Claude ${family} (Global)`,
-    ...(family === "Sonnet 5.5" ? [] : [`Bedrock Claude ${family} (US)`]),
+    `Bedrock Claude ${family} (US)`,
     ...(family === "Opus 5" || family === "Sonnet 5" ? [`Bedrock Claude ${family} (ap-northeast-2)`] : []),
     ...(family === "Opus 4.6" ? [] : [`Anthropic Claude ${family} (US)`]),
   ]),
@@ -28,7 +28,7 @@ const modelNames = [
 ];
 
 for (const [width, lang, theme] of [[1440, "ko", "dark"], [1440, "en", "light"], [390, "ko", "dark"], [390, "en", "light"]] as const) {
-  test(`62-channel dashboard is usable at ${width}px in ${lang}/${theme}`, async ({ page }, testInfo) => {
+  test(`66-channel dashboard is usable at ${width}px in ${lang}/${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: width < 768 ? 844 : 1100 });
     await page.addInitScript(({ lang, theme }) => {
       localStorage.setItem("lang", lang);
@@ -55,8 +55,8 @@ for (const [width, lang, theme] of [[1440, "ko", "dark"], [1440, "en", "light"],
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("/");
     const region = page.getByRole("region", { name: lang === "ko" ? "모델별 최신 상태" : "Latest Model Status" });
-    expect(modelNames).toHaveLength(62);
-    await expect(region.getByRole("article")).toHaveCount(62);
+    expect(modelNames).toHaveLength(66);
+    await expect(region.getByRole("article")).toHaveCount(66);
     await expect(page.locator(".recharts-wrapper")).toHaveCount(3);
     if (width < 768) {
       const attention = await page.getByRole("button", { name: lang === "ko" ? "확인 필요 4" : "Needs attention 4", exact: true }).boundingBox();

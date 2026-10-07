@@ -10,7 +10,7 @@ from claude_features import catalog, engine, probes as P, transports as T, runne
 def test_surfaces_and_models():
     assert catalog.SURFACES == ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse"]
     keys = [m["key"] for m in catalog.MODELS]
-    assert keys == ["fable-5-1", "fable-5", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5"]
+    assert keys == ["fable-5-1", "fable-5", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5", "haiku-5-5"]
     assert catalog.MODEL_KEYS == keys
     assert catalog.model_id_for("cp", "fable-5-1") == "claude-fable-5-1"
     assert catalog.model_id_for("mantle", "fable-5-1") is None  # US GovCloud only
@@ -85,13 +85,15 @@ def test_sonnet_55_mantle_is_not_applicable_with_its_own_reason():
 def test_every_unserved_mantle_model_carries_ko_and_en_reasons():
     """mantle None 모델은 KO와 EN 사유를 둘 다 가진다 — 프런트가 그대로 표시하므로 빠지면 일반 폴백 문구가 뜬다."""
     unserved = [m for m in catalog.MODELS if m["mantle"] is None]
-    assert [m["key"] for m in unserved] == ["fable-5-1", "sonnet-5-5"]
+    assert [m["key"] for m in unserved] == ["fable-5-1", "sonnet-5-5", "haiku-5-5"]
     for m in unserved:
         assert m["mantle_reason"].startswith("측정 불가"), m["key"]
         assert m["mantle_reason_en"].startswith("Not measurable"), m["key"]
     by_key = {m["key"]: m for m in unserved}
     assert "GovCloud" in by_key["fable-5-1"]["mantle_reason_en"]
-    assert "404" in by_key["sonnet-5-5"]["mantle_reason_en"] and "GovCloud" not in by_key["sonnet-5-5"]["mantle_reason_en"]
+    for key in ("sonnet-5-5", "haiku-5-5"):
+        assert "404" in by_key[key]["mantle_reason_en"] and "GovCloud" not in by_key[key]["mantle_reason_en"]
+        assert f"anthropic.claude-{key}" in by_key[key]["mantle_reason_en"]
     # 서빙되는 모델에는 사유 키가 없다
     assert not [m["key"] for m in catalog.MODELS if m["mantle"] and ("mantle_reason" in m or "mantle_reason_en" in m)]
 
@@ -104,9 +106,9 @@ def test_catalog_endpoint_exposes_mantle_reason_en():
     assert list(models) == catalog.MODEL_KEYS
 
 
-def test_catalog_version_bumped_for_sonnet_55():
-    # MODELS 변경(대표 모델 추가)은 런 형태를 바꾸므로 CATALOG_VERSION 범프 대상 (CLAUDE.md 규칙)
-    assert R.CATALOG_VERSION == "2026-09-30"
+def test_catalog_version_bumped_for_haiku_55():
+    # MODELS 변경(대표 모델 추가)은 런 형태를 바꾸므로 CATALOG_VERSION 범프 대상 (CLAUDE.md 규칙) — v2.32.0 Sonnet 5.5는 2026-09-30
+    assert R.CATALOG_VERSION == "2026-10-07"
 
 
 def test_documented_defaults_from_overview():
@@ -740,12 +742,12 @@ def test_build_jobs_partitions_applicable_and_predecided():
 def test_default_job_count_matches_spec_estimate():
     jobs, decided = R.build_jobs(None, None, None)
     total = len(jobs) + len(decided)
-    assert total == 39 * 5 * 6  # feature × surface × model (1170, v2.32.0~ — Sonnet 5.5 추가 전 975, Opus 5.5 추가 전 780)
-    # pre-decided 224 = Mantle Fable 5.1 + Mantle Sonnet 5.5 (39 × 2 = 78)
-    #                 + Converse-inexpressible 17 features × 6 models (102)
-    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 6 − 2 overlap = 22)
-    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 6 − 2 overlap = 22)
-    assert (len(jobs), len(decided)) == (946, 224)
+    assert total == 39 * 5 * 7  # feature × surface × model (1365, v2.33.0~ — Haiku 5.5 추가 전 1170, Sonnet 5.5 추가 전 975)
+    # pre-decided 286 = Mantle Fable 5.1 + Mantle Sonnet 5.5 + Mantle Haiku 5.5 (39 × 3 = 117)
+    #                 + Converse-inexpressible 17 features × 7 models (119)
+    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 7 − 3 overlap = 25)
+    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 7 − 3 overlap = 25)
+    assert (len(jobs), len(decided)) == (1079, 286)
     # Sonnet 5.5 몫 = 39 × 5 = 195셀 (프로브 133 + 사전판정 62) — Mantle 미서빙이라 Mantle 열 39셀은 전부 사전판정
     s_jobs = [j for j in jobs if j["model_key"] == "sonnet-5-5"]
     s_dec = [d for d in decided if d["model_key"] == "sonnet-5-5"]

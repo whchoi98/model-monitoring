@@ -269,9 +269,10 @@ curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
 # 기댓값: 28개 행 (Mantle 17 + Global 7 + US 4), status "success", input_tokens > 0, output_tokens > 0.
-# CP(anthropic:*)는 10행 — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
+# CP(anthropic:*)는 11행(v2.33.0) — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
 #   "Anthropic Claude Opus 5.5 (US)", anthropic:claude-sonnet-5-5가 "Anthropic Claude Sonnet 5.5 (US)",
-#   anthropic:claude-sonnet-5가 "Anthropic Claude Sonnet 5 (US)"인지 확인 (v2.27.0 점 버전 오등록 수정 ADR-028, v2.32.0 ADR-031).
+#   anthropic:claude-sonnet-5가 "Anthropic Claude Sonnet 5 (US)", anthropic:claude-haiku-5-5가 "Anthropic Claude Haiku 5.5 (US)"인지 확인
+#   (v2.27.0 점 버전 오등록 수정 ADR-028, v2.32.0 ADR-031, v2.33.0 ADR-032).
 # Bedrock 서울 in-region(bedrock:*)은 2행 — 라벨 "(ap-northeast-2)", status "success" (v2.32.0, ADR-031).
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.[] | select(.model_id|startswith("bedrock:")) | {model_id, model_name, status, input_tokens, output_tokens}]'
@@ -337,7 +338,7 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{id: .run.id, cv: .run.ca
 ### 5-2. v2.29.0 배포 경로와 확인 (CP 10분 주기, FeaturesVerify 고정 cron)
 
 > v2.29.1부터 CP 기본 주기는 다시 매 사이클이다(§5-3). 아래 CP 확인(2~4번과 대시보드, 카테고리 항목, 사용량 상한 항목의
-> 시간당 54개 — v2.32.0부터 CP 10채널이라 60개, 로그는 "10 due")은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
+> 시간당 54개 — v2.32.0부터 CP 10채널이라 60개, 로그는 "10 due", v2.33.0부터 11채널이라 66개, "11 due")은 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`을 다시 넣었을 때의 기댓값으로 쓴다. FeaturesVerify cron 확인(1번)은
 > 그대로 유효하다.
 
 **배포 경로**: CDK 변경이 있다(FeaturesVerify 스케줄 `rate(24 hours)` → `cron(30 17 * * ? *)` Etc/UTC, AutoProber task def
@@ -359,7 +360,7 @@ aws ecs describe-task-definition --task-definition "$FAM" --region $REGION \
   --query 'taskDefinition.containerDefinitions[0].environment[?name==`ANTHROPIC_CP_PROBE_INTERVAL_S`]'
 
 # 3. CP 채널이 두 사이클에 한 번만 프로빙되는지 — 사이클마다 한 줄, "10 due"와 "0 due … 10 not due"가 번갈아 나온다
-#    (v2.32.0부터 CP 10채널, v2.29.0 당시는 9)
+#    (v2.33.0부터 CP 11채널, v2.32.0은 10, v2.29.0 당시는 9)
 aws logs tail /ecs/autoprober --since 30m --region $REGION | grep "Claude Platform on AWS 600s cadence"
 # 예: … 600s cadence - 10 due ['code-gen'], 0 not due   /   … 600s cadence - 0 due [], 10 not due
 
@@ -725,6 +726,71 @@ aws ecs list-tasks --cluster bedrock-monitor --family "$FAM" --desired-status ST
   | xargs -r aws ecs describe-tasks --cluster bedrock-monitor --region $REGION --query 'tasks[].[startedAt,stoppedAt,containers[?name==`insightstaskdef`].exitCode|[0]]' --output text --tasks
 # 기댓값: 태스크 소요 240초 + 기동 안(이전 2분 15초~6분 44초), 다음 스케줄과 겹치지 않는다, exit 0
 ```
+
+### 5-9. v2.33.0 배포 경로와 확인 (Claude Haiku 5.5, Claude Sonnet 5.5 US, Sonnet 5.5 캐시 읽기 인하)
+
+**배포 경로**: 신규 env, IAM, DB 스키마 변경이 없다(새 4채널은 Bedrock 프로파일과 CP 등록이라 env가 없고, 두 역할 모두
+`arn:aws:bedrock:*::foundation-model/*`라 Haiku 5.5 FM도 이미 허용된다). CDK 변경은 주석과 `FeaturesVerifySchedule` description(7 models)뿐이지만,
+backend 서비스와 스케줄 태스크 6개가 함께 새 이미지로 가도록 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를
+배포한다(§3 경고). backend 기동 seed가 새 4채널(Haiku 5.5 Global, US, CP와 Sonnet 5.5 US) 단가 행을 넣는다. 배포 후 PricingSync를 **수동으로 1회** 돌린다
+(Sonnet 5.5 Global 캐시 읽기 인하는 동기화가 반영한다 — 기존 seed 행은 다시 쓰지 않는다). 자세히는 ADR-032.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 카탈로그 — /status 66, /api/models 66
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count, channel_intervals}'
+curl -s "https://$CF_DOMAIN/api/models" | jq 'length'
+# 기댓값: expected_model_count 66, channel_intervals {"anthropic": 300}, 66
+
+# 2. 새 4채널 — 첫 사이클(5분) 뒤 /latest에 라벨이 맞게 있는지
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | test("haiku-5-5|us\\.anthropic\\.claude-sonnet-5-5")) | {model_id, model_name, status}]'
+# 기댓값: 4행, status "success"
+#   global.anthropic.claude-haiku-5-5   "Bedrock Claude Haiku 5.5 (Global)"
+#   us.anthropic.claude-haiku-5-5       "Bedrock Claude Haiku 5.5 (US)"
+#   anthropic:claude-haiku-5-5          "Anthropic Claude Haiku 5.5 (US)"   (CP /v1/models 첫 항목, Haiku 4.5로 오등록되면 안 된다)
+#   us.anthropic.claude-sonnet-5-5      "Bedrock Claude Sonnet 5.5 (US)"
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
+# 기댓값: {"anthropic": 11, "bedrock": 27, "openai": 28} (bedrock = Global 12 + US 13 + 서울 in-region 2)
+
+# 3. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'
+# 기댓값: "pricing_sync_runner: 75 active channels"(66 + OpenAI 공식 가격 9), 런 요약 pending=0, errors=0.
+#   Sonnet 5.5 Global 캐시 읽기 0.2 → 0.1은 정확히 50%라 자동 적용된다(changed 1 — 0.5 경계 포함, 관리자 승인 없음).
+#   나머지 출처가 그대로면 results는 {'unchanged': 74, 'changed': 1}이다. GPT-6.1 Sol 긴 컨텍스트 WARNING은 v2.32.0과 같이 정상이다.
+
+# 4. /api/pricing — families 22, models 66, references 24, Haiku 5.5 긴 컨텍스트, Sonnet 5.5 US와 캐시 읽기, CP 문서 불일치 메모
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pending_review,
+  families: (.families | length), models: (.models | length), references: (.references | length),
+  haiku55: (.families[] | select(.family_key == "claude-haiku-5-5") | {cp: (.tiers.cp | {input, output, long}),
+    global: (.tiers.global | {input, output, cache_read, long}), us: (.tiers.us | {input, output, long})}),
+  sonnet55: (.families[] | select(.family_key == "claude-sonnet-5-5") | {cp_cache_read: .tiers.cp.cache_read,
+    global_cache_read: .tiers.global.cache_read, us: (.tiers.us | {input, output, cache_read}), notes: [.notes[] | .kind]})}'
+# 기댓값: last_sync "completed", pending_review 0, families 22, models 66, references 24(오퍼 21, Price List 1, Anthropic 1, OpenAI 1),
+#   haiku55 cp {0.1, 0.5, long {0.5, 2.5, …}}, global {0.1, 0.5, cache_read 0.01, long {0.5, 2.5, …}}, us {0.11, 0.55, long {0.55, 2.75, …}},
+#   sonnet55 cp_cache_read 0.2(Anthropic 문서 표 값), global_cache_read 0.1(수동 PricingSync 뒤, 전에는 0.2), us {2.2, 11, cache_read 0.11},
+#   notes ["doc_conflict"] — Anthropic 문서 표가 0.1로 바뀌어 동기화가 CP에서 0.1을 관측하면 메모가 빠진다(그때는 [])
+
+# 5. FeaturesVerify — 다음 스케줄 런(17:30 UTC) 또는 §5-1과 같은 run-task 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version, n: (.results | length),
+  haiku55: ([.results[] | select(.model_key == "haiku-5-5")] | length),
+  haiku55_mantle: ([.results[] | select(.model_key == "haiku-5-5" and .surface == "mantle") | .status] | unique),
+  catalog_changes: ([.changes[] | select(.kind == "catalog")] | length)}'
+# 기댓값: cv "2026-10-07", n 1365(totals 6상태 합도 1365 = 프로브 1079 + 사전판정 286), haiku55 195,
+#   haiku55_mantle ["not_applicable"], catalog_changes 195(직전 런에 없던 haiku-5-5 셀 — 정상, 한 번만)
+```
+
+- 화면 확인: 대시보드 카드 66장(Claude Haiku 5.5 행이 Haiku 4.5 바로 앞, Sonnet 5.5 행에 US 카드), `/pricing` Claude 표의 Haiku 5.5 행
+  (셋째 줄 긴 컨텍스트, 단위 안내 "GPT와 Claude Haiku 5.5 셋째 줄: 긴 컨텍스트"와 고정 안내 5번), Sonnet 5.5 행의 AWS Bedrock - US CRIS 셀,
+  수동 PricingSync 뒤 Sonnet 5.5 Global CRIS 셀의 "캐시 읽기 $0.10", Sonnet 5.5 Claude Platform on AWS 셀의 "문서 불일치" 배지(주황,
+  "문서 본문과 발표: 캐시 읽기 $0.10", Anthropic 참고 자료 각주), `/claude-features` 모델 칩 Haiku 5.5(Sonnet 5 뒤),
+  `/prompts` 대상 "Bedrock Claude Haiku 5.5 (Global)", "Bedrock Claude Haiku 5.5 (US)", "Bedrock Claude Sonnet 5.5 (US)", 추이 차트의
+  Haiku 5.5 3색(Global 실선, US 점선, CP 점)과 Sonnet 5.5 US 올리브.
+- CP 호출은 시간당 120회에서 132회(11채널 × 12회)로 는다. 월간 사용량 상한이 다시 걸리면 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`이
+  레버다(AutoProber task와 backend 서비스 둘 다, §5-2).
+- AutoProber 사이클 소요(`/ecs/autoprober`)가 300초에 가까워지면(66채널) `CycleAlreadyRunning` 위험이 있으니 보고한다.
+- 오등록 확인(선택): `SELECT DISTINCT model_id, model_name FROM probe_results WHERE model_id LIKE 'anthropic:claude-haiku%'` — 두 id가 각자
+  자기 라벨이면 정상이다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 

@@ -195,10 +195,10 @@ _CP_MODEL_IDS_20260930 = [
 ]
 
 
-def test_bedrock_sonnet55_global_only():
+def test_bedrock_sonnet55_global_and_no_in_region():
     assert prober.AVAILABLE_MODELS["global.anthropic.claude-sonnet-5-5"] == "Bedrock Claude Sonnet 5.5 (Global)"
-    # us. 프로파일 없음("The provided model identifier is invalid"), Seoul in-region은 ON_DEMAND 미지원
-    assert "us.anthropic.claude-sonnet-5-5" not in prober.AVAILABLE_MODELS
+    # 2026-09-30에는 us. 프로파일이 없었고 v2.33.0(2026-10-07)에 생겨 US 채널을 더했다(test_haiku55_catalog.py).
+    # Seoul in-region은 여전히 ON_DEMAND 미지원(INFERENCE_PROFILE 전용).
     assert "bedrock:ap-northeast-2:anthropic.claude-sonnet-5-5" not in prober.AVAILABLE_MODELS
     assert prober._is_reasoning_model("global.anthropic.claude-sonnet-5-5") is True  # temperature 400
     # 정적 순서: Sonnet 5.5는 Sonnet 5 바로 앞
@@ -220,6 +220,8 @@ def test_cp_discovery_with_20260930_model_order_labels_every_id_correctly():
     assert matched["opus-5"] == "claude-opus-5"
     assert matched["opus-5-5"] == "claude-opus-5-5"
     assert matched["fable-5"] == "claude-fable-5"
+    # haiku-5-5는 v2.33.0 타깃 — 2026-09-30 목록에는 아직 없어 None(등록 skip)이 맞다
+    assert matched.pop("haiku-5-5") is None
     assert None not in matched.values()
     assert len(set(matched.values())) == len(matched)
     # 날짜 서픽스가 붙은 미래 id도 자기 타깃에 매칭된다

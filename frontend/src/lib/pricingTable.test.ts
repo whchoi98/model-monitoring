@@ -9,7 +9,7 @@
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fetchPricing, pricingExportUrl } from "./api";
-import type { PricingModelPrice, PricingNote, PricingPending, PricingTier } from "./types";
+import type { PricingDocConflictNote, PricingModelPrice, PricingPending, PricingPromoNote, PricingTier } from "./types";
 import {
   PROVIDER_COLUMNS, cacheItems, columnsFor, costFromPrices, formatPricePair, formatUnitPrice, headerParts, longItems,
   notesForTier, pendingDetail, textRuns, tierBadges, tierLabel, utcDate,
@@ -38,7 +38,7 @@ function pendingOf(base: PricingTier, overrides: Partial<PricingPending> = {}): 
 }
 
 // pricing_sources.PRICE_NOTES (v2.31.0): the promotion is cited from the OpenAI pricing page.
-const SOL_PROMO: PricingNote = {
+const SOL_PROMO: PricingPromoNote = {
   family_key: "gpt-5.6-sol", kind: "promo", min_until: "2026-11-21",
   prior_price: {
     openai_list: { input: 5, output: 30 }, global: { input: 5, output: 30 }, in_region: { input: 5.5, output: 33 },
@@ -50,8 +50,17 @@ const SOL_PROMO: PricingNote = {
 };
 
 // A manual note (still supported): its footnote is the backend's note:<family_key> reference.
-const MANUAL_PROMO: PricingNote = {
+const MANUAL_PROMO: PricingPromoNote = {
   ...SOL_PROMO, prior_price: { in_region: { input: 5.5, output: 33 } }, source: "manual_note", source_id: "note:gpt-5.6-sol",
+};
+
+// pricing_sources.PRICE_NOTES (v2.33.0): the Anthropic table still says $0.20 for the Sonnet 5.5 cache read.
+const SONNET55_CONFLICT: PricingDocConflictNote = {
+  family_key: "claude-sonnet-5-5", kind: "doc_conflict", expected: { cp: { cache_read: 0.1 } },
+  text_ko: "Anthropic 공식 요금 문서 본문과 2026-10-07 발표는 캐시 읽기를 $0.10으로 내렸지만, 같은 문서의 요금 표는 2026-10-07 기준 $0.20이다. 이 표는 문서 표를 따른다.",
+  text_en: "The Anthropic pricing page text and the 2026-10-07 announcement cut the cache read price to $0.10, but the page's pricing table still shows $0.20 as of 2026-10-07. This table follows the pricing table.",
+  source: "anthropic_doc",
+  source_id: "anthropic-pricing",
 };
 
 const SEPT_26 = new Date("2026-09-26T12:00:00Z");
@@ -387,13 +396,27 @@ describe("tierBadges", () => {
   });
 });
 
+describe("doc_conflict 메모 (v2.33.0)", () => {
+  test("기대 값이 있는 티어(CP)에만 붙고 배지 설명은 문서 본문 값이다", () => {
+    expect(notesForTier([SONNET55_CONFLICT], "global")).toEqual([]);
+    const notes = notesForTier([SOL_PROMO, SONNET55_CONFLICT], "cp");
+    expect(notes.map((n) => n.kind)).toEqual(["doc_conflict"]);
+    const cp = tier({ model_ids: ["anthropic:claude-sonnet-5-5"] });
+    expect(tierBadges(cp, notes, "ko", SEPT_26)).toEqual([
+      { kind: "doc_conflict", label: "문서 불일치", detail: "문서 본문과 발표: 캐시 읽기 $0.10", ref: "anthropic-pricing" },
+    ]);
+    expect(tierBadges(cp, notes, "en", SEPT_26)[0]).toMatchObject({
+      label: "Source mismatch", detail: "Page text and announcement: cache read $0.10" });
+  });
+});
+
 describe("notesForTier", () => {
   test("그 티어의 이전 단가가 있는 메모만 남기고 이전 단가를 그 티어로 좁힌다", () => {
     expect(notesForTier([SOL_PROMO], "us")).toEqual([]);
     expect(notesForTier([SOL_PROMO], "cp")).toEqual([]);
-    const [global] = notesForTier([SOL_PROMO], "global");
+    const [global] = notesForTier([SOL_PROMO], "global") as PricingPromoNote[];
     expect(global.prior_price).toEqual({ global: { input: 5, output: 30 } });
-    const [list] = notesForTier([SOL_PROMO], "openai_list");
+    const [list] = notesForTier([SOL_PROMO], "openai_list") as PricingPromoNote[];
     expect(list.prior_price).toEqual({ openai_list: { input: 5, output: 30 } });
     expect(list.source_id).toBe("openai-pricing");
     expect(SOL_PROMO.prior_price).toHaveProperty("in_region"); // 원본은 바꾸지 않는다

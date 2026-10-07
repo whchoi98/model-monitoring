@@ -51,7 +51,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.locator('main [data-tier="none"]')).toHaveCount(novaRows + 1);
   // The unit is said once above the tables, and each table's caption names it with the unit.
   await expect(page.locator("[data-unit-legend]"))
-    .toHaveText("각 단가 셀: 입력 / 출력, 1M 토큰당 USD. 둘째 줄: 프롬프트 캐싱. GPT 셋째 줄: 긴 컨텍스트");
+    .toHaveText("각 단가 셀: 입력 / 출력, 1M 토큰당 USD. 둘째 줄: 프롬프트 캐싱. GPT와 Claude Haiku 5.5 셋째 줄: 긴 컨텍스트");
   for (const provider of ["Anthropic Claude", "OpenAI", "Amazon Nova"]) {
     await expect(page.getByRole("table", { name: `${provider} 단가 (입력 / 출력, 1M 토큰당 USD)`, exact: true })).toBeVisible();
   }
@@ -120,7 +120,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
     "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
     "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
     "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
-    "GPT의 긴 컨텍스트 요금은 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에 적용된다",
+    "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
     "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
     "캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다",
     "batch, flex, priority(fast) 단가는 포함하지 않는다",
@@ -314,7 +314,7 @@ test("a 390px phone in English shows the new columns, cache and long-context lin
   await expect(page.getByRole("region", { name: "Amazon Nova price table" }).getByRole("columnheader"))
     .toHaveText(["Model", ...BEDROCK_COLUMNS]);
   await expect(page.locator("[data-unit-legend]"))
-    .toHaveText("Each price cell: input / output, USD per 1M tokens. Second line: prompt caching. Third line on GPT rows: long context");
+    .toHaveText("Each price cell: input / output, USD per 1M tokens. Second line: prompt caching. Third line on GPT and Claude Haiku 5.5 rows: long context");
   await expect(page.locator('tr[data-family="claude-opus-5-5"] td[data-tier="global"] [data-cache-line]'))
     .toHaveText("Cache read $0.20, write $5.00, 1h write $8.00");
   await expect(page.locator('tr[data-family="gpt-6-astra"] td[data-tier="global"] [data-long-line]'))

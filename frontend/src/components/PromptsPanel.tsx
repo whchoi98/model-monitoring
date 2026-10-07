@@ -18,7 +18,8 @@ import RefreshControls from "./RefreshControls";
 // Bedrock OptimizePrompt는 inference profile / foundation-model ARN 모두 시도.
 // Anthropic CP on AWS 채널은 Bedrock OptimizePrompt 대상이 아니므로 동일 family의
 // Bedrock US inference profile로 fallback.
-// Sonnet 5.5는 us. 프로파일이 없어 Global 항목만 둔다.
+// Sonnet 5.5 US와 Haiku 5.5(Global, US)는 v2.33.0 — us-east-1 OptimizePrompt가 anthropic.claude-haiku-5-5,
+// anthropic.claude-sonnet-5-5를 받는다(2026-10-07 실측, 백엔드가 프로파일 접두를 떼어 FM id로 보낸다).
 const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   // Bedrock Global Anthropic
   { id: "global.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (Global)" },
@@ -31,6 +32,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   { id: "global.anthropic.claude-sonnet-5-5", label: "Bedrock Claude Sonnet 5.5 (Global)" },
   { id: "global.anthropic.claude-sonnet-5", label: "Bedrock Claude Sonnet 5 (Global)" },
   { id: "global.anthropic.claude-sonnet-4-6", label: "Bedrock Claude Sonnet 4.6 (Global)" },
+  { id: "global.anthropic.claude-haiku-5-5", label: "Bedrock Claude Haiku 5.5 (Global)" },
   { id: "global.anthropic.claude-haiku-4-5-20251001-v1:0", label: "Bedrock Claude Haiku 4.5 (Global)" },
   // Bedrock US Anthropic
   { id: "us.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (US)" },
@@ -40,8 +42,10 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   { id: "us.anthropic.claude-opus-4-8", label: "Bedrock Claude Opus 4.8 (US)" },
   { id: "us.anthropic.claude-opus-4-7", label: "Bedrock Claude Opus 4.7 (US)" },
   { id: "us.anthropic.claude-opus-4-6-v1", label: "Bedrock Claude Opus 4.6 (US)" },
+  { id: "us.anthropic.claude-sonnet-5-5", label: "Bedrock Claude Sonnet 5.5 (US)" },
   { id: "us.anthropic.claude-sonnet-5", label: "Bedrock Claude Sonnet 5 (US)" },
   { id: "us.anthropic.claude-sonnet-4-6", label: "Bedrock Claude Sonnet 4.6 (US)" },
+  { id: "us.anthropic.claude-haiku-5-5", label: "Bedrock Claude Haiku 5.5 (US)" },
   { id: "us.anthropic.claude-haiku-4-5-20251001-v1:0", label: "Bedrock Claude Haiku 4.5 (US)" },
   // Bedrock Nova
   { id: "us.amazon.nova-2-lite-v1:0", label: "Bedrock Nova 2.0 Lite (US)" },

@@ -1,0 +1,674 @@
+{
+ "modelId": "anthropic.claude-haiku-5-5",
+ "offers": [
+  {
+   "offerId": "offer-u3aih6zr7uw5u",
+   "termDetails": {
+    "usageBasedPricingTerm": {
+     "rateCard": [
+      {
+       "dimension": "APN2_input_tokens_global_standard",
+       "price": "0.1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_global_standard",
+       "price": "0.5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_global_standard",
+       "price": "0.01",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_global_standard",
+       "price": "0.125",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_1h_global_standard",
+       "price": "0.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_long_ctx_global_standard",
+       "price": "0.5",
+       "description": "Input Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_long_ctx_global_standard",
+       "price": "2.5",
+       "description": "Output Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_long_ctx_global_standard",
+       "price": "0.05",
+       "description": "Cache Read Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_long_ctx_global_standard",
+       "price": "0.625",
+       "description": "Cache Write Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_1h_long_ctx_global_standard",
+       "price": "1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_global_standard",
+       "price": "0.1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_global_standard",
+       "price": "0.5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_global_standard",
+       "price": "0.01",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_global_standard",
+       "price": "0.125",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_1h_global_standard",
+       "price": "0.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_long_ctx_global_standard",
+       "price": "0.5",
+       "description": "Input Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_long_ctx_global_standard",
+       "price": "2.5",
+       "description": "Output Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_long_ctx_global_standard",
+       "price": "0.05",
+       "description": "Cache Read Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_long_ctx_global_standard",
+       "price": "0.625",
+       "description": "Cache Write Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_1h_long_ctx_global_standard",
+       "price": "1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_global_standard",
+       "price": "0.1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_global_standard",
+       "price": "0.5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_global_standard",
+       "price": "0.01",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_global_standard",
+       "price": "0.125",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_1h_global_standard",
+       "price": "0.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_long_ctx_global_standard",
+       "price": "0.5",
+       "description": "Input Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_long_ctx_global_standard",
+       "price": "2.5",
+       "description": "Output Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_long_ctx_global_standard",
+       "price": "0.05",
+       "description": "Cache Read Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_long_ctx_global_standard",
+       "price": "0.625",
+       "description": "Cache Write Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_1h_long_ctx_global_standard",
+       "price": "1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_global_standard",
+       "price": "0.1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_global_standard",
+       "price": "0.5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_global_standard",
+       "price": "0.01",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_global_standard",
+       "price": "0.125",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_1h_global_standard",
+       "price": "0.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_long_ctx_global_standard",
+       "price": "0.5",
+       "description": "Input Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_long_ctx_global_standard",
+       "price": "2.5",
+       "description": "Output Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_long_ctx_global_standard",
+       "price": "0.05",
+       "description": "Cache Read Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_long_ctx_global_standard",
+       "price": "0.625",
+       "description": "Cache Write Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_1h_long_ctx_global_standard",
+       "price": "1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_global_standard",
+       "price": "0.1",
+       "description": "Input Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_global_standard",
+       "price": "0.5",
+       "description": "Output Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_global_standard",
+       "price": "0.01",
+       "description": "Cache Read Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_global_standard",
+       "price": "0.125",
+       "description": "Cache Write Tokens - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_1h_global_standard",
+       "price": "0.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_long_ctx_global_standard",
+       "price": "0.5",
+       "description": "Input Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_long_ctx_global_standard",
+       "price": "2.5",
+       "description": "Output Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_long_ctx_global_standard",
+       "price": "0.05",
+       "description": "Cache Read Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_long_ctx_global_standard",
+       "price": "0.625",
+       "description": "Cache Write Tokens - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_1h_long_ctx_global_standard",
+       "price": "1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context, Global",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_standard",
+       "price": "0.11",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_standard",
+       "price": "0.55",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_standard",
+       "price": "0.011",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_standard",
+       "price": "0.1375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_1h_standard",
+       "price": "0.22",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_input_tokens_long_ctx_standard",
+       "price": "0.55",
+       "description": "Input Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_output_tokens_long_ctx_standard",
+       "price": "2.75",
+       "description": "Output Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_read_tokens_long_ctx_standard",
+       "price": "0.055",
+       "description": "Cache Read Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_long_ctx_standard",
+       "price": "0.6875",
+       "description": "Cache Write Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "APN2_cache_write_tokens_1h_long_ctx_standard",
+       "price": "1.1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_standard",
+       "price": "0.11",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_standard",
+       "price": "0.55",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_standard",
+       "price": "0.011",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_standard",
+       "price": "0.1375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_1h_standard",
+       "price": "0.22",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_input_tokens_long_ctx_standard",
+       "price": "0.55",
+       "description": "Input Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_output_tokens_long_ctx_standard",
+       "price": "2.75",
+       "description": "Output Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_read_tokens_long_ctx_standard",
+       "price": "0.055",
+       "description": "Cache Read Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_long_ctx_standard",
+       "price": "0.6875",
+       "description": "Cache Write Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "EU_cache_write_tokens_1h_long_ctx_standard",
+       "price": "1.1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_standard",
+       "price": "0.11",
+       "description": "Million Input Tokens Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_standard",
+       "price": "0.55",
+       "description": "Million Response Tokens Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_standard",
+       "price": "0.011",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_standard",
+       "price": "0.1375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_1h_standard",
+       "price": "0.22",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_input_tokens_long_ctx_standard",
+       "price": "0.55",
+       "description": "Input Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_output_tokens_long_ctx_standard",
+       "price": "2.75",
+       "description": "Output Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_read_tokens_long_ctx_standard",
+       "price": "0.055",
+       "description": "Cache Read Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_long_ctx_standard",
+       "price": "0.6875",
+       "description": "Cache Write Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE1_cache_write_tokens_1h_long_ctx_standard",
+       "price": "1.1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_standard",
+       "price": "0.11",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_standard",
+       "price": "0.55",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_standard",
+       "price": "0.011",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_standard",
+       "price": "0.1375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_1h_standard",
+       "price": "0.22",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_input_tokens_long_ctx_standard",
+       "price": "0.55",
+       "description": "Input Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_output_tokens_long_ctx_standard",
+       "price": "2.75",
+       "description": "Output Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_read_tokens_long_ctx_standard",
+       "price": "0.055",
+       "description": "Cache Read Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_long_ctx_standard",
+       "price": "0.6875",
+       "description": "Cache Write Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USE2_cache_write_tokens_1h_long_ctx_standard",
+       "price": "1.1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_input_tokens_standard",
+       "price": "0.12",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_output_tokens_standard",
+       "price": "0.6",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_read_tokens_standard",
+       "price": "0.012",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_write_tokens_standard",
+       "price": "0.15",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_write_tokens_1h_standard",
+       "price": "0.24",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_input_tokens_long_ctx_standard",
+       "price": "0.6",
+       "description": "Input Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_output_tokens_long_ctx_standard",
+       "price": "3",
+       "description": "Output Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_read_tokens_long_ctx_standard",
+       "price": "0.06",
+       "description": "Cache Read Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_write_tokens_long_ctx_standard",
+       "price": "0.75",
+       "description": "Cache Write Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "UGE1_cache_write_tokens_1h_long_ctx_standard",
+       "price": "1.2",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_standard",
+       "price": "0.11",
+       "description": "Input Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_standard",
+       "price": "0.55",
+       "description": "Output Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_standard",
+       "price": "0.011",
+       "description": "Cache Read Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_standard",
+       "price": "0.1375",
+       "description": "Cache Write Tokens - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_1h_standard",
+       "price": "0.22",
+       "description": "Cache Write Tokens (1h TTL) - Standard",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_input_tokens_long_ctx_standard",
+       "price": "0.55",
+       "description": "Input Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_output_tokens_long_ctx_standard",
+       "price": "2.75",
+       "description": "Output Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_read_tokens_long_ctx_standard",
+       "price": "0.055",
+       "description": "Cache Read Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_long_ctx_standard",
+       "price": "0.6875",
+       "description": "Cache Write Tokens - Standard, Long Context",
+       "unit": "Units"
+      },
+      {
+       "dimension": "USW2_cache_write_tokens_1h_long_ctx_standard",
+       "price": "1.1",
+       "description": "Cache Write Tokens (1h TTL) - Standard, Long Context",
+       "unit": "Units"
+      }
+     ]
+    }
+   }
+  }
+ ]
+}

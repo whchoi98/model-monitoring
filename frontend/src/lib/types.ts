@@ -208,18 +208,31 @@ export interface PricingInRegionTier extends PricingTier {
   regions: string[];
 }
 
-export interface PricingNote {
+interface PricingNoteBase {
   family_key: string;
+  text_ko: string;
+  text_en: string;
+  /** "openai_doc" / "anthropic_doc" cite the provider's pricing page; "manual_note" is a note kept by hand (v2.31.0: never both). */
+  source: "manual_note" | "openai_doc" | "anthropic_doc";
+  /** Reference id whose footnote carries the note's source (e.g. "openai-pricing", "anthropic-pricing", "note:<family_key>"). */
+  source_id: string;
+}
+
+/** A promotion: the price before it per tier; the backend drops the note once a sync observes that price. */
+export interface PricingPromoNote extends PricingNoteBase {
   kind: "promo";
   min_until: string;
   prior_price: Record<string, { input: number; output: number }>;
-  text_ko: string;
-  text_en: string;
-  /** "openai_doc" cites the OpenAI pricing page; "manual_note" is a note kept by hand (v2.31.0: never both). */
-  source: "manual_note" | "openai_doc";
-  /** Reference id whose footnote carries the note's source (e.g. "openai-pricing", "note:<family_key>"). */
-  source_id: string;
 }
+
+/** The pricing table and the page text disagree (v2.33.0, Sonnet 5.5 CP cache read): `expected` per tier is the value
+ * the text and the announcement give; the backend drops the note once a sync observes it. */
+export interface PricingDocConflictNote extends PricingNoteBase {
+  kind: "doc_conflict";
+  expected: Record<string, Partial<Record<"cache_read" | "cache_write" | "cache_write_1h", number>>>;
+}
+
+export type PricingNote = PricingPromoNote | PricingDocConflictNote;
 
 export interface PricingFamily {
   family_key: string;

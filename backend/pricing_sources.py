@@ -22,7 +22,7 @@ PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 
 FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
     "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Sonnet 4.6",
-    "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol",
+    "Claude Haiku 5.5", "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol",
     "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5", "GPT 5.4",
 )
 
@@ -49,12 +49,15 @@ _BEDROCK_CLAUDE_FM: dict[str, tuple[str, str]] = {
     "anthropic.claude-sonnet-5-5": ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
     "anthropic.claude-sonnet-5": ("claude-sonnet-5", "Claude Sonnet 5"),
     "anthropic.claude-sonnet-4-6": ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
+    "anthropic.claude-haiku-5-5": ("claude-haiku-5-5", "Claude Haiku 5.5"),
     "anthropic.claude-haiku-4-5-20251001-v1:0": ("claude-haiku-4-5", "Claude Haiku 4.5"),
 }
 _CLAUDE_FAMILY_NAMES = {fk: fam for fk, fam in _BEDROCK_CLAUDE_FM.values()}
 # CP — prober._ANTHROPIC_TARGETS와 같은 substring, 같은 순서(tests가 고정). family_key = "claude-" + substring.
 _CP_TARGETS = ("fable-5-1", "fable-5", "opus-5-5", "opus-5", "opus-4-8", "opus-4-7", "sonnet-5-5", "sonnet-5", "sonnet-4-6",
-               "haiku-4-5")
+               "haiku-5-5", "haiku-4-5")
+# Anthropic 문서 표의 모델 이름 = family 이름. Haiku 5.5 행은 "(for prompts up to/over 100,000 tokens)" 두 줄이고
+# 파서가 괄호를 지운 같은 이름으로 합친다(100K 이하 = 표준, 초과 = 긴 컨텍스트, v2.33.0).
 ANTHROPIC_DOC_NAMES: dict[str, str] = {f"claude-{s}": _CLAUDE_FAMILY_NAMES[f"claude-{s}"] for s in _CP_TARGETS}
 ANTHROPIC_PRICING_URL = "https://platform.claude.com/docs/en/about-claude/pricing.md"
 ANTHROPIC_SOURCE_ID = "anthropic-pricing"
@@ -86,6 +89,15 @@ OPENAI_LIST_PREFIX = "openai-list:"
 _INREGION_REGIONS = ("us-east-1", "us-east-2", "us-west-2")
 _BEDROCK_INREGION_REGIONS = ("ap-northeast-2",)
 BEDROCK_INREGION_PREFIX = "bedrock:"
+# 긴 컨텍스트 단가(long_*)를 저장, 표시하는 Claude 패밀리 — 프롬프트 길이로 단가가 갈리는 모델만(v2.33.0).
+# Claude Haiku 5.5: 100K 토큰 초과 프롬프트는 입력, 출력, 캐시 모두 5배(Anthropic 문서, offer `_long_ctx` 차원).
+# 나머지 Claude는 1M 컨텍스트 전체가 표준 단가라 offer에 `_long_ctx`가 있어도 버린다. OpenAI는 패밀리 전부.
+CLAUDE_LONG_CONTEXT_FAMILIES: frozenset[str] = frozenset({"claude-haiku-5-5"})
+
+
+def keeps_long_context(ident: "PriceIdentity") -> bool:
+    """이 채널의 긴 컨텍스트 단가를 저장하는가 — OpenAI 전부, Claude는 CLAUDE_LONG_CONTEXT_FAMILIES만."""
+    return ident.provider == "openai" or ident.family_key in CLAUDE_LONG_CONTEXT_FAMILIES
 
 
 def _is_point_release_of(substring: str, model_id: str) -> bool:
@@ -242,4 +254,17 @@ PRICE_NOTES: list[dict] = [{
                "2026-11-21.",
     "source": "openai_doc",
     "source_id": OPENAI_SOURCE_ID,
+}, {
+    # 문서 불일치 메모(v2.33.0) — 2026-10-07 Haiku 5.5 발표가 Sonnet 5.5 캐시 읽기를 $0.20 → $0.10으로 내렸고 Anthropic
+    # 요금 문서 본문("a cache hit costs 5% … $0.10 USD on Claude Sonnet 5.5")도 그렇게 적었지만, 동기화가 읽는 표 행은
+    # 아직 $0.20이다(사용자 결정: 표를 따르고 메모). expected 값을 동기화가 관측하면 pricing_payload가 메모를 뺀다.
+    "family_key": "claude-sonnet-5-5",
+    "kind": "doc_conflict",
+    "expected": {"cp": {"cache_read": 0.1}},
+    "text_ko": "Anthropic 공식 요금 문서 본문과 2026-10-07 발표는 캐시 읽기를 $0.10으로 내렸지만, 같은 문서의 요금 표는 "
+               "2026-10-07 기준 $0.20이다. 이 표는 문서 표를 따른다.",
+    "text_en": "The Anthropic pricing page text and the 2026-10-07 announcement cut the cache read price to $0.10, but "
+               "the page's pricing table still shows $0.20 as of 2026-10-07. This table follows the pricing table.",
+    "source": "anthropic_doc",
+    "source_id": ANTHROPIC_SOURCE_ID,
 }]

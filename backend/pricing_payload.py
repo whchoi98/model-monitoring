@@ -42,7 +42,7 @@ OPENAI_TITLE_KO = "OpenAI API 요금 (Standard)"
 SINGLE_TIERS = ("cp", "openai_list", "global", "us")
 _VERIFICATION_RANK = {"verified": 0, "stale": 1, "seed_only": 2, "none": 3}
 
-NOTE_KIND_TITLES = {"promo": {"en": "promotion", "ko": "프로모션"}}
+NOTE_KIND_TITLES = {"promo": {"en": "promotion", "ko": "프로모션"}, "doc_conflict": {"en": "source mismatch", "ko": "문서 불일치"}}
 # Note fields that only build a manual note's reference title; families[].notes carries the rest (frontend PricingNote).
 _NOTE_TITLE_FIELDS = ("basis_en", "basis_ko")
 
@@ -303,7 +303,18 @@ def build_pricing_payload(db: Session, active: Mapping[str, PriceIdentity], *, n
 
 def _note_resolved(note: Mapping, mids: list[str], active: Mapping[str, PriceIdentity],
                    current: Mapping[str, PriceHistory]) -> bool:
-    """A promo note drops out once a sync has observed the pre-promotion price on one of its tiers."""
+    """A promo note drops out once a sync has observed the pre-promotion price on one of its tiers; a doc_conflict
+    note (v2.33.0) once a sync has observed every expected value on one of its tiers."""
+    if note["kind"] == "doc_conflict":
+        for tier, expected in note["expected"].items():
+            for mid in mids:
+                row = current.get(mid)
+                if (row is not None and row.observed_at is not None and tier_of(active[mid].channel) == tier
+                        and all(getattr(row, f"{field}_per_mtok") is not None
+                                and price_number(getattr(row, f"{field}_per_mtok")) == price_number(value)
+                                for field, value in expected.items())):
+                    return True
+        return False
     for tier, prior in note["prior_price"].items():
         for mid in mids:
             row = current.get(mid)
