@@ -785,7 +785,7 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version
   수동 PricingSync 뒤 Sonnet 5.5 Global CRIS 셀의 "캐시 읽기 $0.10", Sonnet 5.5 Claude Platform on AWS 셀의 "문서 불일치" 배지(주황,
   "문서 본문과 발표: 캐시 읽기 $0.10", Anthropic 참고 자료 각주), `/claude-features` 모델 칩 Haiku 5.5(Sonnet 5 뒤),
   `/prompts` 대상 "Bedrock Claude Haiku 5.5 (Global)", "Bedrock Claude Haiku 5.5 (US)", "Bedrock Claude Sonnet 5.5 (US)", 추이 차트의
-  Haiku 5.5 3색(Global 실선, US 점선, CP 점)과 Sonnet 5.5 US 올리브.
+  Haiku 5.5 3색(Global 실선, US 파선, CP 점선)과 Sonnet 5.5 US 올리브.
 - CP 호출은 시간당 120회에서 132회(11채널 × 12회)로 는다. 월간 사용량 상한이 다시 걸리면 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`이
   레버다(AutoProber task와 backend 서비스 둘 다, §5-2).
 - AutoProber 사이클 소요(`/ecs/autoprober`)가 300초에 가까워지면(66채널) `CycleAlreadyRunning` 위험이 있으니 보고한다.
