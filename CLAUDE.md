@@ -74,6 +74,7 @@ model-monitoring/
 │   ├── stream_watchdog.py   # 스트림 wall-clock watchdog — prober·gptbench 공용 (v2.28.2)
 │   ├── label_repair.py      # 기동 시 저장 행 model_name을 카탈로그 라벨로 정정 (v2.22.1)
 │   ├── visibility.py        # 조회 노출 필터 — HIDDEN_MODEL_PATTERNS (기본 `(1P)`) (v2.19.1)
+│   ├── streamed_read.py     # yield_per 조회 전체 시간 상한 stream_rows / stream_rows_or_503 — reliability, efficiency, cost trend, results stats, insights (v2.32.1)
 │   ├── window_spec.py       # 공개 조회 ?window= 파서 parse_window(max_window) — 상한 초과, 0 이하, 읽을 수 없는 창, datetime 범위 초과는 422, 단위 없는 값은 24h (analysis와 cost 30d, reliability와 efficiency 7d, v2.32.1)
 │   ├── tests/               # pytest (python3.12)
 │   ├── prober.py            # Probe logic (Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P), AVAILABLE_MODELS (66개 활성 + 1P 5개 휴면, Bedrock in-region 키 bedrock:<region>:<fm-id> v2.32.0), retry, stop_reason capture
@@ -83,7 +84,7 @@ model-monitoring/
 │   ├── pricing_sync.py      # 12시간 동기화 — 가져오기, 관측 값 소수 6자리 정규화, 비교(classify_change — 9필드 필드별, CHANGE_THRESHOLD 0.5 경계 포함, 빈 필드 첫 관측은 새 행 없이 현재 행 채움 `enriched`), pending_review, price_sync_runs 기록, 상한 300초. 파서 예외는 종류와 상관없이 그 출처 채널만 skipped:parse_failed(v2.31.0: 문서 표는 찾는 모델 행만 하나씩 정규화해 값이 이상한 추적 모델은 자기 채널만 skipped:parse_failed, 긴 컨텍스트 필드는 `_long_context_gate`(v2.33.0, 구 `_gpt_long_only`)가 OpenAI 채널과 Claude Haiku 5.5 채널만 남김 — offer, 문서, Price List 경로 공통)
 │   ├── pricing_sync_runner.py # CLI entry: `python -m pricing_sync_runner --once` (PricingSync Fargate task) — create_tables → ensure_price_columns(v2.31.0) → CP/OpenAI 등록 → ensure_seed → run_sync(pg_try_advisory_lock(917350004) — 점유 중이면 즉시 exit 1) → os._exit
 │   ├── price_history.py     # 유효 단가 조회, 행 단위 비용 서브쿼리(with_row_cost — /api/cost/*, /api/efficiency/score), verification(seed_only/verified/stale)
-│   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료 — 셀 각주나 메모가 인용한 출처만, 1..N 빈칸 없음, 운영 23개(오퍼 20), v2.31.1, v2.32.0) + 숫자 직렬화
+│   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료 — 셀 각주나 메모가 인용한 출처만, 1..N 빈칸 없음, 운영 24개(오퍼 21, v2.33.0), v2.31.1, v2.32.0) + 숫자 직렬화
 │   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄, 확장 단가 7열), Markdown(머리말 공식 요금 페이지 링크 한 줄 v2.31.1, 제공사별 열 머리글, 셀 안 `<br>` 캐시와 긴 컨텍스트 줄, 고정 안내 9개 — 3번째 GPT US CRIS = In Region v2.31.1), JSON 내보내기 순수 함수
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
@@ -157,7 +158,7 @@ model-monitoring/
 │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
 │   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 헬스 카드(docHealth, 클릭 → Key Findings 드로어) + 모델 칩 + 드리프트/변경(kind) 배너 + 증거 모달 + 수동 트리거 (v2.24.0)
 │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
-│   │   ├── hooks/                       # useAsyncResource, useAutoRefresh, useProbeStream, useChatStream, usePageTitle, useUaPopupStrategy
+│   │   ├── hooks/                       # useAsyncResource, useAutoRefresh, useProbeStream, useChatStream, usePageTitle, useUaPopupStrategy, useChatFabVisibility(v2.31.1)
 │   │   └── lib/
 │   │       ├── api.ts                   # 모든 fetch 함수 (auth token mgmt)
 │   │       ├── http.ts / auth-context.tsx / types.ts / format.ts  # fetchJson+ApiError, AuthProvider/useAuth, 공용 타입, 시각 포맷(UTC 파싱)
@@ -169,13 +170,14 @@ model-monitoring/
 │   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
 │   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (lang 파라미터로 KO/EN, v2.16.2)
 │   │       ├── claudeFeatures.ts        # Claude API Features 매트릭스 순수 로직 — 셀 집계·그룹 구성(modelKey, modelOrder)·surfaceSummary/surfaceFindings·labelMaps·지연시간 헬퍼 (v2.24.0)
+│   │       ├── fabVisibility.ts         # 챗봇 버튼 스크롤 숨김 규칙 nextFabState, isFabVisible (v2.31.1)
 │   │       ├── metricGrade.ts           # 대시보드 카드 지표 등급 단일 출처 — 카테고리별 TTFT/총 응답시간 임계치, TPS 공통(<40 경고, <15 위험), roundForDisplay, 색·표지 (v2.28.0, ADR-029)
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / src/proxy.ts
 ├── cdk/                                  # lib/stacks/ 8 stacks + lib/constructs/{fargate-service,pinned-image}.ts (TypeScript)
 └── docs/
     ├── architecture.md, api-reference.md
-    ├── decisions/ADR-001~032.md
+    ├── decisions/ADR-*.md   # 001~032 중 012, 014, 015, 016은 결번
     └── runbooks/deploy.md, rollback.md, troubleshooting.md
 ```
 
