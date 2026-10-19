@@ -46,6 +46,17 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
+**v2.33.0에서 v2.32.2로 되돌릴 때 (과도 상태)**. v2.33.0은 env, 스케줄, IAM을 바꾸지 않았다(CDK 변경은 FeaturesVerify 스케줄 설명
+"7 models"뿐). 그래서 현재 `cdk/`로 v2.32.2 이미지 digest(`v37b0280`)를 주입해 AppServices, Scheduler를 배포하면 된다. 설명 문자열이 남는 것은 무해하다.
+DB는 그대로 둔다. v2.32.2는 Haiku 5.5와 Sonnet 5.5 US를 카탈로그에 두지 않아 프로브를 멈춘다. 그 4채널의 `price_history` 행은
+`price_identity`가 분류하지 않아 무시된다. Sonnet 5.5 Global 캐시 읽기 0.1 행은 맞는 값이라 그대로 쓰인다. CP Sonnet 5.5의
+"문서 불일치" 메모는 v2.32.2 `PRICE_NOTES`에 없어 사라진다. 다만 다음이 잠시 보인다.
+1. `/claude-features`: 다음 17:30 UTC 런까지 v2.33.0 런(7모델, 1365셀, Haiku 5.5 포함)이 최신 런이다. v2.32.2 런은 6모델이라
+   직전 런 대비 변경 배너에 Haiku 5.5 셀이 빠진 것으로 잡힌다.
+2. 대시보드 카드와 `/reliability`: 조회 창이 지날 때까지 Haiku 5.5, Sonnet 5.5 US 행이 남는다. v2.32.2 `FAMILY_ORDER`에
+   Claude Haiku 5.5가 없어 그 묶음은 아는 패밀리 뒤에 놓인다.
+데이터를 지울 필요는 없다. 다시 v2.33.0 이상으로 올리면 그대로 이어진다.
+
 **v2.32.0에서 v2.31.2로 되돌릴 때 (과도 상태)**. v2.32.0은 CDK env(`BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`)를 더한 릴리스라 위 규칙대로
 v2.31.2 tag의 `cdk/`로 되돌린다. DB는 그대로 둔다 — v2.32.0이 남긴 `price_history` 8행(Sonnet 5.5 Global, CP Sonnet 5.5, 서울 in-region 2,
 GPT 6.1 Sol 3, `openai-list:gpt-6.1-sol`)과 새 model_id의 프로브, 벤치, 피처 행은 v2.31.2가 무시하거나 단가 조회에만 쓰고, v2.31.2의
