@@ -75,6 +75,12 @@ def test_reasoning_only_applicable_to_reasoning_capable():
     "unknown parameter: 'cache_control'",
     # Mantle /anthropic에서 모델이 그 리전에 서빙되지 않음 — 깨끗한 미제공 신호 (v2.13.0)
     "NotFoundError: Error code: 404 - {'error': {'type': 'not_found_error', 'message': \"The model 'anthropic.claude-fable-5' does not exist\"}}",
+    # bedrock-runtime OpenAI 호환(Global/US CRIS)에 GET /v1/models/{model} 라우트가 없다 — coral XML 본문이라
+    # openai SDK 문자열에 "Error code: 404"가 없다 (run #211까지 11셀 broken, 2026-10-19)
+    "NotFoundError: <UnknownOperationException/>",
+    # Mantle /anthropic Fable 5 — 데이터 보존 옵트인 없음. /claude-features와 같은 판정 (사용자 결정 2026-10-19)
+    "BadRequestError: Error code: 400 - {'type': 'error', 'request_id': 'req_x', 'error': {'type': 'invalid_request_error', "
+    "'message': \"data retention mode 'default' is not available for this model\"}}",
 ])
 def test_clean_unsupported_errors(msg):
     assert classify_error(msg) == "unsupported"
@@ -137,6 +143,14 @@ def test_max_tokens_budget_prevents_truncation():
     assert max_tokens_for("system_instructions") >= 256
     # reasoning은 thinking budget(1024)보다 커야 텍스트가 남는다
     assert max_tokens_for("reasoning") > 1024
+
+
+def test_json_prompt_limits_the_key_count():
+    # 키 수 제한이 없으면 Opus 5 JSON이 512토큰을 넘어 잘린다 (run #211 messages_mantle structured_output broken)
+    from parity.probes import _JSON_PROMPT
+
+    assert '"city"' in _JSON_PROMPT
+    assert "5개 이하" in _JSON_PROMPT
 
 
 def test_check_json_object_rejects_truncated_json():

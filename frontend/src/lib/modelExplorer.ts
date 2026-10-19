@@ -108,11 +108,17 @@ export function channelOf(modelId: string): ChannelInfo {
   const isGlobal = modelId.startsWith("global.");
   return {
     type: "bedrock",
-    label: isGlobal ? "Bedrock (Global 프로파일)" : "Bedrock (US 프로파일)",
-    endpoint: "bedrock-runtime (ap-northeast-2에서 호출)",
+    label: isGlobal ? "Bedrock (Global CRIS)" : "Bedrock (US CRIS)",
+    endpoint: `https://bedrock-runtime.${profileRegion(modelId)}.amazonaws.com`,
     region: isGlobal ? "global cross-region" : "us cross-region",
     badge: isGlobal ? "Global" : "US",
   };
+}
+
+/** Bedrock 추론 프로파일을 호출하는 리전 — backend prober `_REGION_MAP`과 같다.
+ *  us.* 프로파일은 US 리전에서만 호출된다(ap-northeast-2에서 부르면 "The provided model identifier is invalid", 2026-10-19 실측). */
+function profileRegion(modelId: string): string {
+  return modelId.startsWith("us.") ? "us-east-1" : "ap-northeast-2";
 }
 
 /** 실제 API 호출에 넣는 모델 ID. */
@@ -128,7 +134,7 @@ export function codeExamples(modelId: string, lang: ExplorerLang = "ko"): CodeEx
   const ch = channelOf(modelId);
   const id = nativeId(modelId);
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
-  const bedrockRegion = modelId.startsWith("bedrock:") ? ch.region : "ap-northeast-2";
+  const bedrockRegion = modelId.startsWith("bedrock:") ? ch.region : profileRegion(modelId);
 
   if (ch.type === "bedrock") {
     const converse: CodeExample = {
@@ -175,7 +181,8 @@ response = client.invoke_model(
     }),
 )
 result = json.loads(response["body"].read())
-print(result["content"][0]["text"])`,
+${L("# Opus 5 and Fable 5 return a thinking block first — print only the text blocks", "# Opus 5, Fable 5는 thinking 블록을 먼저 돌려준다 — text 블록만 출력")}
+print("".join(b["text"] for b in result["content"] if b["type"] == "text"))`,
       },
       {
         label: "Python (anthropic SDK)",
@@ -213,7 +220,7 @@ ${L("# Claude Platform on AWS — vendor endpoint + workspace header", "# Claude
 client = Anthropic(
     api_key="<ANTHROPIC_API_KEY>",
     base_url="${ch.endpoint}",
-    default_headers={"anthropic-workspace": "<ANTHROPIC_WORKSPACE_ID>"},
+    default_headers={"anthropic-workspace-id": "<ANTHROPIC_WORKSPACE_ID>"},
 )
 
 with client.messages.stream(
@@ -295,8 +302,8 @@ export function modelLinks(modelId: string, modelName: string, lang: ExplorerLan
   ];
 
   if (ch.type === "bedrock") {
-    // In-Region 키는 그 리전 콘솔, 프로파일 키는 기존과 같이 호출 리전(ap-northeast-2) 콘솔.
-    const consoleRegion = modelId.startsWith("bedrock:") ? ch.region : "ap-northeast-2";
+    // In-Region 키는 그 리전 콘솔, 프로파일 키는 프로파일을 호출하는 리전(Global ap-northeast-2, US us-east-1) 콘솔.
+    const consoleRegion = modelId.startsWith("bedrock:") ? ch.region : profileRegion(modelId);
     links.push(
       { label: L("AWS Bedrock supported models docs", "AWS Bedrock 지원 모델 문서"), url: "https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html" },
       { label: L("Bedrock console (model catalog)", "Bedrock 콘솔 (모델 카탈로그)"), url: `https://console.aws.amazon.com/bedrock/home?region=${consoleRegion}#/model-catalog` },

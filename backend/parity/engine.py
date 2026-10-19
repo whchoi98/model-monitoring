@@ -34,6 +34,14 @@ _UNSUPPORTED_MARKERS = (
     "not yet supported",
     # 고정 엔드포인트에 대한 본문 없는 404 (예: Mantle batches 미제공)
     "error code: 404",
+    # bedrock-runtime의 coral 라우트 부재 — 본문이 XML이라 openai SDK 오류 문자열에 "error code: 404"가 없다.
+    # 예: Global/US CRIS OpenAI 호환 엔드포인트의 GET /v1/models/{model} → "NotFoundError: <UnknownOperationException/>"
+    # (claude_features/transports.py가 같은 신호를 404로 정규화한다)
+    "unknownoperationexception",
+    # 모델 단위 미제공 — Mantle /anthropic의 Fable 5(Covered Model)는 계정에 데이터 보존 옵트인이 없으면
+    # "data retention mode 'default' is not available for this model"(400)로 거부한다. claude_features.engine과 같은
+    # 판정 (사용자 결정 2026-10-19 — run #211까지 messages_mantle 16피처 × Global, US 32셀이 broken이었다)
+    "is not available for this model",
     # 도구 스키마의 명시적 거부 — 허용 tool 태그 목록 반환 (Bedrock InvokeModel)
     "does not match any of the expected",
 )
