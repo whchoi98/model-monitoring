@@ -59,7 +59,9 @@ _CODE_EXEC_BETA = "code-execution-2025-05-22"
 _STRUCTURED_BETA = "structured-outputs-2025-11-13"
 _FILES_BETA = "files-api-2025-04-14"
 _TOOL_PROMPT = f"echo 도구를 text 인자 '{CANARY}' 값으로 호출하세요."
-_JSON_PROMPT = '서울의 정보를 JSON 객체로만 답하세요. 반드시 "city" 키를 포함해야 합니다.'
+# 키 수 제한 — 제한이 없으면 Opus 5가 209~591토큰짜리 JSON을 써서 512 예산에서 잘리고 broken이 됐다
+# (run #190, #200, #208, #211). 제한을 두면 50~91토큰 (2026-10-19 실측, Fable 5, Haiku 5.5도 JSON 유지)
+_JSON_PROMPT = '서울의 정보를 JSON 객체로만 답하세요. 반드시 "city" 키를 포함하고, 키는 5개 이하로 간결하게 쓰세요.'
 _SYSTEM_PROMPT = f"모든 응답을 반드시 '{CANARY}' 로 시작하세요."
 _BASIC_PROMPT = "안녕하세요라고 한 단어로 답하세요."
 

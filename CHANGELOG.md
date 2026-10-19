@@ -7,6 +7,22 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.33.1 — 2026-10-19
+
+### Fixed
+- **Model Explorer — code examples for Bedrock US profiles** (user request 2026-10-19, "check that the Parity Run and Models menus have no errors"). The Converse, InvokeModel and Messages API examples of the 13 US profile cards (Claude 12 + Nova 2.0 Lite) called from `ap-northeast-2`, where a `us.*` profile is "The provided model identifier is invalid". Profile keys now use the prober `_REGION_MAP` region (`global.*` ap-northeast-2, `us.*` us-east-1) for the code, the endpoint (now a URL, `https://bedrock-runtime.<region>.amazonaws.com`) and the console link; the channel labels are "Bedrock (Global CRIS)" and "Bedrock (US CRIS)" instead of the Korean-only "프로파일" text.
+- **모델 탐색 — Bedrock US 프로파일 코드 예제**(2026-10-19 사용자 요청 "패리티런과 모델 메뉴의 기능들이 오류가 없는지 확인"). US 프로파일 카드 13개(Claude 12 + Nova 2.0 Lite)의 Converse, InvokeModel, Messages API 예제가 `ap-northeast-2`에서 호출해 "The provided model identifier is invalid"가 났다. 프로파일 키는 이제 prober `_REGION_MAP`과 같은 리전(`global.*` ap-northeast-2, `us.*` us-east-1)을 코드, 엔드포인트(이제 URL `https://bedrock-runtime.<region>.amazonaws.com`), 콘솔 링크에 쓴다. 채널 라벨은 한국어 전용이던 "프로파일" 대신 "Bedrock (Global CRIS)", "Bedrock (US CRIS)"다.
+- **Model Explorer — Claude Platform on AWS header.** The example sent `anthropic-workspace`, which CP rejects with 400 "Missing 'anthropic-workspace-id' header."; it now sends `anthropic-workspace-id` like `prober._anthropic_default_headers` (11 cards).
+- **모델 탐색 — Claude Platform on AWS 헤더.** 예제가 `anthropic-workspace`를 보내 CP가 400 "Missing 'anthropic-workspace-id' header."로 거부했다. 이제 `prober._anthropic_default_headers`처럼 `anthropic-workspace-id`를 보낸다(카드 11개).
+- **Model Explorer — InvokeModel output.** Opus 5 and Fable 5 return a signature-only `thinking` block first, so `result["content"][0]["text"]` was a KeyError (5 cards); the example now prints the joined `text` blocks. All 118 examples of the 66 active channels were run live after the fix.
+- **모델 탐색 — InvokeModel 출력.** Opus 5와 Fable 5는 서명만 있는 `thinking` 블록을 먼저 돌려줘 `result["content"][0]["text"]`가 KeyError였다(카드 5개). 이제 `text` 블록을 이어 출력한다. 수정 뒤 활성 66채널의 예제 118개를 모두 라이브로 실행했다.
+- **Parity Run — `models_api` on GPT Global and US CRIS.** The bedrock-runtime OpenAI-compatible endpoint has no `GET /v1/models/{model}` route and answers with a coral `<UnknownOperationException/>` body, which the openai SDK reports without "Error code: 404", so 11 cells were broken on every run. `classify_error` now reads `UnknownOperationException` as unsupported (the same signal `claude_features/transports.py` already maps to 404).
+- **패리티 런 — GPT Global, US CRIS의 `models_api`.** bedrock-runtime OpenAI 호환 엔드포인트에는 `GET /v1/models/{model}` 라우트가 없어 coral `<UnknownOperationException/>` 본문으로 답하고, openai SDK 문자열에 "Error code: 404"가 없어 매 런 11셀이 broken이었다. `classify_error`가 `UnknownOperationException`을 unsupported로 읽는다(`claude_features/transports.py`가 이미 404로 정규화하는 신호).
+- **Parity Run — Fable 5 on Mantle `/anthropic`.** Without the Covered Model data-retention opt-in, Mantle rejects Fable 5 with 400 "data retention mode 'default' is not available for this model"; the 32 `messages_mantle` cells (16 features × Global, US) are now unsupported, as on `/claude-features` (user decision 2026-10-19; the evidence keeps the error text).
+- **패리티 런 — Mantle `/anthropic`의 Fable 5.** Covered Model 데이터 보존 옵트인이 없으면 Mantle은 Fable 5를 400 "data retention mode 'default' is not available for this model"로 거부한다. `messages_mantle` 32셀(16피처 × Global, US)을 `/claude-features`처럼 unsupported로 판정한다(2026-10-19 사용자 결정, 증거에는 오류 원문이 남는다).
+- **Parity Run — `structured_output` truncation.** Without a size limit Opus 5 wrote 209 to 591 tokens of JSON and the 512-token budget cut it (runs #190, #200, #208, #211); the prompt now asks for at most 5 keys (50 to 91 tokens live).
+- **패리티 런 — `structured_output` 절단.** 크기 제한이 없으면 Opus 5가 209~591토큰짜리 JSON을 써서 512 예산에서 잘렸다(run #190, #200, #208, #211). 프롬프트가 키 5개 이하를 요구한다(라이브 50~91토큰).
+
 ## v2.33.0 — 2026-10-07
 
 ### Added
