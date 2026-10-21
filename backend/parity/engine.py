@@ -79,6 +79,62 @@ def check_json_object(text: str | None, required_key: str) -> bool:
     return isinstance(obj, dict) and required_key in obj
 
 
+def json_object_keys(text: str | None) -> list[str] | None:
+    """응답의 첫 번째 { ... } JSON 객체 키 목록(정렬) — 객체가 없거나 파싱되지 않으면 None."""
+    if not text:
+        return None
+    match = re.search(r"\{.*\}", text, re.S)
+    if not match:
+        return None
+    try:
+        obj = json.loads(match.group(0))
+    except (ValueError, TypeError):
+        return None
+    return sorted(obj) if isinstance(obj, dict) else None
+
+
+def check_schema_keys(text: str | None, schema_keys: set[str]) -> bool:
+    """json-schema 증거 (v2.34.0): 응답 JSON 객체의 키 집합이 스키마 키 집합과 정확히 같은가.
+
+    프롬프트가 스키마와 다른 키 이름을 요구하므로, 서비스가 스키마를 조용히 무시하면 프롬프트의 키가 나와
+    실패한다(스키마 없이는 name, 강제되면 city — 2026-10-20 실측). 키 존재만 보는 check_json_object로는
+    무시를 잡지 못했다.
+    """
+    keys = json_object_keys(text)
+    return keys is not None and set(keys) == schema_keys
+
+
+def _matches_json_type(value: Any, json_type: str | None) -> bool:
+    if json_type == "integer":
+        return isinstance(value, int) and not isinstance(value, bool)
+    if json_type == "string":
+        return isinstance(value, str)
+    return True  # 프로브 스키마는 string, integer만 쓴다
+
+
+def check_strict_tool_input(tool_call: dict | None, canary: str, schema: dict) -> bool:
+    """strict tool use 증거 (v2.34.0): 도구 입력 키가 스키마 properties와 정확히 같고, 값마다 타입이 맞고,
+    카나리가 왕복했는가.
+
+    프로브는 integer 인자에 문자열을 넣으라고 요구한다 — strict가 무시되면 모델이 문자열을 넣어 타입 검사에서
+    걸린다(strict 없이 Haiku 5.5, Sonnet 4.6, GPT 5.6 Luna가 "three", strict면 전부 정수 — 2026-10-20 실측).
+    """
+    if not tool_call:
+        return False
+    args = tool_call.get("arguments")
+    if isinstance(args, str):
+        try:
+            args = json.loads(args)
+        except (ValueError, TypeError):
+            return False
+    props = schema.get("properties", {})
+    if not isinstance(args, dict) or set(args) != set(props):
+        return False
+    if not all(_matches_json_type(args[k], spec.get("type")) for k, spec in props.items()):
+        return False
+    return any(isinstance(v, str) and canary in v for v in args.values())
+
+
 def check_tool_roundtrip(tool_call: dict | None, canary: str) -> bool:
     """tool-use 증거: 도구 호출이 실행됐고 카나리 인자가 그대로 왕복했는가."""
     if not tool_call:

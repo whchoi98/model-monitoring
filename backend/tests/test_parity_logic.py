@@ -41,9 +41,14 @@ def test_gpt61_sol_stays_out_of_reasoning_cells():
 def test_mantle_fm_id_strips_profile_prefix():
     from parity.catalog import mantle_fm_id
 
-    # Mantle /anthropic은 Bedrock FM id를 요구 — 프로파일 접두사(global./us.) 제거
+    # Mantle /anthropic은 anthropic.claude-… id를 요구 — 프로파일 접두사(global./us.) 제거
     assert mantle_fm_id("global.anthropic.claude-fable-5") == "anthropic.claude-fable-5"
-    assert mantle_fm_id("us.anthropic.claude-haiku-4-5-20251001-v1:0") == "anthropic.claude-haiku-4-5-20251001-v1:0"
+    # Bedrock 버전 접미사도 뗀다 — Mantle /v1/models는 anthropic.claude-haiku-4-5로 서빙하고
+    # 접미사 붙은 id는 404였다(2026-10-21, v2.34.0 전까지 Haiku 4.5 Mantle 셀 전부 unsupported)
+    assert mantle_fm_id("us.anthropic.claude-haiku-4-5-20251001-v1:0") == "anthropic.claude-haiku-4-5"
+    assert mantle_fm_id("global.anthropic.claude-opus-4-6-v1") == "anthropic.claude-opus-4-6"
+    assert mantle_fm_id("global.anthropic.claude-sonnet-5-5") == "anthropic.claude-sonnet-5-5"
+    assert mantle_fm_id("us.anthropic.claude-fable-5-1") == "anthropic.claude-fable-5-1"
 
 
 def test_feature_catalog_order():
@@ -51,7 +56,7 @@ def test_feature_catalog_order():
     assert ids == ["basic", "streaming", "system_instructions", "tool_use",
                    "structured_output", "reasoning", "caching",
                    "adaptive_thinking", "count_tokens", "batches", "web_search", "computer_use",
-                   "reasoning_effort", "json_schema", "url_sources", "memory_tool",
+                   "reasoning_effort", "json_schema", "strict_tool_use", "url_sources", "memory_tool",
                    "code_execution", "files_api", "models_api"]
 
 
@@ -298,9 +303,9 @@ def test_adaptive_thinking_budget_matches_reference():
 # 피처 확장 2차 (v2.15.0) — 참조 도구 수준 19피처
 # ---------------------------------------------------------------------------
 
-def test_feature_catalog_has_nineteen_features():
+def test_feature_catalog_has_twenty_features():
     ids = [f["id"] for f in FEATURES]
-    assert len(ids) == 19
+    assert len(ids) == 20  # v2.34.0 strict_tool_use
     for new in ("reasoning_effort", "json_schema", "url_sources",
                 "memory_tool", "code_execution", "files_api", "models_api"):
         assert new in ids
@@ -310,9 +315,9 @@ def test_v2150_surface_restrictions():
     # reasoning_effort는 reasoning 지원 모델만, 전 surface
     assert is_applicable("reasoning_effort", "responses", "openai:1p:gpt-5.5") is True
     assert is_applicable("reasoning_effort", "converse", "global.anthropic.claude-haiku-4-5-20251001-v1:0") is False
-    # json_schema는 converse 제외 (Bedrock converse에 스키마 강제 파라미터 없음)
+    # json_schema는 v2.34.0부터 converse도 프로빙한다 (outputConfig.textFormat)
     assert is_applicable("json_schema", "chat_completions", "openai:1p:gpt-5.4") is True
-    assert is_applicable("json_schema", "converse", "global.anthropic.claude-fable-5") is False
+    assert is_applicable("json_schema", "converse", "global.anthropic.claude-fable-5") is True
     assert is_applicable("json_schema", "invoke_model", "global.anthropic.claude-fable-5") is True
     # 플랫폼 API 계열은 anthropic SDK 경로 위주
     assert is_applicable("files_api", "messages", "anthropic:claude-fable-5") is True

@@ -106,22 +106,30 @@ def test_catalog_endpoint_exposes_mantle_reason_en():
     assert list(models) == catalog.MODEL_KEYS
 
 
-def test_catalog_version_bumped_for_haiku_55():
-    # MODELS 변경(대표 모델 추가)은 런 형태를 바꾸므로 CATALOG_VERSION 범프 대상 (CLAUDE.md 규칙) — v2.32.0 Sonnet 5.5는 2026-09-30
-    assert R.CATALOG_VERSION == "2026-10-07"
+def test_catalog_version_bumped_for_structured_outputs_docs():
+    # documented 기대치와 MODELS 변경은 CATALOG_VERSION 범프 대상 (CLAUDE.md 규칙) — Haiku 5.5 편입 2026-10-07,
+    # structured_outputs, strict_tool_use 기대치 갱신 2026-10-20(AWS 문서 2026-10-19)
+    assert R.CATALOG_VERSION == "2026-10-20"
 
 
 def test_documented_defaults_from_overview():
     assert catalog.documented_for("web_search", "cp") == "ga"
     assert catalog.documented_for("web_search", "bedrock_invoke") == "no"
-    assert catalog.documented_for("structured_outputs", "mantle") == "no"
+    assert catalog.documented_for("structured_outputs", "mantle") == "ga"
     assert catalog.documented_for("compaction", "bedrock_converse") == "no"
     assert catalog.documented_for("server_side_fallback", "cp") == "unknown"
     # bedrock_messages는 InvokeModel 기대치를 상속하고 갈라지는 지점만 override
     assert catalog.documented_for("adaptive_thinking", "bedrock_messages") == "ga"
-    assert catalog.documented_for("structured_outputs", "bedrock_messages") == "no"
+    assert catalog.documented_for("structured_outputs", "bedrock_messages") == "ga"
     assert catalog.documented_for("token_counting", "bedrock_messages") == "no"
     assert catalog.documented_for("tool_search", "bedrock_messages") == "unknown"
+
+
+@pytest.mark.parametrize("feature", ["structured_outputs", "strict_tool_use"])
+def test_structured_outputs_documented_on_every_surface(feature):
+    # AWS 문서 'Structured outputs for Anthropic Claude models'(2026-10-19): bedrock-runtime(Converse, InvokeModel,
+    # Anthropic Messages API)과 bedrock-mantle, 두 메커니즘 공통 — 2026-10-20 갱신 전에는 Bedrock 3열이 "no"였다
+    assert {s: catalog.documented_for(feature, s) for s in catalog.SURFACES} == {s: "ga" for s in catalog.SURFACES}
 
 
 @pytest.mark.parametrize("documented,observed,expected", [
