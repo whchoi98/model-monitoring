@@ -180,7 +180,7 @@ export default function AppHeader({
           {actions && <div className="hidden items-center gap-2 min-[1000px]:flex">{actions}</div>}
           {user ? (
             <div className="flex items-center gap-2">
-              <span className="hidden max-w-40 truncate text-xs text-gray-400 xl:inline" title={user.username}>{user.username}</span>
+              <span className="hidden max-w-40 truncate text-xs text-gray-400 min-[1000px]:inline" title={user.username}>{user.username}</span>
               <button type="button" onClick={onLogout}
                 className="min-h-10 rounded-lg bg-gray-800 px-3 text-xs font-medium text-gray-300 hover:bg-gray-700">
                 {t.logout}

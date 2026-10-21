@@ -126,6 +126,7 @@ for (const width of [768, 820, 1024]) {
     await page.route("**/api/auth/me", route => route.fulfill({ json: { id: 1, username: "very-long-monitoring-member@example.com" } }));
     await page.goto("/");
     await expect(page.locator("header").getByRole("button", { name: "Logout", exact: true })).toBeVisible();
+    if (width >= 1000) await expect(page.locator("header").getByText("very-long-monitoring-member@example.com", { exact: true })).toBeVisible();
     const layout = await page.evaluate(() => {
       const top = document.querySelector(".app-header-top")!;
       const brand = top.querySelector("a")!.getBoundingClientRect();
