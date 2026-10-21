@@ -259,6 +259,19 @@ export const pricingFixture: PricingResponse = {
 /** All API traffic stays in fixtures, including unexpected mutations. */
 export async function mockApi(page: Page) {
   const data = monitoringData();
+  // Production bundles initialize RUM too. Keep telemetry inside the same
+  // offline fixture boundary as application APIs when testing those images.
+  await page.route(/^https:\/\/[^/]+\.execute-api\.[^/]+\.amazonaws\.com\/v1\/events(?:\?.*)?$/, async (route) => {
+    await route.fulfill({
+      status: route.request().method() === "OPTIONS" ? 204 : 202,
+      headers: {
+        "access-control-allow-origin": "*",
+        "access-control-allow-methods": "POST, OPTIONS",
+        "access-control-allow-headers": "content-type, x-api-key",
+      },
+      body: "",
+    });
+  });
   await page.route("**/api/**", async (route) => {
     const url = new URL(route.request().url());
     const values: Record<string, unknown> = {
