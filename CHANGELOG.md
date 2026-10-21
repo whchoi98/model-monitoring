@@ -20,6 +20,8 @@
 - 로그인 없이 챗봇을 사용하고 최신 인사이트를 조회·새로고침할 수 있다. 전체 분석은 이동 가능한 플로팅 창에서 읽으며 전체 화면 전환과 원래 크기 복귀를 지원한다.
 
 ### Fixed
+- Complete Haiku insight tables and explanations with an insights-only thinking policy and a shared 16,384-token output limit; retain the original prompts and time bounds. Live Korean and English summaries now finish with `end_turn`.
+- Haiku 인사이트 전용 추론 설정과 공통 16,384토큰 한도로 전체 표와 설명이 끝까지 생성되도록 했다. 프롬프트·시간 제한은 유지하며 실제 한국어·영어 요약의 정상 종료를 확인했다.
 - Return chat session IDs on successful SSE completion, supply AgentCore event timestamps and request message payloads so follow-up turns retain context. Interrupted streams report failure; closing or resetting chat discards late callbacks.
 - 정상 완료에도 대화 ID를 반환하고 AgentCore 기록 시각과 메시지 본문 조회 옵션을 추가해 후속 대화가 맥락을 유지하도록 했다. 연결이 끊기면 오류를 표시하고 창을 닫거나 대화를 초기화한 뒤 도착한 응답은 버린다.
 

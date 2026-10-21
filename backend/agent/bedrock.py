@@ -33,6 +33,15 @@ logger = logging.getLogger(__name__)
 # 챗봇 기본 모델 — Seoul deployment에서는 global inference profile 사용.
 CHAT_MODEL_ID = "global.anthropic.claude-haiku-5-5"
 INSIGHTS_MODEL_ID = "global.anthropic.claude-haiku-5-5"
+INSIGHTS_MAX_TOKENS = 16_384
+
+
+def _insights_model_fields(model_id: str) -> Dict:
+    # Summaries cover every monitored channel. Reserve the output budget for the
+    # table and explanation; extended thinking exhausted 8192 tokens mid-answer.
+    if model_id in ("global.anthropic.claude-haiku-5-5", "us.anthropic.claude-haiku-5-5"):
+        return {"thinking": {"type": "disabled"}}
+    return {}
 
 
 def _inference_config(max_tokens: int, temperature: Optional[float]) -> Dict:
@@ -225,6 +234,9 @@ def converse_stream_text(
     }
     if system:
         params["system"] = [{"text": system}]
+    model_fields = _insights_model_fields(model_id)
+    if model_fields:
+        params["additionalModelRequestFields"] = model_fields
 
     response = _client().converse_stream(**params)
     for event in response.get("stream", []):
@@ -288,6 +300,9 @@ def converse_stream_collect(
     }
     if system:
         params["system"] = [{"text": system}]
+    model_fields = _insights_model_fields(model_id)
+    if model_fields:
+        params["additionalModelRequestFields"] = model_fields
 
     client = client if client is not None else insights_client()
     chunks: List[str] = []

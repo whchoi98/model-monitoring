@@ -13,7 +13,7 @@
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
 - **Edge**: CloudFront VPC Origin → Internal ALB → ECS Fargate × 2 (backend, frontend). VPC Origin → ALB는 현재 VPC 내부 HTTP:80(`edge-stack.ts` `HTTP_ONLY`, 운영 cert 정착 전 임시 — ALB는 internal + private subnet + VPC CIDR SG), ALB에는 HTTPS:443 리스너도 있음
 - **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
-- **AI**: Claude Haiku 5.5 공개 챗봇 (4 tools) + Haiku 5.5 dynamic followups + Haiku 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Haiku 5.5 요청은 temperature를 보내지 않는다(v2.37.0)
+- **AI**: Claude Haiku 5.5 공개 챗봇 (4 tools) + Haiku 5.5 dynamic followups + Haiku 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Haiku 5.5 요청은 temperature를 보내지 않는다(v2.37.0). 인사이트는 확장 추론을 끄고 `INSIGHTS_MAX_TOKENS=16384`로 전체 표·설명을 완성하며, 챗봇·후속 질문에는 이 인사이트 전용 설정을 적용하지 않는다
 
 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/) (v2.0.0 당시 설계 기록 — 9개 모델, 인사이트 30분 주기 기준이라 현행과 다름).
 

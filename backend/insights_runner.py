@@ -3,7 +3,7 @@
 흐름:
   1. 최근 N시간(기본 6h) 자동 run의 ProbeResult에서 통계에 쓰는 다섯 열만 나눠 읽는다. 읽은 세션은 닫는다.
   2. 모델별 stats 계산 (avg/p50/p95/err_rate).
-  3. Haiku 5.5에 요약 프롬프트 + stats를 전달, KO와 EN 마크다운 요약을 동시에 스트리밍으로 받는다.
+  3. Haiku 5.5에 요약 프롬프트 + stats를 전달, 확장 추론 없이 최대 16,384토큰으로 KO·EN 요약을 동시에 받는다.
   4. 새 세션의 짧은 트랜잭션으로 Insight 테이블에 INSERT.
 
 ECS Task Definition CMD:
@@ -53,6 +53,7 @@ from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Iterable, List
 
+from agent.bedrock import INSIGHTS_MAX_TOKENS
 from database import SessionLocal
 from models import Insight, ProbeResult, ProbeRun
 from streamed_read import stream_rows
@@ -79,7 +80,7 @@ _MIN_CALL_S = 30.0  # 호출 상한이 이보다 짧으면 부르지 않는다(�
 _RETRY_MIN_S = 90.0  # 끊긴 스트림은 호출 상한이 이만큼 남았을 때만 다시 부른다(정상 생성 p50 약 70초)
 _CALL_ATTEMPTS = 2  # 언어당 converse_stream 호출 수(재시도 포함). 헤더 대기 재시도는 botocore가 따로 한다
 _BACKSTOP_GRACE_S = 15.0
-_MAX_TOKENS = 8192
+_MAX_TOKENS = INSIGHTS_MAX_TOKENS
 _LANGS = ("ko", "en")  # 프롬프트를 만들고 제출하는 순서
 _clock = time.monotonic
 

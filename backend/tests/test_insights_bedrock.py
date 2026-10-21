@@ -13,7 +13,7 @@
   stream_watchdog.CallWatchdog의 wall-clock 상한(INSIGHTS_CALL_WALL_CLOCK_S, 기본 180초)으로 끊는다. botocore 재시도는 스트림이
   열리기 전(헤더 대기)에만 일어나 생성을 다시 과금하지 않는다.
 - KO와 EN을 동시에 만든다(워커 2개). KO가 실패하면 저장하지 않고(-1), EN이 실패하면 KO만 저장한다. 프롬프트, max_tokens
-  8192는 그대로다. v2.35.1에서 Sonnet 5.5로 전환하면서 temperature는 생략한다.
+  프롬프트는 그대로다. Haiku 5.5 인사이트는 확장 추론 없이 최대 16,384토큰으로 전체 표를 완성한다(v2.37.0).
 - 스트림이 열린 뒤 끊기면(청크 사이 read timeout, 연결 끊김, 스트림 안의 오류 이벤트) 남은 예산이 _RETRY_MIN_S 이상일 때만 한
   번 다시 부른다. 끊긴 시도의 부분 텍스트는 버린다. wall-clock 만료는 다시 부르지 않는다.
 - CLI 태스크 예산(INSIGHTS_TASK_BUDGET_S, 기본 240초): 호출 상한은 min(180초, 마감 − 지금 − 저장 여유 15초)이고, 예산 + 15초에
@@ -204,7 +204,8 @@ def test_requests_carry_the_unchanged_prompts_with_haiku55_config(dataset, fake)
         assert req.body["system"] == [{"text": system}]
         assert req.body["messages"] == [{"role": "user", "content": [{"text": user_text}]}]
         assert req.path == "/model/global.anthropic.claude-haiku-5-5/converse-stream"
-        assert req.body["inferenceConfig"] == {"maxTokens": 8192}
+        assert req.body["inferenceConfig"] == {"maxTokens": 16384}
+        assert req.body["additionalModelRequestFields"] == {"thinking": {"type": "disabled"}}
 
 
 @pytest.mark.parametrize("helper", ["chat", "blocking", "stream", "collect"])
@@ -232,6 +233,10 @@ def test_default_helpers_send_haiku55_requests_without_deprecated_temperature(fa
     assert request.path == f"/model/global.anthropic.claude-haiku-5-5/{operation}"
     assert request.body["messages"] == messages
     assert request.body["inferenceConfig"] == {"maxTokens": 128}
+    if helper in ("stream", "collect"):
+        assert request.body["additionalModelRequestFields"] == {"thinking": {"type": "disabled"}}
+    else:
+        assert "additionalModelRequestFields" not in request.body
 
 
 @pytest.mark.parametrize("lang", ["ko", "en"])
@@ -250,7 +255,8 @@ def test_stream_regenerate_uses_haiku55_without_temperature(dataset, fake, monke
     assert _only_saved(dataset).summary_md == "AI summary"
     (request,) = fake.by_lang(lang)
     assert request.path == "/model/global.anthropic.claude-haiku-5-5/converse-stream"
-    assert request.body["inferenceConfig"] == {"maxTokens": 8192}
+    assert request.body["inferenceConfig"] == {"maxTokens": 16384}
+    assert request.body["additionalModelRequestFields"] == {"thinking": {"type": "disabled"}}
 
 
 def test_followups_use_haiku55_without_deprecated_temperature(fake):
@@ -432,7 +438,7 @@ def test_no_bedrock_call_once_the_budget_is_spent(dataset, fake):
 
 def test_each_language_logs_duration_output_tokens_and_stop_reason(dataset, fake, caplog):
     fake.scripts = {"ko": [Stream(KO, output_tokens=5386)],
-                    "en": [Stream(EN, output_tokens=8192, stop_reason="max_tokens")]}
+                    "en": [Stream(EN, output_tokens=16384, stop_reason="max_tokens")]}
     with caplog.at_level("INFO", logger="insights_runner"):
         assert insights_runner.run_once("6h") > 0
     saved = _only_saved(dataset)
@@ -440,10 +446,10 @@ def test_each_language_logs_duration_output_tokens_and_stop_reason(dataset, fake
     text = caplog.text
     assert re.search(r"insights summary ko: \d+\.\d+s, output_tokens=5386, input_tokens=1500, stop_reason=end_turn, "
                      rf"chars={len(''.join(KO))}, attempts=1", text), text
-    assert re.search(r"insights summary en: \d+\.\d+s, output_tokens=8192, .*stop_reason=max_tokens", text), text
+    assert re.search(r"insights summary en: \d+\.\d+s, output_tokens=16384, .*stop_reason=max_tokens", text), text
     warnings = [r for r in caplog.records if r.levelname == "WARNING"]
     assert [r.getMessage() for r in warnings] == [
-        "insights summary en stopped at max_tokens (8192), the saved summary may be cut off"]
+        "insights summary en stopped at max_tokens (16384), the saved summary may be cut off"]
 
 
 # ───────────────────────────────────────────────────────────────────────
@@ -588,3 +594,17 @@ def test_a_ko_failure_waits_for_the_en_worker_only_without_a_deadline(monkeypatc
     else:
         assert not en_done.is_set() and elapsed < 0.4
     en_done.wait(2)
+
+
+@pytest.mark.parametrize("helper", ["stream", "collect"])
+def test_insight_thinking_policy_does_not_leak_to_a_different_model(fake, helper):
+    fake.default = Stream(["Complete summary"])
+    kwargs = {"messages": [{"role": "user", "content": [{"text": "Summarize"}]}],
+              "model_id": "global.anthropic.claude-sonnet-4-6", "max_tokens": 256}
+    if helper == "stream":
+        text = "".join(agent.bedrock.converse_stream_text(**kwargs))
+    else:
+        text = agent.bedrock.converse_stream_collect(**kwargs, wall_clock_s=5).text
+    assert text == "Complete summary"
+    (request,) = fake.requests
+    assert "additionalModelRequestFields" not in request.body

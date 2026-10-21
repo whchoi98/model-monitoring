@@ -168,7 +168,7 @@ async def stream_regenerate(
     Note: generator는 요청 세션을 쓰지 않는다. FastAPI 버전에 따라 요청 의존성 cleanup이 스트림 전(0.115)이나
     스트림 뒤(0.142)에 세션을 닫으므로, generator 안에서 SessionLocal()로 전용 세션을 만들고 finally에서 close한다.
 
-    락(v2.32.2): Bedrock 스트림(최대 8192토큰, 1~3분) 동안 DB 트랜잭션을 쥐지 않는다. 요청 세션(request_db —
+    락(v2.32.2): Bedrock 스트림(최대 16,384토큰) 동안 DB 트랜잭션을 쥐지 않는다. 요청 세션(request_db —
     get_current_user와 같은 세션, 요청 안에서 의존성이 캐시된다)은 인증의 users 조회를 끝낸 뒤 StreamingResponse를
     돌려주기 전에 닫고, generator 세션은 통계를 읽은 뒤 rollback해 probe_results 읽기 트랜잭션을 끝낸다. 저장은 스트림이
     끝난 뒤 짧은 새 트랜잭션이다. 예전에는 스트림 내내 users와 probe_results의 ACCESS SHARE 락이 남아 backend 기동의
@@ -176,7 +176,7 @@ async def stream_regenerate(
 
     window는 최대 24h, 넘거나 읽을 수 없으면 스트림을 시작하지 않고 422.
     """
-    from agent.bedrock import converse_stream_text, INSIGHTS_MODEL_ID
+    from agent.bedrock import converse_stream_text, INSIGHTS_MODEL_ID, INSIGHTS_MAX_TOKENS
     from insights_runner import collect_stats_for_window, _build_prompt
     from datetime import datetime, timezone
 
@@ -217,7 +217,7 @@ async def stream_regenerate(
                     messages=[{"role": "user", "content": [{"text": user_prompt}]}],
                     model_id=INSIGHTS_MODEL_ID,
                     system=system_prompt,
-                    max_tokens=8192,
+                    max_tokens=INSIGHTS_MAX_TOKENS,
                 )
                 while True:
                     chunk = await asyncio.to_thread(_next, gen)

@@ -298,7 +298,7 @@ foundation-model ids).
 ## Insights (regenerate = Auth Required)
 
 ### GET /api/insights/latest · GET /api/insights
-Public latest saved AI insight (bilingual Markdown) / list of recent insights. Haiku 5.5 generates the scheduled and manual summaries. Reading, refreshing saved results and opening the full analysis require no login.
+Public latest saved AI insight (bilingual Markdown) / list of recent insights. Haiku 5.5 generates the scheduled and manual summaries with extended thinking disabled and a shared 16,384-token output limit (`INSIGHTS_MAX_TOKENS`). Chat and follow-ups keep their existing inference settings. Reading, refreshing saved results and opening the full analysis require no login.
 
 ### POST /api/insights/regenerate
 **Auth required.** Non-streaming regenerate. Body `{"window": "6h"}` (default `6h`). Starts `insights_runner.run_once(window)`

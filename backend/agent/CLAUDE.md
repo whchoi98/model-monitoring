@@ -17,6 +17,7 @@ Bedrock Converse helpers, the 4 chatbot tools, AgentCore Memory persistence and 
 - Follow-ups: `_generate_followups` → `converse_blocking` with `CHAT_MODEL_ID` (Haiku 5.5), only when the answer is at least 20 chars; failures are non-fatal
 
 ## Gotchas
+- Haiku 5.5 insights (both `converse_stream_text` and `converse_stream_collect`) send `additionalModelRequestFields.thinking.type="disabled"` and callers share `INSIGHTS_MAX_TOKENS=16384`. With default extended thinking and 8192 tokens, both live summaries hit `max_tokens`; the tested summary settings finish the full channel table and explanation. Chat/follow-up settings and different model overrides do not inherit this insights policy. Prompts and 180/240-second time limits are unchanged.
 - Haiku 5.5 rejects `temperature`. All four Converse helpers default it to `None` and omit the field through `_inference_config`; scheduled and manual insights must not pass it. Haiku 5.5 follow-ups omit sampling options too.
 - `converse_stream_chat` iterates boto3's synchronous EventStream inside the async generator. `await asyncio.sleep(0)` after each text delta only yields between chunks — waiting for the next chunk still blocks the event loop. `routers/insights.py` pulls `converse_stream_text` chunks with `asyncio.to_thread` instead
 - SSE endpoints return these pre-formatted strings via `StreamingResponse(media_type="text/event-stream")`, never `EventSourceResponse` (ADR-007)
