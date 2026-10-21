@@ -11,9 +11,9 @@ import * as ecs from "aws-cdk-lib/aws-ecs";
 import * as iam from "aws-cdk-lib/aws-iam";
 import { Construct } from "constructs";
 
-/** ECR 이미지 URI(`host/repo@sha256:…` 또는 `host/repo:tag`)에서 repo 이름을 추출한다. */
+/** ECR 이미지 URI에서 repo 이름만 추출한다. 태그와 digest를 함께 지정할 수도 있다. */
 export function repoNameFromImageUri(uri: string): string | undefined {
-  const match = uri.match(/^[^/]+\/(.+?)(?:@sha256:[0-9a-f]+|:[^/@]+)?$/);
+  const match = uri.match(/^[^/]+\/([^:@]+)(?::[^/@]+)?(?:@sha256:[0-9a-f]+)?$/);
   return match?.[1];
 }
 

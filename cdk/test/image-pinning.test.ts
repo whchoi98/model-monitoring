@@ -22,7 +22,11 @@ const FE_URI =
   "111111111111.dkr.ecr.us-east-1.amazonaws.com/bedrock-monitor-frontend@sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
 
 function buildStacks(context: Record<string, string>) {
-  const app = new cdk.App({ context });
+  const app = new cdk.App({ context: {
+    "@aws-cdk/core:target-partitions": ["aws"],
+    "@aws-cdk/aws-iam:minimizePolicies": true,
+    ...context,
+  } });
   const network = new NetworkStack(app, "Network", { env });
   const data = new DataStack(app, "Data", {
     env,
@@ -68,11 +72,36 @@ describe("repoNameFromImageUri", () => {
       repoNameFromImageUri("1.dkr.ecr.us-east-1.amazonaws.com/my-repo:v123"),
     ).toBe("my-repo");
   });
+  it("tag와 digest가 함께 있어도 권한에는 repo 이름만 쓴다", () => {
+    expect(repoNameFromImageUri(BE_URI.replace("@", ":v123@"))).toBe("bedrock-monitor-backend-v2");
+    expect(repoNameFromImageUri("registry:5000/team/my-repo:v123@sha256:abc")).toBe("team/my-repo");
+  });
   it("네임스페이스가 있는 repo도 처리한다", () => {
     expect(
       repoNameFromImageUri("1.dkr.ecr.us-east-1.amazonaws.com/team/my-repo@sha256:abc"),
     ).toBe("team/my-repo");
   });
+});
+
+it("tagged digest images grant pull on the actual repository ARN", () => {
+  const { appServices, scheduler } = buildStacks({
+    backendImage: BE_URI.replace("@", ":v123@"),
+    frontendImage: FE_URI.replace("@", ":v123@"),
+  });
+  for (const stack of [appServices, scheduler]) {
+    const repositoryArn = stack.resolve(stack.formatArn({
+      service: "ecr", resource: "repository", resourceName: "bedrock-monitor-backend-v2",
+      arnFormat: cdk.ArnFormat.SLASH_RESOURCE_NAME,
+    }));
+    Template.fromStack(stack).hasResourceProperties("AWS::IAM::Policy", Match.objectLike({
+      PolicyDocument: {
+        Statement: Match.arrayWith([Match.objectLike({
+          Action: Match.arrayWith(["ecr:BatchGetImage"]),
+          Resource: Match.arrayWith([repositoryArn]),
+        })]),
+      },
+    }));
+  }
 });
 
 describe("context 이미지 주입 (backendImage/frontendImage)", () => {

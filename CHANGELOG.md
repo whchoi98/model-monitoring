@@ -24,6 +24,8 @@
 - 고정 비교 영역 높이를 키보드 스크롤과 하단 여백에 반영해 포커스와 접속 통계가 가려지지 않게 했다. 선택 해제 시 여백을 복원한다.
 
 ### Infra
+- Parse combined `repository:tag@digest` image references correctly when granting ECR pull access; repository ARNs never include the tag.
+- `repository:tag@digest` 형식에서 ECR 저장소 이름만 추출하도록 고쳐 pull 권한 ARN에 태그가 섞이지 않게 했다.
 - Serialize table creation across backend and scheduled-task startups with a transaction-scoped PostgreSQL advisory lock. Carry the visitor origin allow-list in the backend service and all six shared-image task definitions.
 - 백엔드와 예약 작업이 동시에 기동해도 테이블 생성이 충돌하지 않도록 트랜잭션 범위 advisory lock을 적용했다. 접속 집계의 Origin 허용 목록을 백엔드 서비스와 공용 이미지의 여섯 태스크 정의에 함께 주입한다.
 - Production frontend builds explicitly inject the verified RUM endpoint and accepted SSM key.
