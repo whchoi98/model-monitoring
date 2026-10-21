@@ -97,7 +97,7 @@ def test_features_haiku55_is_the_seventh_model_without_mantle():
     h_dec = [d for d in decided if d["model_key"] == "haiku-5-5"]
     assert (len(h_jobs), len(h_dec)) == (133, 62)  # same shape as Sonnet 5.5: the whole Mantle column is decided
     assert sum(1 for d in h_dec if d["surface"] == "mantle") == 39
-    assert frunner.CATALOG_VERSION == "2026-10-07"
+    assert frunner.CATALOG_VERSION >= "2026-10-07"  # 2026-10-20 문서 기대치 갱신으로 다시 범프
 
 
 # ---------------------------------------------------------------- pricing identity, seeds, parsers

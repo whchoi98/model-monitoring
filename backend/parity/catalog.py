@@ -12,6 +12,8 @@ chat_completions / responses (OpenAI 호환 bearer — Mantle·1P 공용).
 
 from __future__ import annotations
 
+import re
+
 SURFACES = ["converse", "invoke_model", "messages", "messages_mantle", "chat_completions", "responses"]
 
 FEATURES: list[dict] = [
@@ -111,9 +113,17 @@ FEATURES: list[dict] = [
     {
         "id": "json_schema",
         "label_ko": "JSON 스키마 강제",
-        "desc_ko": "strict JSON schema 출력 강제 — 필수 키를 가진 유효 JSON 검증",
+        "desc_ko": "JSON 스키마 출력 강제(Claude output_config.format, Converse outputConfig.textFormat) — 프롬프트가 다른 키 이름을 요구해도 응답 키가 스키마와 정확히 같은지 검증",
         "label_en": "JSON schema",
-        "desc_en": "Forces strict JSON schema output — verifies valid JSON with the required key",
+        "desc_en": "Forces JSON schema output (Claude output_config.format, Converse outputConfig.textFormat) — verifies the reply keys equal the schema even when the prompt asks for another key name",
+    },
+    # --- v2.34.0 ---
+    {
+        "id": "strict_tool_use",
+        "label_ko": "Strict 도구 호출",
+        "desc_ko": "strict: true 도구 — 정수 인자에 문자열을 요구해도 도구 입력의 키와 타입이 스키마와 같고 카나리가 왕복하는지 검증 (forced tool_choice를 못 쓰는 모델은 정상 지시)",
+        "label_en": "Strict tool use",
+        "desc_en": "strict: true tool — verifies the tool input keys and types match the schema even when the prompt asks for a string in an integer argument, and the canary round-trips (plain instruction for models without forced tool_choice)",
     },
     {
         "id": "url_sources",
@@ -189,8 +199,8 @@ _FEATURE_SURFACES: dict[str, frozenset[str]] = {
     # v2.15.0
     "reasoning_effort": frozenset({"converse", "invoke_model", "messages", "messages_mantle",
                                    "chat_completions", "responses"}),
-    "json_schema": frozenset({"invoke_model", "messages", "messages_mantle",
-                              "chat_completions", "responses"}),
+    # json_schema, strict_tool_use(v2.34.0)는 제한 없음 — 6 surface 전부. json_schema의 converse는 v2.34.0부터
+    # outputConfig.textFormat으로 프로빙한다(그 전에는 converse에 스키마 강제 필드가 없다고 보고 skipped였다).
     "url_sources": frozenset({"invoke_model", "messages", "messages_mantle"}),
     "memory_tool": frozenset({"invoke_model", "messages", "messages_mantle"}),
     "code_execution": frozenset({"invoke_model", "messages", "messages_mantle"}),
@@ -216,14 +226,22 @@ def surfaces_for(model_id: str) -> list[str]:
 
 
 def mantle_fm_id(model_id: str) -> str:
-    """Bedrock Mantle /anthropic용 FM id — 프로파일 접두사(global./us.) 제거.
+    """Bedrock Mantle /anthropic용 모델 id — 프로파일 접두사(global./us.)와 Bedrock 버전 접미사 제거.
 
-    실측(2026-07-11): Mantle은 `anthropic.claude-…` FM id만 인식, 프로파일 id는 not_found.
+    실측(2026-07-11): Mantle은 `anthropic.claude-…` id만 인식, 프로파일 id는 not_found.
+    실측(2026-10-21): Mantle은 날짜와 버전 접미사 없는 id로 서빙한다 — GET /v1/models가 `anthropic.claude-haiku-4-5`를
+    돌려주고 `anthropic.claude-haiku-4-5-20251001-v1:0`은 404라, v2.34.0 전까지 Haiku 4.5 Global, US 두 행의
+    messages_mantle 셀이 전부 unsupported였다.
     """
     for prefix in ("global.", "us."):
         if model_id.startswith(prefix):
-            return model_id[len(prefix):]
-    return model_id
+            model_id = model_id[len(prefix):]
+            break
+    return _BEDROCK_VERSION_SUFFIX.sub("", model_id)
+
+
+# Bedrock FM id의 버전 접미사 — `-20251001-v1:0`(Haiku 4.5), `-v1`(Opus 4.6). Claude 5 세대 id에는 없다.
+_BEDROCK_VERSION_SUFFIX = re.compile(r"(-\d{8})?-v\d+(:\d+)?$")
 
 
 def is_reasoning_capable(model_id: str) -> bool:

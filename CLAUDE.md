@@ -97,7 +97,7 @@ model-monitoring/
 │   ├── gptbench_runner.py   # CLI entry: `python -m gptbench_runner --once` (15분 스케줄)
 │   ├── requirements.txt     # email-validator 포함 (EmailStr)
 │   ├── agent/               # 챗봇 core: bedrock.py(CHAT/INSIGHTS model ID), tools.py(4 tools), memory.py(AgentCore), streaming.py
-│   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×19 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
+│   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×20 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
 │   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×5 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
 │   ├── features_runner.py   # CLI entry: `python -m features_runner --once` (FeaturesVerify Fargate task)
 │   └── routers/

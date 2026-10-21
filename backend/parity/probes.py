@@ -18,9 +18,12 @@ from parity.engine import (
     check_cached_tokens,
     check_canary,
     check_json_object,
+    check_schema_keys,
     check_stream_events,
+    check_strict_tool_input,
     check_tool_roundtrip,
     classify_error,
+    json_object_keys,
 )
 from parity.catalog import supports_forced_tool_choice
 
@@ -56,8 +59,32 @@ _MEMORY_TOOL = {"type": "memory_20250818", "name": "memory"}
 _MEMORY_BETA = "context-management-2025-06-27"
 _CODE_EXEC_TOOL = {"type": "code_execution_20250522", "name": "code_execution"}
 _CODE_EXEC_BETA = "code-execution-2025-05-22"
-_STRUCTURED_BETA = "structured-outputs-2025-11-13"
 _FILES_BETA = "files-api-2025-04-14"
+# v2.34.0 구조화 출력 — AWS 문서 형식(Bedrock 사용자 가이드 "Structured outputs for Anthropic Claude models", 2026-10-19 블로그).
+# Claude 본문은 output_config.format(스키마는 객체), Converse는 outputConfig.textFormat(스키마는 JSON 문자열).
+# 구 beta 형식(output_format + anthropic-beta structured-outputs-2025-11-13)은 CRIS에서 아직 통하지만 문서 형식이 아니다.
+_OUTPUT_FORMAT = {"type": "json_schema", "schema": _JSON_SCHEMA}
+_CONVERSE_TEXT_FORMAT = {"type": "json_schema",
+                         "structure": {"jsonSchema": {"schema": json.dumps(_JSON_SCHEMA), "name": "city_info"}}}
+_SCHEMA_KEYS = {"city"}
+# 스키마와 다른 키 이름(name)을 요구한다 — 스키마가 강제되면 city, 조용히 무시되면 name이 나와 증거 검사에서
+# 걸린다(2026-10-20 실측: 스키마 있음 45/45 city, 없음 9/9 name). 스키마에 없는 정보(국가, 인구)를 요구하면
+# GPT가 그 정보를 city 값에 몰아넣다가 GPT 6 Astra, GPT 6 Sol은 512토큰까지 반복 생성해 잘렸다(broken).
+# 서울 in-region 온디맨드 FM은 output_config.format과 strict를 400 "Extra inputs are not permitted"로
+# 거부한다(같은 날, effort와 adaptive는 수락 — 모델이 아니라 그 서빙 경로의 미지원).
+_SCHEMA_PROMPT = "서울의 이름을 JSON으로 답하세요. 키 이름은 name으로 쓰세요."
+_STRICT_SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}, "count": {"type": "integer"}},
+                  "required": ["text", "count"], "additionalProperties": False}
+# integer 인자에 문자열을 요구한다 — strict가 무시되면 문자열이 들어가 타입 검사에서 걸린다(engine.check_strict_tool_input)
+_STRICT_TOOL_PROMPT = f"echo 도구를 호출하세요. text 인자는 '{CANARY}', count 인자는 문자열 \"three\"로 넣으세요."
+# forced tool_choice를 못 쓰는 auto 모델(Fable 5.1, Opus 5.5, Sonnet 5.5)용 정상 지시. 타입 충돌 지시를 받으면 thinking으로
+# 고민하다 256토큰에서 잘리거나(입력 {"text"}만) Fable 5.1은 호출을 거절하고 확인을 요청했다(1024토큰에서도, 2026-10-20).
+# 정상 지시는 76토큰에 바로 호출한다 — 이 모델들은 키와 타입만 검사하고, strict 무시 판별은 forced 모델이 맡는다.
+_STRICT_TOOL_PROMPT_AUTO = f"echo 도구를 호출하세요. text 인자는 '{CANARY}', count 인자는 3으로 넣으세요."
+
+
+def _strict_tool_prompt(model_id: str) -> str:
+    return _STRICT_TOOL_PROMPT if supports_forced_tool_choice(model_id) else _STRICT_TOOL_PROMPT_AUTO
 _TOOL_PROMPT = f"echo 도구를 text 인자 '{CANARY}' 값으로 호출하세요."
 # 키 수 제한 — 제한이 없으면 Opus 5가 209~591토큰짜리 JSON을 써서 512 예산에서 잘리고 broken이 됐다
 # (run #190, #200, #208, #211). 제한을 두면 50~91토큰 (2026-10-19 실측, Fable 5, Haiku 5.5도 JSON 유지)
@@ -95,6 +122,11 @@ def _run(fn: Callable[[], tuple[bool, dict]], request: dict | None = None) -> Pr
 
 def _snippet(text: Any) -> str:
     return str(text)[:300] if text else ""
+
+
+def _schema_evidence(text: str | None) -> tuple[bool, dict]:
+    """json_schema 판정과 증거 — 응답 키 목록을 함께 남겨 증거 모달에서 무시 여부가 바로 보이게 한다."""
+    return check_schema_keys(text, _SCHEMA_KEYS), {"response_snippet": _snippet(text), "keys": json_object_keys(text)}
 
 
 def _req_snapshot(model: str, **kw: Any) -> dict:
@@ -240,6 +272,34 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
             return bool(text.strip()), {"response_snippet": _snippet(text), "stop_reason": r.get("stopReason")}
         return _run(fn, _req_snapshot(model_id, **kw))
 
+    if feature == "json_schema":
+        kw = dict(messages=[{"role": "user", "content": [{"text": _SCHEMA_PROMPT}]}],
+                  inferenceConfig={"maxTokens": _JSON_MAX_TOKENS},
+                  outputConfig={"textFormat": _CONVERSE_TEXT_FORMAT})
+        def fn():
+            r = converse(**kw)
+            return _schema_evidence("".join(b.get("text", "") for b in r["output"]["message"]["content"]))
+        return _run(fn, _req_snapshot(model_id, **kw))
+
+    if feature == "strict_tool_use":
+        kw = dict(
+            messages=[{"role": "user", "content": [{"text": _strict_tool_prompt(model_id)}]}],
+            toolConfig={
+                "tools": [{"toolSpec": {"name": "echo", "description": _ECHO_TOOL_DESC,
+                                        "inputSchema": {"json": _STRICT_SCHEMA}, "strict": True}}],
+                "toolChoice": {"tool": {"name": "echo"}} if supports_forced_tool_choice(model_id) else {"auto": {}},
+            },
+            inferenceConfig={"maxTokens": _MAX_TOKENS},
+        )
+        def fn():
+            r = converse(**kw)
+            tool_call = None
+            for b in r["output"]["message"]["content"]:
+                if "toolUse" in b:
+                    tool_call = {"name": b["toolUse"]["name"], "arguments": b["toolUse"]["input"]}
+            return check_strict_tool_input(tool_call, CANARY, _STRICT_SCHEMA), {"tool_call": tool_call}
+        return _run(fn, _req_snapshot(model_id, **kw))
+
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")
 
 
@@ -381,14 +441,27 @@ def probe_invoke_model(client, model_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(model_id, **body))
 
     if feature == "json_schema":
-        body = {"max_tokens": _JSON_MAX_TOKENS, "anthropic_beta": [_STRUCTURED_BETA],
-                "output_format": {"type": "json_schema", "schema": _JSON_SCHEMA},
-                "messages": [{"role": "user", "content": _JSON_PROMPT}]}
+        body = {"max_tokens": _JSON_MAX_TOKENS, "output_config": {"format": _OUTPUT_FORMAT},
+                "messages": [{"role": "user", "content": _SCHEMA_PROMPT}]}
         def fn():
             r = invoke(body)
-            text = "".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text")
-            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
+            return _schema_evidence("".join(b.get("text", "") for b in r.get("content", []) if b.get("type") == "text"))
         return _run(fn, _req_snapshot(model_id, **body))
+
+    if feature == "strict_tool_use":
+        body = {
+            "messages": [{"role": "user", "content": _strict_tool_prompt(model_id)}],
+            "tools": [{"name": "echo", "description": _ECHO_TOOL_DESC, "input_schema": _STRICT_SCHEMA, "strict": True}],
+            "tool_choice": {"type": "tool", "name": "echo"} if supports_forced_tool_choice(model_id) else {"type": "auto"},
+        }
+        def fn():
+            r = invoke(body)
+            tool_call = None
+            for b in r.get("content", []):
+                if b.get("type") == "tool_use":
+                    tool_call = {"name": b["name"], "arguments": b["input"]}
+            return check_strict_tool_input(tool_call, CANARY, _STRICT_SCHEMA), {"tool_call": tool_call}
+        return _run(fn, _req_snapshot(model_id, max_tokens=_MAX_TOKENS, **body))
 
     if feature == "url_sources":
         body = {"max_tokens": _MAX_TOKENS,
@@ -567,15 +640,27 @@ def probe_messages(client, actual_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(actual_id, output_config={"effort": "low"}, **kw))
 
     if feature == "json_schema":
-        kw = dict(max_tokens=_JSON_MAX_TOKENS, messages=[{"role": "user", "content": _JSON_PROMPT}])
+        kw = dict(max_tokens=_JSON_MAX_TOKENS, messages=[{"role": "user", "content": _SCHEMA_PROMPT}])
         def fn():
-            r = client.messages.create(
-                model=actual_id,
-                extra_body={"output_format": {"type": "json_schema", "schema": _JSON_SCHEMA}},
-                extra_headers={"anthropic-beta": _STRUCTURED_BETA}, **kw)
-            text = "".join(b.text for b in r.content if getattr(b, "type", "") == "text")
-            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
-        return _run(fn, _req_snapshot(actual_id, output_format={"type": "json_schema", "schema": _JSON_SCHEMA}, **kw))
+            r = client.messages.create(model=actual_id, extra_body={"output_config": {"format": _OUTPUT_FORMAT}}, **kw)
+            return _schema_evidence("".join(b.text for b in r.content if getattr(b, "type", "") == "text"))
+        return _run(fn, _req_snapshot(actual_id, output_config={"format": _OUTPUT_FORMAT}, **kw))
+
+    if feature == "strict_tool_use":
+        kw = dict(
+            max_tokens=_MAX_TOKENS,
+            messages=[{"role": "user", "content": _strict_tool_prompt(actual_id)}],
+            tools=[{"name": "echo", "description": _ECHO_TOOL_DESC, "input_schema": _STRICT_SCHEMA, "strict": True}],
+            tool_choice={"type": "tool", "name": "echo"} if supports_forced_tool_choice(actual_id) else {"type": "auto"},
+        )
+        def fn():
+            r = client.messages.create(model=actual_id, **kw)
+            tool_call = None
+            for b in r.content:
+                if getattr(b, "type", "") == "tool_use":
+                    tool_call = {"name": b.name, "arguments": b.input}
+            return check_strict_tool_input(tool_call, CANARY, _STRICT_SCHEMA), {"tool_call": tool_call}
+        return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "url_sources":
         kw = dict(max_tokens=_MAX_TOKENS, messages=[{"role": "user", "content": [
@@ -714,11 +799,25 @@ def probe_chat_completions(client, actual_id: str, feature: str) -> ProbeOutcome
         kw = dict(max_completion_tokens=_JSON_MAX_TOKENS,
                   response_format={"type": "json_schema",
                                    "json_schema": {"name": "city_info", "strict": True, "schema": _JSON_SCHEMA}},
-                  messages=[{"role": "user", "content": _JSON_PROMPT}])
+                  messages=[{"role": "user", "content": _SCHEMA_PROMPT}])
         def fn():
             r = client.chat.completions.create(model=actual_id, **kw)
-            text = r.choices[0].message.content
-            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
+            return _schema_evidence(r.choices[0].message.content)
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "strict_tool_use":
+        kw = dict(
+            max_completion_tokens=_MAX_TOKENS,
+            messages=[{"role": "user", "content": _STRICT_TOOL_PROMPT}],
+            tools=[{"type": "function", "function": {"name": "echo", "description": _ECHO_TOOL_DESC,
+                                                     "parameters": _STRICT_SCHEMA, "strict": True}}],
+            tool_choice={"type": "function", "function": {"name": "echo"}},
+        )
+        def fn():
+            r = client.chat.completions.create(model=actual_id, **kw)
+            tc = r.choices[0].message.tool_calls
+            tool_call = {"name": tc[0].function.name, "arguments": tc[0].function.arguments} if tc else None
+            return check_strict_tool_input(tool_call, CANARY, _STRICT_SCHEMA), {"tool_call": tool_call}
         return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "models_api":
@@ -823,13 +922,28 @@ def probe_responses(client, actual_id: str, feature: str) -> ProbeOutcome:
         return _run(fn, _req_snapshot(actual_id, **kw))
 
     if feature == "json_schema":
-        kw = dict(max_output_tokens=_JSON_MAX_TOKENS, input=_JSON_PROMPT,
+        kw = dict(max_output_tokens=_JSON_MAX_TOKENS, input=_SCHEMA_PROMPT,
                   text={"format": {"type": "json_schema", "name": "city_info",
                                    "schema": _JSON_SCHEMA, "strict": True}})
         def fn():
             r = client.responses.create(model=actual_id, **kw)
-            text = getattr(r, "output_text", "")
-            return check_json_object(text, "city"), {"response_snippet": _snippet(text)}
+            return _schema_evidence(getattr(r, "output_text", ""))
+        return _run(fn, _req_snapshot(actual_id, **kw))
+
+    if feature == "strict_tool_use":
+        kw = dict(
+            max_output_tokens=_MAX_TOKENS, input=_STRICT_TOOL_PROMPT,
+            tools=[{"type": "function", "name": "echo", "description": _ECHO_TOOL_DESC,
+                    "parameters": _STRICT_SCHEMA, "strict": True}],
+            tool_choice="required",
+        )
+        def fn():
+            r = client.responses.create(model=actual_id, **kw)
+            tool_call = None
+            for item in r.output:
+                if getattr(item, "type", "") == "function_call":
+                    tool_call = {"name": item.name, "arguments": item.arguments}
+            return check_strict_tool_input(tool_call, CANARY, _STRICT_SCHEMA), {"tool_call": tool_call}
         return _run(fn, _req_snapshot(actual_id, **kw))
 
     return ProbeOutcome("broken", error=f"no probe for feature {feature}")

@@ -152,12 +152,16 @@ FEATURES: list[dict] = [
        "overview는 Claude API only, fallback-credit 페이지는 P-AWS 인식 시사 → 실측"),
     _f("structured_outputs", "model", "구조화 출력", "Structured outputs", "output_config.format json_schema → 스키마 유효 JSON",
        "output_config.format json_schema → schema-valid JSON", _DOC + "build-with-claude/structured-outputs",
-       {"cp": "ga", "mantle": "no", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
-       "Anthropic 'Claude in Amazon Bedrock (Opus 4.7+)' 페이지: 미지원. AWS 문서의 지원 표기는 4.6 이하 세대 대상 — 실측(Claude 5 세대) 'Extra inputs are not permitted'"),
+       ALL, "evidence",
+       "AWS 문서 'Structured outputs for Anthropic Claude models'(2026-10-19)가 bedrock-runtime(Converse, InvokeModel, "
+       "Anthropic Messages API)과 bedrock-mantle 지원을 명시하고, Anthropic 'Claude in Amazon Bedrock' 페이지도 지원 기능에 "
+       "넣었다 — 2026-10-20 기대치 갱신(이전: Bedrock 3열과 Mantle 미지원, 2026-09-05 실측 'Extra inputs are not permitted'). "
+       "서울 in-region 온디맨드 FM은 지금도 거부한다(패리티 런에서 측정, 대표 모델 셀 아님)"),
     _f("strict_tool_use", "model", "Strict 도구", "Strict tool use", "strict:true 도구 → 입력 키 집합이 스키마와 일치",
        "strict:true tool → input keys exactly match schema", _DOC + "build-with-claude/structured-outputs",
-       {"cp": "ga", "mantle": "unknown", "bedrock_invoke": "no", "bedrock_converse": "no"}, "evidence",
-       "Bedrock: strict 도구가 'Extra inputs are not permitted' (실측 2026-09-05) — structured outputs와 동일 제약"),
+       ALL, "evidence",
+       "AWS 문서가 Claude의 두 메커니즘(JSON 스키마 출력, strict 도구)을 bedrock-runtime과 bedrock-mantle 공통으로 설명한다 — "
+       "2026-10-20 기대치 갱신(이전: Bedrock 3열 미지원, Mantle 미확정)"),
     _f("extended_thinking", "model", "확장 추론(budget)", "Extended thinking (budget_tokens)",
        "대표 모델은 전부 adaptive-only(Opus 5.5, Sonnet 5.5, Haiku 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
        "All representative models are adaptive-only (incl. Opus 5.5, Sonnet 5.5, Haiku 5.5) → documented 400; exact rejection → not_applicable",
@@ -232,12 +236,11 @@ FEATURE_IDS = [f["id"] for f in FEATURES]
 _FEATURE_BY_ID = {f["id"]: f for f in FEATURES}
 
 #: bedrock_messages가 InvokeModel 기대치와 갈라지는 지점 (AWS 문서 + 실측 2026-09-05).
-#: - structured_outputs/strict_tool_use: `output_config.format`·`strict` → 400 "Extra inputs are not permitted"
 #: - token_counting: `/v1/messages/count_tokens` → coral UnknownOperationException (라우트 없음)
 #: - tool_search: AWS 문서는 InvokeModel만 명시 → 이 경로는 기대치 미정(unknown), 실측으로 판정
+#: structured_outputs, strict_tool_use는 2026-10-20에 빠졌다 — AWS 문서가 bedrock-runtime Anthropic Messages API를
+#: 지원 경로로 명시해 InvokeModel 기대치(ga)를 그대로 상속한다.
 _BEDROCK_MESSAGES_OVERRIDES: dict[str, str] = {
-    "structured_outputs": "no",
-    "strict_tool_use": "no",
     "token_counting": "no",
     "tool_search": "unknown",
 }

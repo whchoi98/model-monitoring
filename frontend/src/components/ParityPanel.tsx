@@ -779,8 +779,8 @@ export default function ParityPanel() {
         <div className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "How it works" : "동작 방식"}</div>
         <p>1 · {lang === "en" ? "An EventBridge schedule starts a Fargate sweep every 12 hours (manual trigger runs inside the backend service)." : "EventBridge 스케줄이 12시간마다 Fargate 스윕을 시작합니다 (수동 트리거는 backend 서비스 내에서 실행)."}</p>
         <p>2 · {lang === "en" ? "The monitored model catalog is the source — new models are picked up automatically." : "모니터링 모델 카탈로그가 소스입니다 — 신규 모델은 자동으로 반영됩니다."}</p>
-        <p>3 · {lang === "en" ? "Each model is checked across Converse, InvokeModel, Messages, ChatCompletions and Responses for 19 features." : "각 모델의 Converse, InvokeModel, Messages, ChatCompletions, Responses API에서 19개 기능을 확인합니다."}</p>
-        <p>4 · {lang === "en" ? "Execution-evidence probes: tool canary round-trip, system-instruction canary, JSON validity, cached_tokens on repeat, ≥2 stream deltas — HTTP 200 is never enough." : "실행-증거 프로브: 도구 카나리 왕복, 시스템 지시 카나리, JSON 유효성, 반복 요청의 cached tokens, 스트림 델타 2개 이상 — HTTP 200만으로는 판정하지 않습니다."}</p>
+        <p>3 · {lang === "en" ? "Each model is checked across Converse, InvokeModel, Messages, ChatCompletions and Responses for 20 features." : "각 모델의 Converse, InvokeModel, Messages, ChatCompletions, Responses API에서 20개 기능을 확인합니다."}</p>
+        <p>4 · {lang === "en" ? "Execution-evidence probes: tool canary round-trip, system-instruction canary, JSON validity, JSON keys and strict tool argument types that match the schema exactly, cached_tokens on repeat, ≥2 stream deltas — HTTP 200 is never enough." : "실행-증거 프로브: 도구 카나리 왕복, 시스템 지시 카나리, JSON 유효성, 스키마와 정확히 같은 JSON 키와 strict 도구 인자 타입, 반복 요청의 cached tokens, 스트림 델타 2개 이상 — HTTP 200만으로는 판정하지 않습니다."}</p>
         <p>5 · {lang === "en" ? "Execution evidence (response snippet, tool call, usage, latency, error) is stored in RDS; click any cell to see it. Changes vs the previous run are shown at the top." : "실행 증거(응답 스니펫·도구 호출·usage·지연·오류)는 RDS에 저장됩니다. 셀을 클릭하면 확인할 수 있고, 이전 런 대비 변경사항은 상단에 표시됩니다."}</p>
       </div>
 
