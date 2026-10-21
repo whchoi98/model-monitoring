@@ -311,4 +311,14 @@ describe("SchedulerStack", () => {
     expect(containers).toHaveLength(6);
     for (const c of containers) expect(c.Environment).toContainEqual({ Name: "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", Value: "openai.gpt-6.1-sol" });
   });
+
+  it("all six shared backend tasks retain the visitor origin configuration", () => {
+    const tasks = Object.values(template.findResources("AWS::ECS::TaskDefinition"));
+    expect(tasks).toHaveLength(6);
+    for (const task of tasks) {
+      expect(task.Properties.ContainerDefinitions[0].Environment).toContainEqual({
+        Name: "PRESENCE_ALLOWED_ORIGINS", Value: "https://llm-monitor.whchoi.net",
+      });
+    }
+  });
 });

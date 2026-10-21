@@ -7,12 +7,15 @@ import { useT, useLang } from "@/lib/i18n-context";
 import type { AuthUser } from "@/lib/types";
 import ThemeToggle from "./ThemeToggle";
 
+const NAV_GROUPS = ["monitor", "explore", "analysis", "run"] as const;
+
 export interface NavItem {
   key: string;
   label: string;
   href?: string;
   onClick?: () => void;
   active?: boolean;
+  group?: typeof NAV_GROUPS[number];
 }
 
 export function useNavItems(currentKey: string): NavItem[] {
@@ -20,21 +23,42 @@ export function useNavItems(currentKey: string): NavItem[] {
   const { lang } = useLang();
   const L = (en: string, ko: string) => lang === "en" ? en : ko;
   const items: NavItem[] = [
-    { key: "dashboard", label: t.dashboardTab, href: "/" },
+    { key: "dashboard", label: t.dashboardTab, href: "/", group: "monitor" },
     // 비용 단가는 대시보드 바로 옆 (v2.31.2 사용자 요청) — e2e/pricing.spec.ts가 순서를 고정한다.
-    { key: "pricing", label: L("Unit Prices", "비용 단가"), href: "/pricing" },
-    { key: "models", label: L("Models", "모델 탐색"), href: "/models" },
-    { key: "parity", label: L("Parity Run", "패리티 런"), href: "/parity" },
-    { key: "cost", label: L("Cost", "비용"), href: "/cost" },
-    { key: "reliability", label: L("Reliability", "신뢰성"), href: "/reliability" },
-    { key: "efficiency", label: L("Efficiency", "효율성"), href: "/efficiency" },
-    { key: "analysis", label: L("Analysis", "분석"), href: "/analysis" },
-    { key: "gptbench", label: "GPT on AWS", href: "/gpt-on-aws" },
-    { key: "features", label: L("Claude API Features", "Claude API 기능"), href: "/claude-features" },
-    { key: "manual", label: t.manualProbeTab, href: "/?view=manual" },
-    { key: "prompts", label: L("Prompts", "프롬프트"), href: "/prompts" },
+    { key: "pricing", label: L("Unit Prices", "비용 단가"), href: "/pricing", group: "monitor" },
+    { key: "models", label: L("Models", "모델 탐색"), href: "/models", group: "explore" },
+    { key: "parity", label: L("Parity Run", "패리티 런"), href: "/parity", group: "explore" },
+    { key: "gptbench", label: "GPT on AWS", href: "/gpt-on-aws", group: "explore" },
+    { key: "features", label: L("Claude API Features", "Claude API 기능"), href: "/claude-features", group: "explore" },
+    { key: "cost", label: L("Cost", "비용"), href: "/cost", group: "analysis" },
+    { key: "reliability", label: L("Reliability", "신뢰성"), href: "/reliability", group: "analysis" },
+    { key: "efficiency", label: L("Efficiency", "효율성"), href: "/efficiency", group: "analysis" },
+    { key: "analysis", label: L("Analysis", "분석"), href: "/analysis", group: "analysis" },
+    { key: "manual", label: t.manualProbeTab, href: "/?view=manual", group: "run" },
+    { key: "prompts", label: L("Prompts", "프롬프트"), href: "/prompts", group: "run" },
   ];
   return items.map((item) => ({ ...item, active: item.key === currentKey }));
+}
+
+function NavGroups({ items, mobile, onNavigate }: { items: NavItem[]; mobile?: boolean; onNavigate: () => void }) {
+  const labels = useT().navigationGroups;
+  return (
+    <div className={mobile ? "space-y-4" : "flex w-max min-w-full items-start gap-3 px-4 py-2 sm:px-6"}>
+      {NAV_GROUPS.map((key) => {
+        const entries = items.filter((item) => (item.group ?? "monitor") === key);
+        if (!entries.length) return null;
+        return (
+          <div key={key} role="group" aria-label={labels[key]}
+            className={mobile ? "space-y-1" : "shrink-0 border-l border-gray-800 pl-3 first:border-0 first:pl-0"}>
+            <p aria-hidden="true" className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-gray-500">{labels[key]}</p>
+            <div className={mobile ? "space-y-1" : "flex items-center gap-1"}>
+              {entries.map((item) => <NavEntry key={item.key} item={item} mobile={mobile} onNavigate={onNavigate} />)}
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
 }
 
 function NavEntry({ item, mobile, onNavigate }: { item: NavItem; mobile?: boolean; onNavigate: () => void }) {
@@ -179,15 +203,11 @@ export default function AppHeader({
       </div>
       <nav ref={desktopNav} aria-label={lang === "en" ? "Primary navigation" : "주요 메뉴"}
         className="hidden max-w-full overflow-x-auto border-t border-gray-800/60 md:block">
-        <div className="flex w-max min-w-full items-center gap-1 px-4 py-1.5 sm:px-6">
-          {items.map((item) => <NavEntry key={item.key} item={item} onNavigate={close} />)}
-        </div>
+        <NavGroups items={items} onNavigate={close} />
       </nav>
       <nav id={menuId} hidden={!menuOpen} aria-label={lang === "en" ? "Mobile navigation" : "모바일 메뉴"}
         className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-800 px-4 py-3 md:hidden">
-        <div className="space-y-1">
-          {items.map((item) => <NavEntry key={item.key} item={item} mobile onNavigate={close} />)}
-        </div>
+        <NavGroups items={items} mobile onNavigate={close} />
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-800 pt-3">
           <Preferences />
           {actions}

@@ -9,6 +9,7 @@
  * 코드 수정 없이 통째로 전환된다. 기본은 다크(:root), <html class="light">가 화이트.
  * ------------------------------------------------------------------------- */
 :root {
+  scroll-padding-bottom: var(--comparison-dock-clearance, 0px);
   /* 다크 (기본) — Tailwind 기본 gray 스케일 원본 */
   --tw-gray-100: 243 244 246;
   --tw-gray-200: 229 231 235;
@@ -151,6 +152,10 @@ body {
 }
 
 @layer components {
+  .ui-copy {
+    word-break: keep-all;
+    overflow-wrap: anywhere;
+  }
   .ui-button {
     @apply inline-flex min-h-9 items-center justify-center gap-2 rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-xs font-medium text-gray-300 transition-colors hover:border-gray-500 hover:bg-gray-800 disabled:cursor-not-allowed disabled:opacity-50;
   }
@@ -167,7 +172,7 @@ body {
   outline-offset: 3px;
 }
 
-section[id] { scroll-margin-top: 9rem; }
+section[id] { scroll-margin-top: calc(var(--app-header-height, 8rem) + 1rem); }
 input[type="search"]::-webkit-search-cancel-button { cursor: pointer; }
 
 /* 테마 전환 시 배경·보더가 부드럽게 넘어가도록 (개별 요소 transition은 과함) */

@@ -4,6 +4,8 @@ from sqlalchemy import (
     Column,
     Index,
     Integer,
+    BigInteger,
+    String,
     Text,
     Float,
     DateTime,
@@ -280,6 +282,25 @@ class PriceHistory(Base):
     observed_at = Column(DateTime(timezone=True), nullable=True)  # 출처에서 마지막으로 확인한 시각, seed는 NULL
     run_id = Column(Integer, nullable=True)          # 이 행을 만든(또는 마지막으로 관측한) price_sync_runs.id
     created_at = Column(DateTime(timezone=True), default=lambda: datetime.now(timezone.utc))
+
+
+class SiteVisitor(Base):
+    """Anonymous signed-cookie hashes; activity expires, first-visit identity persists."""
+
+    __tablename__ = "site_visitors"
+
+    visitor_hash = Column(String(64), primary_key=True)
+    first_seen = Column(DateTime(timezone=True), nullable=False)
+    last_seen = Column(DateTime(timezone=True), nullable=False, index=True)
+
+
+class SitePresenceTotal(Base):
+    __tablename__ = "site_presence_totals"
+
+    id = Column(Integer, primary_key=True)
+    initial_total = Column(BigInteger, nullable=False)
+    total_visitors = Column(BigInteger, nullable=False)
+    counting_since = Column(DateTime(timezone=True), nullable=False)
 
 
 class PriceSyncRun(Base):

@@ -5,6 +5,7 @@ Framework-light modules shared by components: the API client, auth/language prov
 (sorting, price-table formatting, grading, trend pivoting, feature-matrix aggregation) that vitest covers.
 
 ## Key Files
+- `presence.ts`, `presence-context.tsx` — validate server counts/timestamps and own the root presence state. `initial_total` is already included in `total_visitors`; the client never increments or adds its own offset. Cookie identity stays HttpOnly and never enters client storage.
 - `api.ts` — every backend call. Token in `localStorage["auth_token"]` (in-memory fallback when storage is blocked); `setToken` dispatches `auth-changed`; a 401 clears the token only if it is still the one that was sent. SSE clients `runProbe`, `chatStream`, `compareStream`, `streamRegenerateInsight` parse `event:` / `data:` blocks by hand. `fetchPricing` (`GET /api/pricing`) and `pricingExportUrl(format, lang)` (v2.30.0)
 - `http.ts` — `fetchJson` (20 s default timeout → `TimeoutError`, caller `signal` honored) and `ApiError(status)` carrying FastAPI `detail`. Streams use plain `fetch` with no read timeout
 - `auth-context.tsx` — `AuthProvider` / `useAuth()`: one session check and one login dialog for the whole app; `openLogin(afterLogin?)` resumes the action after sign-in (used by `FloatingChat`)

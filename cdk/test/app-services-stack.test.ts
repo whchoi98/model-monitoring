@@ -42,6 +42,17 @@ describe("AppServicesStack", () => {
     template.resourceCountIs("AWS::ECS::Service", 2);
   });
 
+  it("backend receives the public origin required for visitor heartbeats", () => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({
+        Name: "backend",
+        Environment: Match.arrayWith([{
+          Name: "PRESENCE_ALLOWED_ORIGINS", Value: "https://llm-monitor.whchoi.net",
+        }]),
+      })]),
+    }));
+  });
+
   it("backend Service는 헬스체크 유예 300s (기동 마이그레이션 ~130s 실측, 2026-09-06 롤백 재발 방지)", () => {
     template.hasResourceProperties("AWS::ECS::Service", Match.objectLike({
       ServiceName: "backend",

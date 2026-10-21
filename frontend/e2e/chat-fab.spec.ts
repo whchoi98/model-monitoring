@@ -75,12 +75,10 @@ test("on a 390px phone the chat button hides while scrolling down or sideways an
   await expectHidden(button);
   expect(await page.evaluate(() => Math.round(window.scrollY))).toBe(target - 200);
 
-  // Keyboard: Tab from the last reference link reaches the hidden button (still in the tab order) and shows it,
+  // Keyboard: Tab from the last footer control reaches the hidden button (still in the tab order) and shows it,
   // without scrolling the page.
-  await page.evaluate(() => {
-    const links = document.querySelectorAll<HTMLAnchorElement>('section[aria-labelledby="pricing-references-title"] a');
-    links[links.length - 1].focus({ preventScroll: true });
-  });
+  await page.getByRole("contentinfo", { name: "접속 통계", exact: true }).locator("summary")
+    .evaluate((element) => (element as HTMLElement).focus({ preventScroll: true }));
   await expect(button).toHaveAttribute("data-visible", "false");
   await page.keyboard.press("Tab");
   await expect(button).toBeFocused();
@@ -167,10 +165,11 @@ test("at 820px a header link to a page whose menu item sits off to the right kee
   const button = page.getByRole("button", { name: "챗봇 열기", exact: true });
   await expectShown(button);
   const before = await menuScrolls(page);
-  await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "Claude API 기능", exact: true }).click();
-  await expect(page).toHaveURL(/\/claude-features$/);
+  // Grouped navigation puts Claude API Features on screen at this width; Analysis remains off to the right.
+  await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "분석", exact: true }).click();
+  await expect(page).toHaveURL(/\/analysis$/);
   const menu = page.getByRole("navigation", { name: "주요 메뉴" });
-  await expect(menu.locator('[aria-current="page"]')).toHaveAttribute("href", "/claude-features");
+  await expect(menu.locator('[aria-current="page"]')).toHaveAttribute("href", "/analysis");
   // The precondition of the bug: the menu really scrolled sideways, and the window did not.
   await afterMenuScroll(page, before);
   expect(await menu.evaluate((element) => element.scrollLeft)).toBeGreaterThan(0);

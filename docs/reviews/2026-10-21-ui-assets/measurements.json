@@ -1,0 +1,134 @@
+[
+  {
+    "width": 1440,
+    "documentHeight": 8911,
+    "overflow": false,
+    "modelSection": {
+      "top": 903,
+      "height": 5764,
+      "width": 1232
+    },
+    "firstCard": {
+      "top": 1107,
+      "height": 197,
+      "width": 403
+    },
+    "trends": {
+      "top": 6691,
+      "height": 1814,
+      "width": 1232
+    },
+    "nav": {
+      "clientWidth": 1440,
+      "scrollWidth": 1440
+    },
+    "cardCount": 66,
+    "firstChartSeries": 65,
+    "statusCell": {
+      "top": 433,
+      "height": 28,
+      "width": 28
+    },
+    "theme": "dark",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "documentHeight": 17938,
+    "overflow": false,
+    "modelSection": {
+      "top": 1452,
+      "height": 14158,
+      "width": 358
+    },
+    "firstCard": {
+      "top": 1749,
+      "height": 180,
+      "width": 358
+    },
+    "trends": {
+      "top": 15630,
+      "height": 1922,
+      "width": 358
+    },
+    "nav": {
+      "clientWidth": 0,
+      "scrollWidth": 0
+    },
+    "cardCount": 66,
+    "firstChartSeries": 65,
+    "statusCell": {
+      "top": 620,
+      "height": 28,
+      "width": 28
+    },
+    "theme": "dark",
+    "errors": []
+  },
+  {
+    "width": 1024,
+    "documentHeight": 12009,
+    "overflow": false,
+    "modelSection": {
+      "top": 937,
+      "height": 8829,
+      "width": 976
+    },
+    "firstCard": {
+      "top": 1141,
+      "height": 197,
+      "width": 482
+    },
+    "trends": {
+      "top": 9789,
+      "height": 1814,
+      "width": 976
+    },
+    "nav": {
+      "clientWidth": 1024,
+      "scrollWidth": 1044
+    },
+    "cardCount": 66,
+    "firstChartSeries": 65,
+    "statusCell": {
+      "top": 433,
+      "height": 28,
+      "width": 28
+    },
+    "theme": "light",
+    "errors": []
+  },
+  {
+    "width": 390,
+    "documentHeight": 17938,
+    "overflow": false,
+    "modelSection": {
+      "top": 1452,
+      "height": 14158,
+      "width": 358
+    },
+    "firstCard": {
+      "top": 1749,
+      "height": 180,
+      "width": 358
+    },
+    "trends": {
+      "top": 15630,
+      "height": 1922,
+      "width": 358
+    },
+    "nav": {
+      "clientWidth": 0,
+      "scrollWidth": 0
+    },
+    "cardCount": 66,
+    "firstChartSeries": 65,
+    "statusCell": {
+      "top": 620,
+      "height": 28,
+      "width": 28
+    },
+    "theme": "light",
+    "errors": []
+  }
+]

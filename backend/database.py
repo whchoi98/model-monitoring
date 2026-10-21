@@ -15,7 +15,7 @@ import logging
 import os
 from urllib.parse import quote_plus
 
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, declarative_base
 
 logger = logging.getLogger(__name__)
@@ -87,10 +87,15 @@ Base = declarative_base()
 
 
 def create_tables():
-    """Create all tables defined by ORM models."""
+    """Create ORM tables without racing another service or scheduled-task startup."""
     from models import ProbeRun, ProbeResult, PromptSet, User, Insight, FeatureRun, FeatureResult  # noqa: F401
 
-    Base.metadata.create_all(bind=engine)
+    with engine.begin() as connection:
+        if connection.dialect.name == "postgresql":
+            connection.execute(text("SET LOCAL statement_timeout = '30000'"))
+            connection.execute(text("SET LOCAL lock_timeout = '5000'"))
+            connection.execute(text("SELECT pg_advisory_xact_lock(917350006)"))
+        Base.metadata.create_all(bind=connection)
 
 
 def get_db():

@@ -14,7 +14,7 @@ export default defineConfig({
     { name: "chromium", use: { ...devices["Desktop Chrome"] } },
     {
       name: "webkit",
-      testMatch: ["**/visibility.spec.ts", "**/shell.spec.ts"],
+      testMatch: ["**/visibility.spec.ts", "**/shell.spec.ts", "**/dashboard-workflow.spec.ts", "**/presence.spec.ts"],
       use: { ...devices["Desktop Safari"] },
     },
   ],

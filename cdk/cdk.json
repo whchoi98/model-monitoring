@@ -14,6 +14,7 @@
     ]
   },
   "context": {
+    "presenceAllowedOrigins": "https://llm-monitor.whchoi.net,https://d36s7ml54xwemr.cloudfront.net",
     "existingVpcId": "vpc-0dfa5610180dfa628",
     "appSubnetIds": "subnet-095297380cd45e1eb,subnet-07b1e65682847dce9",
     "dataSubnetIds": "subnet-01b8fb3c462210113,subnet-022000a208af56aae",

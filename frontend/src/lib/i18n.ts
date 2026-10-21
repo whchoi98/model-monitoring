@@ -60,6 +60,18 @@ export interface Translations {
     resetFilters: string;
     streamInterrupted: string;
   };
+  navigationGroups: Record<"monitor" | "explore" | "analysis" | "run", string>;
+  presence: {
+    title: string;
+    active: string;
+    total: string;
+    loading: string;
+    unavailable: string;
+    stale: string;
+    about: string;
+    criteria: (initial: number | null) => string;
+    refreshHint: string;
+  };
   monitoring: {
     title: string;
     description: string;
@@ -129,6 +141,31 @@ export interface Translations {
     metricGuide: string;
     channelsGuide: string;
     selectionMissing: string;
+    attentionChannels: string;
+    latestStateHint: string;
+    inspectModel: (name: string) => string;
+    allChannelStates: string;
+    channelCount: (count: number) => string;
+    attentionCount: (count: number) => string;
+    viewAllAttention: string;
+    listView: string;
+    compactView: string;
+    cardsView: string;
+    modelChannel: string;
+    otherModels: string;
+    familyChannels: (family: string) => string;
+    compareFamily: (family: string) => string;
+    compareChannels: string;
+    collapseFamilies: string;
+    expandFamilies: string;
+    comparisonScope: string;
+    familyCompare: string;
+    chooseFamily: string;
+    comparisonDock: string;
+    jumpToTrends: string;
+    compareShort: string;
+    selectionNames: string;
+    moreSelected: (count: number) => string;
     grade: MetricGradeTexts;
   };
   // Top tabs
@@ -247,6 +284,13 @@ export const ko: Translations = {
     noDataHint: "조회 기간을 늘리거나 필터를 변경해 보세요.", resetFilters: "필터 초기화",
     streamInterrupted: "완료 전에 연결이 끊겼습니다. 수집된 결과는 유지됩니다. 연결을 확인한 뒤 다시 실행하세요.",
   },
+  navigationGroups: { monitor: "모니터링", explore: "탐색·검증", analysis: "분석", run: "실행" },
+  presence: {
+    title: "접속 통계", active: "현재 접속", total: "총 접속",
+    loading: "접속 집계 확인 중", unavailable: "집계 확인 불가", stale: "마지막 확인값", about: "집계 기준",
+    criteria: (initial) => `현재 접속은 최근 90초 동안 활동한 브라우저 수입니다. 같은 브라우저의 새로고침과 여러 탭은 중복 집계하지 않습니다.${initial !== null ? ` 총 접속수는 초기값 ${initial.toLocaleString("ko-KR")}을 포함합니다.` : ""}`,
+    refreshHint: "화면이 보이고 온라인일 때 30초마다 갱신합니다.",
+  },
   monitoring: {
     title: "모델 모니터링", description: "채널별 최신 응답, 수집 상태와 성능 추세를 확인하세요.",
     overview: "모니터링 요약", monitored: "모니터링 채널", observed: (count) => `${count}개 채널에서 결과 수집`,
@@ -267,13 +311,13 @@ export const ko: Translations = {
     search: "모델 검색", searchPlaceholder: "모델 이름 또는 ID 검색", statusFilter: "모델 상태 필터",
     sort: "모델 정렬", sortFamily: "모델 계열순", sortAttention: "문제 우선", sortTtft: "TTFT 높은 순",
     allStatuses: "전체 상태", failuresOnly: "오류·과부하", staleOnly: "지연·미수집",
-    visibleCount: (visible, total) => `${total}개 중 ${visible}개 표시`, noMatchingModels: "조건에 맞는 모델이 없습니다.",
-    selectHint: "카드를 선택하면 해당 모델의 추세를 비교할 수 있습니다.",
+    visibleCount: (visible, total) => `${total}개 중 ${visible}개 채널`, noMatchingModels: "조건에 맞는 모델이 없습니다.",
+    selectHint: "모델을 선택하면 화면 아래에서 추세를 비교할 수 있습니다.",
     selection: (count) => `${count}개 선택`, clearSelection: "선택 해제", selectModel: (name) => `${name} 추세 비교 선택`,
     compareSelection: "선택 모델 추세 보기", noTrend: "이 기간에 수집된 추세 데이터가 없습니다.",
     noTrendHint: "조회 기간을 늘려 보세요. 짧은 기간에는 수집 주기에 따라 결과가 없을 수 있습니다.",
     noMetric: "이 지표의 측정값이 없습니다.", noMetricHint: "측정되지 않은 값과 실패 구간은 그래프의 빈 구간으로 표시합니다.",
-    trendHint: "카드 선택은 세 그래프에 함께 적용됩니다. 빈 구간은 측정값 없음 또는 호출 실패를 의미합니다.",
+    trendHint: "모델 선택은 세 그래프에 함께 적용됩니다. 빈 구간은 측정값 없음 또는 호출 실패를 의미합니다.",
     singlePoint: "측정값이 한 건뿐이므로 추세선 대신 점으로 표시합니다.",
     aggregationHint: "시간별 평균과 최소–최대 범위입니다. 성공한 호출의 측정값만 포함합니다.",
     showDetails: "오류 상세", missingHint: "이 조건의 최신 실행에 결과가 없습니다.",
@@ -283,6 +327,17 @@ export const ko: Translations = {
     triggerBusy: "이미 수집 중입니다. 완료 후 다시 실행할 수 있습니다.",
     triggerFailed: "프로브 실행 요청에 실패했습니다.", metricGuide: "지표 해설", channelsGuide: "호출 채널 안내",
     selectionMissing: "선택한 모델 중 이 조건에 결과가 없는 모델이 있습니다.",
+    attentionChannels: "확인이 필요한 채널", latestStateHint: "선택한 워크로드의 최신 수집 결과 기준",
+    inspectModel: (name) => `${name} 상태 보기`, allChannelStates: "전체 채널 상태",
+    channelCount: (count) => `${count}개 채널`, attentionCount: (count) => `확인 필요 ${count}개`,
+    viewAllAttention: "확인 필요 채널 모두 보기",
+    listView: "목록 보기", compactView: "간결하게", cardsView: "카드로", modelChannel: "모델·채널",
+    otherModels: "기타 모델", familyChannels: (family) => `${family} 채널`,
+    compareFamily: (family) => `${family} 채널 비교`, compareChannels: "채널 비교",
+    collapseFamilies: "모두 접기", expandFamilies: "모두 펼치기",
+    comparisonScope: "비교 범위", familyCompare: "계열별 비교", chooseFamily: "비교할 계열 선택",
+    comparisonDock: "선택한 모델 비교", jumpToTrends: "성능 추세로 이동", compareShort: "추세 비교",
+    selectionNames: "선택한 모델 목록", moreSelected: (count) => `외 ${count}개`,
     grade: {
       names: koGradeNames,
       legendLabel: "지표 등급", legendScope: "워크로드 카테고리별 기준", showCriteria: "기준값 보기",
@@ -452,6 +507,13 @@ export const en: Translations = {
     noDataHint: "Choose a longer time range or change the filters.", resetFilters: "Reset filters",
     streamInterrupted: "The connection ended before completion. Partial results are preserved. Check your connection and run again.",
   },
+  navigationGroups: { monitor: "Monitor", explore: "Explore & verify", analysis: "Analyze", run: "Run" },
+  presence: {
+    title: "Visitor counts", active: "Online", total: "Total visits",
+    loading: "Loading visitor counts", unavailable: "Visitor counts unavailable", stale: "Last known count", about: "About these counts",
+    criteria: (initial) => `Online counts browsers active within the last 90 seconds. Reloads and multiple tabs in the same browser count once.${initial !== null ? ` Total visits includes an opening balance of ${initial.toLocaleString("en-US")}.` : ""}`,
+    refreshHint: "Counts refresh every 30 seconds while this page is visible and online.",
+  },
   monitoring: {
     title: "Model monitoring", description: "Track the latest responses, collection health and performance across channels.",
     overview: "Monitoring overview", monitored: "Monitored channels", observed: (count) => `${count} channels with results`,
@@ -473,7 +535,7 @@ export const en: Translations = {
     sort: "Sort models", sortFamily: "Model family", sortAttention: "Attention first", sortTtft: "Highest TTFT",
     allStatuses: "All statuses", failuresOnly: "Errors and overloads", staleOnly: "Stale and unmeasured",
     visibleCount: (visible, total) => `${visible} of ${total} channels`, noMatchingModels: "No models match these filters.",
-    selectHint: "Select cards to compare their performance trends.",
+    selectHint: "Select models, then compare their trends using the controls at the bottom.",
     selection: (count) => `${count} selected`, clearSelection: "Clear selection", selectModel: (name) => `Compare trends for ${name}`,
     compareSelection: "Compare selected models", noTrend: "No trend data in this time range.",
     noTrendHint: "Choose a longer range. A short window may fall between collection cycles.",
@@ -488,6 +550,17 @@ export const en: Translations = {
     triggerBusy: "Collection is already running. Wait for it to finish before starting another probe.",
     triggerFailed: "Could not start the probe.", metricGuide: "Metric guide", channelsGuide: "Channel guide",
     selectionMissing: "Some selected models have no results matching these filters.",
+    attentionChannels: "Channels needing attention", latestStateHint: "Latest results for the selected workload",
+    inspectModel: (name) => `View status for ${name}`, allChannelStates: "All channel statuses",
+    channelCount: (count) => `${count} channels`, attentionCount: (count) => `${count} need attention`,
+    viewAllAttention: "View all channels needing attention",
+    listView: "List view", compactView: "Compact", cardsView: "Cards", modelChannel: "Model / channel",
+    otherModels: "Other models", familyChannels: (family) => `${family} channels`,
+    compareFamily: (family) => `Compare ${family} channels`, compareChannels: "Compare channels",
+    collapseFamilies: "Collapse all", expandFamilies: "Expand all",
+    comparisonScope: "Comparison scope", familyCompare: "Compare a family", chooseFamily: "Choose a model family",
+    comparisonDock: "Selected model comparison", jumpToTrends: "Go to performance trends", compareShort: "Compare",
+    selectionNames: "Selected models", moreSelected: (count) => `and ${count} more`,
     grade: {
       names: enGradeNames,
       legendLabel: "Metric grades", legendScope: "graded per workload category", showCriteria: "View thresholds",

@@ -1,10 +1,11 @@
 # Backend Routers — API Endpoint Handlers
 
 ## Role
-FastAPI router modules defining all API endpoints (18 router modules, registered in `main.py`; `pricing.py` holds two routers).
+FastAPI router modules defining all API endpoints (19 router modules, registered in `main.py`; `pricing.py` holds two routers).
 `GET /api/health` (public liveness, `{"status": "ok"}`) is defined in `backend/main.py`, not in a router.
 
 ## Files
+- `presence.py` — `/api/presence`: public GET with `Cache-Control: no-store` and signed HttpOnly cookie bootstrap; POST accepts only configured same-origin browser heartbeats with a valid cookie and empty JSON. It intentionally does not require JWT. Both return aggregate counts only; storage errors are 503. `PRESENCE_ALLOWED_ORIGINS` is explicit because CloudFront replaces the origin Host header.
 - `auth.py` — `/api/auth/*` — login (public), register (EmailStr enforced), email approval, `/me` (JWT)
 - `admin.py` — `/api/admin/*` — reset-monitoring-data, users CRUD (admin only: `username == "admin"`)
 - `auto_probe.py` — `/api/auto-probe/*` — status (DB reservation + overdue state; `channel_intervals` / `channel_category_intervals` per-channel cadence, v2.29.0 — `{"anthropic": 300}` / `{"anthropic": 1800}` at the default since v2.29.1), latest (each model's latest row from completed auto runs within its own cadence window — `latest_results.py`, v2.29.0; not the rows of one run), trend, categories, anomalies?hours=&category= (automatic runs only) are public. `trigger` requires JWT and returns 202/409/503; scheduler/manual admission is serialized in `auto_prober.py`.

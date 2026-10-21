@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.34.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.35.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -27,7 +27,7 @@ CloudFront (d36s7ml54xwemr.cloudfront.net, alias llm-monitor.whchoi.net — edge
 Internal ALB
   ├── /api/*  → backend Fargate Task (FastAPI, port 8000)
   └── /*      → frontend Fargate Task (Next.js standalone, port 3000)
-                ├── /             — Dashboard (status + 66 model cards + trend)
+                ├── /             — Dashboard (status + named attention channels + 66 compact rows/cards + trend, fixed comparison controls)
                 ├── /?view=manual — 수동 프로브 (ProbeConfigPanel + StreamingView, 결과/차트/비교 탭, auth)
                 ├── /chat         — 챗봇 팝업 창 진입점 (Firefox/Safari, FloatingChat이 연다)
                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
@@ -328,6 +328,7 @@ Claude Platform on AWS 채널(anthropic:*)도 기본값에서는 매 사이클 �
 - **Public**: `/api/health`, `/api/auth/{login,register,approve}`, 모든 조회 GET — `/api/auto-probe/*`, `/api/results/*`, `/api/models`, `/api/cost/*`, `/api/reliability/*`, `/api/efficiency/*`, `/api/analysis/*`, `/api/parity/{catalog,latest,evidence}`, `/api/features/{catalog,latest,evidence}`, `/api/gptbench/*`, `/api/pricing`, `/api/pricing/export`, `/api/insights`·`/latest`, `GET /api/prompts`, `GET /api/probes/{run_id}`
 - **Auth required** (`Depends(get_current_user)`): `/api/auth/me`, `/api/auto-probe/trigger` (202 accepted / 409 active reservation), `/api/probes/run`, `/api/compare/run`, `/api/parity/trigger`, `/api/features/trigger`, `/api/prompts` (POST/DELETE, `/optimize`), `/api/insights/regenerate`·`/stream-regenerate`, `/api/chat/*`
 - **Admin only**: `/api/admin/*` (username == "admin") — `/api/admin/pricing/*` 검토 대기 단가 승인/거부 포함 (v2.30.0). admin 비밀번호는 `SEED_ADMIN_PASSWORD` env var (8자 이상)
+- **Visitor counts**: `GET /api/presence`는 공개 집계 조회와 서명된 HttpOnly 방문자 쿠키 준비, `POST /api/presence`는 JWT 없이 같은 Origin·전용 클라이언트 헤더·유효한 쿠키·빈 JSON 본문을 확인한 접속 신호다. 최근 90초의 브라우저를 접속자로 세고 누적값은 10,000부터 시작한다. `site_visitors`, `site_presence_totals`에 저장해 재배포와 여러 태스크에서 공유한다. IP나 브라우저 지문을 저장하지 않는다.
 
 ---
 
@@ -406,6 +407,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** �
 | `SEED_ADMIN_USERNAME` | `admin` | 시드 admin username |
 | `SEED_ADMIN_PASSWORD` | (필수, 8자 이상) | admin 시드 비번 (변경 시 자동 rotate) |
 | `PUBLIC_BASE_URL` | `https://d36s7ml54xwemr.cloudfront.net` | 승인 이메일 링크 base |
+| `PRESENCE_ALLOWED_ORIGINS` | CDK `presenceAllowedOrigins` context | 방문 확인 POST를 허용할 Origin의 쉼표 구분 목록. 운영 별칭과 CloudFront 도메인을 함께 지정한다. 값은 백엔드와 여섯 예약 태스크에 공통 주입한다 |
 | `DATABASE_URL` / `DB_*` | (CDK 주입) | RDS 연결 |
 | `ANTHROPIC_API_KEY` | (CDK 주입, secret) | CP on AWS envelope key |
 | `ANTHROPIC_WORKSPACE_ID` | (CDK 주입, secret) | CP on AWS workspace |

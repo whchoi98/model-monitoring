@@ -7,6 +7,28 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.35.0 — 2026-10-21
+
+### Added
+- **Persistent visitor counts.** Every main page shows active browsers from the last 90 seconds and total visits, starting from the requested opening balance of 10,000. Signed HttpOnly cookies and atomic PostgreSQL updates deduplicate reloads, retries and concurrent tabs. Counts survive service restarts; hidden/offline pages stop heartbeats and failed reads never become fabricated zero counts.
+- **접속 통계.** 주요 페이지 하단에 최근 90초 접속자 수와 총 접속수를 표시한다. 요청한 초기값 10,000부터 누적하며, 서명된 HttpOnly 쿠키와 PostgreSQL 트랜잭션으로 새로고침·재시도·여러 탭의 중복을 막는다. 재기동해도 누적값이 유지되고, 화면이 숨겨지거나 오프라인이면 접속 신호를 멈춘다. 조회 실패는 0으로 표시하지 않는다.
+- **Model comparison controls.** Compact rows and detailed cards, collapsible model families, family comparison presets, named attention channels and a fixed comparison dock.
+- **모델 비교 동선.** 간결한 목록과 상세 카드 전환, 모델 계열 접기, 계열별 비교, 이름이 보이는 확인 필요 채널, 고정 비교 영역을 추가했다.
+
+### Changed
+- Group navigation by purpose while keeping Unit Prices next to Dashboard. Preserve search, workload, period, layout and model selection in the URL. Improve Korean wrapping and expose health descriptions to assistive technology.
+- 메뉴를 용도별로 묶고 비용 단가는 대시보드 바로 뒤에 유지했다. 검색·워크로드·기간·보기 방식·모델 선택을 URL에 유지하며 한글 줄바꿈과 상태 설명의 접근성을 개선했다.
+
+### Fixed
+- Reserve the measured comparison-dock clearance for keyboard scrolling and footer content; remove it when the selection clears.
+- 고정 비교 영역 높이를 키보드 스크롤과 하단 여백에 반영해 포커스와 접속 통계가 가려지지 않게 했다. 선택 해제 시 여백을 복원한다.
+
+### Infra
+- Serialize table creation across backend and scheduled-task startups with a transaction-scoped PostgreSQL advisory lock. Carry the visitor origin allow-list in the backend service and all six shared-image task definitions.
+- 백엔드와 예약 작업이 동시에 기동해도 테이블 생성이 충돌하지 않도록 트랜잭션 범위 advisory lock을 적용했다. 접속 집계의 Origin 허용 목록을 백엔드 서비스와 공용 이미지의 여섯 태스크 정의에 함께 주입한다.
+- Production frontend builds explicitly inject the verified RUM endpoint and accepted SSM key.
+- 운영 프런트엔드 빌드에는 확인한 RUM 수집 주소와 SSM 키를 명시적으로 주입한다.
+
 ## v2.34.0 — 2026-10-21
 
 ### Added

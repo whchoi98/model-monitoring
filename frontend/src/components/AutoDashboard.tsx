@@ -13,12 +13,14 @@ import { useAuth } from "@/lib/auth-context";
 import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { isExcludedModel, sortResults } from "@/lib/sortModels";
-import { defaultTrendSelection, parseTrendQuery } from "@/lib/trendSelection";
+import { parseTrendQuery } from "@/lib/trendSelection";
 import { buildMonitoringRows, cadenceResolver, filterMonitoringRows, getFreshness, type HealthFilter, type ModelSort } from "@/lib/monitoring";
 import { formatAge, formatDateTime, parseTimestamp } from "@/lib/format";
 import ModelStatusGrid from "./ModelStatusGrid";
 import MonitoringOverview from "./MonitoringOverview";
+import ModelComparisonDock from "./ModelComparisonDock";
 import TrendChart from "./TrendChart";
+import TrendComparisonControls from "./TrendComparisonControls";
 import InsightsPanel from "./InsightsPanel";
 import RefreshControls from "./RefreshControls";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
@@ -46,6 +48,12 @@ function updateQuery(updates: Record<string, string | null>) {
   window.history.replaceState(null, "", `${url.pathname}${url.search}${url.hash}`);
 }
 
+function focusSection(id: "model-status" | "performance-trends") {
+  const section = document.getElementById(id);
+  section?.querySelector<HTMLElement>("h2")?.focus({ preventScroll: true });
+  section?.scrollIntoView({ block: "start" });
+}
+
 export default function AutoDashboard() {
   const t = useT();
   const m = t.monitoring;
@@ -62,6 +70,8 @@ export default function AutoDashboard() {
   const search = params.get("q") ?? "";
   const healthFilter = HEALTH_FILTERS.includes(params.get("health") as HealthFilter) ? params.get("health") as HealthFilter : "all";
   const sort = MODEL_SORTS.includes(params.get("sort") as ModelSort) ? params.get("sort") as ModelSort : "family";
+  const layout = params.get("layout") === "cards" ? "cards" : "compact";
+  const selectedNames = useMemo(() => sortResults(Array.from(selectedModels, (model_name) => ({ model_name }))).map((row) => row.model_name), [selectedModels]);
 
   const status = useAsyncResource("auto-status", fetchAutoStatus);
   const latest = useAsyncResource(`auto-latest:${category ?? ""}`, (signal) => fetchAutoLatest(category, signal));
@@ -116,6 +126,23 @@ export default function AutoDashboard() {
     selectModels(selected);
   }, [selectModels]);
   const resetCardFilters = () => updateQuery({ q: null, health: null, sort: null });
+  const filterFromOverview = useCallback((value: HealthFilter) => {
+    updateQuery({ health: value === "all" ? null : value, q: null });
+    focusSection("model-status");
+  }, []);
+  const inspectModel = useCallback((name: string) => {
+    updateQuery({ q: name, health: null });
+    focusSection("model-status");
+  }, []);
+  const compareFamily = useCallback((names: string[]) => {
+    selectModels(new Set(names));
+    focusSection("performance-trends");
+  }, [selectModels]);
+  const viewTrends = useCallback(() => focusSection("performance-trends"), []);
+  const clearSelection = useCallback(() => {
+    selectModels(new Set());
+    focusSection("model-status");
+  }, [selectModels]);
 
   const lastRun = status.data?.last_run_time;
   const nextRun = parseTimestamp(status.data?.next_run_time);
@@ -157,7 +184,7 @@ export default function AutoDashboard() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <h1 className="text-2xl font-bold tracking-tight text-gray-100">{m.title}</h1>
-          <p className="mt-1 text-sm text-gray-500">{m.description}</p>
+          <p className="ui-copy mt-1 text-sm text-gray-500">{m.description}</p>
         </div>
         <nav aria-label={m.overview} className="flex flex-wrap gap-2">
           <a className="ui-button" href="#model-status">{t.modelStatus}</a>
@@ -176,7 +203,7 @@ export default function AutoDashboard() {
             <span>{t.common.updatedAt}: {formatAge(latest.updatedAt, lang, now)}</span>
           </p>
           <MonitoringOverview rows={rows} catalogKnown={catalogKnown} expectedCount={status.data?.expected_model_count} filter={healthFilter}
-            onFilterChange={(value) => updateQuery({ health: value === "all" ? null : value, q: null })}
+            onFilterChange={filterFromOverview} onInspectModel={inspectModel}
             selectedModels={selectedModels} onToggleModel={toggleModel} />
         </div>
       )}
@@ -247,10 +274,18 @@ export default function AutoDashboard() {
         <section id="model-status" aria-label={t.modelStatus} className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <h2 className="text-lg font-semibold text-gray-100">{t.modelStatus}</h2>
-              <p className="mt-1 text-xs text-gray-500">{m.selectHint}</p>
+              <h2 tabIndex={-1} className="w-fit rounded-sm text-lg font-semibold text-gray-100">{t.modelStatus}</h2>
+              <p className="ui-copy mt-1 text-xs text-gray-500">{m.selectHint}</p>
             </div>
-            <span className="text-xs tabular-nums text-gray-500">{m.visibleCount(visibleRows.length, rows.length + unlistedCount)}</span>
+            <div className="flex flex-wrap items-center gap-3">
+              <span className="text-xs tabular-nums text-gray-500">{m.visibleCount(visibleRows.length, rows.length + unlistedCount)}</span>
+              <div role="group" aria-label={m.listView} className="flex gap-1 rounded-lg border border-gray-800 bg-gray-900/50 p-1">
+                <button type="button" aria-pressed={layout === "compact"} className={layout === "compact" ? "ui-button-primary" : "ui-button"}
+                  onClick={() => updateQuery({ layout: "compact" })}>{m.compactView}</button>
+                <button type="button" aria-pressed={layout === "cards"} className={layout === "cards" ? "ui-button-primary" : "ui-button"}
+                  onClick={() => updateQuery({ layout: "cards" })}>{m.cardsView}</button>
+              </div>
+            </div>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <label className="min-w-0 flex-1 sm:max-w-sm">
@@ -268,14 +303,8 @@ export default function AutoDashboard() {
           <div className="flex flex-wrap gap-2" role="group" aria-label={m.statusFilter}>
             {HEALTH_FILTERS.map((filter) => <button type="button" key={filter} aria-pressed={healthFilter === filter} onClick={() => updateQuery({ health: filter === "all" ? null : filter })} className={healthFilter === filter ? "ui-button-primary" : "ui-button"}>{filterLabels[filter]}</button>)}
           </div>
-          {selectedModels.size > 0 && (
-            <div className="flex flex-wrap items-center gap-3 rounded-xl border border-blue-500/30 bg-blue-500/10 px-4 py-3">
-              <span className="text-xs font-medium text-blue-300">{m.selection(selectedModels.size)}</span>
-              <a href="#performance-trends" className="ui-button-primary">{m.compareSelection}</a>
-              <button type="button" className="ui-button" onClick={() => selectModels(new Set())}>{m.clearSelection}</button>
-            </div>
-          )}
-          {visibleRows.length > 0 ? <ModelStatusGrid rows={visibleRows} grouped={sort === "family"} selectedModels={selectedModels} onToggleModel={toggleModel} now={nowMinute} /> : (
+          {visibleRows.length > 0 ? <ModelStatusGrid key={`${search}:${healthFilter}:${sort}`} rows={visibleRows} grouped={sort === "family"} layout={layout}
+            selectedModels={selectedModels} onToggleModel={toggleModel} onCompareFamily={compareFamily} now={nowMinute} /> : (
             <DataEmpty title={unlistedCount ? m.catalogRequired : rows.length ? m.noMatchingModels : t.noDataYet}
               description={unlistedCount ? m.unlistedChannels(unlistedCount) : rows.length ? t.common.noDataHint : t.noDataDesc}>
               {unlistedCount ? <button type="button" className="ui-button" onClick={catalog.refresh}>{t.common.retry}</button>
@@ -287,18 +316,14 @@ export default function AutoDashboard() {
 
       <section id="performance-trends" aria-label={m.trends} className="space-y-4">
         <div>
-          <h2 className="text-lg font-semibold text-gray-100">{m.trends}</h2>
-          <p className="mt-1 text-xs leading-relaxed text-gray-500">{m.trendHint}</p>
+          <h2 tabIndex={-1} className="w-fit rounded-sm text-lg font-semibold text-gray-100">{m.trends}</h2>
+          <p className="ui-copy mt-1 text-xs leading-relaxed text-gray-500">{m.trendHint}</p>
         </div>
         <div role="group" aria-label={t.trendRange} className="flex flex-wrap items-center gap-2">
           <span className="mr-1 shrink-0 text-xs font-medium text-gray-400">{t.trendRange}</span>
           {TREND_RANGE_HOURS.map((range) => <button type="button" key={range} aria-pressed={hours === range} onClick={() => updateQuery({ hours: String(range) })} className={hours === range ? "ui-button-primary" : "ui-button"}>{t.trendRangeLabel(range)}</button>)}
         </div>
-        <div className="flex flex-wrap items-center gap-2">
-          <button type="button" className={selectedModels.size === 0 ? "ui-button-primary" : "ui-button"} onClick={() => selectModels(new Set())} aria-pressed={selectedModels.size === 0}>{t.allModels}</button>
-          <button type="button" className="ui-button" onClick={() => selectModels(defaultTrendSelection(availableModels))} title={t.repModelsHint}>{t.repModels}</button>
-          {selectedModels.size > 0 && <span className="text-xs text-gray-400">{m.selection(selectedModels.size)}</span>}
-        </div>
+        <TrendComparisonControls availableModels={availableModels} selectedModels={selectedModels} onSelect={selectModels} />
         <details className="rounded-xl border border-gray-800 bg-gray-900/50 p-3" open={selectedModels.size > 0 ? true : undefined}>
           <summary className="cursor-pointer text-xs font-medium text-gray-300">{m.selectHint}</summary>
           <div className="mt-3 flex max-h-52 flex-wrap gap-2 overflow-auto p-1">
@@ -333,6 +358,7 @@ export default function AutoDashboard() {
           {Object.values(t.channels).map((channel) => <div key={channel.name} className="text-xs"><span className="font-semibold text-gray-300">{channel.name}</span><p className="mt-1 leading-relaxed text-gray-500">{channel.desc}</p><code className="mt-2 block break-all text-blue-300">{channel.endpoint}</code></div>)}
         </div>
       </details>
+      {selectedNames.length > 0 && <ModelComparisonDock names={selectedNames} onCompare={viewTrends} onClear={clearSelection} />}
     </div>
   );
 }

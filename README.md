@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.34.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.35.0-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -26,6 +26,8 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 
 ## Features
 
+- **Faster model comparison** — compact rows or detailed cards, family collapse and comparison, named attention channels and a fixed comparison dock. Search, period, workload and selections remain shareable in the URL.
+- **Visitor counts** — the footer shows browsers active within 90 seconds and persistent total visits, including an opening balance of 10,000. Refreshes and multiple tabs share one signed visitor identity; counts update every 30 seconds while visible and online.
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
 - **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 66 monitored channels. The 11 Claude Platform on AWS channels are probed every cycle with the same category as every other channel (v2.29.1 reverted the v2.29.0 10-minute cadence); setting `ANTHROPIC_CP_PROBE_INTERVAL_S=600` switches them to every other cycle with their own category rotation, an operational lever if the monthly usage cap returns.
 - **Eleven analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison, each probe priced at the unit price in effect at its time), Unit Prices (Standard input/output price per model family and channel, prompt-caching and long-context prices (GPT and, since v2.33.0, Claude Haiku 5.5), the OpenAI official price beside the AWS Bedrock channels, numbered source footnotes and CSV / Markdown / JSON download, v2.30.0, v2.31.0), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (21-channel TTFB/TTFT bench over Bedrock Mantle in-region and cross-region profiles — GPT 5.4/5.5/5.6 Terra, GPT-6 Astra/Sol/Luna and GPT-6.1 Sol, 15-min cycles, one lane per host in parallel since v2.32.1: cross-region plus each Mantle region), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
@@ -323,6 +325,7 @@ Key endpoint groups:
 | Insights | `/api/insights/*` | regenerate requires JWT |
 | Admin | `/api/admin/*` | admin role only |
 | Health | `/api/health` | public |
+| Visitor counts | `/api/presence` | GET public; POST requires an allowed Origin and signed visitor cookie |
 
 See `docs/api-reference.md` for request and response details of each endpoint.
 
@@ -362,6 +365,8 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 
 ## 주요 기능
 
+- **모델 비교 동선** — 간결한 목록과 상세 카드, 계열 접기와 비교, 이름이 보이는 확인 필요 채널, 고정 비교 영역을 제공한다. 검색·기간·워크로드·선택 상태는 URL로 공유할 수 있다.
+- **접속 통계** — 하단에 최근 90초 접속자와 총 접속수를 표시한다. 초기값 10,000을 포함해 누적하며 새로고침과 여러 탭의 중복을 막는다. 화면이 보이고 온라인일 때 30초마다 갱신한다.
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
 - **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 66개 모니터링 채널에 호출합니다. Claude Platform on AWS 11채널도 매 사이클 다른 채널과 같은 카테고리로 호출합니다(v2.29.1에서 v2.29.0의 10분 주기를 되돌렸습니다). `ANTHROPIC_CP_PROBE_INTERVAL_S=600`으로 설정하면 이 채널만 두 사이클에 한 번, 카테고리를 따로 순환하며 호출하므로 월간 사용 한도가 다시 걸릴 때 운영 레버로 쓸 수 있습니다.
 - **11개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교, 프로브마다 그 시각에 유효했던 단가로 계산), 비용 단가(모델 패밀리와 채널별 Standard 입력/출력 단가, 프롬프트 캐싱과 긴 컨텍스트 단가(GPT, v2.33.0부터 Claude Haiku 5.5), AWS Bedrock 채널 옆 OpenAI 공식 가격, 번호 각주 출처, CSV / Markdown / JSON 다운로드, v2.30.0, v2.31.0), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle 인리전과 교차 리전 프로파일 21채널 TTFB/TTFT 벤치 — GPT 5.4/5.5/5.6 Terra, GPT-6 Astra/Sol/Luna, GPT-6.1 Sol, 15분 주기, v2.32.1부터 호스트별 갈래 병렬: 교차 리전 한 갈래와 Mantle 리전마다 한 갈래), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
@@ -659,6 +664,7 @@ https://<your-cloudfront-domain>/openapi.json
 | 인사이트 | `/api/insights/*` | 재생성 시 JWT 필요 |
 | 관리자 | `/api/admin/*` | admin 전용 |
 | 헬스 체크 | `/api/health` | 공개 |
+| 접속 통계 | `/api/presence` | GET 공개, POST는 허용된 Origin과 서명된 방문자 쿠키 필요 |
 
 엔드포인트별 요청과 응답 상세는 `docs/api-reference.md`를 참고합니다.
 

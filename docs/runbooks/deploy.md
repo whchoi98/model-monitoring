@@ -16,6 +16,12 @@
 
 ## 1. 로컬 검증
 
+v2.35.0부터 접속 집계는 `site_visitors`와 `site_presence_totals`를 사용한다. 새 테이블은
+공통 `create_tables()`가 트랜잭션 advisory lock으로 생성하며 총 접속수의 초기값 10,000은
+첫 방문 기록과 함께 한 번만 저장한다. 재배포 때 값을 덮어쓰거나 초기화하지 않는다.
+`cdk/cdk.json`의 `presenceAllowedOrigins`에는 운영 별칭과 CloudFront Origin을 함께 지정한다.
+이 값은 backend와 여섯 예약 태스크에 공통 주입되므로 두 스택을 함께 배포한다.
+
 ```bash
 make verify
 ```

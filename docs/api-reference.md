@@ -9,6 +9,40 @@ Liveness check (`backend/main.py`). Always returns `{"status": "ok"}`; it does n
 
 ---
 
+## Visitor Counts (Public, v2.35.0)
+
+`GET /api/presence` returns aggregate browser counts and prepares a signed HttpOnly
+cookie at `/api/presence`. Reading does not increment the total. Responses use
+`Cache-Control: no-store`.
+
+`POST /api/presence` accepts an empty JSON object, the cookie, an Origin listed in
+`PRESENCE_ALLOWED_ORIGINS`, and `x-llm-monitor-client: 1`. JWT is not required.
+Only the first valid heartbeat for a browser increments the persistent total.
+Retries, reloads and concurrent tabs remain idempotent.
+
+```json
+{
+  "active_visitors": 1,
+  "total_visitors": 10001,
+  "initial_total": 10000,
+  "window_seconds": 90,
+  "as_of": "2026-10-21T08:00:00+00:00",
+  "counting_since": "2026-10-21T07:59:00+00:00"
+}
+```
+
+The example includes an opening balance of 10,000 and one new browser.
+Activity expires after 90 seconds; the lifetime marker and total remain in
+PostgreSQL. Before the first heartbeat, `counting_since` is `null`.
+The client sends heartbeats every 30 seconds while visible and online, and uses
+Web Locks to serialize cookie bootstrap across tabs. A storage failure returns
+503 with `Retry-After: 5`; invalid origin/client headers return 403, an invalid
+cookie 401, and client-supplied count fields 422.
+
+접속자는 최근 90초 동안 활동한 브라우저 기준이다. 총 접속수에는 사용자 요청
+초기값 10,000이 포함되며 새로고침과 여러 탭을 중복 집계하지 않는다.
+집계 실패 시 숫자를 0으로 바꾸지 않는다. IP나 브라우저 지문은 저장하지 않는다.
+
 ## Authentication
 
 ### POST /api/auth/login

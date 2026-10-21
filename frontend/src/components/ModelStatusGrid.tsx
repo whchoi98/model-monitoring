@@ -1,17 +1,15 @@
 "use client";
 
-import { useId } from "react";
-import { useLang, useT } from "@/lib/i18n-context";
+import { memo, useId, useMemo, useState } from "react";
+import { useT } from "@/lib/i18n-context";
 import type { MetricGradeTexts } from "@/lib/i18n";
 import type { MonitoringRow } from "@/lib/monitoring";
-import { formatAge, formatDateTime } from "@/lib/format";
-import { groupByFamily } from "@/lib/sortModels";
+import { FAMILY_ORDER, familyRank, groupByFamily } from "@/lib/sortModels";
 import {
   FALLBACK_LATENCY_THRESHOLDS, GRADE_MARKER, GRADE_TEXT_CLASS, LATENCY_THRESHOLDS, TPS_THRESHOLD, WORKLOAD_CATEGORY_IDS,
-  describeGrade, formatMetricValue, roundForDisplay, type GradeRule, type GradeThreshold,
+  type GradeThreshold,
 } from "@/lib/metricGrade";
-import { HealthBadge } from "./MonitoringOverview";
-import ModelName from "./ModelName";
+import ModelStatusItem, { type ModelLayout } from "./ModelStatusItem";
 
 interface Props {
   rows: MonitoringRow[];
@@ -19,16 +17,11 @@ interface Props {
   selectedModels: Set<string>;
   now: number;
   grouped?: boolean;
+  layout?: ModelLayout;
+  onCompareFamily?: (names: string[]) => void;
 }
 
 const GRADES = ["normal", "warning", "critical"] as const;
-
-/** 등급 규칙 → 툴팁 문구. 측정값 없음(none)은 문구 없음. */
-function gradeHint(g: MetricGradeTexts, rule: GradeRule, metric: string): string | undefined {
-  if (rule.grade === "none") return undefined;
-  const scope = rule.lowerIsWorse ? g.allWorkloads : rule.category ? g.categories[rule.category] : g.defaultCategory;
-  return g.hint({ grade: rule.grade, metric, scope, warnAt: rule.warnAt, critAt: rule.critAt, unit: rule.unit, lowerIsWorse: rule.lowerIsWorse });
-}
 
 /** 경고(▲)/위험(◆) 경계값 한 쌍 — 기준표 셀. 모양 표지는 스크린 리더에서 숨기고 대신 등급 이름을 읽어 준다. */
 function ThresholdPair({ g, threshold, unit }: { g: MetricGradeTexts; threshold: GradeThreshold; unit: "ms" | "tok/s" }) {
@@ -103,120 +96,80 @@ function MetricGradeLegend() {
   );
 }
 
-export default function ModelStatusGrid({ rows, onToggleModel, selectedModels, now, grouped = true }: Props) {
+function ModelStatusGrid({ rows, onToggleModel, selectedModels, now, grouped = true, layout = "compact", onCompareFamily }: Props) {
   const t = useT();
-  const { lang } = useLang();
   const m = t.monitoring;
   const idPrefix = useId();
-  const groups = grouped ? groupByFamily(rows.map((row) => ({ ...row, model_name: row.model.name }))) : [rows];
+  const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
+  const groups = useMemo(
+    () => grouped ? groupByFamily(rows.map((row) => ({ ...row, model_name: row.model.name }))) : [rows],
+    [rows, grouped],
+  );
+  const familyKey = (group: MonitoringRow[]) => FAMILY_ORDER[familyRank(group[0]?.model.name ?? "")] ?? "other";
+  const allCollapsed = groups.length > 0 && groups.every((group) => collapsed.has(familyKey(group)));
 
   return (
     <div className="space-y-4">
-      <MetricGradeLegend />
-      {groups.map((group, groupIndex) => (
-      <div key={group[0]?.model.id ?? "models"} className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
-      {group.map(({ model, result, health, freshness }, index) => {
-        const selected = selectedModels.has(model.name);
-        const success = result?.status === "success";
-        // 성공한 결과만 등급을 매긴다 — 값 텍스트 색은 워크로드 카테고리별 절대 기준(lib/metricGrade.ts).
-        // 표시 정밀도로 반올림한 값으로 판정해 보이는 숫자와 색·툴팁이 어긋나지 않게 한다.
-        const metrics = success && result ? ([
-          { key: "ttft", name: "TTFT", raw: result.ttft_ms, unit: "ms" },
-          { key: "total", name: t.metrics.totalLatency.name, raw: result.total_latency_ms, unit: "s" },
-          { key: "tps", name: "TPS", raw: result.tps, unit: "tok/s" },
-        ] as const).map((metric) => {
-          const shown = roundForDisplay(metric.key, metric.raw);
-          const rule = describeGrade(metric.key, shown, result.category);
-          return { ...metric, value: formatMetricValue(metric.key, shown), rule, hint: gradeHint(m.grade, rule, metric.name) };
-        }) : [];
-        const issues = metrics.filter((metric) => metric.rule.grade === "warning" || metric.rule.grade === "critical");
-        const issuesId = issues.length ? `${idPrefix}-grade-${groupIndex}-${index}` : undefined;
-        return (
-          <article
-            key={model.id}
-            className={`min-w-0 rounded-xl border bg-gray-900/50 transition-colors ${
-              selected ? "border-blue-500 ring-1 ring-blue-500/40"
-                : health === "error" ? "border-rose-500/35"
-                  : health === "overloaded" || health === "stale" ? "border-amber-500/30" : "border-gray-800"
-            }`}
-          >
-            <button
-              type="button"
-              aria-label={m.selectModel(model.name)}
-              aria-pressed={selected}
-              aria-describedby={issuesId}
-              onClick={() => onToggleModel(model.name)}
-              className="block w-full rounded-xl p-4 text-left hover:bg-gray-800/25"
-            >
-              <span className="mb-3 flex items-start justify-between gap-2">
-                <span className="min-w-0">
-                  <span className="block text-sm font-semibold leading-snug text-gray-200"><ModelName name={model.name} /></span>
-                  <code className="mt-1 block truncate text-[11px] text-gray-500" title={model.id}>{model.id}</code>
-                </span>
-                <HealthBadge health={health} />
-              </span>
-              {success && result ? (
-                <span className="grid grid-cols-3 gap-2">
-                  {metrics.map((metric) => (
-                    <span key={metric.key} className="min-w-0">
-                      <span className="block text-[11px] text-gray-500">{metric.name}</span>
-                      {/* 값, 단위, 표지를 각각 flex 항목으로 두어 좁은 열(320px 화면의 3열)에서는 표지 앞에서 줄바꿈한다 —
-                          한 줄로 넘치면 표지가 옆 열의 값에 붙어 보인다. */}
-                      <span
-                        data-grade={metric.rule.grade}
-                        title={metric.hint}
-                        className={`mt-1 flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-base font-medium tabular-nums ${GRADE_TEXT_CLASS[metric.rule.grade]}`}
-                      >
-                        <span>{metric.value}</span>
-                        {metric.value !== "—" && <span className="text-[11px] font-normal text-gray-500">{metric.unit}</span>}
-                        {GRADE_MARKER[metric.rule.grade] && (
-                          <span aria-hidden="true" data-marker={metric.rule.grade} className="text-xs">{GRADE_MARKER[metric.rule.grade]}</span>
-                        )}
-                      </span>
-                    </span>
-                  ))}
-                </span>
-              ) : (
-                <span className={`line-clamp-2 break-words text-xs leading-relaxed ${result?.status === "overloaded" ? "text-amber-300" : result ? "text-rose-300" : "text-gray-400"}`}>
-                  {result?.status === "overloaded" ? t.overloadedHint : result?.error_message || m.missingHint}
-                </span>
-              )}
-              {success && result && (
-                <span className="mt-3 block text-[11px] text-gray-500">
-                  {t.metrics.inputTokens.name}: {result.input_tokens ?? "—"} · {t.metrics.outputTokens.name}: {result.output_tokens ?? "—"}
-                </span>
-              )}
-              <span className="mt-3 flex flex-wrap items-center justify-between gap-1 border-t border-gray-800 pt-2 text-[11px] text-gray-500">
-                <span>{selected ? `✓ ${m.selection(1)}` : m.lastResult}</span>
-                <span title={formatDateTime(result?.timestamp, lang)}>
-                  {result?.timestamp ? formatAge(result.timestamp, lang, now) : "—"}
-                </span>
-              </span>
-              {(freshness === "stale" || (result && freshness === "unknown")) && (
-                <span className="mt-2 block text-xs leading-relaxed text-amber-300">
-                  {freshness === "stale" ? m.staleHint : m.unknownTime}
-                </span>
-              )}
-              {/* 버튼 이름은 aria-label이라 내부 값이 읽히지 않는다 — 경고/위험 지표만 설명으로 연결 */}
-              {issuesId && (
-                <span id={issuesId} className="sr-only">
-                  {issues.map((metric) => `${metric.name} ${metric.value} ${metric.unit}, ${metric.hint}`).join(". ")}
-                </span>
-              )}
-            </button>
-            {result?.error_message && (
-              <details className="mx-4 mb-3 border-t border-gray-800 pt-2">
-                <summary className="cursor-pointer text-xs text-gray-400">{m.showDetails}</summary>
-                <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words rounded-lg bg-gray-950 p-3 text-xs leading-relaxed text-rose-300">
-                  {result.error_message}
-                </pre>
-              </details>
-            )}
-          </article>
-        );
-      })}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <MetricGradeLegend />
+        {grouped && (
+          <button type="button" className="ui-button shrink-0" onClick={() => setCollapsed(allCollapsed ? new Set() : new Set(groups.map(familyKey)))}>
+            {allCollapsed ? m.expandFamilies : m.collapseFamilies}
+          </button>
+        )}
       </div>
+      {layout === "compact" && (
+        <div aria-hidden="true" className="hidden grid-cols-[minmax(0,1fr)_21rem] gap-6 px-4 text-[11px] font-medium text-gray-500 md:grid">
+          <span>{m.modelChannel}</span>
+          <div className="grid grid-cols-3 gap-2"><span>TTFT</span><span>{t.metrics.totalLatency.name}</span><span>TPS</span></div>
+        </div>
+      )}
+      {groups.map((group, groupIndex) => (
+        <div key={grouped ? familyKey(group) : "flat"} className="space-y-2">
+          {grouped && (
+            <div className="flex items-center justify-between gap-3">
+              <h3 className="min-w-0 flex-1">
+                <button
+                  type="button"
+                  className="flex min-h-10 w-full flex-wrap items-center gap-x-2 gap-y-1 rounded-lg py-1 text-left"
+                  aria-label={m.familyChannels(familyKey(group) === "other" ? m.otherModels : familyKey(group))}
+                  aria-expanded={!collapsed.has(familyKey(group))}
+                  aria-controls={`${idPrefix}-family-${groupIndex}`}
+                  onClick={() => setCollapsed((previous) => {
+                    const next = new Set(previous);
+                    if (next.has(familyKey(group))) next.delete(familyKey(group));
+                    else next.add(familyKey(group));
+                    return next;
+                  })}
+                >
+                  <span aria-hidden="true" className="w-3 text-xs text-gray-500">{collapsed.has(familyKey(group)) ? "▸" : "▾"}</span>
+                  <span className="text-sm font-semibold text-gray-200">{familyKey(group) === "other" ? m.otherModels : familyKey(group)}</span>
+                  <span className="text-[11px] font-normal text-gray-500">{m.channelCount(group.length)}</span>
+                  {group.some((row) => row.health !== "healthy") && (
+                    <span className="whitespace-nowrap text-[11px] font-normal text-amber-300">{m.attentionCount(group.filter((row) => row.health !== "healthy").length)}</span>
+                  )}
+                </button>
+              </h3>
+              {onCompareFamily && (
+                <button type="button" className="ui-button shrink-0"
+                  aria-label={m.compareFamily(familyKey(group) === "other" ? m.otherModels : familyKey(group))}
+                  onClick={() => onCompareFamily(group.map((row) => row.model.name))}>
+                  {m.compareChannels}
+                </button>
+              )}
+            </div>
+          )}
+          <div id={`${idPrefix}-family-${groupIndex}`}
+            className={grouped && collapsed.has(familyKey(group)) ? "hidden" : layout === "cards" ? "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" : "grid grid-cols-1 gap-1.5"}>
+            {group.map((row) => (
+              <ModelStatusItem key={row.model.id} row={row} selected={selectedModels.has(row.model.name)}
+                onToggleModel={onToggleModel} now={now} layout={layout} />
+            ))}
+          </div>
+        </div>
       ))}
     </div>
   );
 }
+
+export default memo(ModelStatusGrid);
