@@ -195,7 +195,7 @@ def test_a_generation_longer_than_the_read_timeout_is_saved_in_both_languages(da
     assert [r.outcome for r in fake.requests] == ["completed", "completed"]
 
 
-def test_requests_carry_the_unchanged_prompts_with_sonnet55_config(dataset, fake):
+def test_requests_carry_the_unchanged_prompts_with_haiku55_config(dataset, fake):
     insights_runner.run_once("6h")
     saved = _only_saved(dataset)
     for lang in ("ko", "en"):
@@ -203,13 +203,13 @@ def test_requests_carry_the_unchanged_prompts_with_sonnet55_config(dataset, fake
         system, user_text = insights_runner._build_prompt("6h", saved.model_breakdown, lang)
         assert req.body["system"] == [{"text": system}]
         assert req.body["messages"] == [{"role": "user", "content": [{"text": user_text}]}]
-        assert req.path == "/model/global.anthropic.claude-sonnet-5-5/converse-stream"
+        assert req.path == "/model/global.anthropic.claude-haiku-5-5/converse-stream"
         assert req.body["inferenceConfig"] == {"maxTokens": 8192}
 
 
 @pytest.mark.parametrize("helper", ["chat", "blocking", "stream", "collect"])
-def test_default_helpers_send_sonnet55_requests_without_deprecated_temperature(fake, helper):
-    """A stale model ID or sampling default would reject AI requests on Sonnet 5.5."""
+def test_default_helpers_send_haiku55_requests_without_deprecated_temperature(fake, helper):
+    """A stale model ID or sampling default would reject AI requests on Haiku 5.5."""
     messages = [{"role": "user", "content": [{"text": "Summarize the monitoring data."}]}]
     kwargs = {"messages": messages, "max_tokens": 128}
     fake.default = Blocking("summary", delay_s=0) if helper == "blocking" else Stream(["sum", "mary"])
@@ -229,13 +229,13 @@ def test_default_helpers_send_sonnet55_requests_without_deprecated_temperature(f
     assert text == "summary"
     (request,) = fake.requests
     operation = "converse" if helper == "blocking" else "converse-stream"
-    assert request.path == f"/model/global.anthropic.claude-sonnet-5-5/{operation}"
+    assert request.path == f"/model/global.anthropic.claude-haiku-5-5/{operation}"
     assert request.body["messages"] == messages
     assert request.body["inferenceConfig"] == {"maxTokens": 128}
 
 
 @pytest.mark.parametrize("lang", ["ko", "en"])
-def test_stream_regenerate_uses_sonnet55_without_temperature(dataset, fake, monkeypatch, lang):
+def test_stream_regenerate_uses_haiku55_without_temperature(dataset, fake, monkeypatch, lang):
     """The manual refresh caller must not reintroduce the removed sampling option."""
     monkeypatch.setattr(insights_router, "SessionLocal", dataset)
     app = FastAPI()
@@ -249,19 +249,19 @@ def test_stream_regenerate_uses_sonnet55_without_temperature(dataset, fake, monk
     assert "event: error" not in response.text
     assert _only_saved(dataset).summary_md == "AI summary"
     (request,) = fake.by_lang(lang)
-    assert request.path == "/model/global.anthropic.claude-sonnet-5-5/converse-stream"
+    assert request.path == "/model/global.anthropic.claude-haiku-5-5/converse-stream"
     assert request.body["inferenceConfig"] == {"maxTokens": 8192}
 
 
-def test_followups_keep_the_haiku_model_and_explicit_temperature(fake):
+def test_followups_use_haiku55_without_deprecated_temperature(fake):
     fake.default = Blocking('["Which model is fastest?", "What changed?", "Any errors?"]', delay_s=0)
     followups = asyncio.run(chat_router._generate_followups(
         "Show recent performance.", "The recent monitoring results show several healthy model channels.",
     ))
     assert followups == ["Which model is fastest?", "What changed?", "Any errors?"]
     (request,) = fake.requests
-    assert request.path == "/model/global.anthropic.claude-haiku-4-5-20251001-v1%3A0/converse"
-    assert request.body["inferenceConfig"] == {"maxTokens": 400, "temperature": 0.4}
+    assert request.path == "/model/global.anthropic.claude-haiku-5-5/converse"
+    assert request.body["inferenceConfig"] == {"maxTokens": 400}
 
 
 def test_ko_and_en_are_generated_concurrently(dataset, fake):

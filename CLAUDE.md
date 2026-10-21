@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.36.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.37.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -13,7 +13,7 @@
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
 - **Edge**: CloudFront VPC Origin → Internal ALB → ECS Fargate × 2 (backend, frontend). VPC Origin → ALB는 현재 VPC 내부 HTTP:80(`edge-stack.ts` `HTTP_ONLY`, 운영 cert 정착 전 임시 — ALB는 internal + private subnet + VPC CIDR SG), ALB에는 HTTPS:443 리스너도 있음
 - **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
-- **AI**: Claude Sonnet 5.5 챗봇 (4 tools) + Haiku 4.5 dynamic followups + Sonnet 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Sonnet 5.5 요청은 temperature를 보내지 않는다(v2.35.1)
+- **AI**: Claude Haiku 5.5 공개 챗봇 (4 tools) + Haiku 5.5 dynamic followups + Haiku 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Haiku 5.5 요청은 temperature를 보내지 않는다(v2.37.0)
 
 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/) (v2.0.0 당시 설계 기록 — 9개 모델, 인사이트 30분 주기 기준이라 현행과 다름).
 
@@ -44,7 +44,7 @@ Internal ALB
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 66 models × 1 workload preset (round-robin 6 categories);
   │                              Claude Platform on AWS 11채널(anthropic:*)도 매 사이클 같은 카테고리 (v2.29.1 복귀; ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 두 사이클에 한 번 + 자체 회전)
-  ├── Insights Fargate Task    → Sonnet 5.5 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row — v2.32.2부터 스트리밍 요약, 한국어와 영어 동시, 호출당 180초 상한, 태스크 예산 240초, Bedrock 호출 전에 읽기 트랜잭션 종료
+  ├── Insights Fargate Task    → Haiku 5.5 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row — v2.32.2부터 스트리밍 요약, 한국어와 영어 동시, 호출당 180초 상한, 태스크 예산 240초, Bedrock 호출 전에 읽기 트랜잭션 종료
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0)
   ├── GptBench Fargate Task    → 15분 주기 GPT 21채널(Mantle 인리전 12 + Global/US CRIS 9) × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1, GPT-6 Sol/Luna 6채널 v2.28.0, GPT-6.1 Sol 3채널 v2.32.0).
   │                              v2.32.1부터 호스트별 네 갈래(cris 9 = Global/US CRIS, mantle-us-east-1 6, mantle-us-east-2 3, mantle-us-west-2 3 = Mantle 리전마다 한 갈래)를 동시에 돌리고 갈래 안은 채널 하나씩 순차(워밍업 1 + GPT_BENCH_RUNS), 데드라인은 모든 갈래 공유, DB 저장은 메인 스레드.
@@ -86,6 +86,7 @@ model-monitoring/
 │   ├── price_history.py     # 유효 단가 조회, 행 단위 비용 서브쿼리(with_row_cost — /api/cost/*, /api/efficiency/score), verification(seed_only/verified/stale)
 │   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료 — 셀 각주나 메모가 인용한 출처만, 1..N 빈칸 없음, 운영 24개(오퍼 21, v2.33.0), v2.31.1, v2.32.0) + 숫자 직렬화
 │   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄, 확장 단가 7열), Markdown(머리말 공식 요금 페이지 링크 한 줄 v2.31.1, 제공사별 열 머리글, 셀 안 `<br>` 캐시와 긴 컨텍스트 줄, 고정 안내 9개 — 3번째 GPT US CRIS = In Region v2.31.1), JSON 내보내기 순수 함수
+│   ├── chat_access.py       # 공개 챗봇의 서명 쿠키·사용자별 actor·Origin 검사·요청 제한 (v2.37.0)
 │   ├── auth.py              # JWT + bcrypt + ADMIN_EMAIL=whchoi98@gmail.com
 │   ├── models.py            # ProbeResult.stop_reason, .category 컬럼 포함
 │   ├── schemas.py           # Pydantic; ProbeResultResponse.stop_reason Optional
@@ -108,7 +109,7 @@ model-monitoring/
 │       ├── results.py       # /api/results/* — stored results query + stats
 │       ├── models.py        # /api/models — AVAILABLE_MODELS list
 │       ├── prompts.py       # /api/prompts/* — prompt set CRUD + Bedrock OptimizePrompt (auth)
-│       ├── chat.py          # /api/chat/stream — Sonnet 5.5 + 4 tools + dynamic followups
+│       ├── chat.py          # /api/chat/stream — Haiku 5.5 + 4 tools + dynamic followups (public)
 │       ├── insights.py      # /api/insights/* — list/latest/stream-regenerate
 │       ├── cost.py          # /api/cost/* — summary, channel-compare, trend (행 단위 시점 단가, v2.30.0)
 │       ├── pricing.py       # /api/pricing(60초 캐시), /api/pricing/export(csv|md|json) 공개 + admin_router /api/admin/pricing/pending, approve, reject (v2.30.0)
@@ -326,8 +327,9 @@ Claude Platform on AWS 채널(anthropic:*)도 기본값에서는 매 사이클 �
 - **Admin email**: `whchoi98@gmail.com` (`backend/auth.py:ADMIN_EMAIL`)
   - SES region: `us-east-1`. **Sandbox 모드 시 sender/recipient 둘 다 verified identity 필요**
 - **Public**: `/api/health`, `/api/auth/{login,register,approve}`, 모든 조회 GET — `/api/auto-probe/*`, `/api/results/*`, `/api/models`, `/api/cost/*`, `/api/reliability/*`, `/api/efficiency/*`, `/api/analysis/*`, `/api/parity/{catalog,latest,evidence}`, `/api/features/{catalog,latest,evidence}`, `/api/gptbench/*`, `/api/pricing`, `/api/pricing/export`, `/api/insights`·`/latest`, `GET /api/prompts`, `GET /api/probes/{run_id}`
-- **Auth required** (`Depends(get_current_user)`): `/api/auth/me`, `/api/auto-probe/trigger` (202 accepted / 409 active reservation), `/api/probes/run`, `/api/compare/run`, `/api/parity/trigger`, `/api/features/trigger`, `/api/prompts` (POST/DELETE, `/optimize`), `/api/insights/regenerate`·`/stream-regenerate`, `/api/chat/*`
+- **Auth required** (`Depends(get_current_user)`): `/api/auth/me`, `/api/auto-probe/trigger` (202 accepted / 409 active reservation), `/api/probes/run`, `/api/compare/run`, `/api/parity/trigger`, `/api/features/trigger`, `/api/prompts` (POST/DELETE, `/optimize`), `/api/insights/regenerate`·`/stream-regenerate`
 - **Admin only**: `/api/admin/*` (username == "admin") — `/api/admin/pricing/*` 검토 대기 단가 승인/거부 포함 (v2.30.0). admin 비밀번호는 `SEED_ADMIN_PASSWORD` env var (8자 이상)
+- **Public chat** (`POST /api/chat/stream`, v2.37.0): JWT 없이 이용한다. 유효한 로그인은 사용자별 해시 actor, 비회원은 별도 서명 HttpOnly 쿠키의 해시 actor로 대화를 분리한다. `session_id`만 복사해 다른 사용자 대화를 읽을 수 없다. 성공·실패의 `final` 이벤트에 세션 ID를 담고 AgentCore는 필수 `eventTimestamp`, `includePayloads=True`로 대화를 기록·조회한다. 브라우저 Origin은 사이트 별칭만 허용하며 비회원은 백엔드 프로세스당 브라우저 6회/분·전체 30회/분을 초과하면 `429`와 `Retry-After: 60`을 받는다. 수동 프로브·프롬프트·인사이트 재생성의 인증은 그대로다.
 - **Visitor counts**: `GET /api/presence`는 공개 집계 조회와 서명된 HttpOnly 방문자 쿠키 준비, `POST /api/presence`는 JWT 없이 같은 Origin·전용 클라이언트 헤더·유효한 쿠키·빈 JSON 본문을 확인한 접속 신호다. 최근 90초의 브라우저를 접속자로 세고 누적값은 10,000부터 시작한다. `site_visitors`, `site_presence_totals`에 저장해 재배포와 여러 태스크에서 공유한다. IP나 브라우저 지문을 저장하지 않는다.
 
 ---

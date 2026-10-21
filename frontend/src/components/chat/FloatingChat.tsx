@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useChatFabVisibility } from "@/hooks/useChatFabVisibility";
 import { useUaPopupStrategy } from "@/hooks/useUaPopupStrategy";
-import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/i18n-context";
 import ChatModal from "./ChatModal";
 
@@ -30,7 +29,6 @@ const FAB_HIDDEN_CLASS = "translate-y-[calc(100%_+_2rem_+_env(safe-area-inset-bo
 export default function FloatingChat() {
   const { openChat } = useUaPopupStrategy();
   const [modalOpen, setModalOpen] = useState(false);
-  const { user, checking, openLogin } = useAuth();
   const { lang } = useLang();
   const popupRef = useRef<Window | null>(null);
   const fab = useChatFabVisibility(modalOpen);
@@ -60,23 +58,14 @@ export default function FloatingChat() {
     }
   }, [openChat]);
 
-  const handleClick = () => {
-    if (checking) return;
-    if (!user) {
-      openLogin(showChat);
-      return;
-    }
-    showChat();
-  };
 
   return (
     <>
       <button
         type="button"
-        onClick={handleClick}
+        onClick={showChat}
         onFocus={fab.onFocus}
         onBlur={fab.onBlur}
-        disabled={checking}
         data-chat-fab
         data-visible={fab.visible ? "true" : "false"}
         className={fab.visible ? FAB_CLASS : `${FAB_CLASS} ${FAB_HIDDEN_CLASS}`}

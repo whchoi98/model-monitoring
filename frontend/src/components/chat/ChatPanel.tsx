@@ -1,7 +1,6 @@
 "use client";
 
 import { useChatStream } from "@/hooks/useChatStream";
-import { useAuth } from "@/lib/auth-context";
 import { useLang } from "@/lib/i18n-context";
 import MessageList from "./MessageList";
 import ChatInput from "./ChatInput";
@@ -47,7 +46,6 @@ interface ChatPanelProps {
 export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps) {
   const { messages, isStreaming, error, followups, send, cancel, reset } = useChatStream();
   const { lang } = useLang();
-  const { user, checking, openLogin, error: authError, retry } = useAuth();
 
   const suggested = lang === "en" ? SUGGESTED_EN : SUGGESTED_KO;
   // 동적 followups가 있으면 사용, 없으면 (초기 상태) 정적 fallback 사용.
@@ -57,40 +55,11 @@ export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps
     send(q);
   };
 
-  if (checking && !user) {
-    return (
-      <div className="h-full flex items-center justify-center text-gray-500 text-sm">
-        {lang === "en" ? "Checking sign-in…" : "로그인 상태 확인 중…"}
-      </div>
-    );
-  }
-
-  if (!user) {
-    return (
-      <div className="h-full flex flex-col items-center justify-center text-center gap-3 px-6">
-        <div className="text-gray-300 text-sm">
-          {lang === "en" ? "Sign in to ask about your monitoring data." : "로그인하면 모니터링 데이터에 관해 질문할 수 있습니다."}
-        </div>
-        <button type="button" onClick={() => openLogin()} className="ui-button-primary">{lang === "en" ? "Login" : "로그인"}</button>
-        {authError && <button type="button" onClick={retry} className="ui-button">{lang === "en" ? "Retry sign-in check" : "로그인 상태 다시 확인"}</button>}
-        {variant === "modal" && onClose && (
-          <button
-            type="button"
-            onClick={onClose}
-            className="ui-button"
-          >
-            {lang === "en" ? "Close" : "닫기"}
-          </button>
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="chat-panel h-full min-w-0 flex flex-col bg-gray-900 text-gray-100">
       <div className="chat-panel-heading flex items-start justify-between gap-3 border-b border-gray-800 px-4 py-4">
         <div className="min-w-0">
-          <span className="mb-1 block text-xs font-semibold text-blue-400">Sonnet 5.5</span>
+          <span className="mb-1 block text-xs font-semibold text-blue-400">Haiku 5.5</span>
           <span className="block text-sm font-semibold">{lang === "en" ? "Bedrock Monitor Assistant" : "모니터링 AI 어시스턴트"}</span>
         </div>
         <div className="flex items-center gap-2">

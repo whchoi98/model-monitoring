@@ -1,82 +1,26 @@
 "use client";
 
-import { useCallback, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { ChatMessage } from "@/lib/types";
-import { chatStream } from "@/lib/api";
+import { chatStream, getToken } from "@/lib/api";
 
-// SSE 스트리밍 채팅 상태 훅.
-// - send(message): 사용자 메시지를 큐에 추가하고 backend SSE 호출.
-// - delta 이벤트를 받아 마지막 assistant 메시지에 누적.
-// - final 이벤트로 정확히 1회 종료.
 export function useChatStream() {
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [sessionId, setSessionId] = useState<string | null>(null);
   const [followups, setFollowups] = useState<string[]>([]);
-  const controllerRef = useRef<AbortController | null>(null);
-
-  const send = useCallback(
-    (text: string) => {
-      const trimmed = text.trim();
-      if (!trimmed || isStreaming) return;
-
-      setError(null);
-
-      const userMsg: ChatMessage = {
-        id: `u-${Date.now()}`,
-        role: "user",
-        text: trimmed,
-      };
-      const assistantMsg: ChatMessage = {
-        id: `a-${Date.now()}`,
-        role: "assistant",
-        text: "",
-      };
-
-      setMessages((prev) => [...prev, userMsg, assistantMsg]);
-      setIsStreaming(true);
-      setFollowups([]);  // 새 질문 시 옛 followups 초기화
-
-      const updateAssistant = (mutator: (m: ChatMessage) => ChatMessage) =>
-        setMessages((prev) => {
-          const last = prev[prev.length - 1];
-          if (!last || last.role !== "assistant") return prev;
-          return [...prev.slice(0, -1), mutator(last)];
-        });
-
-      const ctrl = chatStream(
-        { message: trimmed, session_id: sessionId },
-        {
-          onDelta: (delta) => updateAssistant((m) => ({ ...m, text: m.text + delta })),
-          onToolCall: (call) =>
-            updateAssistant((m) => ({
-              ...m,
-              toolCalls: [...(m.toolCalls ?? []), { name: call.name, input: call.input }],
-            })),
-          onWarning: (msg) => setError(`warning: ${msg}`),
-          onFollowups: (suggestions) => setFollowups(suggestions),
-          onFinal: (payload) => {
-            setIsStreaming(false);
-            if (payload.session_id) setSessionId(payload.session_id);
-            if (!payload.ok && payload.error) setError(payload.error);
-          },
-          onError: (err) => {
-            setError(err.message);
-            setIsStreaming(false);
-          },
-        },
-      );
-      controllerRef.current = ctrl;
-    },
-    [isStreaming, sessionId],
-  );
+  const controller = useRef<AbortController | null>(null);
+  const generation = useRef(0);
+  const busy = useRef(false);
 
   const cancel = useCallback(() => {
-    controllerRef.current?.abort();
+    generation.current++;
+    controller.current?.abort();
+    controller.current = null;
+    busy.current = false;
     setIsStreaming(false);
   }, []);
-
   const reset = useCallback(() => {
     cancel();
     setMessages([]);
@@ -84,6 +28,60 @@ export function useChatStream() {
     setSessionId(null);
     setFollowups([]);
   }, [cancel]);
+
+  useEffect(() => {
+    let token = getToken();
+    const identityChanged = () => {
+      const next = getToken();
+      if (next !== token) { token = next; reset(); }
+    };
+    window.addEventListener("auth-changed", identityChanged);
+    return () => {
+      window.removeEventListener("auth-changed", identityChanged);
+      generation.current++;
+      controller.current?.abort();
+    };
+  }, [reset]);
+
+  const send = useCallback((text: string) => {
+    const trimmed = text.trim();
+    if (!trimmed || busy.current) return;
+    busy.current = true;
+    const current = ++generation.current;
+    const active = () => generation.current === current;
+    setError(null);
+    const id = `${Date.now()}-${current}`;
+    setMessages(previous => [...previous,
+      { id: `u-${id}`, role: "user", text: trimmed },
+      { id: `a-${id}`, role: "assistant", text: "" },
+    ]);
+    setIsStreaming(true);
+    setFollowups([]);
+    const updateAssistant = (mutator: (message: ChatMessage) => ChatMessage) => {
+      if (!active()) return;
+      setMessages(previous => previous.map(message => message.id === `a-${id}` ? mutator(message) : message));
+    };
+    const finish = () => { busy.current = false; setIsStreaming(false); controller.current = null; };
+    controller.current = chatStream({ message: trimmed, session_id: sessionId }, {
+      onDelta: delta => updateAssistant(message => ({ ...message, text: message.text + delta })),
+      onToolCall: call => updateAssistant(message => ({
+        ...message, toolCalls: [...(message.toolCalls ?? []), { name: call.name, input: call.input }],
+      })),
+      onWarning: message => { if (active()) setError(message); },
+      onFollowups: suggestions => { if (active()) setFollowups(suggestions); },
+      onFinal: payload => {
+        if (!active()) return;
+        finish();
+        if (payload.session_id) setSessionId(payload.session_id);
+        if (!payload.ok) setError(payload.error || "The analysis could not be completed.");
+      },
+      onError: cause => {
+        if (!active()) return;
+        setError(cause.message);
+        finish();
+      },
+    });
+  }, [sessionId]);
 
   return { messages, isStreaming, error, sessionId, followups, send, cancel, reset };
 }

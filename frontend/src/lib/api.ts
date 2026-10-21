@@ -356,100 +356,73 @@ export function chatStream(
   callbacks: ChatStreamEvents,
 ): AbortController {
   const controller = new AbortController();
-
   (async () => {
+    let reader: ReadableStreamDefaultReader<Uint8Array> | undefined;
     try {
       const headers: Record<string, string> = {
-        "Content-Type": "application/json",
-        Accept: "text/event-stream",
+        "Content-Type": "application/json", Accept: "text/event-stream",
       };
       const token = getToken();
-      if (token) headers["Authorization"] = `Bearer ${token}`;
-
+      if (token) headers.Authorization = `Bearer ${token}`;
       const res = await authenticatedFetch(`${BASE}/api/chat/stream`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(body),
-        signal: controller.signal,
+        method: "POST", headers, credentials: "same-origin",
+        body: JSON.stringify(body), signal: controller.signal,
       });
-      if (!res.ok || !res.body) {
-        throw new Error(`chat stream failed: ${res.status}`);
+      if (!res.ok) {
+        const error = await res.json().catch(() => null);
+        throw new ApiError(res.status, typeof error?.detail === "string" ? error.detail : `Chat unavailable (HTTP ${res.status})`);
       }
-
-      const reader = res.body.getReader();
+      if (!res.body) throw new Error("The chat response was empty.");
+      reader = res.body.getReader();
       const decoder = new TextDecoder();
       let buffer = "";
-
-      while (true) {
+      let completed = false;
+      while (!completed && !controller.signal.aborted) {
         const { done, value } = await reader.read();
         if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-
-        // SSE 이벤트는 빈 줄(\n\n)로 분리됨.
-        let sep = buffer.indexOf("\n\n");
-        while (sep !== -1) {
-          const block = buffer.slice(0, sep);
-          buffer = buffer.slice(sep + 2);
-          sep = buffer.indexOf("\n\n");
-
-          let eventType = "message";
-          let dataLine = "";
+        buffer = (buffer + decoder.decode(value, { stream: true })).replace(/\r\n/g, "\n");
+        let boundary: number;
+        while ((boundary = buffer.indexOf("\n\n")) !== -1) {
+          const block = buffer.slice(0, boundary);
+          buffer = buffer.slice(boundary + 2);
+          let event = "";
+          const data: string[] = [];
           for (const line of block.split("\n")) {
-            if (line.startsWith("event:")) eventType = line.slice(6).trim();
-            else if (line.startsWith("data:")) dataLine = line.slice(5).trim();
+            if (line.startsWith("event:")) event = line.slice(6).trim();
+            if (line.startsWith("data:")) data.push(line.slice(5).trim());
           }
-          if (!dataLine) continue;
-
-          try {
-            const parsed = JSON.parse(dataLine);
-            switch (eventType) {
-              case "delta":
-                callbacks.onDelta?.(parsed.text ?? "");
-                break;
-              case "tool_call":
-                callbacks.onToolCall?.(parsed);
-                break;
-              case "usage":
-                callbacks.onUsage?.(parsed);
-                break;
-              case "warning":
-                callbacks.onWarning?.(parsed.message ?? "");
-                break;
-              case "final":
-                callbacks.onFinal?.(parsed);
-                break;
-              case "followups":
-                if (Array.isArray(parsed.suggestions)) {
-                  callbacks.onFollowups?.(parsed.suggestions.map((s: unknown) => String(s)));
-                }
-                break;
-              case "error":
-                callbacks.onError?.(new Error(parsed.message ?? "unknown"));
-                break;
-              default:
-                // user / usage 등 무시
-                break;
-            }
-          } catch {
-            // skip unparseable events
-          }
+          if (!data.length) continue;
+          let parsed;
+          try { parsed = JSON.parse(data.join("\n")); } catch { continue; }
+          if (event === "delta") callbacks.onDelta?.(parsed.text ?? "");
+          else if (event === "tool_call") callbacks.onToolCall?.(parsed);
+          else if (event === "usage") callbacks.onUsage?.(parsed);
+          else if (event === "warning") callbacks.onWarning?.(parsed.message ?? "");
+          else if (event === "followups" && Array.isArray(parsed.suggestions)) callbacks.onFollowups?.(parsed.suggestions.map(String));
+          else if (event === "final") { completed = true; callbacks.onFinal?.(parsed); }
+          else if (event === "error") { completed = true; callbacks.onError?.(new Error(parsed.message ?? parsed.error ?? "Chat unavailable")); }
+          if (completed) break;
         }
       }
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === "AbortError") return;
-      callbacks.onError?.(err instanceof Error ? err : new Error(String(err)));
+      if (!completed && !controller.signal.aborted) {
+        const error = new Error("The connection ended before the answer was complete. Please try again.");
+        error.name = "StreamInterruptedError";
+        throw error;
+      }
+    } catch (error: unknown) {
+      if (!controller.signal.aborted) callbacks.onError?.(error instanceof Error ? error : new Error(String(error)));
+    } finally {
+      await reader?.cancel().catch(() => {});
     }
   })();
-
   return controller;
 }
 
+
 // --- Insights (v2) ---
 
-export async function fetchLatestInsight(): Promise<Insight | null> {
-  const res = await fetch(`${BASE}/api/insights/latest`);
-  if (!res.ok) throw new Error(`fetchLatestInsight failed: ${res.statusText}`);
-  return res.json();
+export async function fetchLatestInsight(signal?: AbortSignal): Promise<Insight | null> {
+  return fetchJson(`${BASE}/api/insights/latest`, { signal, cache: "no-store" });
 }
 
 export async function fetchInsights(limit: number = 10): Promise<Insight[]> {

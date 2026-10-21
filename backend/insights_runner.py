@@ -3,7 +3,7 @@
 흐름:
   1. 최근 N시간(기본 6h) 자동 run의 ProbeResult에서 통계에 쓰는 다섯 열만 나눠 읽는다. 읽은 세션은 닫는다.
   2. 모델별 stats 계산 (avg/p50/p95/err_rate).
-  3. Sonnet 5.5에 요약 프롬프트 + stats를 전달, KO와 EN 마크다운 요약을 동시에 스트리밍으로 받는다.
+  3. Haiku 5.5에 요약 프롬프트 + stats를 전달, KO와 EN 마크다운 요약을 동시에 스트리밍으로 받는다.
   4. 새 세션의 짧은 트랜잭션으로 Insight 테이블에 INSERT.
 
 ECS Task Definition CMD:
@@ -200,7 +200,7 @@ def _summarize_prompt(client, lang: str, system: str, user_text: str, deadline: 
 
 def _summarize(window_label: str, stats: Dict[str, Any], lang: str, *, client=None,
                deadline: float | None = None) -> str:
-    """Sonnet 5.5 요약 하나 — lang in {'ko','en'}. 프롬프트는 _build_prompt와 같다."""
+    """Haiku 5.5 요약 하나 — lang in {'ko','en'}. 프롬프트는 _build_prompt와 같다."""
     from agent import bedrock
 
     system, user_text = _build_prompt(window_label, stats, lang)

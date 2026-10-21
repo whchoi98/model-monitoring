@@ -15,7 +15,7 @@ export default function SiteFooter() {
   const total = snapshot ? snapshot.total_visitors.toLocaleString(locale) : "—";
   return (
     <footer aria-label={p.title} data-presence-state={status}
-      className="site-footer mx-auto mt-8 border-t border-gray-800 px-4 pt-6 [padding-bottom:max(6rem,var(--comparison-dock-clearance,0px))] sm:px-6 sm:[padding-bottom:max(7rem,var(--comparison-dock-clearance,0px))]">
+      className="site-footer mx-auto mt-8 border-t border-gray-800 pt-6 [padding-bottom:max(6rem,var(--comparison-dock-clearance,0px))] sm:[padding-bottom:max(7rem,var(--comparison-dock-clearance,0px))]">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 text-xs">
         <span className="text-gray-500">LLM Monitor <span className="ml-1">{APP_VERSION}</span></span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">

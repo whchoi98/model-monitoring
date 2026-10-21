@@ -2,7 +2,7 @@
 
 흐름:
   1. 사용자 메시지를 AgentCore Memory에 기록 (best-effort).
-  2. Bedrock Sonnet 5.5에 tools와 함께 converse_stream 호출.
+  2. Bedrock Haiku 5.5에 tools와 함께 converse_stream 호출.
   3. tool_use 받으면 즉시 tool 실행 후 tool_result로 다시 호출 (최대 N hop).
   4. text_delta는 그대로 SSE delta 이벤트로 emit.
   5. 종료/예외에 관계없이 'final' 이벤트 emit (try/finally).
@@ -16,12 +16,13 @@ import logging
 import uuid
 from typing import AsyncIterator, Dict, List, Optional
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from sqlalchemy.orm import Session
 
-from auth import get_current_user
+from auth import get_optional_user
+from chat_access import GuestChatLimiter, check_browser_origin, guest_identity, member_actor, set_guest_cookie
 from database import get_db
 from models import User
 from agent import bedrock as bedrock_client
@@ -34,11 +35,12 @@ router = APIRouter(prefix="/api/chat", tags=["chat"])
 
 # 같은 채팅에서 tool_use → tool_result hop 한도 — 무한 루프 방지.
 MAX_TOOL_HOPS = 4
+guest_limiter = GuestChatLimiter()
 
 
 class ChatRequest(BaseModel):
     message: str = Field(min_length=1, max_length=4000)
-    session_id: Optional[str] = None  # 사용자가 명시 시 그 세션, 아니면 신규.
+    session_id: Optional[str] = Field(default=None, min_length=1, max_length=100, pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_-]*$")
 
 
 # Bedrock Converse API tool 스펙.
@@ -120,7 +122,7 @@ def _invoke_tool(name: str, tool_input: dict, db: Session) -> dict:
 async def _generate_followups(user_question: str, assistant_answer: str) -> list[str]:
     """대화 맥락 기반 follow-up 3개 생성 — 응답에 등장한 모델·메트릭·시간대 참조.
 
-    Haiku 4.5로 빠르고 저렴하게. 응답이 JSON array가 아닐 경우 line 단위 fallback.
+    Haiku 5.5로 빠르고 저렴하게. 응답이 JSON array가 아닐 경우 line 단위 fallback.
     """
     import json as _json
     import re as _re
@@ -143,10 +145,9 @@ async def _generate_followups(user_question: str, assistant_answer: str) -> list
 
     raw = converse_blocking(
         messages=[{"role": "user", "content": [{"text": user_prompt}]}],
-        model_id="global.anthropic.claude-haiku-4-5-20251001-v1:0",
+        model_id=bedrock_client.CHAT_MODEL_ID,
         system=system,
         max_tokens=400,
-        temperature=0.4,
     )
 
     # JSON array 추출 — 응답이 ```json ... ``` 또는 prefix 포함 가능.
@@ -224,8 +225,7 @@ async def _chat_generator(
             elif t == "stop":
                 stop_reason = ev.get("stop_reason")
             elif t == "error":
-                yield sse_event("error", {"message": ev.get("error", "unknown")})
-                return
+                raise RuntimeError(ev.get("error", "unknown"))
             elif t == "usage":
                 yield sse_event("usage", ev.get("usage", {}))
 
@@ -285,7 +285,7 @@ async def _chat_generator(
             actor_id, session_id, role="ASSISTANT", content=final_assistant
         )
 
-    # 5) 동적 Follow-up 3개 생성 — 마지막 user 질문 + assistant 응답을 기반으로 Haiku 4.5에 single-shot.
+    # 5) 동적 Follow-up 3개 생성 — 마지막 user 질문 + assistant 응답을 기반으로 Haiku 5.5에 single-shot.
     #    응답이 너무 짧거나 에러면 skip.
     if final_assistant and len(final_assistant) >= 20:
         try:
@@ -299,27 +299,38 @@ async def _chat_generator(
 @router.post("/stream")
 async def chat_stream(
     body: ChatRequest,
-    user: User = Depends(get_current_user),
+    request: Request,
+    user: Optional[User] = Depends(get_optional_user),
     db: Session = Depends(get_db),
 ):
-    """SSE 스트리밍 챗봇 엔드포인트 (인증 필요)."""
-    session_id = body.session_id or f"chat-{user.username}-{uuid.uuid4().hex[:12]}"
-    actor_id = f"user-{user.username}"
+    """Public SSE chat, with separate signed-browser and verified-member histories."""
+    check_browser_origin(request)
+    session_id = body.session_id or f"chat-{uuid.uuid4().hex}"
+    cookie = None
+    if user is None:
+        actor_id, cookie = guest_identity(request)
+        guest_limiter.admit(actor_id)
+    else:
+        actor_id = member_actor(user.username)
 
     async def inner():
         async for chunk in _chat_generator(body.message, actor_id, session_id, db):
             yield chunk
 
-    final_meta = {"session_id": session_id, "username": user.username}
-    return StreamingResponse(
-        stream_with_final(inner(), label="chat", on_error_metadata=final_meta),
+    final_meta = {"session_id": session_id, "username": user.username if user else None}
+    response = StreamingResponse(
+        stream_with_final(inner(), label="chat", final_metadata=final_meta),
         media_type="text/event-stream",
         headers={
-            "Cache-Control": "no-cache, no-transform",
+            "Cache-Control": "no-store, no-transform",
             "X-Accel-Buffering": "no",  # nginx/ALB 버퍼링 방지
             "Connection": "keep-alive",
         },
     )
+
+    if cookie:
+        set_guest_cookie(response, request, cookie)
+    return response
 
 
 # 미사용 import 경고 회피용 (Optional 등은 동적으로 사용됨).

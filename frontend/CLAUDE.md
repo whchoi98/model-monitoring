@@ -36,7 +36,7 @@ Dashboard UI for monitoring LLM channel performance — Amazon Bedrock, Claude P
 - `AppShell` owns `.workspace-main` (max 1680px and responsive padding); panel roots use `.page-stack` without independent page padding. `PageHeading` provides one h1, description, category label, actions and a context slot.
 - Reuse `.ui-panel`, `.ui-panel-muted`, `.ui-toolbar`, `.ui-stat-card`, `.ui-table-shell`, `.ui-table`, `.ui-label` and the existing button/input classes. Component styles live in the Tailwind components layer so explicit utility variants retain meaning.
 - `QuickNavigation` searches existing page labels/paths, opens with Ctrl/Cmd+K, and respects IME and existing modals. `dialogFocus.ts` is shared by native search/detail, login and chat dialogs.
-- The dashboard uses summary metrics and a main model area with collection/attention/AI in a secondary area. `MonitoringOverview` supports summary/details modes; `InsightsPanel` shows a plain text preview and expands to full Markdown.
+- The dashboard uses summary metrics and a main model area with collection/attention/AI in a secondary area. `MonitoringOverview` supports summary/details modes; `InsightsPanel` shows a public plain text preview; full Markdown opens in a draggable `FloatingWindow` with full-screen/restore controls. Saved-result refresh and chat are public; manual insight generation stays authenticated.
 - The default theme is light; the pre-hydration script restores saved preference. `theme.ts` reconciles changes missed during hydration and keeps a session selection if storage writes fail.
 
 ## Commands

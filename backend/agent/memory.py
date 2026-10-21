@@ -3,12 +3,13 @@
 대화 컨텍스트를 AWS Bedrock AgentCore Memory에 영속화한다.
 환경변수 `AGENTCORE_MEMORY_ID`로 memory ID를 받는다 (CDK가 SSM 통해 주입).
 
-세션 ID는 사용자 단위 + 대화 단위로 부여: `chat-{username}-{conversation_uuid}`.
+대화 ID는 `chat-{conversation_uuid}`이며, 비회원·로그인 사용자는 서로 다른 해시 actor로 분리한다.
 """
 
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 import os
 from typing import List, Optional
 
@@ -52,6 +53,7 @@ def append_message(
             memoryId=memory_id,
             actorId=actor_id,
             sessionId=session_id,
+            eventTimestamp=datetime.now(timezone.utc),
             payload=[
                 {
                     "conversational": {
@@ -89,6 +91,7 @@ def list_recent_messages(
             actorId=actor_id,
             sessionId=session_id,
             maxResults=limit,
+            includePayloads=True,
         )
         events = resp.get("events", [])
         # API는 최신순일 수 있으므로 오래된 → 최신 정렬.

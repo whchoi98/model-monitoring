@@ -51,6 +51,7 @@ async def stream_with_final(
     *,
     label: str = "chat",
     on_error_metadata: Optional[dict] = None,
+    final_metadata: Optional[dict] = None,
 ) -> AsyncIterator[str]:
     """inner 생성기를 그대로 흘려보내되 끝/예외 모두에서 'final' 이벤트를 반드시 emit.
 
@@ -75,6 +76,8 @@ async def stream_with_final(
         payload = {"ok": True, "label": label}
         if error_payload is not None:
             payload = error_payload
+        if final_metadata:
+            payload = {**payload, **final_metadata}
         if on_error_metadata and error_payload is not None:
             payload = {**payload, **on_error_metadata}
         yield sse_event("final", payload)

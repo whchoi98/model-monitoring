@@ -50,9 +50,9 @@ function NavGroups({ items, mobile, onNavigate }: { items: NavItem[]; mobile?: b
         if (!entries.length) return null;
         return (
           <div key={key} role="group" aria-label={labels[key]}
-            className={mobile ? "space-y-1" : "primary-navigation-group"}>
+            className={mobile ? "space-y-1" : "primary-navigation-group"} data-nav-group={key}>
             <p aria-hidden="true" className="nav-group-label">{labels[key]}</p>
-            <div className={mobile ? "space-y-1" : "flex items-center gap-1"}>
+            <div className={mobile ? "mobile-navigation-entries" : "primary-navigation-entries"}>
               {entries.map((item) => <NavEntry key={item.key} item={item} mobile={mobile} onNavigate={onNavigate} />)}
             </div>
           </div>
@@ -64,7 +64,7 @@ function NavGroups({ items, mobile, onNavigate }: { items: NavItem[]; mobile?: b
 
 function NavEntry({ item, mobile, onNavigate }: { item: NavItem; mobile?: boolean; onNavigate: () => void }) {
   const cls = `navigation-link ${
-    mobile ? "w-full text-left" : "shrink-0 whitespace-nowrap"
+    mobile ? "w-full text-left" : ""
   } ${item.active ? "navigation-link-active" : ""}`;
   if (item.onClick) {
     return (
@@ -177,10 +177,10 @@ export default function AppHeader({
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
           <QuickNavigation items={items} />
           <div className="hidden md:block"><Preferences /></div>
-          {actions && <div className="hidden items-center gap-2 md:flex">{actions}</div>}
+          {actions && <div className="hidden items-center gap-2 min-[1000px]:flex">{actions}</div>}
           {user ? (
             <div className="flex items-center gap-2">
-              <span className="hidden max-w-40 truncate text-xs text-gray-400 sm:inline" title={user.username}>{user.username}</span>
+              <span className="hidden max-w-40 truncate text-xs text-gray-400 xl:inline" title={user.username}>{user.username}</span>
               <button type="button" onClick={onLogout}
                 className="min-h-10 rounded-lg bg-gray-800 px-3 text-xs font-medium text-gray-300 hover:bg-gray-700">
                 {t.logout}
@@ -194,7 +194,7 @@ export default function AppHeader({
             </button>
           )}
           <button ref={toggle} type="button" onClick={() => setMenuOpen((open) => !open)}
-            className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 text-gray-300 md:hidden"
+            className="flex h-10 w-10 items-center justify-center rounded-lg bg-gray-800 text-gray-300 min-[1000px]:hidden"
             aria-label={lang === "en" ? (menuOpen ? "Close navigation" : "Open navigation") : (menuOpen ? "메뉴 닫기" : "메뉴 열기")}
             aria-expanded={menuOpen} aria-controls={menuId}>
             <svg aria-hidden="true" className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
@@ -204,11 +204,11 @@ export default function AppHeader({
         </div>
       </div>
       <nav ref={desktopNav} aria-label={lang === "en" ? "Primary navigation" : "주요 메뉴"}
-        className="primary-navigation hidden max-w-full overflow-x-auto md:block">
+        className="primary-navigation hidden min-[1000px]:block">
         <NavGroups items={items} onNavigate={close} />
       </nav>
       <nav id={menuId} hidden={!menuOpen} aria-label={lang === "en" ? "Mobile navigation" : "모바일 메뉴"}
-        className="mobile-navigation max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-800 px-4 py-4 md:hidden">
+        className="mobile-navigation max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-800 px-4 py-4 min-[1000px]:hidden">
         <NavGroups items={items} mobile onNavigate={close} />
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-800 pt-3">
           <Preferences />

@@ -490,7 +490,7 @@ export class SchedulerStack extends cdk.Stack {
 
     this.insightsSchedule = new scheduler.Schedule(this, "InsightsSchedule", {
       schedule: scheduler.ScheduleExpression.rate(cdk.Duration.minutes(5)),
-      description: "Insights every 5 minutes (Sonnet 5.5)",
+      description: "Insights every 5 minutes (Haiku 5.5)",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: insightsTaskDef,
         vpcSubnets: props.appSubnets,

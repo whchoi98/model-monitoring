@@ -88,3 +88,19 @@ def get_current_user(
     if user.approved != 1:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="계정 승인 대기 중입니다. 관리자 승인 후 이용 가능합니다.")
     return user
+
+
+
+def get_optional_user(
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
+    db: Session = Depends(get_db),
+) -> Optional[User]:
+    """Public chat may associate a valid login; rejected credentials stay anonymous."""
+    if credentials is None:
+        return None
+    try:
+        return get_current_user(credentials, db)
+    except HTTPException as exc:
+        if exc.status_code not in (401, 403):
+            raise
+        return None

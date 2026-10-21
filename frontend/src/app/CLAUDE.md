@@ -10,7 +10,7 @@ from `src/components/` in `AppShell` (header, page title, `FloatingChat`).
 - `icon.png`, `apple-icon.png` — Next.js file-convention app icons
 - `globals.css` — gray scale remapped to CSS variables (`:root` dark, `html.light` white — tailwind `light:` variant), shared `@layer components` classes (`ui-copy` keeps Korean words together with a long-token fallback), and the `@media (display-mode: standalone)` block: `header.sticky` gets `env(safe-area-inset-top)` and `body` gets left/right/bottom insets. The selector depends on `AppHeader` rendering `<header className="sticky …">`. Section anchors use the measured `--app-header-height`; root scroll padding uses `--comparison-dock-clearance` while a comparison dock is mounted
 - `page.tsx` — `/` dashboard (`AutoDashboard`); `?view=manual` switches to the manual probe view (`useProbeStream`, results/charts/compare tabs, history). `useSearchParams` is read inside `<Suspense>`
-- `chat/page.tsx` — `/chat`, the popup-window target of `FloatingChat` (Firefox/Safari). Renders `ChatPanel variant="popup"` without `AppShell` (no header, no floating button); the auth token is shared through same-origin `localStorage`
+- `chat/page.tsx` — `/chat`, the popup-window target of `FloatingChat` (Firefox/Safari). Renders `ChatPanel variant="popup"` without `AppShell` (no header, no floating button); chat is public; same-origin cookies isolate guests, while an optional auth token associates a verified member
 - `prompts/page.tsx` — login gate via `useAuth()`, then `PromptsPanel`
 - `models/`, `parity/`, `gpt-on-aws/`, `claude-features/`, `cost/`, `pricing/` (v2.30.0, `PricingPanel`), `reliability/`, `efficiency/`, `analysis/` — one-line pages: `<AppShell navKey="…"><Panel /></AppShell>`
 

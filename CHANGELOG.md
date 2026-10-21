@@ -7,6 +7,26 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.37.0 — 2026-10-21
+
+### Changed
+- Use Claude Haiku 5.5 for chatbot answers, follow-up questions and scheduled/manual insights; omit the unsupported temperature option.
+- 챗봇 답변·후속 질문·자동 및 수동 인사이트를 Claude Haiku 5.5로 전환하고 temperature 옵션을 생략했다.
+- Align the header, grouped navigation and footer with the main content. Arrange narrow-screen menus in two columns and adapt desktop groups to the available width.
+- 상단 헤더·그룹 메뉴·푸터의 좌우 기준선을 본문에 맞췄다. 좁은 화면은 두 열 메뉴로, 데스크톱은 너비에 따라 그룹 안의 항목을 배치한다.
+
+### Added
+- Public chatbot access with isolated signed-browser and member conversations. Saved insights can be read and refreshed without login; the full analysis opens in a movable window with full-screen and restore controls.
+- 로그인 없이 챗봇을 사용하고 최신 인사이트를 조회·새로고침할 수 있다. 전체 분석은 이동 가능한 플로팅 창에서 읽으며 전체 화면 전환과 원래 크기 복귀를 지원한다.
+
+### Fixed
+- Return chat session IDs on successful SSE completion, supply AgentCore event timestamps and request message payloads so follow-up turns retain context. Interrupted streams report failure; closing or resetting chat discards late callbacks.
+- 정상 완료에도 대화 ID를 반환하고 AgentCore 기록 시각과 메시지 본문 조회 옵션을 추가해 후속 대화가 맥락을 유지하도록 했다. 연결이 끊기면 오류를 표시하고 창을 닫거나 대화를 초기화한 뒤 도착한 응답은 버린다.
+
+### Security
+- Separate guest/member history namespaces, validate session IDs, verify browser origins and bound anonymous bursts. Manual probes, prompt writes and insight regeneration keep their existing authentication.
+- 비회원과 로그인 사용자의 대화를 분리하고 세션 ID·브라우저 Origin·비회원 요청량을 확인한다. 수동 프로브·프롬프트 저장·인사이트 재생성은 기존 인증을 유지한다.
+
 ## v2.36.0 — 2026-10-21
 
 ### Changed

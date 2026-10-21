@@ -318,7 +318,7 @@ export const ko: Translations = {
     chooseModels: "모델 선택",
     configureProbe: "프롬프트와 실행 설정",
     resultsWorkspace: "실행 결과",
-    signInDescription: "로그인하면 프로브 실행, 프롬프트 저장과 AI 분석을 사용할 수 있습니다.",
+    signInDescription: "로그인하면 직접 프로브를 실행하고 프롬프트를 저장할 수 있습니다.",
   },
   common: {
     loading: "데이터를 불러오는 중…", retry: "다시 시도", refresh: "새로고침", refreshing: "갱신 중…",
@@ -564,7 +564,7 @@ export const en: Translations = {
     chooseModels: "Choose models",
     configureProbe: "Prompt & configuration",
     resultsWorkspace: "Run results",
-    signInDescription: "Sign in to run probes, save prompts and ask the AI assistant.",
+    signInDescription: "Sign in to run probes and save prompts.",
   },
   common: {
     loading: "Loading data…", retry: "Retry", refresh: "Refresh", refreshing: "Refreshing…",

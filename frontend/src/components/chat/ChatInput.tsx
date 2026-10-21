@@ -39,6 +39,7 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
           onKeyDown={handleKey}
           disabled={disabled}
           rows={1}
+          maxLength={4000}
           aria-label={lang === "en" ? "Message" : "메시지"}
           placeholder={isStreaming ? (lang === "en" ? "Generating response…" : "응답 생성 중…") : (lang === "en" ? "Message (Enter to send, Shift+Enter for a new line)" : "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)")}
           className="ui-input min-w-0 flex-1 resize-none max-h-32 text-gray-100"

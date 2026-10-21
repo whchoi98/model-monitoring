@@ -298,7 +298,7 @@ foundation-model ids).
 ## Insights (regenerate = Auth Required)
 
 ### GET /api/insights/latest · GET /api/insights
-Latest saved AI insight (bilingual Markdown) / list of recent insights.
+Public latest saved AI insight (bilingual Markdown) / list of recent insights. Haiku 5.5 generates the scheduled and manual summaries. Reading, refreshing saved results and opening the full analysis require no login.
 
 ### POST /api/insights/regenerate
 **Auth required.** Non-streaming regenerate. Body `{"window": "6h"}` (default `6h`). Starts `insights_runner.run_once(window)`
@@ -332,10 +332,18 @@ default client, 60 s read timeout between chunks, no wall-clock cap).
 
 ---
 
-## Chat (Auth Required)
+## Chat (Public)
 
 ### POST /api/chat/stream
-**Auth required.** SSE stream — Claude Sonnet 5.5 chatbot with 4 Bedrock tools + per-turn dynamic followups.
+SSE stream — Claude Haiku 5.5 chatbot with 4 Bedrock tools and Haiku 5.5 follow-up questions. These requests omit `temperature`.
+
+Body: `{"message": "Which model is fastest?", "session_id": null}`. Messages are 1–4,000 characters. Omit `session_id` to start a conversation; pass the returned ID to continue. Session IDs are 1–100 ASCII letters, digits, hyphens or underscores and start with a letter or digit. Every `final` event includes `ok` and `session_id`, including successful completion. A model failure finishes with `ok: false`; the client keeps partial text and lets the user retry.
+
+Login is optional. A valid JWT selects a hashed member actor. Without a valid login, the server prepares the signed `llm_monitor_chat` cookie (`HttpOnly`, `SameSite=Lax`, `/api/chat`, 30-day lifetime, `Secure` outside local HTTP development) and derives a separate guest actor. Guest and member histories are never merged, and knowing another conversation's `session_id` does not grant access to its history. The browser sends the cookie automatically; the response is `Cache-Control: no-store, no-transform`. AgentCore events retain the existing 30-day expiration.
+
+Browser requests with an `Origin` must match `CHAT_ALLOWED_ORIGINS` (comma-separated), falling back to `PRESENCE_ALLOWED_ORIGINS`, then `PUBLIC_BASE_URL`. Local development accepts localhost origins. API clients without an Origin can call the public endpoint directly. Guest admission is limited per backend process to 6 questions per browser and 30 total questions in a rolling minute; HTTP 429 includes `Retry-After: 60`. This is burst protection, not a distributed account quota.
+
+Manual probes, prompt writes, verification triggers and insight regeneration still require JWT.
 
 ---
 

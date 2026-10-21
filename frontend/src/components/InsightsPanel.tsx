@@ -1,148 +1,127 @@
 "use client";
 
-import { useCallback, useEffect, useState } from "react";
-import {
-  fetchLatestInsight,
-  streamRegenerateInsight,
-} from "@/lib/api";
-import { Insight } from "@/lib/types";
+import { useEffect, useRef, useState } from "react";
+import { fetchLatestInsight, streamRegenerateInsight } from "@/lib/api";
 import { useLang, useT } from "@/lib/i18n-context";
 import { useAuth } from "@/lib/auth-context";
+import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useAutoRefresh } from "@/hooks/useAutoRefresh";
+import { formatDateTime } from "@/lib/format";
 import MessageMarkdown from "./chat/MessageMarkdown";
 import { DataError } from "./DataState";
+import FloatingWindow from "./FloatingWindow";
 
-// 인사이트 위젯 - 최신 인사이트 표시 + (인증 후) SSE 스트리밍 재생성.
-// 검색은 채팅봇에서 대신 수행 (제거).
 export default function InsightsPanel() {
   const { lang } = useLang();
   const t = useT();
-  const [expanded, setExpanded] = useState(false);
-
-  const [insight, setInsight] = useState<Insight | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [loadError, setLoadError] = useState<Error | null>(null);
+  const title = lang === "en" ? "AI Insights" : "AI 인사이트";
+  const [open, setOpen] = useState(false);
+  const resource = useAsyncResource("latest-insight", fetchLatestInsight);
+  const { data: insight, error: loadError, loading, refreshing, refresh } = resource;
+  useAutoRefresh(refresh, 60_000);
   const [generationError, setGenerationError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
-  const [statusMsg, setStatusMsg] = useState<string | null>(null);
-  const [streamingText, setStreamingText] = useState<string>("");
-  const { user, checking, openLogin } = useAuth();
-  const authed = user !== null;
+  const [streamingText, setStreamingText] = useState("");
+  const request = useRef<AbortController | null>(null);
+  const generation = useRef(0);
+  const { user, checking } = useAuth();
 
-  const load = useCallback(async () => {
-    try {
-      const d = await fetchLatestInsight();
-      setInsight(d);
-      setLoadError(null);
-    } catch (error) {
-      setLoadError(error instanceof Error ? error : new Error(String(error)));
-    } finally {
-      setLoading(false);
-    }
-  }, []);
-
-  useEffect(() => {
-    load();
-    const id = setInterval(load, 60_000);
-    return () => clearInterval(id);
-  }, [load]);
+  useEffect(() => () => { generation.current++; request.current?.abort(); }, []);
 
   const handleRegenerate = () => {
-    if (regenerating || checking) return;
-    if (!authed) {
-      openLogin();
-      return;
-    }
+    if (regenerating || checking || !user) return;
+    const current = ++generation.current;
+    const active = () => generation.current === current;
     setRegenerating(true);
     setGenerationError(null);
     setStreamingText("");
-    setStatusMsg(lang === "en" ? "Streaming..." : "스트리밍 중...");
-    streamRegenerateInsight(
-      { window: "6h", lang },
-      {
-        onDelta: (t) => setStreamingText((prev) => prev + t),
-        onFinal: (payload) => {
-          setRegenerating(false);
-          setStatusMsg(null);
-          setStreamingText("");
-          if (!payload.ok) {
-            setGenerationError(payload.error || (lang === "en" ? "Unable to save the analysis. Please try again." : "분석을 저장하지 못했습니다. 다시 시도해 주세요."));
-            return;
-          }
-          void load();
-        },
-        onError: (err) => {
-          setRegenerating(false);
-          setStatusMsg(null);
-          setGenerationError(err.message);
-          setStreamingText("");
-        },
+    request.current = streamRegenerateInsight({ window: "6h", lang }, {
+      onDelta: text => { if (active()) setStreamingText(previous => previous + text); },
+      onFinal: payload => {
+        if (!active()) return;
+        setRegenerating(false);
+        setStreamingText("");
+        if (!payload.ok) {
+          setGenerationError(payload.error || (lang === "en" ? "Unable to save the analysis. Please try again." : "분석을 저장하지 못했습니다. 다시 시도해 주세요."));
+          return;
+        }
+        void refresh();
       },
-    );
+      onError: error => {
+        if (!active()) return;
+        setRegenerating(false);
+        setGenerationError(error.message);
+        setStreamingText("");
+      },
+    });
   };
 
+  const summary = streamingText || (lang === "en" && insight?.summary_md_en ? insight.summary_md_en : insight?.summary_md) || "";
+  const preview = summary.replace(/```[\s\S]*?```/g, "").replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^[\s#>*-]+/gm, "").replace(/[*_`|]/g, "").replace(/\s+/g, " ").trim();
+  const created = insight && formatDateTime(insight.created_at, lang);
+  const errors = <>
+    <DataError error={loadError} resource={title} onRetry={() => void refresh()} hasData={!!insight} />
+    {generationError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">{generationError}</p>}
+  </>;
+  const refreshButton = (
+    <button type="button" className="ui-button" onClick={() => void refresh()} disabled={refreshing}
+      aria-label={lang === "en" ? "Refresh AI insights" : "AI 인사이트 새로고침"} aria-busy={refreshing}>
+      {refreshing ? t.common.refreshing : t.common.refresh}
+    </button>
+  );
+
   return (
-    <section id="ai-insights" aria-label={lang === "en" ? "AI Insights" : "AI 인사이트"} className="ui-panel space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <p className="page-eyebrow">SONNET 5.5</p>
-          <h2 className="text-base font-semibold text-gray-100">{lang === "en" ? "AI Insights" : "AI 인사이트"}</h2>
-        </div>
-        <button type="button" className={authed ? "ui-button-primary" : "ui-button"}
-          onClick={handleRegenerate} disabled={regenerating || checking}
-          aria-label={lang === "en" ? (authed ? "Refresh AI insights" : "Sign in for AI insights") : (authed ? "AI 분석 새로고침" : "AI 분석을 위해 로그인")}>
-          {regenerating ? (lang === "en" ? "Generating" : "생성 중") : authed ? t.common.refresh : (lang === "en" ? "Login" : "로그인")}
-        </button>
-      </div>
-      <p className="ui-copy text-xs leading-relaxed text-gray-500">{t.workspace.insightsDescription}</p>
-      {insight && <p className="text-xs text-gray-500">
-        {new Date(insight.created_at).toLocaleString(lang === "en" ? "en-US" : "ko-KR")}
-      </p>}
-
-      {/* Status message */}
-      {statusMsg && (
-        <div className="px-3 py-1.5 bg-blue-500/10 border border-blue-500/30 rounded text-xs text-blue-300">
-          {statusMsg}
-        </div>
-      )}
-
-      <DataError error={loadError} resource={lang === "en" ? "AI insights" : "AI 인사이트"} onRetry={() => void load()} hasData={!!insight} />
-      {generationError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">{generationError}</p>}
-      <div id="insight-body">
-      {loading ? (
-        <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
-      ) : streamingText ? (
-        <div className="border-l-2 border-blue-500/50 pl-3">
-          <MessageMarkdown text={streamingText} />
-          <div className="text-xs text-blue-400/70 mt-2 animate-pulse">
-            {lang === "en" ? "Streaming from Sonnet 5.5..." : "Sonnet 5.5 스트리밍 중..."}
+    <>
+      <section id="ai-insights" aria-label={title} className="ui-panel space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3">
+          <div>
+            <p className="page-eyebrow">HAIKU 5.5</p>
+            <h2 className="text-base font-semibold text-gray-100">{title}</h2>
+          </div>
+          <div className="flex items-center gap-1">
+            {refreshButton}
+            <button type="button" className="window-control" aria-haspopup="dialog"
+              aria-label={lang === "en" ? "Expand AI insights" : "AI 인사이트 확대"} onClick={() => setOpen(true)}>
+              <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7"><path d="M14 4h6v6m-6 0 6-6M10 20H4v-6m6 0-6 6" /></svg>
+            </button>
           </div>
         </div>
-      ) : insight ? (
-        expanded ? <MessageMarkdown text={lang === "en" && insight.summary_md_en ? insight.summary_md_en : insight.summary_md} /> : (
-          <p className="ui-copy text-sm leading-relaxed text-gray-300">
-            {(lang === "en" && insight.summary_md_en ? insight.summary_md_en : insight.summary_md)
-              .replace(/```[\s\S]*?```/g, "")
-              .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-              .replace(/^[\s#>*-]+/gm, "").replace(/[*_`|]/g, "")
-              .replace(/\s+/g, " ").trim().slice(0, 160)}
-            {(lang === "en" && insight.summary_md_en ? insight.summary_md_en : insight.summary_md).length > 160 ? "…" : ""}
-          </p>
-        )
-      ) : loadError ? null : (
-        <div className="text-xs text-gray-500">
-          {lang === "en"
-            ? "No insight yet. Click Refresh (login required) or wait for the next 5-min job."
-            : "아직 생성된 인사이트가 없습니다. \"새로고침\" 버튼으로 즉시 생성하거나 5분 주기 잡을 기다리세요."}
+        <p className="ui-copy text-xs leading-relaxed text-gray-500">{t.workspace.insightsDescription}</p>
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-gray-500">
+          <span className="inline-flex items-center gap-1.5"><span aria-hidden="true" className="h-1.5 w-1.5 rounded-full bg-blue-500" />{lang === "en" ? "Analyzed every 5 min" : "5분마다 자동 분석"}</span>
+          {created && <time dateTime={insight!.created_at}>{created}</time>}
         </div>
-      )}
-
-      </div>
-      {insight && !streamingText && (
-        <button type="button" className="ui-button w-full" aria-expanded={expanded}
-          aria-controls="insight-body" onClick={() => setExpanded((value) => !value)}>
-          {expanded ? t.workspace.collapseInsight : t.workspace.expandInsight}
-        </button>
-      )}
-    </section>
+        {errors}
+        {regenerating && <p role="status" className="text-xs text-blue-400">{lang === "en" ? "Haiku 5.5 is analyzing the latest results…" : "Haiku 5.5가 최신 결과를 분석하고 있습니다…"}</p>}
+        {loading ? <p className="text-xs text-gray-500">{t.common.loading}</p>
+          : summary ? <p className="ui-copy text-sm leading-relaxed text-gray-300">{preview.slice(0, 180)}{preview.length > 180 ? "…" : ""}</p>
+          : !loadError && <p className="text-xs text-gray-500">{lang === "en" ? "No insight yet. The next automatic analysis will appear here." : "아직 생성된 인사이트가 없습니다. 다음 자동 분석이 완료되면 여기에 표시됩니다."}</p>}
+        {summary && <button type="button" className="ui-button w-full" aria-haspopup="dialog" onClick={() => setOpen(true)}>
+          {t.workspace.expandInsight}<span aria-hidden="true" className="ml-2">↗</span>
+        </button>}
+      </section>
+      <FloatingWindow open={open} onClose={() => setOpen(false)} title={title} className="insights-window">
+        <div className="insights-reading-view">
+          <div className="insights-reading-toolbar">
+            <div>
+              <p className="page-eyebrow mb-1">HAIKU 5.5</p>
+              <p className="text-xs text-gray-500">{created || (lang === "en" ? "Analyzed every 5 min" : "5분마다 자동 분석")}</p>
+            </div>
+            <div className="flex flex-wrap items-center gap-2">
+              {refreshButton}
+              {user && <button type="button" className="ui-button-primary" onClick={handleRegenerate} disabled={regenerating || checking}>
+                {regenerating ? (lang === "en" ? "Generating…" : "생성 중…") : (lang === "en" ? "Generate new analysis" : "새 분석 생성")}
+              </button>}
+            </div>
+          </div>
+          <div className="insights-reading-body" tabIndex={0} aria-label={lang === "en" ? "Full analysis" : "전체 분석"}>
+            {errors}
+            {regenerating && <p role="status" className="mb-4 text-sm text-blue-400">{lang === "en" ? "Haiku 5.5 is analyzing the latest results…" : "Haiku 5.5가 최신 결과를 분석하고 있습니다…"}</p>}
+            {summary ? <MessageMarkdown text={summary} /> : <p className="text-sm text-gray-500">{loading ? t.common.loading : lang === "en" ? "The next automatic analysis will appear here." : "다음 자동 분석이 완료되면 여기에 표시됩니다."}</p>}
+          </div>
+        </div>
+      </FloatingWindow>
+    </>
   );
 }

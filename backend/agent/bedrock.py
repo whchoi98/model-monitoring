@@ -31,13 +31,12 @@ from stream_watchdog import CallWatchdog
 logger = logging.getLogger(__name__)
 
 # 챗봇 기본 모델 — Seoul deployment에서는 global inference profile 사용.
-CHAT_MODEL_ID = "global.anthropic.claude-sonnet-5-5"
-INSIGHTS_MODEL_ID = "global.anthropic.claude-sonnet-5-5"
+CHAT_MODEL_ID = "global.anthropic.claude-haiku-5-5"
+INSIGHTS_MODEL_ID = "global.anthropic.claude-haiku-5-5"
 
 
 def _inference_config(max_tokens: int, temperature: Optional[float]) -> Dict:
-    # Sonnet 5.5 rejects temperature. Keep it opt-in for callers using older models,
-    # including the Haiku 4.5 follow-up generator.
+    # Haiku 5.5 rejects temperature. Keep sampling opt-in for older model callers.
     config: Dict = {"maxTokens": max_tokens}
     if temperature is not None:
         config["temperature"] = temperature
