@@ -2,7 +2,7 @@
 
 흐름:
   1. 사용자 메시지를 AgentCore Memory에 기록 (best-effort).
-  2. Bedrock Sonnet 4.6에 tools와 함께 converse_stream 호출.
+  2. Bedrock Sonnet 5.5에 tools와 함께 converse_stream 호출.
   3. tool_use 받으면 즉시 tool 실행 후 tool_result로 다시 호출 (최대 N hop).
   4. text_delta는 그대로 SSE delta 이벤트로 emit.
   5. 종료/예외에 관계없이 'final' 이벤트 emit (try/finally).

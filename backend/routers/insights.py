@@ -162,7 +162,7 @@ async def stream_regenerate(
 ):
     """SSE 스트리밍 인사이트 재생성.
 
-    Bedrock Sonnet 4.6 converse_stream으로 토큰 단위 yield → SSE delta 이벤트.
+    Bedrock Sonnet 5.5 converse_stream으로 토큰 단위 yield → SSE delta 이벤트.
     완료 시 DB에 Insight row 저장 + final 이벤트로 응답 종료.
 
     Note: generator는 요청 세션을 쓰지 않는다. FastAPI 버전에 따라 요청 의존성 cleanup이 스트림 전(0.115)이나
@@ -218,7 +218,6 @@ async def stream_regenerate(
                     model_id=INSIGHTS_MODEL_ID,
                     system=system_prompt,
                     max_tokens=8192,
-                    temperature=0.3,
                 )
                 while True:
                     chunk = await asyncio.to_thread(_next, gen)

@@ -7,9 +7,13 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
-## Unreleased
+## v2.35.1 — 2026-10-21
 
 ### Changed
+- Use Claude Sonnet 5.5 for the AI chatbot and scheduled/manual insights. Omit the deprecated temperature parameter from these requests and update their UI labels; Haiku 4.5 still generates follow-up questions.
+- AI 챗봇과 자동·수동 인사이트 모델을 Claude Sonnet 5.5로 변경했다. 해당 요청에서 지원되지 않는 temperature 옵션을 제거하고 화면의 모델 표시를 맞췄다. 후속 질문 생성은 Haiku 4.5를 사용한다.
+- Center the desktop navigation groups while retaining horizontal scrolling on narrower screens and the mobile menu.
+- 데스크톱 상단 메뉴를 가운데 정렬했다. 좁은 화면의 가로 스크롤과 모바일 메뉴는 유지한다.
 - Remove the opening-balance sentence from the visitor footer in Korean and English; counting and stored totals are unchanged.
 - 접속 통계 안내의 초기값 문구를 한국어·영어 화면에서 제거했다. 집계 방식과 저장된 누적값은 유지한다.
 

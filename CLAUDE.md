@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.35.0 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.35.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -13,7 +13,7 @@
 - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
 - **Edge**: CloudFront VPC Origin → Internal ALB → ECS Fargate × 2 (backend, frontend). VPC Origin → ALB는 현재 VPC 내부 HTTP:80(`edge-stack.ts` `HTTP_ONLY`, 운영 cert 정착 전 임시 — ALB는 internal + private subnet + VPC CIDR SG), ALB에는 HTTPS:443 리스너도 있음
 - **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
-- **AI**: Claude Sonnet 4.6 챗봇 (4 tools) + Haiku 4.5 dynamic followups + Sonnet 4.6 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth
+- **AI**: Claude Sonnet 5.5 챗봇 (4 tools) + Haiku 4.5 dynamic followups + Sonnet 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Sonnet 5.5 요청은 temperature를 보내지 않는다(v2.35.1)
 
 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/) (v2.0.0 당시 설계 기록 — 9개 모델, 인사이트 30분 주기 기준이라 현행과 다름).
 
@@ -44,7 +44,7 @@ Internal ALB
 EventBridge Scheduler (rate 5 min)
   ├── AutoProber Fargate Task  → 1 cycle = 66 models × 1 workload preset (round-robin 6 categories);
   │                              Claude Platform on AWS 11채널(anthropic:*)도 매 사이클 같은 카테고리 (v2.29.1 복귀; ANTHROPIC_CP_PROBE_INTERVAL_S=600이면 두 사이클에 한 번 + 자체 회전)
-  ├── Insights Fargate Task    → Sonnet 4.6 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row — v2.32.2부터 스트리밍 요약, 한국어와 영어 동시, 호출당 180초 상한, 태스크 예산 240초, Bedrock 호출 전에 읽기 트랜잭션 종료
+  ├── Insights Fargate Task    → Sonnet 5.5 KO+EN summary (`INSIGHTS_MODEL_ID`), save Insight row — v2.32.2부터 스트리밍 요약, 한국어와 영어 동시, 호출당 180초 상한, 태스크 예산 240초, Bedrock 호출 전에 읽기 트랜잭션 종료
   ├── ParityRun Fargate Task   → 12시간 주기 모델×surface×피처 실행-증거 스윕 (v2.12.0)
   ├── GptBench Fargate Task    → 15분 주기 GPT 21채널(Mantle 인리전 12 + Global/US CRIS 9) × 10회 TTFB/TTFT 벤치 (v2.18.0; Terra Global CRIS 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1, GPT-6 Sol/Luna 6채널 v2.28.0, GPT-6.1 Sol 3채널 v2.32.0).
   │                              v2.32.1부터 호스트별 네 갈래(cris 9 = Global/US CRIS, mantle-us-east-1 6, mantle-us-east-2 3, mantle-us-west-2 3 = Mantle 리전마다 한 갈래)를 동시에 돌리고 갈래 안은 채널 하나씩 순차(워밍업 1 + GPT_BENCH_RUNS), 데드라인은 모든 갈래 공유, DB 저장은 메인 스레드.
@@ -108,7 +108,7 @@ model-monitoring/
 │       ├── results.py       # /api/results/* — stored results query + stats
 │       ├── models.py        # /api/models — AVAILABLE_MODELS list
 │       ├── prompts.py       # /api/prompts/* — prompt set CRUD + Bedrock OptimizePrompt (auth)
-│       ├── chat.py          # /api/chat/stream — Sonnet 4.6 + 4 tools + dynamic followups
+│       ├── chat.py          # /api/chat/stream — Sonnet 5.5 + 4 tools + dynamic followups
 │       ├── insights.py      # /api/insights/* — list/latest/stream-regenerate
 │       ├── cost.py          # /api/cost/* — summary, channel-compare, trend (행 단위 시점 단가, v2.30.0)
 │       ├── pricing.py       # /api/pricing(60초 캐시), /api/pricing/export(csv|md|json) 공개 + admin_router /api/admin/pricing/pending, approve, reject (v2.30.0)

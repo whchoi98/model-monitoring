@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.35.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.35.1-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -20,7 +20,7 @@ Amazon Bedrock, Anthropic CP on AWS, OpenAI GPT on Bedrock LLM 채널의 응답 
 
 Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 66 LLM channels (27 Bedrock, 11 Anthropic CP on AWS, 28 OpenAI GPT on Bedrock) across Bedrock Global / US inference profiles (including Claude Opus 5.5, v2.27.0, Claude Sonnet 5.5 Global, v2.32.0, and US, v2.33.0, and Claude Haiku 5.5, v2.33.0), Seoul in-region on-demand Claude Opus 5 and Sonnet 5 (v2.32.0), Anthropic CP on AWS, and OpenAI GPT via Bedrock Mantle in-region endpoints (Path 4) plus Bedrock Global cross-region profiles for GPT-5.6, GPT-6 Astra, Sol and Luna and GPT-6.1 Sol and US cross-region profiles for GPT-6 Astra, Sol and Luna and GPT-6.1 Sol (v2.20.0, v2.25.0, v2.27.0, v2.32.0). (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, 30-day cost projections, and official unit prices synced every 12 hours — all behind a Next.js dashboard with eleven monitoring views.
 
-The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories and a 12-hourly sync of official unit prices. A built-in chatbot (Claude Sonnet 4.6 with four Bedrock tools) lets you query the time-series data conversationally.
+The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories and a 12-hourly sync of official unit prices. A built-in chatbot (Claude Sonnet 5.5 with four Bedrock tools) lets you query the time-series data conversationally.
 
 ![Dashboard overview: channel counts, per-model status strip, collection cadence](docs/images/ui/dashboard-en.png)
 
@@ -36,7 +36,7 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 20 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
 - **Daily Claude API Features sweep** — a scheduled Fargate task (daily at 17:30 UTC, 02:30 KST, v2.29.0) runs the 39-row catalog (= 33 documented features + 4 core Messages + Models API 1 + strict_tool_use split 1) against Claude Platform on AWS, Bedrock Mantle `/anthropic`, and Bedrock runtime (Messages API + InvokeModel + Converse) for 7 representative models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5 — 1,365 cells per run, v2.33.0), surfacing a documentation-drift banner when observed behavior disagrees with the documented availability.
 - **Multi-channel comparison** — Same model family invoked through Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), and OpenAI GPT via Bedrock Mantle (Path 4) in parallel for true apples-to-apples evaluation.
-- **AI chatbot with tools** — Claude Sonnet 4.6 chatbot answers natural-language questions over the time-series store using four custom Bedrock tools; dynamic follow-up suggestions generated per turn.
+- **AI chatbot with tools** — Claude Sonnet 5.5 chatbot answers natural-language questions over the time-series store using four custom Bedrock tools; dynamic follow-up suggestions generated per turn.
 - **Mobile-responsive UI** — one shared header with a hamburger menu on narrow screens; the same URLs adapt purely by viewport width (v2.16.0).
 - **CDK-managed infrastructure** — Eight TypeScript stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability) with reusable L3 constructs, immutable ECR tags, and idempotent lifespan migrations.
 
@@ -359,7 +359,7 @@ This project is licensed under the MIT License.
 
 Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opus 5.5 포함 v2.27.0, Claude Sonnet 5.5 Global v2.32.0과 US v2.33.0, Claude Haiku 5.5 v2.33.0), 서울 in-region 온디맨드 Claude Opus 5와 Sonnet 5(v2.32.0), Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle 인리전 엔드포인트(Path 4)와 GPT-5.6, GPT-6 Astra, Sol, Luna, GPT-6.1 Sol의 Bedrock Global cross-region 프로파일, GPT-6 Astra, Sol, Luna, GPT-6.1 Sol의 US cross-region 프로파일(v2.20.0, v2.25.0, v2.27.0, v2.32.0)에 걸친 66개 LLM 채널(Bedrock 27, Anthropic CP on AWS 11, OpenAI GPT on Bedrock 28)을 지속적으로 프로빙하는 운영 등급 관측 플랫폼입니다. (OpenAI 1P direct 경로(Path 5)는 코드에 남아 있지만 v2.19.1부터 휴면·비노출 상태입니다.) 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측, 12시간마다 갱신되는 공식 단가를 11개 모니터링 화면을 갖춘 Next.js 대시보드에서 제공합니다.
 
-이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 프롬프트 카테고리를 라운드로빈하는 워크로드 프로빙을 실행하고, 12시간마다 공식 단가를 동기화합니다. Claude Sonnet 4.6 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
+이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 프롬프트 카테고리를 라운드로빈하는 워크로드 프로빙을 실행하고, 12시간마다 공식 단가를 동기화합니다. Claude Sonnet 5.5 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
 
 ![대시보드 개요: 채널 수, 모델별 상태 스트립, 수집 주기](docs/images/ui/dashboard-ko.png)
 
@@ -375,7 +375,7 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 20 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
 - **일일 Claude API 기능 검증 스윕** — 스케줄된 Fargate 태스크(매일 17:30 UTC, 02:30 KST, v2.29.0)가 39행 카탈로그(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1)를 Claude Platform on AWS · Bedrock Mantle `/anthropic` · Bedrock runtime(Messages API + InvokeModel + Converse)에서 대표 모델 7종(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5 — 런당 1,365셀, v2.33.0)으로 실행하고, 실측이 문서상 가용성과 어긋나면 문서 드리프트 배너로 표시합니다.
 - **다중 채널 비교** — 동일 모델 family를 Bedrock Global, Bedrock US, Anthropic CP on AWS (Path 3 External), OpenAI GPT via Bedrock Mantle (Path 4) 네 채널로 병렬 호출하여 정확한 동일 조건 비교를 제공합니다.
-- **AI 챗봇 + 도구** — Claude Sonnet 4.6 챗봇이 4개의 Bedrock 커스텀 도구를 사용해 시계열 데이터에 대한 자연어 질의에 응답하며, 매 턴마다 동적 후속 질문을 생성합니다.
+- **AI 챗봇 + 도구** — Claude Sonnet 5.5 챗봇이 4개의 Bedrock 커스텀 도구를 사용해 시계열 데이터에 대한 자연어 질의에 응답하며, 매 턴마다 동적 후속 질문을 생성합니다.
 - **모바일 반응형 UI** — 공용 헤더 + 좁은 화면 햄버거 메뉴, 같은 URL이 뷰포트 폭만으로 적응 (v2.16.0).
 - **CDK 기반 인프라** — TypeScript로 작성된 8개 스택(Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)과 재사용 가능한 L3 construct, 불변 ECR tag, 멱등 lifespan 마이그레이션을 제공합니다.
 

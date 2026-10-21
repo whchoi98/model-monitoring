@@ -335,7 +335,7 @@ default client, 60 s read timeout between chunks, no wall-clock cap).
 ## Chat (Auth Required)
 
 ### POST /api/chat/stream
-**Auth required.** SSE stream — Claude Sonnet 4.6 chatbot with 4 Bedrock tools + per-turn dynamic followups.
+**Auth required.** SSE stream — Claude Sonnet 5.5 chatbot with 4 Bedrock tools + per-turn dynamic followups.
 
 ---
 

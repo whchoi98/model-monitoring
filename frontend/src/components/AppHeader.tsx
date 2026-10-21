@@ -43,7 +43,7 @@ export function useNavItems(currentKey: string): NavItem[] {
 function NavGroups({ items, mobile, onNavigate }: { items: NavItem[]; mobile?: boolean; onNavigate: () => void }) {
   const labels = useT().navigationGroups;
   return (
-    <div className={mobile ? "space-y-4" : "flex w-max min-w-full items-start gap-3 px-4 py-2 sm:px-6"}>
+    <div className={mobile ? "space-y-4" : "flex w-max min-w-full items-start justify-center gap-3 px-4 py-2 sm:px-6"}>
       {NAV_GROUPS.map((key) => {
         const entries = items.filter((item) => (item.group ?? "monitor") === key);
         if (!entries.length) return null;

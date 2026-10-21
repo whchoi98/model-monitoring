@@ -161,7 +161,7 @@ export default function InsightsPanel() {
         <div className="border-l-2 border-blue-500/50 pl-3">
           <MessageMarkdown text={streamingText} />
           <div className="text-[10px] text-blue-400/70 mt-2 animate-pulse">
-            {lang === "en" ? "Streaming from Sonnet 4.6..." : "Sonnet 4.6 스트리밍 중..."}
+            {lang === "en" ? "Streaming from Sonnet 5.5..." : "Sonnet 5.5 스트리밍 중..."}
           </div>
         </div>
       ) : insight ? (

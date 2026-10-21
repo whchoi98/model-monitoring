@@ -13,7 +13,7 @@
   stream_watchdog.CallWatchdog의 wall-clock 상한(INSIGHTS_CALL_WALL_CLOCK_S, 기본 180초)으로 끊는다. botocore 재시도는 스트림이
   열리기 전(헤더 대기)에만 일어나 생성을 다시 과금하지 않는다.
 - KO와 EN을 동시에 만든다(워커 2개). KO가 실패하면 저장하지 않고(-1), EN이 실패하면 KO만 저장한다. 프롬프트, max_tokens
-  8192, temperature 0.1은 그대로다.
+  8192는 그대로다. v2.35.1에서 Sonnet 5.5로 전환하면서 temperature는 생략한다.
 - 스트림이 열린 뒤 끊기면(청크 사이 read timeout, 연결 끊김, 스트림 안의 오류 이벤트) 남은 예산이 _RETRY_MIN_S 이상일 때만 한
   번 다시 부른다. 끊긴 시도의 부분 텍스트는 버린다. wall-clock 만료는 다시 부르지 않는다.
 - CLI 태스크 예산(INSIGHTS_TASK_BUDGET_S, 기본 240초): 호출 상한은 min(180초, 마감 − 지금 − 저장 여유 15초)이고, 예산 + 15초에
@@ -25,6 +25,7 @@
 시간은 줄여서 본다: read timeout 60초 → 0.5초. 생성 70초(운영 EN p50)는 0.25초 간격 델타 6개(1.5초)다.
 """
 
+import asyncio
 import os
 import re
 import subprocess
@@ -33,11 +34,14 @@ import textwrap
 import threading
 import time
 from pathlib import Path
+from types import SimpleNamespace
 
 import boto3
 import botocore.exceptions
 import pytest
 from botocore.config import Config
+from fastapi import FastAPI
+from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
@@ -45,6 +49,9 @@ from sqlalchemy.pool import StaticPool
 import agent.bedrock
 import insights_runner
 import models
+from auth import get_current_user
+from routers import chat as chat_router
+from routers import insights as insights_router
 from tests._fake_bedrock import Blocking, FakeBedrock, Silent, Stream
 from tests._read_dataset import FROZEN_NOW, FrozenDatetime, seed
 
@@ -188,7 +195,7 @@ def test_a_generation_longer_than_the_read_timeout_is_saved_in_both_languages(da
     assert [r.outcome for r in fake.requests] == ["completed", "completed"]
 
 
-def test_requests_carry_the_unchanged_prompts_and_inference_config(dataset, fake):
+def test_requests_carry_the_unchanged_prompts_with_sonnet55_config(dataset, fake):
     insights_runner.run_once("6h")
     saved = _only_saved(dataset)
     for lang in ("ko", "en"):
@@ -196,7 +203,65 @@ def test_requests_carry_the_unchanged_prompts_and_inference_config(dataset, fake
         system, user_text = insights_runner._build_prompt("6h", saved.model_breakdown, lang)
         assert req.body["system"] == [{"text": system}]
         assert req.body["messages"] == [{"role": "user", "content": [{"text": user_text}]}]
-        assert req.body["inferenceConfig"] == {"maxTokens": 8192, "temperature": 0.1}
+        assert req.path == "/model/global.anthropic.claude-sonnet-5-5/converse-stream"
+        assert req.body["inferenceConfig"] == {"maxTokens": 8192}
+
+
+@pytest.mark.parametrize("helper", ["chat", "blocking", "stream", "collect"])
+def test_default_helpers_send_sonnet55_requests_without_deprecated_temperature(fake, helper):
+    """A stale model ID or sampling default would reject AI requests on Sonnet 5.5."""
+    messages = [{"role": "user", "content": [{"text": "Summarize the monitoring data."}]}]
+    kwargs = {"messages": messages, "max_tokens": 128}
+    fake.default = Blocking("summary", delay_s=0) if helper == "blocking" else Stream(["sum", "mary"])
+    if helper == "chat":
+        async def collect_chat():
+            return [event async for event in agent.bedrock.converse_stream_chat(**kwargs)]
+
+        events = asyncio.run(collect_chat())
+        text = "".join(event["text"] for event in events if event["type"] == "text_delta")
+        assert any(event.get("stop_reason") == "end_turn" for event in events)
+    elif helper == "blocking":
+        text = agent.bedrock.converse_blocking(**kwargs)
+    elif helper == "stream":
+        text = "".join(agent.bedrock.converse_stream_text(**kwargs))
+    else:
+        text = agent.bedrock.converse_stream_collect(**kwargs, wall_clock_s=5).text
+    assert text == "summary"
+    (request,) = fake.requests
+    operation = "converse" if helper == "blocking" else "converse-stream"
+    assert request.path == f"/model/global.anthropic.claude-sonnet-5-5/{operation}"
+    assert request.body["messages"] == messages
+    assert request.body["inferenceConfig"] == {"maxTokens": 128}
+
+
+@pytest.mark.parametrize("lang", ["ko", "en"])
+def test_stream_regenerate_uses_sonnet55_without_temperature(dataset, fake, monkeypatch, lang):
+    """The manual refresh caller must not reintroduce the removed sampling option."""
+    monkeypatch.setattr(insights_router, "SessionLocal", dataset)
+    app = FastAPI()
+    app.include_router(insights_router.router)
+    app.dependency_overrides[get_current_user] = lambda: SimpleNamespace(username="tester")
+    fake.default = Stream(["AI ", "summary"])
+    with TestClient(app) as client:
+        response = client.post("/api/insights/stream-regenerate", json={"window": "6h", "lang": lang})
+    assert response.status_code == 200
+    assert "event: final" in response.text and '"ok": true' in response.text
+    assert "event: error" not in response.text
+    assert _only_saved(dataset).summary_md == "AI summary"
+    (request,) = fake.by_lang(lang)
+    assert request.path == "/model/global.anthropic.claude-sonnet-5-5/converse-stream"
+    assert request.body["inferenceConfig"] == {"maxTokens": 8192}
+
+
+def test_followups_keep_the_haiku_model_and_explicit_temperature(fake):
+    fake.default = Blocking('["Which model is fastest?", "What changed?", "Any errors?"]', delay_s=0)
+    followups = asyncio.run(chat_router._generate_followups(
+        "Show recent performance.", "The recent monitoring results show several healthy model channels.",
+    ))
+    assert followups == ["Which model is fastest?", "What changed?", "Any errors?"]
+    (request,) = fake.requests
+    assert request.path == "/model/global.anthropic.claude-haiku-4-5-20251001-v1%3A0/converse"
+    assert request.body["inferenceConfig"] == {"maxTokens": 400, "temperature": 0.4}
 
 
 def test_ko_and_en_are_generated_concurrently(dataset, fake):

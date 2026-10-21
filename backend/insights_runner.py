@@ -3,7 +3,7 @@
 흐름:
   1. 최근 N시간(기본 6h) 자동 run의 ProbeResult에서 통계에 쓰는 다섯 열만 나눠 읽는다. 읽은 세션은 닫는다.
   2. 모델별 stats 계산 (avg/p50/p95/err_rate).
-  3. Sonnet 4.6에 요약 프롬프트 + stats를 전달, KO와 EN 마크다운 요약을 동시에 스트리밍으로 받는다.
+  3. Sonnet 5.5에 요약 프롬프트 + stats를 전달, KO와 EN 마크다운 요약을 동시에 스트리밍으로 받는다.
   4. 새 세션의 짧은 트랜잭션으로 Insight 테이블에 INSERT.
 
 ECS Task Definition CMD:
@@ -80,7 +80,6 @@ _RETRY_MIN_S = 90.0  # 끊긴 스트림은 호출 상한이 이만큼 남았을 
 _CALL_ATTEMPTS = 2  # 언어당 converse_stream 호출 수(재시도 포함). 헤더 대기 재시도는 botocore가 따로 한다
 _BACKSTOP_GRACE_S = 15.0
 _MAX_TOKENS = 8192
-_TEMPERATURE = 0.1
 _LANGS = ("ko", "en")  # 프롬프트를 만들고 제출하는 순서
 _clock = time.monotonic
 
@@ -176,7 +175,6 @@ def _summarize_prompt(client, lang: str, system: str, user_text: str, deadline: 
                 model_id=bedrock.INSIGHTS_MODEL_ID,
                 system=system,
                 max_tokens=_MAX_TOKENS,
-                temperature=_TEMPERATURE,
                 wall_clock_s=limit,
                 client=client,
             )
@@ -202,7 +200,7 @@ def _summarize_prompt(client, lang: str, system: str, user_text: str, deadline: 
 
 def _summarize(window_label: str, stats: Dict[str, Any], lang: str, *, client=None,
                deadline: float | None = None) -> str:
-    """Sonnet 4.6 요약 하나 — lang in {'ko','en'}. 프롬프트는 _build_prompt와 같다."""
+    """Sonnet 5.5 요약 하나 — lang in {'ko','en'}. 프롬프트는 _build_prompt와 같다."""
     from agent import bedrock
 
     system, user_text = _build_prompt(window_label, stats, lang)

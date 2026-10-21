@@ -31,8 +31,17 @@ from stream_watchdog import CallWatchdog
 logger = logging.getLogger(__name__)
 
 # 챗봇 기본 모델 — Seoul deployment에서는 global inference profile 사용.
-CHAT_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
-INSIGHTS_MODEL_ID = "global.anthropic.claude-sonnet-4-6"
+CHAT_MODEL_ID = "global.anthropic.claude-sonnet-5-5"
+INSIGHTS_MODEL_ID = "global.anthropic.claude-sonnet-5-5"
+
+
+def _inference_config(max_tokens: int, temperature: Optional[float]) -> Dict:
+    # Sonnet 5.5 rejects temperature. Keep it opt-in for callers using older models,
+    # including the Haiku 4.5 follow-up generator.
+    config: Dict = {"maxTokens": max_tokens}
+    if temperature is not None:
+        config["temperature"] = temperature
+    return config
 
 
 def _client():
@@ -84,7 +93,7 @@ async def converse_stream_chat(
     system: str = DEFAULT_CHAT_SYSTEM,
     tools: Optional[List[dict]] = None,
     max_tokens: int = 1024,
-    temperature: float = 0.2,
+    temperature: Optional[float] = None,
 ) -> AsyncIterator[Dict]:
     """챗봇용 ConverseStream — 이벤트를 비동기 generator로 yield.
 
@@ -97,7 +106,7 @@ async def converse_stream_chat(
         "modelId": model_id,
         "messages": messages,
         "system": [{"text": system}],
-        "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
+        "inferenceConfig": _inference_config(max_tokens, temperature),
     }
     if tools:
         params["toolConfig"] = {"tools": tools}
@@ -176,13 +185,13 @@ def converse_blocking(
     model_id: str = INSIGHTS_MODEL_ID,
     system: Optional[str] = None,
     max_tokens: int = 2048,
-    temperature: float = 0.1,
+    temperature: Optional[float] = None,
 ) -> str:
     """배치 잡용 — converse() 동기 호출, 최종 텍스트 한 번에 반환."""
     params: Dict = {
         "modelId": model_id,
         "messages": messages,
-        "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
+        "inferenceConfig": _inference_config(max_tokens, temperature),
     }
     if system:
         params["system"] = [{"text": system}]
@@ -204,7 +213,7 @@ def converse_stream_text(
     model_id: str = INSIGHTS_MODEL_ID,
     system: Optional[str] = None,
     max_tokens: int = 2048,
-    temperature: float = 0.1,
+    temperature: Optional[float] = None,
 ):
     """동기 generator — Bedrock converse_stream의 text_delta를 즉시 yield.
 
@@ -213,7 +222,7 @@ def converse_stream_text(
     params: Dict = {
         "modelId": model_id,
         "messages": messages,
-        "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
+        "inferenceConfig": _inference_config(max_tokens, temperature),
     }
     if system:
         params["system"] = [{"text": system}]
@@ -261,7 +270,7 @@ def converse_stream_collect(
     model_id: str = INSIGHTS_MODEL_ID,
     system: Optional[str] = None,
     max_tokens: int = 2048,
-    temperature: float = 0.1,
+    temperature: Optional[float] = None,
     wall_clock_s: float,
     client=None,
 ) -> StreamedText:
@@ -276,7 +285,7 @@ def converse_stream_collect(
     params: Dict = {
         "modelId": model_id,
         "messages": messages,
-        "inferenceConfig": {"maxTokens": max_tokens, "temperature": temperature},
+        "inferenceConfig": _inference_config(max_tokens, temperature),
     }
     if system:
         params["system"] = [{"text": system}]

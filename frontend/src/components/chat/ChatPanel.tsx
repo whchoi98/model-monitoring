@@ -93,7 +93,7 @@ export default function ChatPanel({ onClose, variant = "modal" }: ChatPanelProps
           <span className="w-2 h-2 rounded-full bg-emerald-500" />
           <span className="text-sm font-semibold">Bedrock Monitor Assistant</span>
           <span className="text-[10px] text-gray-500 uppercase tracking-wider">
-            Sonnet 4.6
+            Sonnet 5.5
           </span>
         </div>
         <div className="flex items-center gap-2">

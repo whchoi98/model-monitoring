@@ -162,8 +162,8 @@ flowchart LR
 | Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna and GPT 6 Astra, Sol, Luna and GPT 6.1 Sol in-region (17 channels); `/anthropic` surface for the parity run and Claude API Features in `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
 | Claude Platform on AWS | 11 Anthropic channels at `aws-external-anthropic.us-east-2.api.aws` with a workspace ID header |
 | OpenAI channel total | 28 = Mantle in-region 17 + Global CRIS 7 + US CRIS 4; the OpenAI 1P direct path (5 channels) is dormant and hidden since v2.19.1 |
-| Chatbot | Claude Sonnet 4.6 (`CHAT_MODEL_ID` in `backend/agent/bedrock.py`) with 4 tools; follow-up questions from Claude Haiku 4.5 (`backend/routers/chat.py`) |
-| Insights | Claude Sonnet 4.6 (`INSIGHTS_MODEL_ID`) writes KO and EN summaries of the last 6 hours |
+| Chatbot | Claude Sonnet 5.5 (`CHAT_MODEL_ID` in `backend/agent/bedrock.py`) with 4 tools; follow-up questions from Claude Haiku 4.5 (`backend/routers/chat.py`) |
+| Insights | Claude Sonnet 5.5 (`INSIGHTS_MODEL_ID`) writes KO and EN summaries of the last 6 hours |
 | AgentCore Memory `BedrockMonitorChatMemory` | Chat context, 30-day retention; IAM managed policy attached to the backend task role |
 | Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize` in `BEDROCK_OPTIMIZE_REGION` (default us-east-1) |
 | Amazon SES (us-east-1) | Registration approval email to the admin address |
@@ -427,8 +427,8 @@ flowchart LR
 | Bedrock Mantle | OpenAI GPT 5.4, 5.5, 5.6 Sol, Terra, Luna와 GPT 6 Astra, Sol, Luna, GPT 6.1 Sol 인리전(17채널), 패리티 런과 Claude API Features용 `/anthropic` surface는 `MANTLE_ANTHROPIC_REGION=us-east-1` (ADR-026) |
 | Claude Platform on AWS | `aws-external-anthropic.us-east-2.api.aws` + workspace ID 헤더로 호출하는 Anthropic 11채널 |
 | OpenAI 채널 합계 | 28 = Mantle 인리전 17 + Global CRIS 7 + US CRIS 4, OpenAI 1P direct 경로(5채널)는 v2.19.1부터 휴면, 비노출 |
-| 챗봇 | Claude Sonnet 4.6(`backend/agent/bedrock.py` `CHAT_MODEL_ID`) + 도구 4개, 후속 질문은 Claude Haiku 4.5(`backend/routers/chat.py`) |
-| 인사이트 | Claude Sonnet 4.6(`INSIGHTS_MODEL_ID`)이 최근 6시간 KO, EN 요약 작성 |
+| 챗봇 | Claude Sonnet 5.5(`backend/agent/bedrock.py` `CHAT_MODEL_ID`) + 도구 4개, 후속 질문은 Claude Haiku 4.5(`backend/routers/chat.py`) |
+| 인사이트 | Claude Sonnet 5.5(`INSIGHTS_MODEL_ID`)이 최근 6시간 KO, EN 요약 작성 |
 | AgentCore Memory `BedrockMonitorChatMemory` | 대화 컨텍스트 30일 보존, IAM 관리형 정책을 backend 태스크 역할에 연결 |
 | Bedrock Agent Runtime OptimizePrompt | `/api/prompts/optimize`, `BEDROCK_OPTIMIZE_REGION`(기본 us-east-1) |
 | Amazon SES (us-east-1) | 가입 승인 메일을 관리자 주소로 발송 |
