@@ -50,7 +50,7 @@ function ModelStatusItem({ row, selected, onToggleModel, now, layout }: {
   return (
     <article
       data-layout={layout}
-      className={`min-w-0 rounded-xl border bg-gray-900/50 transition-colors ${
+      className={`model-status-item min-w-0 rounded-xl border bg-gray-900 transition-colors ${
         selected ? "border-blue-500 ring-1 ring-blue-500/40"
           : health === "error" ? "border-rose-500/35"
             : health === "overloaded" || health === "stale" ? "border-amber-500/30" : "border-gray-800"
@@ -74,11 +74,11 @@ function ModelStatusItem({ row, selected, onToggleModel, now, layout }: {
               <ModelName name={model.name} />
             </span>
             {compact ? (
-              <span className="mt-1 block text-[11px] text-gray-500 md:mt-0 md:whitespace-nowrap" title={formatDateTime(result?.timestamp, lang)}>
+              <span className="mt-1 block text-xs text-gray-500 md:mt-0 md:whitespace-nowrap" title={formatDateTime(result?.timestamp, lang)}>
                 <span className="md:sr-only">{m.lastResult} · </span>{time}
               </span>
             ) : (
-              <code className="mt-1 block truncate text-[11px] text-gray-500" title={model.id}>{model.id}</code>
+              <code className="mt-1 block truncate text-xs text-gray-500" title={model.id}>{model.id}</code>
             )}
           </span>
           <HealthBadge health={health} />
@@ -87,11 +87,11 @@ function ModelStatusItem({ row, selected, onToggleModel, now, layout }: {
           <span className="grid grid-cols-3 gap-2">
             {metrics.map((metric) => (
               <span key={metric.key} className="min-w-0">
-                <span className={`block text-[11px] text-gray-500 ${compact ? "md:sr-only" : ""}`}>{metric.name}</span>
+                <span className={`block text-xs text-gray-500 ${compact ? "md:sr-only" : ""}`}>{metric.name}</span>
                 <span data-grade={metric.rule.grade} title={metric.hint}
                   className={`flex min-w-0 flex-wrap items-baseline gap-x-1 font-mono text-base font-medium tabular-nums ${compact ? "mt-0.5 md:mt-0" : "mt-1"} ${GRADE_TEXT_CLASS[metric.rule.grade]}`}>
                   <span>{metric.value}</span>
-                  {metric.value !== "—" && <span className="text-[11px] font-normal text-gray-500">{metric.unit}</span>}
+                  {metric.value !== "—" && <span className="text-xs font-normal text-gray-500">{metric.unit}</span>}
                   {GRADE_MARKER[metric.rule.grade] && (
                     <span aria-hidden="true" data-marker={metric.rule.grade} className="text-xs">{GRADE_MARKER[metric.rule.grade]}</span>
                   )}
@@ -105,12 +105,12 @@ function ModelStatusItem({ row, selected, onToggleModel, now, layout }: {
           </span>
         )}
         {!compact && success && result && (
-          <span className="mt-3 block text-[11px] text-gray-500">
+          <span className="mt-3 block text-xs text-gray-500">
             {t.metrics.inputTokens.name}: {result.input_tokens ?? "—"} · {t.metrics.outputTokens.name}: {result.output_tokens ?? "—"}
           </span>
         )}
         {!compact && (
-          <span className="mt-3 flex flex-wrap items-center justify-between gap-1 border-t border-gray-800 pt-2 text-[11px] text-gray-500">
+          <span className="mt-3 flex flex-wrap items-center justify-between gap-1 border-t border-gray-800 pt-2 text-xs text-gray-500">
             <span>{selected ? `✓ ${m.selection(1)}` : m.lastResult}</span>
             <span title={formatDateTime(result?.timestamp, lang)}>{time}</span>
           </span>

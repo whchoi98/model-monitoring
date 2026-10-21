@@ -293,19 +293,19 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
       </div>
 
       {/* 입력 영역 */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-5 space-y-3">
+      <div className="ui-panel p-5 space-y-3">
         <textarea
           value={prompt}
           onChange={(e) => setPrompt(e.target.value)}
           rows={6}
           disabled={running}
           placeholder={lang === "en" ? "Enter the prompt to compare..." : "비교할 프롬프트를 입력하세요..."}
-          className="w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
+          className="ui-input w-full bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 disabled:opacity-50"
         />
 
         {/* 추천 비교 프롬프트 풍선말 - 모델별 강·약점이 잘 드러나는 task type 5종 */}
         <div className="flex flex-col gap-2">
-          <span className="text-[10px] uppercase tracking-wider text-gray-500">
+          <span className="text-xs uppercase tracking-wider text-gray-500">
             {lang === "en" ? "Suggested prompts" : "추천 비교 프롬프트"}
           </span>
           <div className="flex flex-wrap gap-1.5">
@@ -316,7 +316,7 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
                   type="button"
                   disabled={running}
                   onClick={() => setPrompt(item.prompt)}
-                  className="px-2.5 py-1 text-[11px] rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
+                  className="px-2.5 py-1 text-xs rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
                   title={item.prompt.slice(0, 200)}
                 >
                   {item.label}
@@ -336,7 +336,7 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
               min={1}
               max={8192}
               disabled={running}
-              className="w-20 bg-gray-950 border border-gray-700 rounded-md px-2 py-1 text-gray-100 disabled:opacity-50"
+              className="ui-input w-20 bg-gray-950 border border-gray-700 rounded-md px-2 py-1 text-gray-100 disabled:opacity-50"
             />
           </label>
           <label className="flex items-center gap-2">
@@ -349,7 +349,7 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
               max={2}
               step={0.1}
               disabled={running}
-              className="w-20 bg-gray-950 border border-gray-700 rounded-md px-2 py-1 text-gray-100 disabled:opacity-50"
+              className="ui-input w-20 bg-gray-950 border border-gray-700 rounded-md px-2 py-1 text-gray-100 disabled:opacity-50"
             />
           </label>
         </div>
@@ -428,11 +428,11 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
 
       {/* 비교 매트릭스 */}
       {matrix && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-          <h2 className="text-sm font-semibold text-gray-200 mb-3">
+        <div className="ui-panel overflow-x-auto ui-table-shell">
+          <h2 className="text-base font-semibold text-gray-200 mb-3">
             {lang === "en" ? "Metrics Matrix" : "지표 비교"}
           </h2>
-          <table className="w-full text-xs">
+          <table className="ui-table w-full text-xs">
             <thead>
               <tr className="text-gray-500 border-b border-gray-800">
                 <th className="text-left py-2 pr-3">Model</th>
@@ -474,7 +474,7 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
               })}
             </tbody>
           </table>
-          <p className="text-[10px] text-gray-600 mt-2">
+          <p className="text-xs text-gray-600 mt-2">
             {lang === "en"
               ? "Best value per column shown in green. Cost is estimated from the current prices on the Unit Prices page."
               : "각 컬럼의 최적 값을 녹색으로 강조. 비용은 비용 단가 메뉴의 현재 단가로 계산한 추정치입니다."}
@@ -497,19 +497,19 @@ export default function ComparePanel({ user, onLoginClick }: Props) {
               <div className="flex items-start justify-between mb-2 gap-2">
                 <div className="min-w-0">
                   <h3 className="text-sm font-semibold text-gray-200 truncate">{r.model_name}</h3>
-                  <code className="text-[10px] text-gray-500 truncate block">{r.model_id}</code>
+                  <code className="text-xs text-gray-500 truncate block">{r.model_id}</code>
                 </div>
                 {r.result?.status === "success" ? (
-                  <div className="text-[10px] text-gray-500 text-right shrink-0">
+                  <div className="text-xs text-gray-500 text-right shrink-0">
                     <div>TTFT {r.result.ttft_ms !== null ? `${r.result.ttft_ms.toFixed(0)}ms` : "—"}</div>
                     <div>Total {(r.result.total_latency_ms / 1000).toFixed(2)}s</div>
                   </div>
                 ) : r.error ? (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-300 border border-rose-500/30">
                     {lang === "en" ? "ERROR" : "에러"}
                   </span>
                 ) : (
-                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
+                  <span className="text-xs px-2 py-0.5 rounded-full bg-blue-500/20 text-blue-300 border border-blue-500/30">
                     {r.ttft_ms ? `TTFT ${r.ttft_ms.toFixed(0)}ms` : "..."}
                   </span>
                 )}

@@ -22,7 +22,7 @@ export default function TrendComparisonControls({ availableModels, selectedModel
   const representativeSelection = isSelection(representatives, representatives.size);
 
   return (
-    <div className="flex flex-wrap items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/50 p-3">
+    <div className="ui-panel flex flex-wrap items-center gap-3 p-3">
       <div role="group" aria-label={m.comparisonScope} className="flex flex-wrap items-center gap-2">
         <button type="button" className={selectedModels.size === 0 ? "ui-button-primary" : "ui-button"}
           aria-pressed={selectedModels.size === 0} onClick={() => onSelect(new Set())}>{t.allModels}</button>
@@ -40,7 +40,7 @@ export default function TrendComparisonControls({ availableModels, selectedModel
           {groups.map((group) => <option key={group.key} value={group.key}>{group.key === "other" ? m.otherModels : group.key} · {m.channelCount(group.names.length)}</option>)}
         </select>
       </label>
-      <p className="ui-copy w-full text-[11px] text-gray-500">
+      <p className="ui-copy w-full text-xs text-gray-500">
         {t.repModelsHint}{selectedModels.size > 0 ? ` · ${m.selection(selectedModels.size)}` : ""}
       </p>
     </div>

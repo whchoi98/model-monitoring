@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 // Model Explorer (v2.9.0) — 모니터링 중인 전체 모델 카드 그리드 + 상세 모달.
 // 참조 UX: aws-samples Bedrock Central의 Explore Models (검색/필터 + 카드 + 상세).
 // 데이터는 /api/models(공개)에서 — 모델 추가 시 자동 반영, 하드코딩 없음.
@@ -184,9 +187,9 @@ function DetailModal({ model, price, onClose }: {
               {" — "}
               {examples[tab].description}
             </p>
-            <div className="text-[11px] text-gray-500 mb-1">{examples[tab].label}</div>
+            <div className="text-xs text-gray-500 mb-1">{examples[tab].label}</div>
             <pre tabIndex={0} aria-label={lang === "en" ? `${examples[tab].api} code example` : `${examples[tab].api} 코드 예제`}
-                 className="bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs text-gray-200 leading-relaxed">
+                 className="bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs text-gray-200 leading-relaxed ui-table-shell">
               <code>{examples[tab].code}</code>
             </pre>
           </div>
@@ -196,6 +199,7 @@ function DetailModal({ model, price, onClose }: {
 }
 
 export default function ModelExplorer() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const t = useT();
   const resource = useAsyncResource<ModelInfo[]>("model-catalog", fetchModels);
@@ -223,24 +227,24 @@ export default function ModelExplorer() {
   }, [models, search, channel]);
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.exploreWorkspace} title={<>
             {lang === "en" ? "Model Explorer" : "모델 탐색"}
-          </h1>
+          </>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
               ? "Select a model for invoke IDs, code examples, and links."
               : "모델을 선택하면 호출 ID·코드 예제·연결 링크를 볼 수 있습니다."}
           </p>
-        </div>
-        <RefreshControls
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><RefreshControls
           refreshing={resource.refreshing || pricing.refreshing}
           onRefresh={() => { void resource.refresh(); void pricing.refresh(); }}
           updatedAt={resource.updatedAt}
-        />
-      </div>
+        /></div>
+      </PageHeading>
 
       {/* 검색 + 채널 필터 */}
       <div className="flex items-end gap-3 flex-wrap">
@@ -304,7 +308,7 @@ export default function ModelExplorer() {
               aria-label={m.name}
               aria-haspopup="dialog"
               aria-expanded={selected?.id === m.id}
-              className="w-full min-w-0 text-left bg-gray-900/50 border border-gray-800 rounded-xl p-4 hover:border-blue-500/50 focus-visible:border-blue-500/50 transition-colors group"
+              className="ui-panel w-full min-w-0 text-left hover:border-blue-500/50 focus-visible:border-blue-500/50 transition-colors group"
             >
               <div className="flex items-start justify-between gap-2">
                 <h3 className="text-sm font-semibold text-gray-100 group-hover:text-blue-300 group-focus-visible:text-blue-300 transition-colors">
@@ -314,8 +318,8 @@ export default function ModelExplorer() {
                   {ch.badge}
                 </span>
               </div>
-              <code className="block text-[11px] text-gray-500 break-all mt-1.5">{m.id}</code>
-              <div className="text-[11px] text-gray-500 mt-2 tabular-nums">
+              <code className="block text-xs text-gray-500 break-all mt-1.5">{m.id}</code>
+              <div className="text-xs text-gray-500 mt-2 tabular-nums">
                 {price
                   ? `${formatPricePair(price)} ${lang === "en" ? "(per 1M tokens, in/out)" : "(1M 토큰당 입력/출력)"}`
                   : pricing.loading ? (lang === "en" ? "Loading prices…" : "단가 불러오는 중…")

@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchStopReasons,
@@ -59,6 +62,7 @@ function labelStopReason(key: string, lang: "ko" | "en"): string {
 }
 
 export default function AnalysisPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const [windowSpec, setWindowSpec] = useState("7d");
   const [category, setCategory] = useState<string | null>(null);
@@ -90,19 +94,19 @@ export default function AnalysisPanel() {
     : 1;
 
   return (
-    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.analysisWorkspace} title={<>
             {lang === "en" ? "Output Analysis" : "출력 분석"}
-          </h1>
+          </>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
               ? "Stop reason distribution + Output token length"
               : "정지 사유 분포 + 출력 토큰 길이"}
           </p>
-        </div>
-        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">{lang === "en" ? "Window" : "기간"}</span>
           <div className="flex flex-wrap gap-1">
             {WINDOW_OPTIONS.map((w) => (
@@ -118,18 +122,19 @@ export default function AnalysisPanel() {
             ))}
           </div>
         </div>
-      </div>
-
-      <RefreshControls
+<RefreshControls
         refreshing={stopResource.refreshing || lengthResource.refreshing || categoriesResource.refreshing}
         onRefresh={() => { reset(); void refreshAll(); }}
         updatedAt={updatedAt}
         enabled={enabled}
         onEnabledChange={setEnabled}
         countdown={countdown}
-      />
+      /></div>
+      </PageHeading>
 
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-3">
+
+
+      <div className="ui-panel space-y-3">
         <label className="flex flex-wrap items-center gap-3 text-xs text-gray-400">
           <span>{lang === "en" ? "Workload" : "워크로드"}</span>
           <select
@@ -163,9 +168,9 @@ export default function AnalysisPanel() {
       </div>
 
       {/* ───── Stop Reason 분포 ───── */}
-      <section aria-labelledby="analysis-stop-title" className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-4">
+      <section aria-labelledby="analysis-stop-title" className="ui-panel min-w-0 space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="analysis-stop-title" className="text-sm font-semibold text-gray-200">
+          <h2 id="analysis-stop-title" className="text-base font-semibold text-gray-200 section-title">
             {lang === "en" ? "Stop Reason Distribution" : "Stop Reason 분포"}
           </h2>
           <span className="text-xs text-gray-500">
@@ -252,9 +257,9 @@ export default function AnalysisPanel() {
       </section>
 
       {/* ───── Output Length 분포 ───── */}
-      <section aria-labelledby="analysis-length-title" className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-4">
+      <section aria-labelledby="analysis-length-title" className="ui-panel min-w-0 space-y-4">
         <div className="flex flex-wrap items-baseline justify-between gap-2">
-          <h2 id="analysis-length-title" className="text-sm font-semibold text-gray-200">
+          <h2 id="analysis-length-title" className="text-base font-semibold text-gray-200 section-title">
             {lang === "en" ? "Output Length Distribution" : "출력 길이 분포"}
           </h2>
           <span className="text-xs text-gray-500">
@@ -274,8 +279,8 @@ export default function AnalysisPanel() {
         {!lengthResource.error && !lengthResource.refreshing && lengthData?.rows.length === 0 && <DataEmpty />}
 
         {lengthData && lengthData.rows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-sm">
+          <div className="overflow-x-auto ui-table-shell">
+            <table className="ui-table w-full min-w-[640px] text-sm">
               <thead className="text-xs text-gray-500 border-b border-gray-800">
                 <tr>
                   <th className="px-2 py-2 text-left">{lang === "en" ? "Model" : "모델"}</th>
@@ -314,7 +319,7 @@ export default function AnalysisPanel() {
                           />
                         ))}
                       </div>
-                      <div className="flex justify-between text-[11px] text-gray-500 mt-0.5">
+                      <div className="flex justify-between text-xs text-gray-500 mt-0.5">
                         <span>0</span>
                         <span>4k+</span>
                       </div>

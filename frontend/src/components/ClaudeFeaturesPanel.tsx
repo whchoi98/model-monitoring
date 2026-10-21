@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 // Claude API Features (v2.23.0) — platform.claude.com "Build with Claude" 33피처(+코어 4, Models API)를
 // Claude Platform on AWS / Bedrock Mantle / Bedrock runtime(Messages API · InvokeModel · Converse) 5열에서 실행-증거로 검증.
 // 표 하단 "참조" 블록: Mantle에서 측정 불가한 모델(Fable 5.1 = US GovCloud 전용, Sonnet 5.5와 Haiku 5.5 = Mantle us-east-1 미서빙)을 카탈로그 mantle_reason/mantle_reason_en으로 표기 (v2.23.1, v2.32.0).
@@ -62,7 +65,7 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
   const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
     <details open={!isOk} className="group">
       <summary className="cursor-pointer select-none text-sm text-gray-400 hover:text-gray-200 py-1">
-        <span className="inline-block w-3 text-[11px] transition-transform group-open:rotate-90">▶</span> {title}
+        <span className="inline-block w-3 text-xs transition-transform group-open:rotate-90">▶</span> {title}
       </summary>
       <pre className={`mt-1 rounded-lg p-3 overflow-x-auto text-xs leading-relaxed border ${
         tone === "error" ? "bg-gray-950 border-rose-500/30 text-rose-300 whitespace-pre-wrap break-all" : "bg-gray-950 border-gray-800 text-gray-200"}`}>
@@ -74,8 +77,8 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
   return (
     <Dialog title={lang === "en" ? "Execution evidence" : "실행 증거"} onClose={onClose}>
         <div>
-          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Evidence</div>
-          <h2 className="text-base font-bold text-gray-100 mt-0.5">{featureLabelOf(labels, cell.feature)} · {surfaceShortOf(labels, cell.surface)} · {cell.model_label}</h2>
+          <div className="text-xs font-semibold tracking-wider text-blue-400 uppercase">Evidence</div>
+          <h2 className="text-base font-bold text-gray-100 mt-0.5 section-title">{featureLabelOf(labels, cell.feature)} · {surfaceShortOf(labels, cell.surface)} · {cell.model_label}</h2>
           <div className="text-xs text-gray-500 mt-0.5 font-mono">{cell.feature} · {cell.surface} · {cell.model_id ?? "—"}</div>
         </div>
         <div className="bg-gray-950/60 light:bg-gray-50 border border-gray-800 rounded-xl p-4 space-y-2">
@@ -83,13 +86,13 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
             <span className={`px-2.5 py-0.5 text-[11px] font-medium rounded-full border ${STATUS_STYLE[cell.status]}`}>{STATUS_LABEL[cell.status]}</span>
             <span className="text-xs text-gray-500">{lang === "en" ? "documented" : "문서"}: <b className="text-gray-300">{DOC_LABEL[cell.documented]}</b></span>
             <span className={`text-xs ${VERDICT_STYLE[cell.verdict]}`}>{lang === "en" ? "verdict" : "판정"}: {cell.verdict}</span>
-            {data?.verification && <span className="px-1.5 py-0.5 text-[11px] rounded bg-gray-800 text-gray-400" title={verificationDesc(data.verification, lang)}>{data.verification}</span>}
+            {data?.verification && <span className="px-1.5 py-0.5 text-xs rounded bg-gray-800 text-gray-400" title={verificationDesc(data.verification, lang)}>{data.verification}</span>}
             <span className="text-xs text-gray-500 ml-auto tabular-nums">{isProbed(cell.status) ? formatMs(cell.latency_ms) : "-"}</span>
           </div>
           <p className={`text-sm leading-relaxed ${isOk ? "text-gray-300" : cell.status === "broken" ? "text-rose-300" : "text-amber-300"}`}>{verdictText[cell.status]}</p>
-          {data?.notes && <p className="text-[11px] text-gray-500">{data.notes}</p>}
+          {data?.notes && <p className="text-xs text-gray-500">{data.notes}</p>}
           {data?.doc_url && (
-            <a href={data.doc_url} target="_blank" rel="noreferrer" className="text-[11px] text-blue-400 hover:underline">
+            <a href={data.doc_url} target="_blank" rel="noreferrer" className="text-xs text-blue-400 hover:underline">
               {lang === "en" ? "Open documentation →" : "공식 문서 열기 →"}
             </a>
           )}
@@ -129,7 +132,7 @@ function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClos
   const Sec = ({ title, sub, color, empty, children }: { title: string; sub: string; color: string; empty: boolean; children: ReactNode }) => (
     <section>
       <h3 className={`text-sm font-semibold mb-1 ${color}`}>{title}</h3>
-      <p className="text-[11px] text-gray-500 mb-2">{sub}</p>
+      <p className="text-xs text-gray-500 mb-2">{sub}</p>
       {empty ? none : children}
     </section>
   );
@@ -141,11 +144,11 @@ function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClos
             <span className="text-sm font-medium text-gray-100">{label(g.feature)}</span>
             <span className={`text-xs font-semibold whitespace-nowrap ${tone === "rose" ? "text-rose-300" : "text-amber-300"}`}>{g.count}/{g.probed} {T("cells", "셀")}</span>
           </div>
-          <div className="text-[11px] text-gray-500 font-mono mt-0.5">{g.feature}</div>
+          <div className="text-xs text-gray-500 font-mono mt-0.5">{g.feature}</div>
           <div className="flex flex-wrap gap-1 mt-1">
             {g.cells.map((c) => (
               <button key={c.model_key} type="button" onClick={() => onPick(c)} title={T("Open evidence", "증거 보기")}
-                className="px-1.5 py-0.5 text-[11px] rounded border border-gray-700 text-gray-300 hover:border-blue-500/60 hover:text-blue-300">
+                className="px-1.5 py-0.5 text-xs rounded border border-gray-700 text-gray-300 hover:border-blue-500/60 hover:text-blue-300">
                 {c.model_label}
               </button>
             ))}
@@ -173,9 +176,9 @@ function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClos
       {/* 폰 폭에서도 왼쪽 2.5rem은 오버레이가 남아 탭으로 닫을 수 있다. 헤더는 sticky — 긴 드로어를 스크롤해도 ×가 항상 닿는다. */}
       <aside className="absolute right-0 top-0 h-full w-[calc(100%-2.5rem)] max-w-md overflow-y-auto bg-gray-900 light:bg-white border-l border-gray-800 shadow-2xl p-6 pt-0 space-y-6">
         <div className="sticky top-0 z-10 -mx-6 px-6 pt-6 pb-3 bg-gray-900 light:bg-white">
-          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
+          <div className="text-xs font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-100">{surface.label}</h2>
+            <h2 className="text-lg font-bold text-gray-100 section-title">{surface.label}</h2>
             <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -218,13 +221,13 @@ function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClos
 
         <section>
           <h3 className="text-sm font-semibold text-gray-200 mb-1">{T("6. Documented health per model", "6. 모델별 문서 일치율")}</h3>
-          <p className="text-[11px] text-gray-500 mb-2">
+          <p className="text-xs text-gray-500 mb-2">
             {T("Share of documented GA/Beta cells that measured supported. Models not served here show the reason instead of a bar.",
                "문서상 GA/Beta 셀 중 supported 비율입니다. 측정 불가 모델은 막대 대신 사유를 표기합니다.")}
           </p>
           <div className="space-y-1.5">
             {findings.perModel.map((m) => (
-              <div key={m.model_key} className="flex items-center gap-2 text-[11px]">
+              <div key={m.model_key} className="flex items-center gap-2 text-xs">
                 <span className="w-24 shrink-0 truncate text-gray-300">{m.model_label.replace(/^Claude /, "")}</span>
                 {m.na_reason ? (
                   <span className="flex-1 text-gray-500 leading-snug">{m.na_reason}</span>
@@ -280,10 +283,10 @@ function CellBadge({ agg, documented, onPick }: { agg: CellAggregate; documented
         <ul className="absolute z-20 mt-1 left-0 min-w-[17rem] bg-gray-900 light:bg-white border border-gray-700 rounded-lg shadow-xl py-1">
           {agg.cells.map((c) => (
             <li key={c.model_key}>
-              <button type="button" onMouseDown={() => onPick(c)} className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-[11px] hover:bg-blue-600/20">
+              <button type="button" onMouseDown={() => onPick(c)} className="w-full flex items-center justify-between gap-2 px-3 py-1.5 text-xs hover:bg-blue-600/20">
                 <span className="flex flex-col items-start min-w-0">
                   <span className="text-gray-300">{c.model_label}</span>
-                  <span className="font-mono text-[11px] text-gray-500 truncate max-w-[11rem]">{c.model_id ?? "—"}</span>
+                  <span className="font-mono text-xs text-gray-500 truncate max-w-[11rem]">{c.model_id ?? "—"}</span>
                 </span>
                 <span className="flex items-center gap-2 shrink-0">
                   <span className="tabular-nums text-gray-500">{isProbed(c.status) ? formatMs(c.latency_ms) : "-"}</span>
@@ -315,6 +318,7 @@ function HealthBar({ summary, lang }: { summary: SurfaceSummary; lang: "en" | "k
 }
 
 export default function ClaudeFeaturesPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const t = useT();
   const { user, openLogin } = useAuth();
@@ -376,11 +380,13 @@ export default function ClaudeFeaturesPanel() {
   }, []) : [];
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">{L("Claude API Features", "Claude API 기능 검증")}</h1>
-          {(() => {
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.exploreWorkspace} title={<>{L("Claude API Features", "Claude API 기능 검증")}</>} description={<>
+
+          <p>{L("Compare documented features with measured support, and open any cell to inspect the evidence.", "모델·호출 경로별 기능 지원 여부를 비교하고 각 셀의 실제 검증 근거를 확인하세요.")}</p>
+          <details className="methodology-details">
+            <summary>{L("Verification method and models", "검증 방법과 대상 모델")}</summary>
+            <div className="ui-panel-muted mt-3">{(() => {
             const modelList = (catalog?.models ?? []).map((m) => m.label.replace(/^Claude /, "")).join(", ") || L("the representative models", "대표 모델");
             return (
               <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
@@ -388,7 +394,8 @@ export default function ClaudeFeaturesPanel() {
                    `공식 "Build with Claude" 문서의 모든 피처를 Claude Platform on AWS, Bedrock Mantle, Bedrock runtime(Messages API, InvokeModel, Converse)에서 ${modelList}로 실제 실행합니다. 셀은 문서가 약속한 것과 실측을 비교합니다. evidence 행은 응답 내용(카나리, 델타, usage)을 검사해 판정하며 HTTP 200만으로는 supported로 두지 않습니다. acceptance 행은 요청 수락 여부까지만 검증합니다.`)}
               </p>
             );
-          })()}
+          })()}</div>
+          </details>
           {run && (
             <p className="text-xs text-gray-500 mt-1">
               {L("Last run", "최근 런")} #{run.id} · {formatDateTime(run.finished_at, lang)} · catalog {run.catalog_version}
@@ -407,13 +414,14 @@ export default function ClaudeFeaturesPanel() {
               <span className="px-1.5 py-0.5 rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300">▲ {L("drift", "드리프트")} {runTotals.drift}</span>
             </div>
           )}
-        </div>
-        <button type="button" onClick={handleTrigger} disabled={triggering || !!latest?.running || !!run?.running} className="ui-button-primary">
+        </>}
+        actions={<><button type="button" onClick={handleTrigger} disabled={triggering || !!latest?.running || !!run?.running} className="ui-button-primary">
           {L("Run verification", "검증 런 실행")}
-        </button>
-      </div>
-      <RefreshControls refreshing={latestResource.refreshing || catalogResource.refreshing} onRefresh={load} updatedAt={latestResource.updatedAt}
-        enabled={autoRefresh.enabled} onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} />
+        </button></>}>
+        <div className="ui-toolbar justify-between"><RefreshControls refreshing={latestResource.refreshing || catalogResource.refreshing} onRefresh={load} updatedAt={latestResource.updatedAt}
+        enabled={autoRefresh.enabled} onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} /></div>
+      </PageHeading>
+
       {triggerMsg && <div role={triggerError ? "alert" : "status"} className={`rounded-xl border px-4 py-3 text-xs ${triggerError ? "border-amber-500/30 bg-amber-500/10 text-amber-300" : "border-blue-500/30 bg-blue-500/10 text-blue-300"}`}>{triggerMsg}</div>}
       <DataError error={latestResource.error} resource={L("verification results", "검증 결과")} onRetry={latestResource.refresh} hasData={!!latest} />
       <DataError error={catalogResource.error} resource={L("feature catalog", "기능 목록")} onRetry={catalogResource.refresh} hasData={!!catalog} />
@@ -426,15 +434,15 @@ export default function ClaudeFeaturesPanel() {
 
       {/* 드리프트 배너 */}
       {run && drift.length > 0 && (
-        <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4">
-          <div className="text-sm font-semibold text-rose-300 mb-2">
+        <details className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-4">
+          <summary className="text-sm font-semibold text-rose-300 mb-2 cursor-pointer">
             {L(`Documentation drift: ${drift.length} cells documented as available but not working`, `문서 드리프트: 문서상 제공인데 동작하지 않는 셀 ${drift.length}개`)}
-          </div>
+          </summary>
           <ul className="space-y-1 text-xs text-gray-300">
             {drift.slice(0, 10).map((c) => (
               <li key={`${c.feature}|${c.surface}|${c.model_key}`} className="flex items-center gap-2 flex-wrap">
                 <button type="button" onClick={() => setSelected(c)} className="text-rose-200 hover:underline">{featureLabelOf(labels, c.feature)}</button>
-                <span className="font-mono text-[11px] text-gray-500">{c.feature}</span>
+                <span className="font-mono text-xs text-gray-500">{c.feature}</span>
                 <span className="text-gray-500">{surfaceShortOf(labels, c.surface)}, {c.model_label}</span>
                 <span className="text-gray-500">{L(`documented ${DOC_LABEL[c.documented]} → observed`, `문서 ${DOC_LABEL[c.documented]} → 실측`)}</span>
                 <span className={`px-1.5 py-0.5 rounded-full border text-[11px] ${STATUS_STYLE[c.status]}`}>{STATUS_LABEL[c.status]}</span>
@@ -442,11 +450,11 @@ export default function ClaudeFeaturesPanel() {
             ))}
             {drift.length > 10 && <li className="text-gray-500">{L(`+${drift.length - 10} more`, `외 ${drift.length - 10}건`)}</li>}
           </ul>
-        </div>
+        </details>
       )}
       {/* 드리프트 0건도 명시한다 (RUL-1) — "변경 없음" 카드와 같은 원칙: 음성 결과를 빈 화면이 아닌 문장으로 */}
       {run && drift.length === 0 && (
-        <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
+        <div className="ui-panel px-3 py-2 text-xs text-gray-500">
           {L("No documentation drift.", "문서 드리프트 없음.")}
         </div>
       )}
@@ -455,10 +463,10 @@ export default function ClaudeFeaturesPanel() {
           항목 클릭 → latest.results에서 셀을 찾아 증거 모달. after는 6상태 STATUS_STYLE pill (critic 4-A: N/A가 amber로 찍히던 문제).
           kind 태그(카탈로그 규칙/실측)와 요약 줄은 백엔드가 kind를 내려줄 때만 표시 (RUL-4). */}
       {run && latest && visibleChanges.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-gray-300">
-          <div className="text-sm font-semibold text-amber-300 mb-1">{L(`Changes since run #${latest.previous_run_id}: ${visibleChanges.length}`, `이전 런(#${latest.previous_run_id}) 대비 변경 ${visibleChanges.length}건`)}</div>
+        <details className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4 text-xs text-gray-300">
+          <summary className="text-sm font-semibold text-amber-300 mb-1 cursor-pointer">{L(`Changes since run #${latest.previous_run_id}: ${visibleChanges.length}`, `이전 런(#${latest.previous_run_id}) 대비 변경 ${visibleChanges.length}건`)}</summary>
           {changeSummary.catalog + changeSummary.measured > 0 && (
-            <div className="text-[11px] text-gray-400 mb-2">
+            <div className="text-xs text-gray-400 mb-2">
               {L(`Catalog rule changes ${changeSummary.catalog}, measured changes ${changeSummary.measured}`, `카탈로그 규칙 변경 ${changeSummary.catalog}건, 실측 변경 ${changeSummary.measured}건`)}
             </div>
           )}
@@ -476,7 +484,7 @@ export default function ClaudeFeaturesPanel() {
                           className={target ? "text-amber-200 hover:underline" : "text-gray-400 cursor-default"}>
                     {featureLabelOf(labels, c.feature)}
                   </button>
-                  <span className="font-mono text-[11px] text-gray-500">{c.feature}</span>
+                  <span className="font-mono text-xs text-gray-500">{c.feature}</span>
                   <span className="text-gray-500">{surfaceShortOf(labels, c.surface)}, {c.model_label}:</span>
                   <span className={c.before ? "text-gray-300" : "text-gray-500"}>{c.before ? STATUS_LABEL[c.before] : L("new", "신규")}</span>
                   <span className="text-gray-500">→</span>
@@ -486,10 +494,10 @@ export default function ClaudeFeaturesPanel() {
             })}
             {visibleChanges.length > 10 && <li className="text-gray-500">{L(`+${visibleChanges.length - 10} more`, `외 ${visibleChanges.length - 10}건`)}</li>}
           </ul>
-        </div>
+        </details>
       )}
       {run && latest && latest.previous_run_id != null && visibleChanges.length === 0 && (
-        <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
+        <div className="ui-panel px-3 py-2 text-xs text-gray-500">
           {L(`No changes since run #${latest.previous_run_id}.`, `이전 런(#${latest.previous_run_id}) 대비 변경 없음.`)}
         </div>
       )}
@@ -504,30 +512,30 @@ export default function ClaudeFeaturesPanel() {
             const sm = surfaceSummary(visibleCells, s.id);
             return (
               <button key={s.id} type="button" onClick={() => setSurfaceDetail(s.id)}
-                      className="text-left w-full bg-gray-900/50 light:bg-white border border-gray-800 hover:border-blue-500/60 rounded-xl p-4 transition-colors">
+                      className="ui-panel text-left w-full light:bg-white hover:border-blue-500/60 transition-colors">
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-sm font-bold text-gray-100">{s.label}</span>
-                  <span className="px-1.5 py-0.5 text-[11px] rounded bg-gray-800 text-gray-400 tabular-nums">{sm.total} {L("cells", "셀")}</span>
+                  <span className="px-1.5 py-0.5 text-xs rounded bg-gray-800 text-gray-400 tabular-nums">{sm.total} {L("cells", "셀")}</span>
                   {sm.drift > 0 && (
-                    <span className="px-1.5 py-0.5 text-[11px] rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300 tabular-nums">▲ {L("drift", "드리프트")} {sm.drift}</span>
+                    <span className="px-1.5 py-0.5 text-xs rounded-full border border-rose-500/30 bg-rose-500/10 text-rose-300 tabular-nums">▲ {L("drift", "드리프트")} {sm.drift}</span>
                   )}
                 </div>
-                <div className="text-[11px] text-gray-500 font-mono">{s.region}</div>
+                <div className="text-xs text-gray-500 font-mono">{s.region}</div>
                 <div className="mt-2 flex items-end gap-2">
                   <span className="text-2xl font-bold text-gray-100 tabular-nums leading-none">{sm.docHealth == null ? "-" : `${sm.docHealth}%`}</span>
-                  <span className="text-[11px] text-gray-500">
+                  <span className="text-xs text-gray-500">
                     {sm.docHealth == null
                       ? L("no documented (GA/Beta) cell measured on this endpoint", "문서상 제공(GA/Beta) 셀 중 실측된 셀 없음")
                       : L("of documented (GA/Beta) cells measured supported", "문서상 제공(GA/Beta) 셀 중 실측 supported")}
                   </span>
                 </div>
                 <div className="mt-2"><HealthBar summary={sm} lang={lang} /></div>
-                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-[11px] tabular-nums">
+                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-xs tabular-nums">
                   {visibleSegments(sm).map((seg) => (
                     <span key={seg} className={SEGMENT_TEXT[seg]}>● {sm.segments[seg]} {SEGMENT_LABEL[seg][lang]}</span>
                   ))}
                 </div>
-                <div className="text-[11px] text-blue-400 mt-1.5">{L("Key findings →", "상세 요약 →")}</div>
+                <div className="text-xs text-blue-400 mt-1.5">{L("Key findings →", "상세 요약 →")}</div>
               </button>
             );
           })}
@@ -535,7 +543,7 @@ export default function ClaudeFeaturesPanel() {
       )}
 
       {latest && !latestResource.error && !run && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 text-center text-sm text-gray-400">
+        <div className="ui-panel p-8 text-center text-sm text-gray-400">
           {L("No verification run yet — click \"Run verification\" (login required) or wait for the daily schedule.", "아직 실행된 검증 런이 없습니다 — \"검증 런 실행\"(로그인 필요)을 누르거나 일일 스케줄을 기다려 주세요.")}
         </div>
       )}
@@ -543,7 +551,7 @@ export default function ClaudeFeaturesPanel() {
       {/* 모델 칩 (v2.24.0, D5) — 전체 집계 또는 모델 하나의 열만. 행을 숨기지 않으므로 filterActive에는 포함하지 않는다 (RUL-8). */}
       {run && catalog && (
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="text-[11px] text-gray-500 mr-1">{L("Model", "모델")}</span>
+          <span className="text-xs text-gray-500 mr-1">{L("Model", "모델")}</span>
           {[{ key: null as string | null, label: L("All (aggregate)", "전체") },
             ...catalog.models.map((m) => ({ key: m.key as string | null, label: m.label.replace(/^Claude /, "") }))].map((m) => (
             <button key={m.key ?? "all"} type="button" onClick={() => setModelFilter(m.key)}
@@ -553,7 +561,7 @@ export default function ClaudeFeaturesPanel() {
             </button>
           ))}
           {modelFilter && (
-            <span className="text-[11px] text-gray-500 ml-1">
+            <span className="text-xs text-gray-500 ml-1">
               {L("Cells, health cards and banners show this model only.", "셀, 헬스 카드, 배너가 이 모델의 결과만 표시합니다.")}
             </span>
           )}
@@ -572,11 +580,11 @@ export default function ClaudeFeaturesPanel() {
           {!filterActive && (
             <div className="flex gap-1 ml-auto">
               <button type="button" onClick={() => setCollapsed(new Set())}
-                      className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300">
+                      className="px-2 py-1 text-xs rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300">
                 {L("Expand all", "모두 펼치기")}
               </button>
               <button type="button" onClick={() => setCollapsed(new Set(groups.map((g) => g.id)))}
-                      className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300">
+                      className="px-2 py-1 text-xs rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300">
                 {L("Collapse all", "모두 접기")}
               </button>
             </div>
@@ -590,8 +598,8 @@ export default function ClaudeFeaturesPanel() {
         </DataEmpty>
       )}
       {run && catalog && groups.length > 0 && (
-        <div className="overflow-x-auto bg-gray-900/50 border border-gray-800 rounded-xl">
-          <table className="w-full text-xs border-collapse">
+        <div className="ui-panel overflow-x-auto ui-table-shell">
+          <table className="ui-table w-full text-xs border-collapse">
             {/* 고정(sticky) 피처 열은 z-20(thead)/z-10(tbody) — CellBadge의 relative 래퍼가 DOM 뒤라 z 없이는 가로 스크롤 시 배지가
                 피처 이름 위에 그려진다. 드롭다운(z-20)은 tbody 고정 셀(z-10)보다 위에 남는다. */}
             <thead>
@@ -622,7 +630,7 @@ export default function ClaudeFeaturesPanel() {
                           className="flex min-h-9 w-full items-center text-left">
                         {!filterActive && <span className={`text-[11px] text-gray-500 inline-block mr-2 transition-transform ${open ? "rotate-90" : ""}`}>▶</span>}
                         <span className="font-bold text-gray-100 text-sm">{g.label}</span>
-                        <span className="ml-2 text-[11px] text-gray-500">{g.rows.length}</span>
+                        <span className="ml-2 text-xs text-gray-500">{g.rows.length}</span>
                         </button>
                       </td>
                       <td colSpan={surfaces.length} />
@@ -632,15 +640,15 @@ export default function ClaudeFeaturesPanel() {
                         <td className="px-3 py-1.5 pl-8 sticky left-0 z-10 bg-gray-900 light:bg-white">
                           <div className="flex items-center gap-2">
                             <span className="text-gray-200 text-[12px]">{row.label}</span>
-                            {row.verification !== "evidence" && <span className="px-1 py-px text-[11px] rounded bg-gray-800 text-gray-500" title={verificationDesc(row.verification, lang)}>{row.verification}</span>}
-                            {row.drift > 0 && <span className="text-[11px] text-rose-300">▲{row.drift}</span>}
+                            {row.verification !== "evidence" && <span className="px-1 py-px text-xs rounded bg-gray-800 text-gray-500" title={verificationDesc(row.verification, lang)}>{row.verification}</span>}
+                            {row.drift > 0 && <span className="text-xs text-rose-300">▲{row.drift}</span>}
                           </div>
-                          <div className="text-gray-500 font-mono text-[11px]">{row.id}</div>
+                          <div className="text-gray-500 font-mono text-xs">{row.id}</div>
                         </td>
                         {surfaces.map((s) => (
                           <td key={s} className="px-3 py-1.5 border-l border-gray-800/60">
                             <div className="flex items-center justify-center gap-2">
-                              <span className="w-7 text-[11px] text-gray-500 tabular-nums" title={L("documented", "문서")}>{DOC_LABEL[row.documented[s]] ?? "?"}</span>
+                              <span className="w-7 text-xs text-gray-500 tabular-nums" title={L("documented", "문서")}>{DOC_LABEL[row.documented[s]] ?? "?"}</span>
                               <CellBadge agg={row.cells[s] ?? aggregateCell([])} documented={row.documented[s]} onPick={setSelected} />
                             </div>
                           </td>
@@ -666,7 +674,7 @@ export default function ClaudeFeaturesPanel() {
             "데이터 레지던시(inference_geo): Amazon Bedrock(Mantle 포함)은 엔드포인트 리전/추론 프로파일이 추론 리전을 결정하므로 파라미터가 비적용입니다. 미지원이 아닌 N/A로 표기합니다."),
         ];
         return (
-          <div className="px-1 text-[11px] text-gray-500 leading-relaxed space-y-0.5">
+          <div className="px-1 text-xs text-gray-500 leading-relaxed space-y-0.5">
             {notes.map((n, i) => (
               <div key={i}><span className="font-semibold text-gray-400">{L("Note", "참조")} {i + 1}: </span>{n}</div>
             ))}
@@ -674,7 +682,7 @@ export default function ClaudeFeaturesPanel() {
         );
       })()}
 
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-1.5">
+      <div className="ui-panel text-xs text-gray-400 leading-relaxed space-y-1.5">
         <div className="text-sm font-semibold text-gray-200 mb-1">{L("How to read", "읽는 법")}</div>
         <p>1. {L("Rows are the features listed on platform.claude.com/docs/en/build-with-claude/overview (+4 core Messages checks and the Models API). The small GA/Beta/— tag in each cell is what the documentation says for that platform.", "행은 platform.claude.com/docs/en/build-with-claude/overview의 피처 목록(+코어 Messages 4종, Models API)입니다. 셀 앞의 GA/Beta/— 태그가 해당 플랫폼의 문서상 기대치입니다.")}</p>
         <p>2. {(() => {

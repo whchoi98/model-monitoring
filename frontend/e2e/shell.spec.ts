@@ -179,7 +179,8 @@ test("shared login keeps the manual probe configuration usable across tab naviga
   await expect.poll(() => page.getByRole("complementary").evaluate((sidebar) => {
     const headerHeight = document.querySelector("header")!.getBoundingClientRect().height;
     const sidebarTop = Number.parseFloat(getComputedStyle(sidebar).top);
-    return Math.abs(sidebarTop - headerHeight) < 1;
+    // The redesigned configuration panel keeps a 20px gap below the measured header.
+    return Math.abs(sidebarTop - headerHeight - 20) < 1;
   })).toBe(true);
   const model = page.getByRole("checkbox", { name: modelCatalog[0].name, exact: true });
   await model.press("Space");

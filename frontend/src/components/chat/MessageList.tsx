@@ -45,7 +45,7 @@ export default function MessageList({
           <div>{emptyHint ?? "질문을 입력하세요."}</div>
           {suggested.length > 0 && (
             <div className="flex flex-col items-center gap-2 max-w-md">
-              <div className="text-[10px] uppercase tracking-wider text-gray-600">
+              <div className="text-xs uppercase tracking-wider text-gray-600">
                 {suggestedLabel ?? "추천 검색어"}
               </div>
               <div className="flex flex-wrap gap-2 justify-center">
@@ -95,7 +95,7 @@ export default function MessageList({
                     {m.toolCalls.map((tc, i) => (
                       <span
                         key={i}
-                        className="text-[10px] uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded"
+                        className="text-xs uppercase tracking-wider bg-purple-500/20 text-purple-300 border border-purple-500/30 px-1.5 py-0.5 rounded"
                       >
                         🛠 {tc.name}
                       </span>
@@ -110,7 +110,7 @@ export default function MessageList({
 
       {lastIsAssistantComplete && followUps.length > 0 && (
         <div className="flex flex-col gap-2 pt-1">
-          <div className="text-[10px] uppercase tracking-wider text-gray-500 pl-1">
+          <div className="text-xs uppercase tracking-wider text-gray-500 pl-1">
             {followUpLabel ?? "이어서 물어보기"}
           </div>
           <div className="flex flex-wrap gap-2">
@@ -120,7 +120,7 @@ export default function MessageList({
                 type="button"
                 onClick={() => onSuggested?.(q)}
                 disabled={isStreaming}
-                className="px-2.5 py-1 text-[11px] rounded-full bg-gray-800/70 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
+                className="px-2.5 py-1 text-xs rounded-full bg-gray-800/70 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
               >
                 ↪ {q}
               </button>

@@ -6,17 +6,22 @@ import {
   streamRegenerateInsight,
 } from "@/lib/api";
 import { Insight } from "@/lib/types";
-import { useLang } from "@/lib/i18n-context";
+import { useLang, useT } from "@/lib/i18n-context";
 import { useAuth } from "@/lib/auth-context";
 import MessageMarkdown from "./chat/MessageMarkdown";
+import { DataError } from "./DataState";
 
 // 인사이트 위젯 - 최신 인사이트 표시 + (인증 후) SSE 스트리밍 재생성.
 // 검색은 채팅봇에서 대신 수행 (제거).
 export default function InsightsPanel() {
   const { lang } = useLang();
+  const t = useT();
+  const [expanded, setExpanded] = useState(false);
 
   const [insight, setInsight] = useState<Insight | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<Error | null>(null);
+  const [generationError, setGenerationError] = useState<string | null>(null);
   const [regenerating, setRegenerating] = useState(false);
   const [statusMsg, setStatusMsg] = useState<string | null>(null);
   const [streamingText, setStreamingText] = useState<string>("");
@@ -27,8 +32,9 @@ export default function InsightsPanel() {
     try {
       const d = await fetchLatestInsight();
       setInsight(d);
-    } catch {
-      setInsight(null);
+      setLoadError(null);
+    } catch (error) {
+      setLoadError(error instanceof Error ? error : new Error(String(error)));
     } finally {
       setLoading(false);
     }
@@ -47,6 +53,7 @@ export default function InsightsPanel() {
       return;
     }
     setRegenerating(true);
+    setGenerationError(null);
     setStreamingText("");
     setStatusMsg(lang === "en" ? "Streaming..." : "스트리밍 중...");
     streamRegenerateInsight(
@@ -57,95 +64,39 @@ export default function InsightsPanel() {
           setRegenerating(false);
           setStatusMsg(null);
           setStreamingText("");
-          // 스트리밍 종료 후 latest fetch로 DB-saved Insight 가져오기.
-          fetchLatestInsight().then(setInsight).catch(() => {});
+          if (!payload.ok) {
+            setGenerationError(payload.error || (lang === "en" ? "Unable to save the analysis. Please try again." : "분석을 저장하지 못했습니다. 다시 시도해 주세요."));
+            return;
+          }
+          void load();
         },
         onError: (err) => {
           setRegenerating(false);
-          setStatusMsg(`${err.message}`);
+          setStatusMsg(null);
+          setGenerationError(err.message);
           setStreamingText("");
-          setTimeout(() => setStatusMsg(null), 5000);
         },
       },
     );
   };
 
   return (
-    <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <h3 className="text-sm font-semibold text-gray-200 flex items-center gap-2">
-          <span aria-hidden>✨</span>
-          {lang === "en" ? "AI Insights" : "AI 인사이트"}
-        </h3>
-        <div className="flex items-center gap-3">
-          {insight && (
-            <span className="text-[10px] text-gray-500">
-              {new Date(insight.created_at).toLocaleString(lang === "en" ? "en-US" : "ko-KR")}
-            </span>
-          )}
-          {authed ? (
-            <button
-              type="button"
-              onClick={handleRegenerate}
-              disabled={regenerating || checking}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-blue-600/80 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-              title={
-                lang === "en"
-                  ? "Regenerate insight now (10-30s)"
-                  : "현재 데이터로 즉시 인사이트 재생성 (10~30초)"
-              }
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className={`w-3.5 h-3.5 ${regenerating ? "animate-spin" : ""}`}
-              >
-                <path d="M21 12a9 9 0 11-9-9c2.5 0 4.7 1 6.4 2.6L21 8" />
-                <path d="M21 3v5h-5" />
-              </svg>
-              {regenerating
-                ? lang === "en"
-                  ? "Generating"
-                  : "생성 중"
-                : lang === "en"
-                  ? "Refresh"
-                  : "새로고침"}
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={() => openLogin()}
-              disabled={checking}
-              className="inline-flex items-center gap-1.5 px-2.5 py-1 text-xs font-medium rounded-md bg-gray-700 hover:bg-gray-600 text-white transition-colors"
-              title={
-                lang === "en"
-                  ? "Login required to refresh / search"
-                  : "새로고침/검색은 로그인 후 사용 가능"
-              }
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="w-3.5 h-3.5"
-              >
-                <path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4M10 17l5-5-5-5M15 12H3" />
-              </svg>
-              {lang === "en" ? "Login" : "로그인"}
-            </button>
-          )}
+    <section id="ai-insights" aria-label={lang === "en" ? "AI Insights" : "AI 인사이트"} className="ui-panel space-y-4">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <p className="page-eyebrow">SONNET 5.5</p>
+          <h2 className="text-base font-semibold text-gray-100">{lang === "en" ? "AI Insights" : "AI 인사이트"}</h2>
         </div>
+        <button type="button" className={authed ? "ui-button-primary" : "ui-button"}
+          onClick={handleRegenerate} disabled={regenerating || checking}
+          aria-label={lang === "en" ? (authed ? "Refresh AI insights" : "Sign in for AI insights") : (authed ? "AI 분석 새로고침" : "AI 분석을 위해 로그인")}>
+          {regenerating ? (lang === "en" ? "Generating" : "생성 중") : authed ? t.common.refresh : (lang === "en" ? "Login" : "로그인")}
+        </button>
       </div>
+      <p className="ui-copy text-xs leading-relaxed text-gray-500">{t.workspace.insightsDescription}</p>
+      {insight && <p className="text-xs text-gray-500">
+        {new Date(insight.created_at).toLocaleString(lang === "en" ? "en-US" : "ko-KR")}
+      </p>}
 
       {/* Status message */}
       {statusMsg && (
@@ -154,27 +105,30 @@ export default function InsightsPanel() {
         </div>
       )}
 
-      {/* Latest insight content - 스트리밍 중이면 streamingText, 아니면 저장된 insight */}
+      <DataError error={loadError} resource={lang === "en" ? "AI insights" : "AI 인사이트"} onRetry={() => void load()} hasData={!!insight} />
+      {generationError && <p role="alert" className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-300">{generationError}</p>}
+      <div id="insight-body">
       {loading ? (
         <div className="text-xs text-gray-500">{lang === "en" ? "Loading..." : "로딩 중..."}</div>
       ) : streamingText ? (
         <div className="border-l-2 border-blue-500/50 pl-3">
           <MessageMarkdown text={streamingText} />
-          <div className="text-[10px] text-blue-400/70 mt-2 animate-pulse">
+          <div className="text-xs text-blue-400/70 mt-2 animate-pulse">
             {lang === "en" ? "Streaming from Sonnet 5.5..." : "Sonnet 5.5 스트리밍 중..."}
           </div>
         </div>
       ) : insight ? (
-        <div>
-          <MessageMarkdown
-            text={
-              lang === "en" && insight.summary_md_en
-                ? insight.summary_md_en
-                : insight.summary_md
-            }
-          />
-        </div>
-      ) : (
+        expanded ? <MessageMarkdown text={lang === "en" && insight.summary_md_en ? insight.summary_md_en : insight.summary_md} /> : (
+          <p className="ui-copy text-sm leading-relaxed text-gray-300">
+            {(lang === "en" && insight.summary_md_en ? insight.summary_md_en : insight.summary_md)
+              .replace(/```[\s\S]*?```/g, "")
+              .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+              .replace(/^[\s#>*-]+/gm, "").replace(/[*_`|]/g, "")
+              .replace(/\s+/g, " ").trim().slice(0, 160)}
+            {(lang === "en" && insight.summary_md_en ? insight.summary_md_en : insight.summary_md).length > 160 ? "…" : ""}
+          </p>
+        )
+      ) : loadError ? null : (
         <div className="text-xs text-gray-500">
           {lang === "en"
             ? "No insight yet. Click Refresh (login required) or wait for the next 5-min job."
@@ -182,6 +136,13 @@ export default function InsightsPanel() {
         </div>
       )}
 
-    </div>
+      </div>
+      {insight && !streamingText && (
+        <button type="button" className="ui-button w-full" aria-expanded={expanded}
+          aria-controls="insight-body" onClick={() => setExpanded((value) => !value)}>
+          {expanded ? t.workspace.collapseInsight : t.workspace.expandInsight}
+        </button>
+      )}
+    </section>
   );
 }

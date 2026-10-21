@@ -205,7 +205,7 @@ function TrendChart({ data, metric, title, selectedModels, onToggleModel, cadenc
 
   if (chartData.length === 0) {
     return (
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+      <div className="ui-panel">
         <h3 className="text-sm font-semibold text-gray-200 mb-2">{title}</h3>
         <DataEmpty title={t.monitoring.noTrend} description={t.monitoring.noTrendHint} />
       </div>
@@ -213,7 +213,7 @@ function TrendChart({ data, metric, title, selectedModels, onToggleModel, cadenc
   }
 
   return (
-    <figure aria-label={title} className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+    <figure aria-label={title} className="ui-panel min-w-0">
       <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
         <h3 className="text-sm font-semibold text-gray-200">{title}</h3>
         <span className="text-xs tabular-nums text-gray-500">

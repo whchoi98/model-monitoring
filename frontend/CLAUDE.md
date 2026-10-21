@@ -25,12 +25,19 @@ Dashboard UI for monitoring LLM channel performance — Amazon Bedrock, Claude P
 - API calls are same-origin `/api/*` from the browser (`lib/api.ts` `BASE = ""`). In production the internal ALB routes `/api/*` straight to the backend service (the frontend task gets no `BACKEND_INTERNAL_URL`); the `next.config.mjs` rewrite to `BACKEND_INTERNAL_URL` (default `http://localhost:8000`) only serves local runs
 - PWA (v2.21.0): `src/app/manifest.ts`(→ /manifest.webmanifest) + `app/icon.png`·`apple-icon.png` 컨벤션 + `public/icons/*`(maskable 포함). iOS standalone은 layout.tsx `appleWebApp`/`viewport-fit=cover` + globals.css의 `display-mode: standalone` safe-area 패딩이 세트 — 아이콘 재생성은 Pillow 스크립트(커밋 메시지 참조), proxy no-store matcher에서 PWA 자산 제외 유지
 - UI text must go through `src/lib/i18n.ts` (Korean primary, English secondary)
-- Components use Tailwind dark theme (bg-gray-900/950 palette); v2.8.0부터 화이트 테마 토글 (`html.light` class + `light:` variant, `lib/theme.ts`)
+- Components use semantic gray variables with a light default and saved dark/light preference (v2.36.0); v2.8.0부터 화이트 테마 토글 (`html.light` class + `light:` variant, `lib/theme.ts`)
 - The dashboard defaults to compact model rows; `?layout=cards` selects detailed cards and `layout=compact` restores compact rows. Both views use `ModelStatusItem` and group by family (newest first), then channel (Anthropic → Global → US → regions: Bedrock in-region such as `(ap-northeast-2)` since v2.32.0, OpenAI Mantle). Family groups can be collapsed or compared; new search/health/sort conditions reopen matching groups. Attention/TTFT sorting stays flat. An empty comparison selection means all models.
 - `MonitoringOverview` lists named attention channels and provides a collapsible, family-grouped channel overview. `TrendComparisonControls` offers all, representative and family selections. `ModelComparisonDock` retains the selection and trend action while scrolling, reserves space beside the unchanged chat button, and owns the measured `--comparison-dock-clearance` for keyboard scrolling; remove that property when the dock unmounts. `SiteFooter` uses the same clearance for page-end content.
 - Root `PresenceProvider` owns one visitor-count poller across route changes. `SiteFooter` shows server counts and methodology on AppShell pages; the initial 10,000 belongs to the backend total and must never be added again in the client. Visible online pages heartbeat every 30 seconds; Web Locks serialize cross-tab cookie bootstrap. Without Locks, read aggregates with omitted credentials instead of creating competing cookies. Stale activity displays “—” while the last total remains labelled as last known.
 - Card metric values are graded per workload category (normal blue / warning amber ▲ / critical rose ◆, v2.28.0). The KO grade names are 양호/경고/위험 — never 정상 for a grade, which belongs to the channel health badge. Thresholds, display rounding and color classes live only in `src/lib/metricGrade.ts` (ADR-029); tests and e2e read the `data-grade` attribute, not color classes.
 - Pages: `/` 대시보드 (`/?view=manual` = 수동 프로브, 로그인 필요 — 결과 테이블/차트/비교 분석 탭, 비교 분석 탭은 `ComparisonView`), `/chat` 챗봇 팝업 창(헤더 없음, `FloatingChat`이 여는 `ChatPanel variant="popup"`), `/models` Model Explorer (v2.9.0), `/parity` 패리티 매트릭스 (v2.11.0), `/gpt-on-aws` GPT on AWS 벤치 (v2.18.0), `/claude-features` Claude API Features 매트릭스 (v2.23.0), `/prompts`, `/cost`, `/pricing` 비용 단가 (v2.30.0 — 단가는 `/api/pricing`만 읽고 프런트에 단가 표를 두지 않는다), `/reliability`, `/efficiency`, `/analysis`
+
+## Shared design (v2.36.0)
+- `AppShell` owns `.workspace-main` (max 1680px and responsive padding); panel roots use `.page-stack` without independent page padding. `PageHeading` provides one h1, description, category label, actions and a context slot.
+- Reuse `.ui-panel`, `.ui-panel-muted`, `.ui-toolbar`, `.ui-stat-card`, `.ui-table-shell`, `.ui-table`, `.ui-label` and the existing button/input classes. Component styles live in the Tailwind components layer so explicit utility variants retain meaning.
+- `QuickNavigation` searches existing page labels/paths, opens with Ctrl/Cmd+K, and respects IME and existing modals. `dialogFocus.ts` is shared by native search/detail, login and chat dialogs.
+- The dashboard uses summary metrics and a main model area with collection/attention/AI in a secondary area. `MonitoringOverview` supports summary/details modes; `InsightsPanel` shows a plain text preview and expands to full Markdown.
+- The default theme is light; the pre-hydration script restores saved preference. `theme.ts` reconciles changes missed during hydration and keeps a session selection if storage writes fail.
 
 ## Commands
 ```bash
@@ -41,3 +48,13 @@ npm run typecheck # next typegen && tsc --noEmit (CI, `make frontend-lint`)
 npm test       # Data, chart and stream regression tests
 npm run test:e2e # Browser flows with fixture APIs
 ```
+
+<!-- BEGIN:nextjs-agent-rules -->
+
+# This is NOT the Next.js you know
+
+This version has breaking changes — APIs, conventions, and file structure may all differ from your training data. Read the relevant guide in `node_modules/next/dist/docs/` (resolved from this file's directory; in monorepos the `next` package may not be visible from the repo root) before writing any code. Heed deprecation notices.
+
+This block is written and re-added by `next dev` — verify at `node_modules/next/dist/server/lib/generate-agent-files.js`. Removing it from a diff only re-creates the uncommitted change; committing it with your work keeps the tree clean.
+
+<!-- END:nextjs-agent-rules -->

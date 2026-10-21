@@ -47,11 +47,11 @@ function MetricGradeLegend() {
     { id: "fallback", label: g.defaultCategory, thresholds: FALLBACK_LATENCY_THRESHOLDS },
   ];
   return (
-    <details className="group text-[11px] text-gray-500">
+    <details className="group text-xs text-gray-500">
       <summary className="flex cursor-pointer list-none flex-wrap items-center gap-x-3 gap-y-1 [&::-webkit-details-marker]:hidden">
         <span className="font-medium text-gray-400">{g.legendLabel}:</span>
         {GRADES.map((grade) => (
-          <span key={grade} className="inline-flex items-center gap-1">
+          <span key={grade} className="hidden items-center gap-1 group-open:inline-flex sm:inline-flex">
             {/* 카드와 같은 규칙: 경고/위험 값에만 모양 표지가 붙으므로 양호는 모양 없는 색 견본만 보여 준다. */}
             {GRADE_MARKER[grade] ? (
               <span aria-hidden="true" className={GRADE_TEXT_CLASS[grade]}>{GRADE_MARKER[grade]}</span>
@@ -61,7 +61,7 @@ function MetricGradeLegend() {
             <span className="text-gray-400">{g.names[grade]}</span>
           </span>
         ))}
-        <span><span aria-hidden="true">— </span>{g.legendScope}</span>
+        <span className="hidden group-open:inline sm:inline"><span aria-hidden="true">— </span>{g.legendScope}</span>
         <span className="inline-flex items-center gap-1 text-gray-400">
           <span className="underline decoration-dotted underline-offset-2">{g.showCriteria}</span>
           <span aria-hidden="true" className="transition-transform group-open:rotate-180">▾</span>
@@ -119,7 +119,7 @@ function ModelStatusGrid({ rows, onToggleModel, selectedModels, now, grouped = t
         )}
       </div>
       {layout === "compact" && (
-        <div aria-hidden="true" className="hidden grid-cols-[minmax(0,1fr)_21rem] gap-6 px-4 text-[11px] font-medium text-gray-500 md:grid">
+        <div aria-hidden="true" className="hidden grid-cols-[minmax(0,1fr)_21rem] gap-6 px-4 text-xs font-medium text-gray-500 md:grid">
           <span>{m.modelChannel}</span>
           <div className="grid grid-cols-3 gap-2"><span>TTFT</span><span>{t.metrics.totalLatency.name}</span><span>TPS</span></div>
         </div>
@@ -144,9 +144,9 @@ function ModelStatusGrid({ rows, onToggleModel, selectedModels, now, grouped = t
                 >
                   <span aria-hidden="true" className="w-3 text-xs text-gray-500">{collapsed.has(familyKey(group)) ? "▸" : "▾"}</span>
                   <span className="text-sm font-semibold text-gray-200">{familyKey(group) === "other" ? m.otherModels : familyKey(group)}</span>
-                  <span className="text-[11px] font-normal text-gray-500">{m.channelCount(group.length)}</span>
+                  <span className="text-xs font-normal text-gray-500">{m.channelCount(group.length)}</span>
                   {group.some((row) => row.health !== "healthy") && (
-                    <span className="whitespace-nowrap text-[11px] font-normal text-amber-300">{m.attentionCount(group.filter((row) => row.health !== "healthy").length)}</span>
+                    <span className="whitespace-nowrap text-xs font-normal text-amber-300">{m.attentionCount(group.filter((row) => row.health !== "healthy").length)}</span>
                   )}
                 </button>
               </h3>
@@ -160,7 +160,7 @@ function ModelStatusGrid({ rows, onToggleModel, selectedModels, now, grouped = t
             </div>
           )}
           <div id={`${idPrefix}-family-${groupIndex}`}
-            className={grouped && collapsed.has(familyKey(group)) ? "hidden" : layout === "cards" ? "grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3" : "grid grid-cols-1 gap-1.5"}>
+            className={grouped && collapsed.has(familyKey(group)) ? "hidden" : layout === "cards" ? "grid grid-cols-1 gap-3 md:grid-cols-2 2xl:grid-cols-3" : "grid grid-cols-1 gap-1.5"}>
             {group.map((row) => (
               <ModelStatusItem key={row.model.id} row={row} selected={selectedModels.has(row.model.name)}
                 onToggleModel={onToggleModel} now={now} layout={layout} />

@@ -40,7 +40,7 @@ export default function ModelComparisonDock({ names, onCompare, onClear }: {
               <span aria-hidden="true" className="text-gray-500 transition-transform group-open:rotate-180">⌃</span>
             </span>
             <span className="mt-1 block truncate text-xs text-gray-300">{names[0]}</span>
-            {names.length > 1 && <span className="text-[11px] text-gray-500">{m.moreSelected(names.length - 1)}</span>}
+            {names.length > 1 && <span className="text-xs text-gray-500">{m.moreSelected(names.length - 1)}</span>}
           </summary>
           <div className="absolute bottom-[calc(100%_+_0.5rem)] left-0 right-0 max-h-[min(16rem,40dvh)] overflow-auto rounded-xl border border-gray-700 bg-gray-900 p-4 shadow-xl">
             <p className="mb-3 text-xs font-semibold text-gray-300">{m.selectionNames}</p>

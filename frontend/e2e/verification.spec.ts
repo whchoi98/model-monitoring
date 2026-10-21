@@ -70,3 +70,30 @@ test("parity evidence can be retried and Escape restores focus to the result", a
   await expect(dialog).toHaveCount(0);
   await expect(result).toBeFocused();
 });
+
+
+for (const [path, api] of [["/parity", "parity"], ["/claude-features", "features"]]) {
+  test(`${path} supported evidence disclosures are reachable and openable with the keyboard`, async ({ page }) => {
+    const supported = api === "parity" ? { ...parityCell, status: "supported" } : { ...cell, status: "supported", verdict: "match" };
+    const run = { id: 8, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), totals: { supported: 1 }, running: false, catalog_version: "fixture" };
+    await page.route(`**/api/${api}/latest`, route => route.fulfill({ json: { run, results: [supported], changes: [], drift: [], previous_run_id: 7 } }));
+    await page.route(`**/api/${api}/evidence?*`, route => route.fulfill({ json: { ...supported, verification: "evidence", evidence: { request: { prompt: "keyboard evidence canary" }, signal: "validated" } } }));
+    await page.goto(path);
+    await page.getByRole("button", { name: "Expand all", exact: true }).click();
+    const result = page.getByRole("table").getByRole("button", { name: "Supported", exact: true });
+    await result.click();
+    const dialog = page.getByRole("dialog", { name: "Execution evidence", exact: true });
+    const details = dialog.locator("details").filter({ hasText: "keyboard evidence canary" });
+    const summary = details.locator("summary");
+    await expect(summary).toBeVisible();
+    await expect(details).not.toHaveAttribute("open");
+    await dialog.getByRole("button", { name: "Close dialog", exact: true }).focus();
+    await page.keyboard.press("Tab");
+    await expect(summary).toBeFocused();
+    await page.keyboard.press("Enter");
+    await expect(details.locator("pre")).toBeVisible();
+    await page.keyboard.press("Escape");
+    await expect(dialog).toHaveCount(0);
+    await expect(result).toBeFocused();
+  });
+}

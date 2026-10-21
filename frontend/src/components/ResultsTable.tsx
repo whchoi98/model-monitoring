@@ -108,9 +108,9 @@ export default function ResultsTable({ results }: ResultsTableProps) {
   return (
     <div className="space-y-3">
       <h2 className="text-lg font-semibold text-gray-200">Results</h2>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+      <div className="ui-panel overflow-hidden">
+        <div className="overflow-x-auto ui-table-shell">
+          <table className="ui-table w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
                 {columns.map((col) => (

@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 import { useCallback, useEffect, useState } from "react";
 import {
   fetchEfficiency,
@@ -28,6 +31,7 @@ function scoreColor(s: number | null): string {
 }
 
 export default function EfficiencyPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const [windowSpec, setWindowSpec] = useState("24h");
   const [category, setCategory] = useState<string | null>(null);
@@ -45,19 +49,19 @@ export default function EfficiencyPanel() {
   useEffect(reset, [windowSpec, category, reset]);
 
   return (
-    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.analysisWorkspace} title={<>
             {lang === "en" ? "Token Efficiency" : "토큰 효율성"}
-          </h1>
+          </>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
               ? "Composite score combining cost, output tokens, latency, TPS, and success rate. Compare models on the same prompt category for a fair view."
               : "비용·출력 토큰·지연·TPS·성공률을 종합한 점수. 같은 카테고리에서 모델 간 공정 비교용."}
           </p>
-        </div>
-        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">{lang === "en" ? "Window" : "기간"}</span>
           <div className="flex flex-wrap gap-1">
             {WINDOW_OPTIONS.map((w) => (
@@ -73,19 +77,20 @@ export default function EfficiencyPanel() {
             ))}
           </div>
         </div>
-      </div>
-
-      <RefreshControls
+<RefreshControls
         refreshing={resource.refreshing || categoriesResource.refreshing}
         onRefresh={() => { reset(); void refreshAll(); }}
         updatedAt={resource.updatedAt}
         enabled={enabled}
         onEnabledChange={setEnabled}
         countdown={countdown}
-      />
+      /></div>
+      </PageHeading>
+
+
 
       {/* Category chip filter */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-3 space-y-3">
+      <div className="ui-panel space-y-3">
         <div role="group" aria-label={lang === "en" ? "Workload" : "워크로드"} className="flex items-center gap-2 flex-wrap">
           <span className="text-xs font-medium text-gray-400">
             {lang === "en" ? "Workload" : "워크로드"}
@@ -110,7 +115,7 @@ export default function EfficiencyPanel() {
             </button>
           ))}
           {category === null && (
-            <span className="text-[11px] text-amber-400">
+            <span className="text-xs text-amber-400">
               {lang === "en"
                 ? "Tip: pick a single category for fair comparison (same prompt)."
                 : "Tip: 같은 프롬프트 기준 공정 비교를 위해 카테고리를 선택하세요."}
@@ -141,8 +146,8 @@ export default function EfficiencyPanel() {
       {resource.loading && <DataLoading />}
       {!resource.error && !resource.refreshing && data?.models.length === 0 && <DataEmpty />}
       {data && data.models.length > 0 && (
-        <div className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 overflow-x-auto">
-          <table className="w-full min-w-[720px] text-xs">
+        <div className="ui-panel min-w-0 overflow-x-auto ui-table-shell">
+          <table className="ui-table w-full min-w-[720px] text-xs">
             <thead>
               <tr className="text-gray-500 border-b border-gray-800">
                 <th className="text-left py-2 pr-3">#</th>

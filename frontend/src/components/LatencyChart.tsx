@@ -101,7 +101,7 @@ export default function LatencyChart({ results }: LatencyChartProps) {
   return (
     <div className="space-y-6">
       {/* Latency Comparison Chart */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="ui-panel">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
           Latency Comparison (ms)
         </h3>
@@ -152,7 +152,7 @@ export default function LatencyChart({ results }: LatencyChartProps) {
       </div>
 
       {/* TPS Comparison Chart */}
-      <div className="bg-gray-900 border border-gray-800 rounded-xl p-4">
+      <div className="ui-panel">
         <h3 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-4">
           Throughput Comparison (tokens/sec)
         </h3>

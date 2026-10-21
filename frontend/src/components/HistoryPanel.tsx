@@ -215,7 +215,7 @@ function OpenHistoryPanel({ onClose, timeRange, onTimeRangeChange, selectedModel
         <div className="grid min-w-0 grid-cols-1 gap-4 md:grid-cols-2">
           {visible.map((s) => (
             <article key={s.model_id} aria-label={s.model_name}
-              className="min-w-0 rounded-xl border border-gray-800 bg-gray-900/50">
+              className="ui-panel min-w-0">
               <div className="space-y-2 border-b border-gray-800/50 px-4 py-3">
                 <h3 className="break-words text-sm font-semibold text-gray-200">{s.model_name}</h3>
                 <div className="flex flex-wrap items-center justify-between gap-2">

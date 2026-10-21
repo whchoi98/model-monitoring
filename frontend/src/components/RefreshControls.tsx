@@ -16,7 +16,7 @@ export default function RefreshControls({
   const t = useT();
   const { lang } = useLang();
   return (
-    <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
+    <div className="refresh-controls flex flex-wrap items-center gap-x-4 gap-y-2 text-xs">
       <span className="text-gray-500" title={updatedAt ? formatDateTime(updatedAt, lang) : undefined}>
         {t.common.updatedAt}: <span className="tabular-nums text-gray-400">{updatedAt ? formatDateTime(updatedAt, lang) : t.common.notUpdated}</span>
       </span>

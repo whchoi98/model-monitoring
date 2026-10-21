@@ -150,7 +150,7 @@ describe("PricingContent", () => {
     const data = { ...pricingFixture, families: [...pricingFixture.families, unknown] };
     const bedrock = ["AWS Bedrock - Global CRIS", "AWS Bedrock - US CRIS", "AWS Bedrock - In Region"];
     const ko = render("ko", null, data);
-    expect(ko).toContain('<h2 id="pricing-google" class="mb-3 break-keep text-sm font-semibold text-gray-200">google</h2>');
+    expect(ko).toMatch(/<h2 id="pricing-google"[^>]*>google<\/h2>/);
     expect(ko).toContain('<caption class="sr-only">google 단가 (입력 / 출력, 1M 토큰당 USD)</caption>');
     expect(ko).toContain('aria-label="google 단가 표"');
     expect(headers(ko, "google")).toEqual(["모델", ...bedrock]);
@@ -197,8 +197,8 @@ describe("PricingContent", () => {
     expect(line(cell(ko, "claude-opus-5-5", "global"), "cache")).toBe("캐시 읽기 $0.20, 쓰기 $5.00, 1시간 쓰기 $8.00");
     expect(line(cell(ko, "claude-opus-5-5", "us"), "cache")).toBe("캐시 읽기 $0.22, 쓰기 $5.50, 1시간 쓰기 $8.80");
     expect(line(cell(ko, "claude-fable-5-1", "cp"), "cache")).toBe("캐시 읽기 $0.25, 쓰기 $12.50, 1시간 쓰기 $20.00");
-    expect(cell(ko, "claude-opus-5-5", "global")).toContain(
-      'data-cache-line="true" class="mt-0.5 block text-[11px] leading-snug text-gray-400"><span class="whitespace-nowrap">캐시 읽기 $0.20</span>, '
+    expect(cell(ko, "claude-opus-5-5", "global").replace(/data-cache-line="true" class="[^"]*"/, 'data-cache-line="true"')).toContain(
+      'data-cache-line="true"><span class="whitespace-nowrap">캐시 읽기 $0.20</span>, '
       + '<span class="whitespace-nowrap">쓰기 $5.00</span>, <span class="whitespace-nowrap">1시간 쓰기 $8.00</span></span>',
     );
     expect(section(ko, "anthropic")).not.toContain("data-long-line");
@@ -207,8 +207,8 @@ describe("PricingContent", () => {
     expect(line(cell(ko, "gpt-6-astra", "openai_list"), "long")).toBe("긴 컨텍스트 $20.00 / $75.00, 캐시 읽기 $2.00, 쓰기 $25.00");
     expect(line(cell(ko, "gpt-6-astra", "us"), "long")).toBe("긴 컨텍스트 $22.00 / $82.50, 캐시 읽기 $2.20, 쓰기 $27.50");
     // The long-context pair may wrap between its label and its value; every other item stays whole.
-    expect(cell(ko, "gpt-6-astra", "global")).toContain(
-      'data-long-line="true" class="mt-0.5 block text-[11px] leading-snug text-gray-400"><span class="whitespace-nowrap">긴 컨텍스트</span> '
+    expect(cell(ko, "gpt-6-astra", "global").replace(/data-long-line="true" class="[^"]*"/, 'data-long-line="true"')).toContain(
+      'data-long-line="true"><span class="whitespace-nowrap">긴 컨텍스트</span> '
       + '<span class="whitespace-nowrap">$20.00 / $75.00</span>, <span class="whitespace-nowrap">캐시 읽기 $2.00</span>, '
       + '<span class="whitespace-nowrap">쓰기 $25.00</span></span>',
     );

@@ -21,7 +21,7 @@ import ChatModal from "./ChatModal";
 // 버튼 높이 + 아래 간격 + 1rem보다 커서 페이지 끝 내용은 보이는 버튼 아래에 놓이지 않는다.
 const FAB_CLASS =
   "fixed right-4 bottom-[calc(1rem_+_env(safe-area-inset-bottom))] sm:right-6 sm:bottom-[calc(1.5rem_+_env(safe-area-inset-bottom))] "
-  + "z-40 w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-gradient-to-br from-blue-500 to-indigo-600 hover:from-blue-400 hover:to-indigo-500 "
+  + "z-40 w-12 h-12 sm:w-16 sm:h-16 rounded-full bg-blue-600 hover:bg-blue-500 "
   + "text-white shadow-2xl border-2 border-blue-300/50 flex items-center justify-center "
   + "transition-[transform,opacity] duration-200 ease-out motion-reduce:transition-none hover:scale-110";
 // Slides below the viewport (its own height + the largest bottom offset) and fades; no pointer hits while hidden.

@@ -13,8 +13,8 @@ export default function manifest(): MetadataRoute.Manifest {
     scope: "/",
     display: "standalone",
     orientation: "any", // iPad 가로/세로 모두 지원
-    background_color: "#0b1220", // 스플래시/전환 배경 — 앱 아이콘·다크 테마와 동일 계열
-    theme_color: "#030712", // gray-950 (다크 기본 테마)
+    background_color: "#f5f7fb",
+    theme_color: "#f5f7fb",
     icons: [
       { src: "/icons/icon-192.png", sizes: "192x192", type: "image/png" },
       { src: "/icons/icon-512.png", sizes: "512x512", type: "image/png" },

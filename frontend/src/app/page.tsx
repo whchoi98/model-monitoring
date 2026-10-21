@@ -13,6 +13,7 @@ import { fetchModels, fetchPromptSets } from "@/lib/api";
 import { useT, useLang } from "@/lib/i18n-context";
 import { useAuth } from "@/lib/auth-context";
 import AppShell from "@/components/AppShell";
+import PageHeading from "@/components/PageHeading";
 import { useProbeStream } from "@/hooks/useProbeStream";
 import ModelSelector from "@/components/ModelSelector";
 import ProbeConfigPanel from "@/components/ProbeConfigPanel";
@@ -118,12 +119,12 @@ function HomeContent() {
 
       {/* Manual Probe Tab */}
       {topTab === "manual" && (
-        <div className="border-b border-gray-800 px-4 py-4 sm:px-6">
-          <h1 className="text-xl font-semibold text-gray-100">{t.manualProbeTab}</h1>
+        <div className="mb-6">
+          <PageHeading eyebrow={t.workspace.runWorkspace} title={t.manualProbeTab} description={t.workspace.manualDescription} />
         </div>
       )}
       {topTab === "manual" && !user && (
-        <div className="mx-auto max-w-md space-y-4 p-6">
+        <div className="ui-panel mx-auto my-8 max-w-lg space-y-4 text-center">
           <p role={checking ? "status" : undefined} className="text-sm text-gray-400">
             {checking
               ? (lang === "en" ? "Checking sign-in…" : "로그인 상태 확인 중…")
@@ -137,10 +138,10 @@ function HomeContent() {
       )}
 
       {topTab === "manual" && user && (
-        <div className="flex flex-col lg:flex-row">
+        <div className="manual-workspace">
           {/* Left Sidebar - Config */}
-          <aside className="w-full lg:w-96 flex-shrink-0 border-b lg:border-b-0 lg:border-r border-gray-800 bg-gray-950 lg:sticky lg:top-[var(--app-header-height,7rem)] lg:h-[calc(100dvh-var(--app-header-height,7rem))] overflow-y-auto">
-            <div className="p-4 space-y-6">
+          <aside className="manual-configuration ui-panel">
+            <div className="space-y-6">
               <ModelSelector
                 selectedModels={config.model_ids}
                 onChange={(ids) =>
@@ -163,7 +164,7 @@ function HomeContent() {
 
           {/* Main Content */}
           <div className="flex-1 min-w-0">
-            <div className="p-6 space-y-6">
+            <div className="space-y-6">
               {/* Progress Bar */}
               <ProgressBar
                 completed={stream.progress.completed}
@@ -245,7 +246,7 @@ function HomeContent() {
               {!stream.isRunning &&
                 stream.results.length === 0 &&
                 !stream.error && (
-                  <div className="flex flex-col items-center justify-center py-24 text-center">
+                  <div className="ui-panel flex min-h-80 flex-col items-center justify-center px-6 py-12 text-center">
                     <div className="w-16 h-16 bg-gray-800 rounded-2xl flex items-center justify-center mb-4">
                       <svg
                         className="w-8 h-8 text-gray-600"

@@ -23,7 +23,7 @@ export default function MessageMarkdown({ text }: { text: string }) {
             const isBlock = /language-/.test(className ?? "");
             return isBlock ? (
               <code
-                className="block bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs"
+                className="block bg-gray-950 border border-gray-800 rounded-md p-3 overflow-x-auto text-xs ui-table-shell"
                 {...props}
               >
                 {children}
@@ -37,8 +37,8 @@ export default function MessageMarkdown({ text }: { text: string }) {
           // 표는 가로 스크롤 가능하게 wrap.
           table({ children }) {
             return (
-              <div className="overflow-x-auto">
-                <table className="w-full text-xs border-collapse">{children}</table>
+              <div className="overflow-x-auto ui-table-shell">
+                <table className="ui-table w-full text-xs border-collapse">{children}</table>
               </div>
             );
           },

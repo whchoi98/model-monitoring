@@ -1,5 +1,7 @@
 "use client";
 
+import { trapDialogFocus } from "./dialogFocus";
+
 import {
   createContext, useCallback, useContext, useEffect, useMemo, useRef, useState,
   type ReactNode,
@@ -166,26 +168,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         ref={dialog}
         tabIndex={-1}
         aria-label={lang === "en" ? "Login" : "로그인"}
-        className="m-auto w-[calc(100%-2rem)] max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-xl border border-gray-800 bg-gray-950 p-0 text-gray-100 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm"
+        className="m-auto w-[calc(100%-2rem)] max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto rounded-2xl border border-gray-800 bg-gray-900 p-0 text-gray-100 shadow-2xl backdrop:bg-black/60 backdrop:backdrop-blur-sm"
         onCancel={(event) => { event.preventDefault(); closeLogin(); }}
-        onKeyDown={(event) => {
-          if (event.key !== "Tab") return;
-          const controls = Array.from(event.currentTarget.querySelectorAll<HTMLElement>(
-            'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex]:not([tabindex="-1"])',
-          )).filter((element) => element.getClientRects().length > 0);
-          const first = controls[0];
-          const last = controls[controls.length - 1];
-          if (!first || !last) {
-            event.preventDefault();
-            event.currentTarget.focus();
-          } else if (event.shiftKey && (document.activeElement === first || document.activeElement === event.currentTarget)) {
-            event.preventDefault();
-            last.focus();
-          } else if (!event.shiftKey && document.activeElement === last) {
-            event.preventDefault();
-            first.focus();
-          }
-        }}
+        onKeyDown={trapDialogFocus}
         onClick={(event) => {
           if (event.target !== event.currentTarget) return;
           const bounds = event.currentTarget.getBoundingClientRect();
@@ -193,7 +178,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             || event.clientY < bounds.top || event.clientY > bounds.bottom) closeLogin();
         }}
       >
-        <div className="sticky top-0 z-10 flex justify-end bg-gray-950 p-2">
+        <div className="sticky top-0 z-10 flex justify-end bg-gray-900 px-3 py-2">
           <button
             type="button"
             onClick={closeLogin}
@@ -204,7 +189,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           </button>
         </div>
         {loginOpen && (
-          <div className="[&>div]:py-0 [&>div>div]:max-w-none [&>div>div>div]:border-0 [&>div>div>div]:bg-transparent">
+          <div className="px-5 pb-6 sm:px-6 [&>div]:py-0 [&>div>div]:max-w-none [&>div>div>div]:border-0 [&>div>div>div]:bg-transparent">
             <LoginForm onLoginSuccess={onLoginSuccess} />
           </div>
         )}

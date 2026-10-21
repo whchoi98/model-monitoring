@@ -7,7 +7,7 @@ import { ApiError } from "@/lib/http";
 export function DataLoading({ label }: { label?: string }) {
   const t = useT();
   return (
-    <div role="status" className="flex items-center gap-3 rounded-xl border border-gray-800 bg-gray-900/50 p-5 text-sm text-gray-400">
+    <div role="status" className="ui-panel flex items-center gap-3 p-5 text-sm text-gray-400">
       <span aria-hidden="true" className="h-4 w-4 shrink-0 animate-spin rounded-full border-2 border-blue-400 border-t-transparent" />
       {label ?? t.common.loading}
     </div>

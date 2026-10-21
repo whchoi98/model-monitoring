@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 import { useEffect, useState } from "react";
 import {
   fetchMultiChannelReliability,
@@ -63,6 +66,7 @@ function rateColor(r: number | null): string {
 }
 
 export default function ReliabilityPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const [windowSpec, setWindowSpec] = useState("24h");
   const resource = useAsyncResource<MultiChannelReliability>(
@@ -80,19 +84,19 @@ export default function ReliabilityPanel() {
   const errLabels = lang === "en" ? ERROR_BUCKET_LABELS_EN : ERROR_BUCKET_LABELS_KO;
 
   return (
-    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.analysisWorkspace} title={<>
             {lang === "en" ? "Multi-channel Reliability" : "다중 채널 신뢰성"}
-          </h1>
+          </>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
               ? "Same model family across Bedrock Global / US / Seoul In-Region (ap-northeast-2), Anthropic CP on AWS, and OpenAI (Global / US cross-region + Mantle regions) channels — for failover decisions."
               : "동일 모델을 Bedrock Global / US / 서울 In-Region(ap-northeast-2), Anthropic CP on AWS, OpenAI(Global / US 교차 리전 + Mantle 리전) 채널별로 비교 — failover 의사결정용."}
           </p>
-        </div>
-        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">
             {lang === "en" ? "Window" : "기간"}
           </span>
@@ -110,16 +114,17 @@ export default function ReliabilityPanel() {
             ))}
           </div>
         </div>
-      </div>
-
-      <RefreshControls
+<RefreshControls
         refreshing={resource.refreshing}
         onRefresh={refresh}
         updatedAt={resource.updatedAt}
         enabled={enabled}
         onEnabledChange={setEnabled}
         countdown={countdown}
-      />
+      /></div>
+      </PageHeading>
+
+
 
       <DataError
         error={resource.error}
@@ -138,8 +143,8 @@ export default function ReliabilityPanel() {
               ...fam.channels.map((c) => c.success_rate ?? 0),
             );
             return (
-              <div key={fam.family} className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-                <h2 className="text-base font-semibold text-gray-100 mb-3">{fam.family}</h2>
+              <div key={fam.family} className="ui-panel">
+                <h2 className="text-base font-semibold text-gray-100 mb-3 section-title">{fam.family}</h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {fam.channels.map((c) => {
                     const isWinner = c.success_rate !== null && c.success_rate === bestRate;
@@ -151,7 +156,7 @@ export default function ReliabilityPanel() {
                         <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
                           <div className="text-xs font-semibold break-words">{c.channel}</div>
                           {isWinner && (
-                            <span className="text-[11px] px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
+                            <span className="text-xs px-1.5 py-0.5 rounded bg-emerald-500/20 text-emerald-300 border border-emerald-500/30">
                               {lang === "en" ? "BEST" : "최우수"}
                             </span>
                           )}
@@ -159,10 +164,10 @@ export default function ReliabilityPanel() {
                         <div className={`text-2xl font-bold tabular-nums ${rateColor(c.success_rate)}`}>
                           {formatRate(c.success_rate)}
                         </div>
-                        <div className="text-[11px] mt-0.5">
+                        <div className="text-xs mt-0.5">
                           {c.success}/{c.samples} {lang === "en" ? "success" : "성공"}
                         </div>
-                        <div className="text-[11px] mt-2 grid grid-cols-2 gap-x-2 gap-y-0.5">
+                        <div className="text-xs mt-2 grid grid-cols-2 gap-x-2 gap-y-0.5">
                           <div className="opacity-70">avg TTFT</div>
                           <div className="text-right tabular-nums">
                             {c.avg_ttft_ms !== null ? `${c.avg_ttft_ms.toFixed(0)} ms` : "—"}
@@ -182,14 +187,14 @@ export default function ReliabilityPanel() {
                         </div>
                         {(c.error > 0 || c.overloaded > 0) && (
                           <div className="mt-2 pt-2 border-t border-current/20">
-                            <div className="text-[11px] mb-1">
+                            <div className="text-xs mb-1">
                               {lang === "en" ? "Failure modes" : "실패 유형"}
                             </div>
                             <div className="flex flex-wrap gap-1">
                               {Object.entries(c.error_buckets).map(([k, v]) => (
                                 <span
                                   key={k}
-                                  className="text-[11px] px-1.5 py-0.5 rounded bg-black/30 light:bg-gray-800"
+                                  className="text-xs px-1.5 py-0.5 rounded bg-black/30 light:bg-gray-800"
                                 >
                                   {errLabels[k] ?? k}: {v}
                                 </span>

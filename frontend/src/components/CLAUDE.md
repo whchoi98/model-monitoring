@@ -4,6 +4,7 @@
 React UI components for the monitoring dashboard (monitoring panels, shared UI primitives, and a `chat/` subfolder). All are client components (`"use client"`).
 
 ## Key Components
+- `PageHeading.tsx`, `QuickNavigation.tsx` — shared page hierarchy and searchable navigation (Ctrl/Cmd+K, native dialog). AppShell owns page width; pages consume the shared UI classes in globals.css.
 - `RumProvider.tsx` — RUM(Real User Monitoring, v2.16.5): 자체 호스팅 `public/rum-sdk.min.js`를 next/script로 로드, appName=llm-monitor. `NEXT_PUBLIC_RUM_ENDPOINT/_API_KEY`는 **빌드 타임** 인라인 — 미설정 빌드는 수집 비활성
 - `AppHeader.tsx` — 공용 헤더 (v2.16.0): NavItem 데이터 기반 — 데스크톱(md+) 별도 가로 내비 행 / 모바일 햄버거 드롭다운, 페이지별 `actions` 슬롯. `NavGroups`는 모니터링·탐색/검증·분석·실행 그룹을 같은 순서로 렌더링한다. 데스크톱 메뉴는 여유 공간 안에서 가운데 정렬하고, 내용이 화면보다 넓으면 가로 스크롤한다. 그룹 이름은 `i18n.ts`의 `navigationGroups`를 쓴다. 로그인 필요 메뉴(수동 프로브·프롬프트)는 맨 뒤, "비용 단가"(`/pricing`)는 "대시보드" 바로 뒤를 유지한다(사용자 요청, `e2e/pricing.spec.ts`가 순서 고정)
 - `AutoDashboard.tsx` — Main dashboard: monitoring overview, catalog coverage, scoped 12h failures, DB-sourced collection status, model search/health/sort filters, shareable `layout=compact|cards`, and trend selection. Status/compare actions move focus to the destination heading. Search/health/sort changes reset collapsed groups so matches remain visible.

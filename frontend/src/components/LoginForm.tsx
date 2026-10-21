@@ -48,9 +48,9 @@ export default function LoginForm({ onLoginSuccess }: Props) {
   };
 
   return (
-    <div className="flex items-center justify-center py-24">
+    <div className="flex items-center justify-center py-2 sm:py-4">
       <div className="w-full max-w-sm">
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-6">
+        <div className="space-y-5">
           {/* Header */}
           <div className="text-center mb-6">
             <div className="w-12 h-12 bg-blue-600/10 border border-blue-500/20 rounded-xl flex items-center justify-center mx-auto mb-3">
@@ -93,12 +93,12 @@ export default function LoginForm({ onLoginSuccess }: Props) {
                 onChange={(e) => setUsername(e.target.value)}
                 required
                 minLength={2}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="ui-input w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 placeholder={mode === "register" ? "you@example.com" : "admin"}
                 autoComplete={mode === "register" ? "email" : "username"}
               />
               {mode === "register" && (
-                <p className="mt-1 text-[11px] text-gray-500">
+                <p className="mt-1 text-xs text-gray-500">
                   관리자 승인 알림 발송을 위해 이메일 형식으로 입력하세요.
                 </p>
               )}
@@ -111,7 +111,7 @@ export default function LoginForm({ onLoginSuccess }: Props) {
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={4}
-                className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                className="ui-input w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-sm text-gray-200 placeholder-gray-600 focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
                 placeholder="••••••••"
                 autoComplete={mode === "login" ? "current-password" : "new-password"}
               />

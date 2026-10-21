@@ -54,7 +54,7 @@ export default function AppShell({
           </button>
         </div>
       )}
-      <main id="main-content" tabIndex={-1} className="min-w-0">{children}</main>
+      <main id="main-content" tabIndex={-1} className="workspace-main">{children}</main>
       {/* The footer reserves space for both floating controls and the iOS safe area. */}
       <SiteFooter />
       <FloatingChat />

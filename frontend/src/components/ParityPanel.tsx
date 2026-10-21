@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 // 패리티 런 (v2.11.0) — 실제 API 호출 증거 기반의 기능 패리티 매트릭스.
 // 모든 셀은 실행-증거 프로브의 판정 결과 (supported/unsupported/broken/skipped).
 // 셀 클릭 → 해당 프로브의 요청 요약·응답 스니펫·오류 등 증거 표시.
@@ -112,7 +115,7 @@ function HealthBar({ counts, health }: { counts: Record<Status, number>; health:
   return (
     <div className="w-24 shrink-0" role="img" aria-label={health === null ? "No measured health" : `healthy ${health}%`}>
       <div className="text-2xl font-bold text-gray-100 tabular-nums leading-none">{health === null ? "—" : `${health}%`}</div>
-      <div className="text-[11px] tracking-widest text-gray-500 mt-0.5">HEALTHY</div>
+      <div className="text-xs tracking-widest text-gray-500 mt-0.5">HEALTHY</div>
       <div className="flex h-2 w-full rounded-full overflow-hidden bg-gray-800 mt-2">
         {order.map((st) =>
           counts[st] > 0 ? (
@@ -183,9 +186,9 @@ function ProviderDrawer({
       <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
       <aside className="absolute right-0 top-0 h-full w-full max-w-md overflow-y-auto bg-gray-900 light:bg-white border-l border-gray-800 shadow-2xl p-6 space-y-6">
         <div>
-          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
+          <div className="text-xs font-semibold tracking-wider text-blue-400 uppercase">Key Findings</div>
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-bold text-gray-100">{provider}</h2>
+            <h2 className="text-lg font-bold text-gray-100 section-title">{provider}</h2>
             <button type="button" onClick={onClose} className="text-gray-400 hover:text-gray-200 text-xl leading-none" aria-label="close">×</button>
           </div>
           <p className="text-xs text-gray-500 mt-0.5">
@@ -199,7 +202,7 @@ function ProviderDrawer({
               ? `Broken — expected to work but failing (${brokenByFeature.length} features)`
               : `Broken — 동작해야 하는데 실패 (${brokenByFeature.length}개 피처)`}
           </h3>
-          <p className="text-[11px] text-gray-500 mb-2">
+          <p className="text-xs text-gray-500 mb-2">
             {lang === "en"
               ? "Live probes hit an error on advertised capabilities — regressions worth chasing."
               : "실제 프로브가 오류를 만난 항목 — 추적할 가치가 있는 회귀입니다."}
@@ -221,8 +224,8 @@ function ProviderDrawer({
                       {g.broken.length}/{g.probed} {lang === "en" ? "cells" : "셀"}
                     </span>
                   </div>
-                  <div className="text-[11px] text-gray-400 font-mono mt-0.5">{surfaces.join(", ")}</div>
-                  <div className="text-[11px] text-gray-500 mt-0.5">
+                  <div className="text-xs text-gray-400 font-mono mt-0.5">{surfaces.join(", ")}</div>
+                  <div className="text-xs text-gray-500 mt-0.5">
                     {models.slice(0, 3).join(" · ")}{models.length > 3 ? ` ${lang === "en" ? `+${models.length - 3} more` : `외 ${models.length - 3}개`}` : ""}
                   </div>
                 </div>
@@ -237,14 +240,14 @@ function ProviderDrawer({
               ? `Explicitly unsupported (${unsupportedChips.length})`
               : `명시적 미지원 (${unsupportedChips.length})`}
           </h3>
-          <p className="text-[11px] text-gray-500 mb-2">
+          <p className="text-xs text-gray-500 mb-2">
             {lang === "en"
               ? "Provider rejected the capability explicitly — deliberate gaps, not bugs."
               : "provider가 명시적으로 거부한 기능 — 버그가 아닌 의도된 격차입니다."}
           </p>
           <div className="flex flex-wrap gap-1.5">
             {unsupportedChips.map((u) => (
-              <span key={`${u.feature}|${u.surface}`} className="px-2 py-0.5 text-[11px] rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
+              <span key={`${u.feature}|${u.surface}`} className="px-2 py-0.5 text-xs rounded-full bg-amber-500/10 border border-amber-500/30 text-amber-300">
                 {featureLabel(u.feature)} · {SURFACE_LABELS[u.surface] ?? u.surface}
               </span>
             ))}
@@ -255,12 +258,12 @@ function ProviderDrawer({
         {weakest.length > 0 && (
           <section>
             <h3 className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "Weakest models" : "취약 모델"}</h3>
-            <p className="text-[11px] text-gray-500 mb-2">
+            <p className="text-xs text-gray-500 mb-2">
               {lang === "en" ? "Share of should-work checks that pass, per model." : "모델별 동작해야 하는 검사의 통과 비율."}
             </p>
             <div className="space-y-1.5">
               {weakest.map((m) => (
-                <div key={m.name} className="flex items-center gap-2 text-[11px]">
+                <div key={m.name} className="flex items-center gap-2 text-xs">
                   <span className="w-44 shrink-0 truncate font-mono text-gray-400">{m.name}</span>
                   <div className="flex-1 h-1.5 rounded-full bg-gray-800 overflow-hidden">
                     <div
@@ -303,7 +306,7 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
   const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
     <details open={!isOk} className="group">
       <summary className="cursor-pointer select-none text-sm text-gray-400 hover:text-gray-200 py-1">
-        <span className="inline-block w-3 text-[11px] transition-transform group-open:rotate-90">▶</span> {title}
+        <span className="inline-block w-3 text-xs transition-transform group-open:rotate-90">▶</span> {title}
       </summary>
       <pre className={`mt-1 rounded-lg p-3 overflow-x-auto text-xs leading-relaxed border ${
         tone === "error" ? "bg-gray-950 border-rose-500/30 text-rose-300 whitespace-pre-wrap break-all" : "bg-gray-950 border-gray-800 text-gray-200"
@@ -316,8 +319,8 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
   return (
     <Dialog title={lang === "en" ? "Execution evidence" : "실행 증거"} onClose={onClose}>
         <div>
-          <div className="text-[11px] font-semibold tracking-wider text-blue-400 uppercase">Evidence</div>
-          <h2 className="text-base font-bold text-gray-100 font-mono mt-0.5">
+          <div className="text-xs font-semibold tracking-wider text-blue-400 uppercase">Evidence</div>
+          <h2 className="text-base font-bold text-gray-100 font-mono mt-0.5 section-title">
             {cell.feature} · {SURFACE_LABELS[cell.surface] ?? cell.surface} · {cell.model_id}
           </h2>
           <div className="text-xs text-gray-500 mt-0.5">{cell.model_name}</div>
@@ -352,6 +355,7 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
 }
 
 export default function ParityPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const t = useT();
   const { user, openLogin } = useAuth();
@@ -477,11 +481,10 @@ export default function ParityPanel() {
   };
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
+    <div className="page-stack">
       {/* 헤더 + 요약 */}
-      <div className="flex items-start justify-between flex-wrap gap-4">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">{lang === "en" ? "Parity Run" : "패리티 런"}</h1>
+      <PageHeading eyebrow={pageCopy.exploreWorkspace} title={<>{lang === "en" ? "Parity Run" : "패리티 런"}</>} description={<>
+
           <p className="text-sm text-gray-400 mt-1 max-w-3xl leading-relaxed">
             {lang === "en"
               ? "Every cell is backed by a real API call — probes inspect response content, HTTP 200 is never enough."
@@ -494,8 +497,8 @@ export default function ParityPanel() {
               {run.running && <span className="ml-2 text-blue-400">● {lang === "en" ? "run in progress…" : "런 실행 중…"}</span>}
             </p>
           )}
-        </div>
-        <div className="flex items-center gap-2">
+        </>}
+        actions={<><div className="flex items-center gap-2">
           <button
             type="button"
             onClick={handleTrigger}
@@ -504,10 +507,11 @@ export default function ParityPanel() {
           >
             {lang === "en" ? "Run parity sweep" : "패리티 런 실행"}
           </button>
-        </div>
-      </div>
-      <RefreshControls refreshing={latestResource.refreshing || catalogResource.refreshing} onRefresh={load} updatedAt={latestResource.updatedAt}
-        enabled={autoRefresh.enabled} onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} />
+        </div></>}>
+        <div className="ui-toolbar justify-between"><RefreshControls refreshing={latestResource.refreshing || catalogResource.refreshing} onRefresh={load} updatedAt={latestResource.updatedAt}
+        enabled={autoRefresh.enabled} onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} /></div>
+      </PageHeading>
+
       {triggerMsg && <div role={triggerError ? "alert" : "status"} className={`rounded-xl border px-4 py-3 text-xs ${triggerError ? "border-amber-500/30 bg-amber-500/10 text-amber-300" : "border-blue-500/30 bg-blue-500/10 text-blue-300"}`}>{triggerMsg}</div>}
       <DataError error={latestResource.error} resource={lang === "en" ? "parity results" : "패리티 결과"} onRetry={latestResource.refresh} hasData={!!latestResource.data} />
       <DataError error={catalogResource.error} resource={lang === "en" ? "feature catalog" : "기능 목록"} onRetry={catalogResource.refresh} hasData={!!catalogResource.data} />
@@ -520,12 +524,12 @@ export default function ParityPanel() {
 
       {/* 이전 런 대비 변경사항 (v2.12.0) */}
       {run && changes.length > 0 && (
-        <div className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
-          <div className="text-sm font-semibold text-amber-300 mb-2">
+        <details className="bg-amber-500/10 border border-amber-500/30 rounded-xl p-4">
+          <summary className="text-sm font-semibold text-amber-300 mb-2 cursor-pointer">
             {lang === "en"
               ? `Changes since run #${prevRunId}: ${changes.length}`
               : `이전 런(#${prevRunId}) 대비 변경 ${changes.length}건`}
-          </div>
+          </summary>
           <ul className="space-y-1 text-xs text-gray-300">
             {changes.slice(0, 10).map((c) => {
               const fdef = features.find((f) => f.id === c.feature);
@@ -548,10 +552,10 @@ export default function ParityPanel() {
               <li className="text-gray-500">{lang === "en" ? `+${changes.length - 10} more` : `외 ${changes.length - 10}건`}</li>
             )}
           </ul>
-        </div>
+        </details>
       )}
       {run && prevRunId != null && changes.length === 0 && (
-        <div className="px-3 py-2 bg-gray-900/50 border border-gray-800 rounded-xl text-xs text-gray-500">
+        <div className="ui-panel px-3 py-2 text-xs text-gray-500">
           {lang === "en"
             ? `No changes since run #${prevRunId}.`
             : `이전 런(#${prevRunId}) 대비 변경 없음.`}
@@ -566,24 +570,24 @@ export default function ParityPanel() {
               key={p.provider}
               type="button"
               onClick={() => setProviderDetail(p.provider)}
-              className="text-left bg-gray-900/50 border border-gray-800 hover:border-blue-500/60 rounded-xl p-4 flex items-center gap-4 transition-colors"
+              className="ui-panel text-left hover:border-blue-500/60 flex items-center gap-4 transition-colors"
             >
               <HealthBar counts={p.counts} health={p.health} />
               <div className="min-w-0">
                 <div className="flex items-center gap-2">
                   <span className="text-base font-bold text-gray-100">{p.provider}</span>
-                  <span className="px-1.5 py-0.5 text-[11px] rounded bg-gray-800 text-gray-400">{p.total} {lang === "en" ? "checks" : "검사"}</span>
+                  <span className="px-1.5 py-0.5 text-xs rounded bg-gray-800 text-gray-400">{p.total} {lang === "en" ? "checks" : "검사"}</span>
                 </div>
-                <div className="text-[11px] text-gray-500 mt-0.5">
+                <div className="text-xs text-gray-500 mt-0.5">
                   {p.health === null ? (lang === "en" ? "No measured expected capabilities" : "헬스 계산 대상 측정값 없음") : lang === "en" ? `${p.health}% of features that should work do` : `동작해야 하는 기능 중 ${p.health}% 동작`}
                 </div>
-                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-[11px] tabular-nums">
+                <div className="flex items-center gap-x-3 gap-y-1 flex-wrap mt-2 text-xs tabular-nums">
                   <span className="text-emerald-300">● {p.counts.supported} supported</span>
                   <span className="text-amber-300">● {p.counts.unsupported} unsupported</span>
                   <span className="text-rose-300">● {p.counts.broken} broken</span>
                   <span className="text-gray-500">● {p.counts.skipped} skipped</span>
                 </div>
-                <div className="text-[11px] text-blue-400 mt-1.5">{lang === "en" ? "Insights →" : "상세 요약 →"}</div>
+                <div className="text-xs text-blue-400 mt-1.5">{lang === "en" ? "Insights →" : "상세 요약 →"}</div>
               </div>
             </button>
           ))}
@@ -591,7 +595,7 @@ export default function ParityPanel() {
       )}
 
       {latestResource.data && !latestResource.error && !run && (
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-8 text-center text-sm text-gray-400">
+        <div className="ui-panel p-8 text-center text-sm text-gray-400">
           {lang === "en"
             ? "No parity run yet — click \"Run parity sweep\" (login required) or wait for the 12-hour schedule."
             : "아직 실행된 패리티 런이 없습니다 — \"패리티 런 실행\"(로그인 필요)을 누르거나 12시간 주기 스케줄을 기다려 주세요."}
@@ -610,7 +614,7 @@ export default function ParityPanel() {
               onFocus={() => setPickerOpen(true)}
               onBlur={() => setTimeout(() => setPickerOpen(false), 150)}
               placeholder={lang === "en" ? "Select or search models..." : "모델 선택/검색..."}
-              className="px-3 py-1.5 pr-8 text-sm rounded-lg bg-gray-900 light:bg-white border border-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 w-64"
+              className="ui-input px-3 py-1.5 pr-8 text-sm rounded-lg bg-gray-900 light:bg-white border border-gray-800 text-gray-200 placeholder-gray-500 focus:outline-none focus:border-blue-500 w-64"
             />
             {search && (
               <button
@@ -662,13 +666,13 @@ export default function ParityPanel() {
             <div className="flex gap-1">
               <button
                 onClick={() => setExpandedFeatures(new Set(groups.map((g) => g.feature)))}
-                className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                className="px-2 py-1 text-xs rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
               >
                 {lang === "en" ? "Expand all" : "모두 펼치기"}
               </button>
               <button
                 onClick={() => setExpandedFeatures(new Set())}
-                className="px-2 py-1 text-[11px] rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
+                className="px-2 py-1 text-xs rounded-md bg-gray-800 text-gray-400 hover:bg-gray-700 hover:text-gray-300"
               >
                 {lang === "en" ? "Collapse all" : "모두 접기"}
               </button>
@@ -684,8 +688,8 @@ export default function ParityPanel() {
         </DataEmpty>
       )}
       {run && catalogResource.data && groups.length > 0 && (
-        <div className="overflow-x-auto bg-gray-900/50 border border-gray-800 rounded-xl">
-          <table className="w-full text-xs border-collapse">
+        <div className="ui-panel overflow-x-auto ui-table-shell">
+          <table className="ui-table w-full text-xs border-collapse">
             <thead>
               <tr className="border-b border-gray-800">
                 <th className="text-left px-3 py-2 text-gray-400 font-medium sticky left-0 bg-gray-900 light:bg-white">
@@ -731,7 +735,7 @@ export default function ParityPanel() {
                               ) : null,
                             )}
                           </div>
-                          <span className="text-[11px] text-gray-500 tabular-nums whitespace-nowrap">
+                          <span className="text-xs text-gray-500 tabular-nums whitespace-nowrap">
                             <span className="text-emerald-300">{g.counts.supported}</span>
                             {" · "}
                             <span className="text-amber-300">{g.counts.unsupported}</span>
@@ -746,8 +750,8 @@ export default function ParityPanel() {
                       g.rows.map((row) => (
                         <tr key={`${g.feature}|${row.model_id}`} className="border-b border-gray-800/60">
                           <td className="px-3 py-1.5 pl-8 sticky left-0 bg-gray-900 light:bg-white">
-                            <div className="text-gray-300 text-[11px]">{row.model_name}</div>
-                            <div className="text-gray-500 font-mono text-[11px]">{row.model_id}</div>
+                            <div className="text-gray-300 text-xs">{row.model_name}</div>
+                            <div className="text-gray-500 font-mono text-xs">{row.model_id}</div>
                           </td>
                           {row.cells.map((cell, j) => (
                             <td key={j} className="px-3 py-1.5">
@@ -775,7 +779,7 @@ export default function ParityPanel() {
       )}
 
       {/* 동작 방식 요약 */}
-      <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 text-xs text-gray-400 leading-relaxed space-y-1.5">
+      <div className="ui-panel text-xs text-gray-400 leading-relaxed space-y-1.5">
         <div className="text-sm font-semibold text-gray-200 mb-1">{lang === "en" ? "How it works" : "동작 방식"}</div>
         <p>1 · {lang === "en" ? "An EventBridge schedule starts a Fargate sweep every 12 hours (manual trigger runs inside the backend service)." : "EventBridge 스케줄이 12시간마다 Fargate 스윕을 시작합니다 (수동 트리거는 backend 서비스 내에서 실행)."}</p>
         <p>2 · {lang === "en" ? "The monitored model catalog is the source — new models are picked up automatically." : "모니터링 모델 카탈로그가 소스입니다 — 신규 모델은 자동으로 반영됩니다."}</p>

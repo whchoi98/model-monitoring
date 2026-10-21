@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 // 비용 단가 (v2.30.0, v2.31.0) — GET /api/pricing 단일 출처. 제공사 섹션(Anthropic Claude, OpenAI, Amazon Nova), 행 순서,
 // 각주 번호는 응답 그대로 쓴다. 열은 제공사마다 PROVIDER_COLUMNS다: 첫 열은 Anthropic이 Claude Platform on AWS, OpenAI가
 // OpenAI 공식 가격(비용 계산에 쓰지 않는 참고 가격)이고, Amazon Nova는 머리글과 칸을 모두 비운다(aria-hidden,
@@ -199,7 +202,7 @@ function PriceTableScroll({ label, lang, children }: { label: string; lang: Lang
       )}
       <div className="relative">
         {/* relative: sr-only 텍스트(absolute)가 스크롤 영역 밖으로 빠져 페이지 가로 스크롤을 만들지 않게 한다. */}
-        <div ref={ref} role="region" aria-label={L(`${label} price table`, `${label} 단가 표`)} tabIndex={0} data-pricing-scroll className="relative overflow-x-auto">
+        <div ref={ref} role="region" aria-label={L(`${label} price table`, `${label} 단가 표`)} tabIndex={0} data-pricing-scroll className="relative overflow-x-auto ui-table-shell">
           {children}
         </div>
         {cue.moreRight && (
@@ -219,7 +222,7 @@ function Footnotes({ numbers, lang, onFootnote }: { numbers: number[]; lang: Lan
             href={`#ref-${n}`}
             onClick={() => onFootnote(n)}
             aria-label={lang === "en" ? `Reference ${n}` : `참고 자료 ${n}`}
-            className="text-[10px] font-medium text-blue-400 hover:underline"
+            className="text-xs font-medium text-blue-400 hover:underline"
           >
             [{n}]
           </a>
@@ -249,7 +252,7 @@ function Badges({ badges, lang, refNumbers, onFootnote }: {
               <Runs text={badge.label} />
             </span>
             <span className="sr-only">, </span>
-            <span data-badge-detail={badge.kind} className="min-w-0 break-keep text-[10px] leading-tight text-gray-400">
+            <span data-badge-detail={badge.kind} className="min-w-0 break-keep text-xs leading-tight text-gray-400">
               <span className="tabular-nums">
                 <Runs text={badge.detail} tail={n === undefined ? undefined : <Footnotes numbers={[n]} lang={lang} onFootnote={onFootnote} />} />
               </span>
@@ -302,7 +305,7 @@ function PriceItems({ items, line }: { items: PriceItem[]; line: "cache" | "long
     <span
       data-cache-line={line === "cache" ? true : undefined}
       data-long-line={line === "long" ? true : undefined}
-      className="mt-0.5 block text-[11px] leading-snug text-gray-400"
+      className="mt-0.5 block text-xs leading-snug text-gray-400"
     >
       {items.map((item, i) => (
         <Fragment key={i}>
@@ -369,7 +372,7 @@ function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFo
             <PriceItems items={cacheItems(entry, lang)} line="cache" />
             <PriceItems items={longItems(entry, lang)} line="long" />
             {showModelIds && (
-              <span data-model-ids className="mt-0.5 block break-all font-mono text-[10px] leading-snug text-gray-500">
+              <span data-model-ids className="mt-0.5 block break-all font-mono text-xs leading-snug text-gray-500">
                 {entry.model_ids.map((id) => <span key={id} className="block">{id}</span>)}
               </span>
             )}
@@ -512,7 +515,7 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
         const columns = columnsFor(section.provider);
         return (
           <section key={section.provider} aria-labelledby={`pricing-${section.provider}`} className="min-w-0 rounded-xl border border-gray-800 bg-gray-900 p-4">
-            <h2 id={`pricing-${section.provider}`} className="mb-3 break-keep text-sm font-semibold text-gray-200">{label}</h2>
+            <h2 id={`pricing-${section.provider}`} className="mb-3 break-keep text-base font-semibold text-gray-200 section-title">{label}</h2>
             <PriceTableScroll label={label} lang={lang}>
               <table className={TABLE}>
                 <caption className="sr-only">{L(`${label} prices (${UNIT.en})`, `${label} 단가 (${UNIT.ko})`)}</caption>
@@ -556,15 +559,15 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
         );
       })}
 
-      <section aria-labelledby="pricing-notes-title" className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <h2 id="pricing-notes-title" className="mb-2 break-keep text-sm font-semibold text-gray-200">{L("Notes", "참고 사항")}</h2>
+      <section aria-labelledby="pricing-notes-title" className="ui-panel">
+        <h2 id="pricing-notes-title" className="mb-2 break-keep text-base font-semibold text-gray-200 section-title">{L("Notes", "참고 사항")}</h2>
         <ol className={`list-decimal space-y-1 pl-5 text-xs leading-relaxed text-gray-400 ${PROSE}`}>
           {NOTES.map((note) => <li key={note.en}><Runs text={L(note.en, note.ko)} /></li>)}
         </ol>
       </section>
 
-      <section aria-labelledby="pricing-references-title" className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <h2 id="pricing-references-title" className="mb-2 break-keep text-sm font-semibold text-gray-200">{L("References", "참고 자료")}</h2>
+      <section aria-labelledby="pricing-references-title" className="ui-panel">
+        <h2 id="pricing-references-title" className="mb-2 break-keep text-base font-semibold text-gray-200 section-title">{L("References", "참고 자료")}</h2>
         <ol className={`space-y-0.5 text-xs leading-relaxed ${PROSE}`}>
           {data.references.map((reference) => (
             <ReferenceItem key={reference.id} reference={reference} lang={lang} highlighted={highlight === reference.n} />
@@ -579,6 +582,7 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
 }
 
 export default function PricingPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const resource = useAsyncResource<PricingResponse>("pricing", fetchPricing);
@@ -594,19 +598,19 @@ export default function PricingPanel() {
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
 
   return (
-    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div className="min-w-0 break-keep">
-          <h1 className="text-2xl font-bold text-gray-100">{L("Unit Prices", "비용 단가")}</h1>
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.exploreWorkspace} title={<>{L("Unit Prices", "비용 단가")}</>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {L(
               "Per-model token prices (USD per 1M tokens), synced with official sources every 12 hours.",
               "모델별 토큰 단가(USD, 1M 토큰당)를 12시간마다 공식 출처와 동기화해 보여 줍니다.",
             )}
           </p>
-        </div>
-        <RefreshControls refreshing={resource.refreshing} onRefresh={() => void resource.refresh()} updatedAt={resource.updatedAt} />
-      </div>
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><RefreshControls refreshing={resource.refreshing} onRefresh={() => void resource.refresh()} updatedAt={resource.updatedAt} /></div>
+      </PageHeading>
 
       <DataError error={resource.error} resource={L("unit prices", "비용 단가")} onRetry={() => void resource.refresh()} hasData={resource.data !== null} />
       {resource.loading && <DataLoading />}

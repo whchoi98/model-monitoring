@@ -172,7 +172,7 @@ export default function ProbeConfigPanel({
           onChange={(e) => onChange({ ...config, prompt: e.target.value })}
           rows={4}
           placeholder="Enter your test prompt..."
-          className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-y"
+          className="ui-input w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50 focus:border-blue-500 resize-y"
         />
         {/* 추천 프롬프트 풍선말 - 한/영에 따라 prompt 내용이 해당 언어로 입력 */}
         <div className="mt-2 flex flex-wrap gap-1.5">
@@ -182,7 +182,7 @@ export default function ProbeConfigPanel({
               type="button"
               onClick={() => onChange({ ...config, prompt: s.p })}
               title={s.p.slice(0, 200)}
-              className="px-2.5 py-1 text-[11px] rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors"
+              className="px-2.5 py-1 text-xs rounded-full bg-gray-800 hover:bg-gray-700 text-gray-300 hover:text-white border border-gray-700 transition-colors"
             >
               {s.l}
             </button>
@@ -210,7 +210,7 @@ export default function ProbeConfigPanel({
               value={saveName}
               onChange={(e) => setSaveName(e.target.value)}
               placeholder="Prompt set name..."
-              className="flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+              className="ui-input flex-1 bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500/50"
               onKeyDown={(e) => e.key === "Enter" && handleSavePrompt()}
             />
             <button
@@ -287,7 +287,7 @@ export default function ProbeConfigPanel({
             }
             className="w-full h-1.5 bg-gray-700 rounded-lg appearance-none cursor-pointer accent-blue-500"
           />
-          <div className="flex justify-between text-[10px] text-gray-600 mt-0.5">
+          <div className="flex justify-between text-xs text-gray-600 mt-0.5">
             <span>Precise</span>
             <span>Creative</span>
           </div>
@@ -311,7 +311,7 @@ export default function ProbeConfigPanel({
                 ),
               })
             }
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="ui-input w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </div>
 
@@ -332,7 +332,7 @@ export default function ProbeConfigPanel({
                 ),
               })
             }
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="ui-input w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </div>
 
@@ -353,7 +353,7 @@ export default function ProbeConfigPanel({
                 ),
               })
             }
-            className="w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/50"
+            className="ui-input w-full bg-gray-800 border border-gray-700 rounded-lg px-3 py-1.5 text-sm text-gray-100 tabular-nums focus:outline-none focus:ring-2 focus:ring-blue-500/50"
           />
         </div>
       </div>

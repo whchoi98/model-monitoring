@@ -15,11 +15,11 @@ export default function SiteFooter() {
   const total = snapshot ? snapshot.total_visitors.toLocaleString(locale) : "—";
   return (
     <footer aria-label={p.title} data-presence-state={status}
-      className="mx-auto mt-6 max-w-7xl border-t border-gray-800 px-4 pt-4 [padding-bottom:max(6rem,var(--comparison-dock-clearance,0px))] sm:px-6 sm:[padding-bottom:max(7rem,var(--comparison-dock-clearance,0px))]">
+      className="site-footer mx-auto mt-8 border-t border-gray-800 px-4 pt-6 [padding-bottom:max(6rem,var(--comparison-dock-clearance,0px))] sm:px-6 sm:[padding-bottom:max(7rem,var(--comparison-dock-clearance,0px))]">
       <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3 text-xs">
         <span className="text-gray-500">LLM Monitor <span className="ml-1">{APP_VERSION}</span></span>
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2">
-          {status !== "live" && <span className="text-[11px] text-gray-500">{status === "loading" ? p.loading : status === "stale" ? p.stale : p.unavailable}</span>}
+          {status !== "live" && <span className="text-xs text-gray-500">{status === "loading" ? p.loading : status === "stale" ? p.stale : p.unavailable}</span>}
           <dl className="flex flex-wrap gap-x-4 gap-y-2">
             <div className="flex items-center gap-2">
               <dt className="inline-flex items-center gap-1.5 text-gray-400">
@@ -35,7 +35,7 @@ export default function SiteFooter() {
           </dl>
         </div>
       </div>
-      <details className="mt-2 text-[11px] text-gray-500">
+      <details className="mt-2 text-xs text-gray-500">
         <summary className="w-fit cursor-pointer rounded py-2">{p.about}</summary>
         <div className="ui-copy max-w-3xl space-y-1 leading-relaxed">
           <p>{p.criteria}</p>

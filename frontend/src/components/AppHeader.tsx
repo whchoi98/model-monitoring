@@ -6,6 +6,7 @@ import { APP_VERSION } from "@/lib/version";
 import { useT, useLang } from "@/lib/i18n-context";
 import type { AuthUser } from "@/lib/types";
 import ThemeToggle from "./ThemeToggle";
+import QuickNavigation from "./QuickNavigation";
 
 const NAV_GROUPS = ["monitor", "explore", "analysis", "run"] as const;
 
@@ -43,14 +44,14 @@ export function useNavItems(currentKey: string): NavItem[] {
 function NavGroups({ items, mobile, onNavigate }: { items: NavItem[]; mobile?: boolean; onNavigate: () => void }) {
   const labels = useT().navigationGroups;
   return (
-    <div className={mobile ? "space-y-4" : "flex w-max min-w-full items-start justify-center gap-3 px-4 py-2 sm:px-6"}>
+    <div className={mobile ? "space-y-4" : "primary-navigation-groups"}>
       {NAV_GROUPS.map((key) => {
         const entries = items.filter((item) => (item.group ?? "monitor") === key);
         if (!entries.length) return null;
         return (
           <div key={key} role="group" aria-label={labels[key]}
-            className={mobile ? "space-y-1" : "shrink-0 border-l border-gray-800 pl-3 first:border-0 first:pl-0"}>
-            <p aria-hidden="true" className="mb-1 px-3 text-[10px] font-semibold tracking-wide text-gray-500">{labels[key]}</p>
+            className={mobile ? "space-y-1" : "primary-navigation-group"}>
+            <p aria-hidden="true" className="nav-group-label">{labels[key]}</p>
             <div className={mobile ? "space-y-1" : "flex items-center gap-1"}>
               {entries.map((item) => <NavEntry key={item.key} item={item} mobile={mobile} onNavigate={onNavigate} />)}
             </div>
@@ -62,9 +63,9 @@ function NavGroups({ items, mobile, onNavigate }: { items: NavItem[]; mobile?: b
 }
 
 function NavEntry({ item, mobile, onNavigate }: { item: NavItem; mobile?: boolean; onNavigate: () => void }) {
-  const cls = `flex min-h-10 items-center rounded-md px-3 py-2 text-sm font-medium transition-colors ${
+  const cls = `navigation-link ${
     mobile ? "w-full text-left" : "shrink-0 whitespace-nowrap"
-  } ${item.active ? "bg-blue-600 text-white" : "text-gray-400 hover:bg-gray-800 hover:text-gray-100"}`;
+  } ${item.active ? "navigation-link-active" : ""}`;
   if (item.onClick) {
     return (
       <button type="button" aria-current={item.active ? "page" : undefined}
@@ -162,18 +163,19 @@ export default function AppHeader({
   }, [menuOpen]);
 
   return (
-    <header ref={header} className="sticky top-0 z-40 min-w-0 border-b border-gray-800 bg-gray-950/95 backdrop-blur">
-      <div className="flex min-h-16 items-center justify-between gap-3 px-4 py-2 sm:px-6">
+    <header ref={header} className="app-header sticky top-0 z-40 min-w-0">
+      <div className="app-header-top">
         <Link href="/" aria-label="LLM Monitor" title={t.appTitle} className="flex min-w-0 items-center gap-2.5 text-gray-100">
           <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-600">
             <svg aria-hidden="true" className="h-5 w-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </span>
-          <span className="whitespace-nowrap text-base font-bold sm:text-lg">LLM Monitor</span>
+          <span className="whitespace-nowrap text-base font-bold sm:text-lg">LLM <span className="hidden min-[380px]:inline">Monitor</span></span>
           <span className="hidden text-xs font-normal text-gray-500 xl:inline">{APP_VERSION}</span>
         </Link>
         <div className="flex shrink-0 items-center gap-2 sm:gap-3">
+          <QuickNavigation items={items} />
           <div className="hidden md:block"><Preferences /></div>
           {actions && <div className="hidden items-center gap-2 md:flex">{actions}</div>}
           {user ? (
@@ -202,11 +204,11 @@ export default function AppHeader({
         </div>
       </div>
       <nav ref={desktopNav} aria-label={lang === "en" ? "Primary navigation" : "주요 메뉴"}
-        className="hidden max-w-full overflow-x-auto border-t border-gray-800/60 md:block">
+        className="primary-navigation hidden max-w-full overflow-x-auto md:block">
         <NavGroups items={items} onNavigate={close} />
       </nav>
       <nav id={menuId} hidden={!menuOpen} aria-label={lang === "en" ? "Mobile navigation" : "모바일 메뉴"}
-        className="max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-800 px-4 py-3 md:hidden">
+        className="mobile-navigation max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-800 px-4 py-4 md:hidden">
         <NavGroups items={items} mobile onNavigate={close} />
         <div className="mt-3 flex flex-wrap items-center gap-3 border-t border-gray-800 pt-3">
           <Preferences />

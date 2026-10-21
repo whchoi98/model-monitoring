@@ -22,6 +22,7 @@ import ModelComparisonDock from "./ModelComparisonDock";
 import TrendChart from "./TrendChart";
 import TrendComparisonControls from "./TrendComparisonControls";
 import InsightsPanel from "./InsightsPanel";
+import PageHeading from "./PageHeading";
 import RefreshControls from "./RefreshControls";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
 
@@ -180,59 +181,30 @@ export default function AutoDashboard() {
   const unlistedCount = !catalogKnown ? Math.max(0, (status.data?.expected_model_count ?? rows.length) - rows.length) : 0;
 
   return (
-    <div className="mx-auto max-w-7xl space-y-5 p-4 sm:space-y-6 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold tracking-tight text-gray-100">{m.title}</h1>
-          <p className="ui-copy mt-1 text-sm text-gray-500">{m.description}</p>
-        </div>
-        <nav aria-label={m.overview} className="flex flex-wrap gap-2">
+    <div className="page-stack">
+      <PageHeading eyebrow={t.workspace.monitorWorkspace} title={m.title} description={<div className="flex flex-wrap items-baseline gap-x-5 gap-y-1">
+          <span>{m.description}</span><span className="whitespace-nowrap text-xs">{t.common.updatedAt}: {formatAge(latest.updatedAt, lang, now)}</span>
+        </div>}
+        actions={<nav aria-label={m.overview} className="flex flex-wrap gap-2">
           <a className="ui-button" href="#model-status">{t.modelStatus}</a>
           <a className="ui-button" href="#performance-trends">{m.viewTrends}</a>
-          <Link className="ui-button" href="/reliability">{m.viewReliability}</Link>
-        </nav>
-      </div>
+          <a className="ui-button" href="#ai-insights">{lang === "en" ? "AI Insights" : "AI 인사이트"}</a>
+        </nav>} />
 
       <DataError error={catalog.error} resource={m.catalog} onRetry={catalog.refresh} hasData={!!catalog.data} />
       <DataError error={latest.error} resource={m.latestResults} onRetry={latest.refresh} hasData={latest.data !== null} />
       {latest.loading && <DataLoading />}
       {latest.data !== null && (
         <div className="space-y-2">
-          <p className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-gray-500">
-            <span>{t.workloadLabel}: <span className="text-gray-300">{scopeLabel}</span></span>
-            <span>{t.common.updatedAt}: {formatAge(latest.updatedAt, lang, now)}</span>
-          </p>
-          <MonitoringOverview rows={rows} catalogKnown={catalogKnown} expectedCount={status.data?.expected_model_count} filter={healthFilter}
+          <MonitoringOverview view="summary" rows={rows} catalogKnown={catalogKnown} expectedCount={status.data?.expected_model_count} filter={healthFilter}
             onFilterChange={filterFromOverview} onInspectModel={inspectModel}
             selectedModels={selectedModels} onToggleModel={toggleModel} />
         </div>
       )}
 
-      <section aria-label={t.autoProbeStatus} className="space-y-3 rounded-xl border border-gray-800 bg-gray-900/50 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs">
-            <span className="font-semibold text-gray-300">{m.collection}</span>
-            <span className={`whitespace-nowrap rounded-full border px-2.5 py-1 font-medium ${cycleState === "waiting" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : cycleState === "running" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-amber-500/30 bg-amber-500/10 text-amber-300"}`}>{cycleLabel}</span>
-            <span className="text-gray-500">{m.cadence(interval / 60)}</span>
-            {cycleNotes.map(([label, minutes]) => <span key={label} className="text-gray-500">{m.channelCadence(label, minutes)}</span>)}
-            <span className="text-gray-500" title={formatDateTime(lastRun, lang)}>{t.lastProbe}: <span className="text-gray-300">{formatAge(lastRun, lang, now)}</span></span>
-            <span className="text-gray-500">{t.nextProbe}: <span className="tabular-nums text-gray-300">{nextLabel}</span></span>
-          </div>
-          <button type="button" onClick={handleTrigger} disabled={triggering || cycleState === "running"} className={user ? "ui-button-primary" : "ui-button"}>
-            {triggering ? t.triggering : user ? t.triggerNow : m.loginToTrigger}
-          </button>
-        </div>
-        <div className="border-t border-gray-800 pt-3">
-          <RefreshControls refreshing={refreshing} onRefresh={() => { autoRefresh.reset(); void refresh(); }} updatedAt={latest.updatedAt}
-            enabled={autoRefresh.enabled} onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} />
-        </div>
-        {triggerMessage && <p role={triggerMessage.kind === "error" ? "alert" : "status"} className={`text-xs ${triggerMessage.kind === "error" ? "text-amber-300" : "text-blue-300"}`}>{triggerMessage.text}</p>}
-      </section>
-      <DataError error={status.error} resource={t.autoProbeStatus} onRetry={status.refresh} hasData={!!status.data} />
-
-      <section aria-label={t.workloadLabel} className="rounded-xl border border-gray-800 bg-gray-900/50 p-3">
-        <div className="flex flex-wrap items-center gap-2" role="group" aria-label={t.workloadLabel}>
-          <span className="mr-1 text-xs font-medium text-gray-400">{t.workloadLabel}</span>
+      <section aria-label={t.workloadLabel} className="ui-panel !py-3">
+        <div className="workload-options flex flex-wrap items-center gap-2" role="group" aria-label={t.workloadLabel}>
+          <span className="mr-1 text-xs font-medium text-gray-400">{t.workloadLabel}: {scopeLabel}</span>
           <button type="button" aria-pressed={category === null} onClick={() => updateQuery({ category: null })} className={category === null ? "ui-button-primary" : "ui-button"}>{t.workloadAll}</button>
           {workloads.data?.map((workload) => (
             <button type="button" key={workload.id} aria-pressed={category === workload.id} onClick={() => updateQuery({ category: workload.id })}
@@ -247,9 +219,88 @@ export default function AutoDashboard() {
       </section>
       <DataError error={workloads.error} resource={t.workloadLabel} onRetry={workloads.refresh} hasData={!!workloads.data} />
 
+      <div className="dashboard-layout">
+        <div className="dashboard-main">
+      {latest.data !== null && (
+        <section id="model-status" aria-label={t.modelStatus} className="ui-panel space-y-4">
+          <div className="model-workspace-header">
+            <div className="min-w-0">
+              <h2 tabIndex={-1} className="w-fit rounded-sm text-lg font-semibold text-gray-100">{t.modelStatus}</h2>
+              <p className="ui-copy mt-1 text-xs text-gray-500">{m.visibleCount(visibleRows.length, rows.length + unlistedCount)} · {m.selectHint}</p>
+            </div>
+            <div className="model-search-controls">
+              <label className="min-w-0 flex-1">
+                <span className="sr-only">{m.search}</span>
+                <input type="search" value={search} onChange={(event) => updateQuery({ q: event.target.value })}
+                  placeholder={m.searchPlaceholder} className="ui-input w-full" />
+              </label>
+              <label>
+                <span className="sr-only">{m.sort}</span>
+                <select className="ui-input text-sm" value={sort} onChange={(event) => updateQuery({ sort: event.target.value })}>
+                  <option value="family">{m.sortFamily}</option><option value="attention">{m.sortAttention}</option><option value="ttft">{m.sortTtft}</option>
+                </select>
+              </label>
+              {(search || healthFilter !== "all" || sort !== "family") && <button type="button" className="ui-button" onClick={resetCardFilters}>{t.common.resetFilters}</button>}
+            </div>
+          </div>
+          <div className="ui-toolbar justify-between">
+            <div className="flex flex-wrap gap-2" role="group" aria-label={m.statusFilter}>
+              {HEALTH_FILTERS.map((filter) => <button type="button" key={filter} aria-pressed={healthFilter === filter}
+                onClick={() => updateQuery({ health: filter === "all" ? null : filter })}
+                className={healthFilter === filter ? "ui-button-primary" : "ui-button"}>{filterLabels[filter]}</button>)}
+            </div>
+            <div role="group" aria-label={m.listView} className="flex gap-1 rounded-lg border border-gray-800 p-1">
+              <button type="button" aria-pressed={layout === "compact"} className={layout === "compact" ? "ui-button-primary" : "ui-button"}
+                onClick={() => updateQuery({ layout: "compact" })}>{m.compactView}</button>
+              <button type="button" aria-pressed={layout === "cards"} className={layout === "cards" ? "ui-button-primary" : "ui-button"}
+                onClick={() => updateQuery({ layout: "cards" })}>{m.cardsView}</button>
+            </div>
+          </div>
+          {visibleRows.length > 0 ? <ModelStatusGrid key={`${search}:${healthFilter}:${sort}`} rows={visibleRows} grouped={sort === "family"} layout={layout}
+            selectedModels={selectedModels} onToggleModel={toggleModel} onCompareFamily={compareFamily} now={nowMinute} /> : (
+            <DataEmpty title={unlistedCount ? m.catalogRequired : rows.length ? m.noMatchingModels : t.noDataYet}
+              description={unlistedCount ? m.unlistedChannels(unlistedCount) : rows.length ? t.common.noDataHint : t.noDataDesc}>
+              {unlistedCount ? <button type="button" className="ui-button" onClick={catalog.refresh}>{t.common.retry}</button>
+                : rows.length > 0 && <button type="button" className="ui-button" onClick={resetCardFilters}>{t.common.resetFilters}</button>}
+            </DataEmpty>
+          )}
+        </section>
+      )}
+
+        </div>
+        <aside className="dashboard-support" aria-label={t.workspace.supportTitle}>
+          <InsightsPanel />
+      <section aria-label={t.autoProbeStatus} className="ui-panel space-y-4">
+        <div className="flex flex-col items-stretch gap-4">
+          <div className="collection-details text-xs">
+            <span className="font-semibold text-gray-300">{m.collection}</span>
+            <span className={`whitespace-nowrap rounded-full border px-2.5 py-1 font-medium ${cycleState === "waiting" ? "border-emerald-500/30 bg-emerald-500/10 text-emerald-300" : cycleState === "running" ? "border-blue-500/30 bg-blue-500/10 text-blue-300" : "border-amber-500/30 bg-amber-500/10 text-amber-300"}`}>{cycleLabel}</span>
+            <span className="text-gray-500">{m.cadence(interval / 60)}</span>
+            {cycleNotes.map(([label, minutes]) => <span key={label} className="text-gray-500">{m.channelCadence(label, minutes)}</span>)}
+            <span className="text-gray-500" title={formatDateTime(lastRun, lang)}>{t.lastProbe}: <span className="text-gray-300">{formatAge(lastRun, lang, now)}</span></span>
+            <span className="text-gray-500">{t.nextProbe}: <span className="tabular-nums text-gray-300">{nextLabel}</span></span>
+          </div>
+          <button type="button" onClick={handleTrigger} disabled={triggering || cycleState === "running"} className={user ? "ui-button-primary" : "ui-button"}>
+            {triggering ? t.triggering : user ? t.triggerNow : m.loginToTrigger}
+          </button>
+        </div>
+        <div className="border-t border-gray-800 pt-4">
+          <RefreshControls refreshing={refreshing} onRefresh={() => { autoRefresh.reset(); void refresh(); }} updatedAt={latest.updatedAt}
+            enabled={autoRefresh.enabled} onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} />
+        </div>
+        {triggerMessage && <p role={triggerMessage.kind === "error" ? "alert" : "status"} className={`text-xs ${triggerMessage.kind === "error" ? "text-amber-300" : "text-blue-300"}`}>{triggerMessage.text}</p>}
+      </section>
+      <DataError error={status.error} resource={t.autoProbeStatus} onRetry={status.refresh} hasData={!!status.data} />
+
+          {latest.data !== null && (
+            <MonitoringOverview view="details" rows={rows} catalogKnown={catalogKnown}
+              expectedCount={status.data?.expected_model_count} filter={healthFilter}
+              onFilterChange={filterFromOverview} onInspectModel={inspectModel}
+              selectedModels={selectedModels} onToggleModel={toggleModel} />
+          )}
       <DataError error={anomalies.error} resource={m.recentFailures} onRetry={anomalies.refresh} hasData={!!anomalies.data} />
       {anomalies.data && (
-        <section aria-label={m.recentFailures} className={`rounded-xl border p-4 ${anomalies.data.total_failures > 0 ? "border-rose-500/30 bg-rose-500/5" : "border-gray-800 bg-gray-900/50"}`}>
+        <section aria-label={m.recentFailures} className={`ui-panel ${anomalies.data.total_failures > 0 ? "border-rose-500/30 bg-rose-500/5" : "border-gray-800 bg-gray-900/50"}`}>
           <div className="flex flex-wrap items-center justify-between gap-2">
             <h2 className={`text-sm font-medium ${anomalies.data.total_failures ? "text-rose-300" : "text-gray-300"}`}>
               {anomalies.data.total_probes === 0 ? m.noProbes : anomalies.data.total_failures ? m.recentFailuresTitle(anomalies.data.total_failures) : m.noFailures}
@@ -270,51 +321,10 @@ export default function AutoDashboard() {
         </section>
       )}
 
-      {latest.data !== null && (
-        <section id="model-status" aria-label={t.modelStatus} className="space-y-4">
-          <div className="flex flex-wrap items-start justify-between gap-3">
-            <div>
-              <h2 tabIndex={-1} className="w-fit rounded-sm text-lg font-semibold text-gray-100">{t.modelStatus}</h2>
-              <p className="ui-copy mt-1 text-xs text-gray-500">{m.selectHint}</p>
-            </div>
-            <div className="flex flex-wrap items-center gap-3">
-              <span className="text-xs tabular-nums text-gray-500">{m.visibleCount(visibleRows.length, rows.length + unlistedCount)}</span>
-              <div role="group" aria-label={m.listView} className="flex gap-1 rounded-lg border border-gray-800 bg-gray-900/50 p-1">
-                <button type="button" aria-pressed={layout === "compact"} className={layout === "compact" ? "ui-button-primary" : "ui-button"}
-                  onClick={() => updateQuery({ layout: "compact" })}>{m.compactView}</button>
-                <button type="button" aria-pressed={layout === "cards"} className={layout === "cards" ? "ui-button-primary" : "ui-button"}
-                  onClick={() => updateQuery({ layout: "cards" })}>{m.cardsView}</button>
-              </div>
-            </div>
-          </div>
-          <div className="flex flex-wrap items-center gap-3">
-            <label className="min-w-0 flex-1 sm:max-w-sm">
-              <span className="sr-only">{m.search}</span>
-              <input type="search" value={search} onChange={(event) => updateQuery({ q: event.target.value })} placeholder={m.searchPlaceholder} className="ui-input w-full" />
-            </label>
-            <label>
-              <span className="sr-only">{m.sort}</span>
-              <select className="ui-input text-xs" value={sort} onChange={(event) => updateQuery({ sort: event.target.value })}>
-                <option value="family">{m.sortFamily}</option><option value="attention">{m.sortAttention}</option><option value="ttft">{m.sortTtft}</option>
-              </select>
-            </label>
-            {(search || healthFilter !== "all" || sort !== "family") && <button type="button" className="ui-button" onClick={resetCardFilters}>{t.common.resetFilters}</button>}
-          </div>
-          <div className="flex flex-wrap gap-2" role="group" aria-label={m.statusFilter}>
-            {HEALTH_FILTERS.map((filter) => <button type="button" key={filter} aria-pressed={healthFilter === filter} onClick={() => updateQuery({ health: filter === "all" ? null : filter })} className={healthFilter === filter ? "ui-button-primary" : "ui-button"}>{filterLabels[filter]}</button>)}
-          </div>
-          {visibleRows.length > 0 ? <ModelStatusGrid key={`${search}:${healthFilter}:${sort}`} rows={visibleRows} grouped={sort === "family"} layout={layout}
-            selectedModels={selectedModels} onToggleModel={toggleModel} onCompareFamily={compareFamily} now={nowMinute} /> : (
-            <DataEmpty title={unlistedCount ? m.catalogRequired : rows.length ? m.noMatchingModels : t.noDataYet}
-              description={unlistedCount ? m.unlistedChannels(unlistedCount) : rows.length ? t.common.noDataHint : t.noDataDesc}>
-              {unlistedCount ? <button type="button" className="ui-button" onClick={catalog.refresh}>{t.common.retry}</button>
-                : rows.length > 0 && <button type="button" className="ui-button" onClick={resetCardFilters}>{t.common.resetFilters}</button>}
-            </DataEmpty>
-          )}
-        </section>
-      )}
+        </aside>
+      </div>
 
-      <section id="performance-trends" aria-label={m.trends} className="space-y-4">
+      <section id="performance-trends" aria-label={m.trends} className="space-y-5 border-t border-gray-800 pt-6">
         <div>
           <h2 tabIndex={-1} className="w-fit rounded-sm text-lg font-semibold text-gray-100">{m.trends}</h2>
           <p className="ui-copy mt-1 text-xs leading-relaxed text-gray-500">{m.trendHint}</p>
@@ -324,7 +334,7 @@ export default function AutoDashboard() {
           {TREND_RANGE_HOURS.map((range) => <button type="button" key={range} aria-pressed={hours === range} onClick={() => updateQuery({ hours: String(range) })} className={hours === range ? "ui-button-primary" : "ui-button"}>{t.trendRangeLabel(range)}</button>)}
         </div>
         <TrendComparisonControls availableModels={availableModels} selectedModels={selectedModels} onSelect={selectModels} />
-        <details className="rounded-xl border border-gray-800 bg-gray-900/50 p-3" open={selectedModels.size > 0 ? true : undefined}>
+        <details className="ui-panel-muted" open={selectedModels.size > 0 ? true : undefined}>
           <summary className="cursor-pointer text-xs font-medium text-gray-300">{m.selectHint}</summary>
           <div className="mt-3 flex max-h-52 flex-wrap gap-2 overflow-auto p-1">
             {Array.from(new Set([...availableModels, ...Array.from(selectedModels)])).map((name) => (
@@ -345,14 +355,13 @@ export default function AutoDashboard() {
         )}
       </section>
 
-      <InsightsPanel />
-      <details className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+      <details className="ui-panel">
         <summary className="cursor-pointer text-sm font-semibold text-gray-200">{m.metricGuide}</summary>
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           {Object.entries(t.metrics).map(([key, metric]) => <div key={key} className="text-xs"><span className="font-medium text-gray-300">{metric.name} ({metric.unit})</span><p className="mt-1 leading-relaxed text-gray-500">{metric.desc}</p></div>)}
         </div>
       </details>
-      <details className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+      <details className="ui-panel">
         <summary className="cursor-pointer text-sm font-semibold text-gray-200">{m.channelsGuide}</summary>
         <div className="mt-4 grid grid-cols-1 gap-4 md:grid-cols-2">
           {Object.values(t.channels).map((channel) => <div key={channel.name} className="text-xs"><span className="font-semibold text-gray-300">{channel.name}</span><p className="mt-1 leading-relaxed text-gray-500">{channel.desc}</p><code className="mt-2 block break-all text-blue-300">{channel.endpoint}</code></div>)}

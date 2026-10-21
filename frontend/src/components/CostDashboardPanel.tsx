@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 import { useCallback, useEffect, useState } from "react";
 import Link from "next/link";
 import {
@@ -35,6 +38,7 @@ const CHANNEL_COLORS: Record<string, string> = {
 };
 
 export default function CostDashboardPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const [window, setWindow] = useState("24h");
   const summaryResource = useAsyncResource<CostSummary>(
@@ -59,19 +63,19 @@ export default function CostDashboardPanel() {
   const monthlyEstimate = projectMonthlyCost(summary);
 
   return (
-    <div className="min-w-0 p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.analysisWorkspace} title={<>
             {lang === "en" ? "Cost Dashboard" : "비용 대시보드"}
-          </h1>
+          </>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
               ? "Token usage × official unit prices → estimated USD spend by model and channel."
               : "토큰 사용량 × 공식 단가 → 모델, 채널별 추정 비용 (USD)"}
           </p>
-        </div>
-        <div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><div role="group" aria-label={lang === "en" ? "Window" : "기간"} className="flex items-center gap-3 flex-wrap">
           <span className="text-xs text-gray-400">
             {lang === "en" ? "Window" : "기간"}
           </span>
@@ -89,16 +93,17 @@ export default function CostDashboardPanel() {
             ))}
           </div>
         </div>
-      </div>
-
-      <RefreshControls
+<RefreshControls
         refreshing={summaryResource.refreshing || channelsResource.refreshing}
         onRefresh={() => { reset(); void refreshAll(); }}
         updatedAt={updatedAt}
         enabled={enabled}
         onEnabledChange={setEnabled}
         countdown={countdown}
-      />
+      /></div>
+      </PageHeading>
+
+
 
       <DataError
         error={summaryResource.error}
@@ -109,18 +114,18 @@ export default function CostDashboardPanel() {
 
       {/* Summary cards */}
       <div aria-busy={summaryResource.refreshing} className="grid grid-cols-1 md:grid-cols-4 gap-3">
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+        <div className="ui-panel">
           <div className="text-xs text-gray-500">
             {lang === "en" ? "Total cost" : "총 비용"}
           </div>
           <div className="text-2xl font-bold text-gray-100 tabular-nums mt-1">
             {summary ? formatCost(summary.total_cost_usd) : "—"}
           </div>
-          <div className="text-[11px] text-gray-500 mt-1">
+          <div className="text-xs text-gray-500 mt-1">
             {lang === "en" ? `Last ${summary?.window ?? window}` : `최근 ${summary?.window ?? window}`}
           </div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+        <div className="ui-panel">
           <div className="text-xs text-gray-500">
             {lang === "en" ? "Input tokens" : "입력 토큰"}
           </div>
@@ -128,7 +133,7 @@ export default function CostDashboardPanel() {
             {summary ? summary.total_input_tokens.toLocaleString() : "—"}
           </div>
         </div>
-        <div className="bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+        <div className="ui-panel">
           <div className="text-xs text-gray-500">
             {lang === "en" ? "Output tokens" : "출력 토큰"}
           </div>
@@ -136,14 +141,14 @@ export default function CostDashboardPanel() {
             {summary ? summary.total_output_tokens.toLocaleString() : "—"}
           </div>
         </div>
-        <div className="bg-gradient-to-br from-blue-500/10 to-purple-500/10 light:bg-none light:bg-gray-900/50 border border-blue-500/30 rounded-xl p-4">
+        <div className="ui-stat-card border-blue-500/30">
           <div className="text-xs text-blue-300">
             {lang === "en" ? "30-day projection" : "30일 예상"}
           </div>
           <div className="text-2xl font-bold text-blue-200 tabular-nums mt-1">
             {monthlyEstimate !== null ? formatCost(monthlyEstimate) : "—"}
           </div>
-          <div className="text-[11px] text-blue-300 mt-1">
+          <div className="text-xs text-blue-300 mt-1">
             {lang === "en"
               ? "Linear extrapolation from current rate"
               : "현재 속도로 단순 외삽"}
@@ -152,8 +157,8 @@ export default function CostDashboardPanel() {
       </div>
 
       {/* Channel comparison */}
-      <section aria-labelledby="cost-channels-title" className="bg-gray-900/50 border border-gray-800 rounded-xl p-4 space-y-3">
-        <h2 id="cost-channels-title" className="text-sm font-semibold text-gray-200">
+      <section aria-labelledby="cost-channels-title" className="ui-panel space-y-3">
+        <h2 id="cost-channels-title" className="text-base font-semibold text-gray-200 section-title">
           {lang === "en" ? "Channel comparison" : "채널별 비교"}
         </h2>
         <DataError
@@ -173,7 +178,7 @@ export default function CostDashboardPanel() {
               >
                 <div className="text-xs font-semibold">{c.channel}</div>
                 <div className="text-xl font-bold tabular-nums mt-1">{formatCost(c.cost_usd)}</div>
-                <div className="text-[11px] mt-1 space-y-0.5">
+                <div className="text-xs mt-1 space-y-0.5">
                   <div>{c.samples.toLocaleString()} {lang === "en" ? "calls" : "호출"}</div>
                   <div>
                     {c.input_tokens.toLocaleString()} in / {c.output_tokens.toLocaleString()} out
@@ -186,15 +191,15 @@ export default function CostDashboardPanel() {
       </section>
 
       {/* Per-model breakdown */}
-      <section aria-labelledby="cost-models-title" className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4">
-        <h2 id="cost-models-title" className="text-sm font-semibold text-gray-200 mb-3">
+      <section aria-labelledby="cost-models-title" className="ui-panel min-w-0">
+        <h2 id="cost-models-title" className="text-base font-semibold text-gray-200 mb-3 section-title">
           {lang === "en" ? "Per-model breakdown" : "모델별 상세"}
         </h2>
         {summaryResource.loading && <DataLoading />}
         {!summaryResource.error && !summaryResource.refreshing && summary?.rows.length === 0 && <DataEmpty />}
         {summary && summary.rows.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full min-w-[640px] text-xs">
+          <div className="overflow-x-auto ui-table-shell">
+            <table className="ui-table w-full min-w-[640px] text-xs">
               <thead>
                 <tr className="text-gray-500 border-b border-gray-800">
                   <th className="text-left py-2 pr-3">{lang === "en" ? "Model" : "모델"}</th>
@@ -236,7 +241,7 @@ export default function CostDashboardPanel() {
             </table>
           </div>
         )}
-        <p className="text-[11px] text-gray-500 mt-2">
+        <p className="text-xs text-gray-500 mt-2">
           {lang === "en"
             ? "Cost is calculated from "
             : "비용은 공식 출처에서 12시간마다 갱신하는 "}

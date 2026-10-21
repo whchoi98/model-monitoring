@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 import { useEffect, useId, useRef, useState, type FormEvent, type ReactNode } from "react";
 import {
   createPromptSet,
@@ -69,6 +72,7 @@ function ActionNotice({ error = false, children }: { error?: boolean; children: 
 }
 
 export default function PromptsPanel({ user, onLoginClick }: Props) {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const t = useT();
   const fieldId = useId();
@@ -241,36 +245,36 @@ export default function PromptsPanel({ user, onLoginClick }: Props) {
   };
 
   return (
-    <div className="mx-auto min-w-0 max-w-6xl space-y-6 p-4 sm:p-6">
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h1 className="text-2xl font-bold text-gray-100">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.runWorkspace} title={<>
             {lang === "en" ? "Prompts" : "프롬프트"}
-          </h1>
+          </>} description={<>
+
           <p className="text-sm text-gray-500 mt-1">
             {lang === "en"
               ? "Manage saved prompt sets and run Bedrock Simple Prompt Optimization."
               : "프롬프트 세트를 관리하고 Bedrock의 Simple Prompt Optimization으로 개선합니다."}
           </p>
-        </div>
-        {!user && (
+        </>}
+        actions={<>{!user && (
           <button
             onClick={onLoginClick}
             className="px-3 py-1.5 text-xs font-medium rounded-md bg-blue-600 hover:bg-blue-500 text-white"
           >
             {lang === "en" ? "Login required" : "로그인 필요"}
           </button>
-        )}
-      </div>
+        )}</>}>
+
+      </PageHeading>
 
       {/* Optimize 섹션 */}
-      <section aria-labelledby={`${fieldId}-opt-title`} className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 sm:p-5 space-y-4">
+      <section aria-labelledby={`${fieldId}-opt-title`} className="ui-panel min-w-0 space-y-4">
         <div className="flex flex-wrap items-center gap-2">
           <span aria-hidden>✨</span>
-          <h2 id={`${fieldId}-opt-title`} className="text-sm font-semibold text-gray-200">
+          <h2 id={`${fieldId}-opt-title`} className="text-base font-semibold text-gray-200 section-title">
             {lang === "en" ? "Bedrock Prompt Optimization" : "Bedrock 프롬프트 최적화"}
           </h2>
-          <span className="text-[10px] text-gray-500">
+          <span className="text-xs text-gray-500">
             ({lang === "en" ? "Powered by bedrock-agent-runtime · OptimizePrompt" : "bedrock-agent-runtime · OptimizePrompt"})
           </span>
         </div>
@@ -371,8 +375,8 @@ export default function PromptsPanel({ user, onLoginClick }: Props) {
       </section>
 
       {/* 새 프롬프트 세트 생성 */}
-      <section aria-labelledby={`${fieldId}-create-title`} className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 sm:p-5 space-y-4">
-        <h2 id={`${fieldId}-create-title`} className="text-sm font-semibold text-gray-200">
+      <section aria-labelledby={`${fieldId}-create-title`} className="ui-panel min-w-0 space-y-4">
+        <h2 id={`${fieldId}-create-title`} className="text-base font-semibold text-gray-200 section-title">
           {lang === "en" ? "New prompt set" : "새 프롬프트 세트"}
         </h2>
         {createNotice && (
@@ -414,9 +418,9 @@ export default function PromptsPanel({ user, onLoginClick }: Props) {
       </section>
 
       {/* 저장된 프롬프트 세트 목록 */}
-      <section aria-labelledby={`${fieldId}-saved-title`} className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4 sm:p-5 space-y-3">
+      <section aria-labelledby={`${fieldId}-saved-title`} className="ui-panel min-w-0 space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <h2 ref={savedTitle} tabIndex={-1} id={`${fieldId}-saved-title`} className="text-sm font-semibold text-gray-200">
+          <h2 ref={savedTitle} tabIndex={-1} id={`${fieldId}-saved-title`} className="text-base font-semibold text-gray-200 section-title">
             {lang === "en" ? "Saved prompt sets" : "저장된 프롬프트 세트"}
           </h2>
           <span className="text-xs text-gray-500">{resource.data === null ? "—" : promptSets.length}</span>

@@ -31,7 +31,7 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
   };
 
   return (
-    <div className="border-t border-gray-800 px-3 py-2 bg-gray-900">
+    <div className="border-t border-gray-800 p-4 bg-gray-900">
       <div className="flex items-end gap-2">
         <textarea
           value={value}
@@ -41,13 +41,13 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
           rows={1}
           aria-label={lang === "en" ? "Message" : "메시지"}
           placeholder={isStreaming ? (lang === "en" ? "Generating response…" : "응답 생성 중…") : (lang === "en" ? "Message (Enter to send, Shift+Enter for a new line)" : "메시지 입력 (Enter 전송, Shift+Enter 줄바꿈)")}
-          className="flex-1 bg-gray-950 border border-gray-700 rounded-md px-3 py-2 text-sm text-gray-100 placeholder-gray-500 focus:outline-none focus:border-blue-500 resize-none max-h-32"
+          className="ui-input min-w-0 flex-1 resize-none max-h-32 text-gray-100"
         />
         {isStreaming && onCancel ? (
           <button
             type="button"
             onClick={onCancel}
-            className="px-3 py-2 rounded-md text-xs font-medium bg-red-600 hover:bg-red-500 text-white"
+            className="ui-button shrink-0 border-red-500 bg-red-600 text-white hover:bg-red-500"
           >
             {lang === "en" ? "Stop" : "중단"}
           </button>
@@ -56,7 +56,7 @@ export default function ChatInput({ disabled, onSubmit, onCancel, isStreaming }:
             type="button"
             onClick={submit}
             disabled={disabled || !value.trim()}
-            className="px-3 py-2 rounded-md text-xs font-medium bg-blue-600 hover:bg-blue-500 text-white disabled:opacity-50 disabled:cursor-not-allowed"
+            className="ui-button-primary shrink-0"
           >
             {lang === "en" ? "Send" : "전송"}
           </button>

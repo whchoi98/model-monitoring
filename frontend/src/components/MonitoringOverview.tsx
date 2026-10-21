@@ -30,7 +30,8 @@ export function HealthBadge({ health, id }: { health: ModelHealth; id?: string }
   );
 }
 
-function MonitoringOverview({ rows, catalogKnown, expectedCount, filter, onFilterChange, selectedModels, onToggleModel, onInspectModel }: {
+function MonitoringOverview({ rows, catalogKnown, expectedCount, filter, onFilterChange, selectedModels, onToggleModel, onInspectModel, view = "all" }: {
+  view?: "all" | "summary" | "details";
   rows: MonitoringRow[];
   catalogKnown: boolean;
   expectedCount?: number;
@@ -54,43 +55,44 @@ function MonitoringOverview({ rows, catalogKnown, expectedCount, filter, onFilte
     { label: m.attention, value: coverageKnown ? summary.attention : summary.attention ? `${summary.attention}+` : "—", hint: coverageKnown ? m.attentionHint : m.catalogRequired, color: summary.attention ? "text-amber-400" : "text-gray-100", filter: "attention" as const },
   ];
   return (
-    <section aria-label={m.overview} className="space-y-3">
-      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+    <section aria-label={view === "details" ? m.allChannelStates : m.overview} className="space-y-4">
+      {view !== "details" && <div className="dashboard-summary">
         {cards.map((card) => (
           <button
             key={card.filter}
             type="button"
             aria-pressed={filter === card.filter}
             aria-label={`${card.label} ${card.value}`}
+            aria-describedby={`${id}-stat-${card.filter}`}
             onClick={() => onFilterChange(card.filter)}
-            className={`rounded-xl border bg-gray-900/50 p-4 text-left transition-colors hover:border-blue-400 ${filter === card.filter ? "border-blue-500/60" : "border-gray-800"}`}
+            className={`ui-stat-card text-left transition-colors hover:border-blue-400 ${filter === card.filter ? "border-blue-500/60" : "border-gray-800"}`}
           >
             <span className="text-xs font-medium text-gray-400">{card.label}</span>
-            <span className={`mt-2 block text-3xl font-semibold tabular-nums tracking-tight ${card.color}`}>{card.value}</span>
-            <span className="ui-copy mt-2 block text-xs leading-relaxed text-gray-500">{card.hint}</span>
+            <span className={`stat-value block tabular-nums ${card.color}`}>{card.value}</span>
+            <span id={`${id}-stat-${card.filter}`} className="stat-context ui-copy sr-only text-gray-500 sm:not-sr-only sm:mt-1.5 sm:block">{card.hint}</span>
           </button>
         ))}
-        <div className="rounded-xl border border-gray-800 bg-gray-900/50 p-4">
+        <div className="ui-stat-card">
           <p className="text-xs font-medium text-gray-400">{m.successRate}</p>
-          <p className="mt-2 text-3xl font-semibold tabular-nums tracking-tight text-gray-100">
+          <p className="stat-value tabular-nums text-gray-100">
             {summary.successRate === null ? "—" : `${(summary.successRate * 100).toFixed(1)}%`}
           </p>
-          <p className="ui-copy mt-2 text-xs leading-relaxed text-gray-500">{m.successRateHint}</p>
+          <p className="stat-context ui-copy sr-only text-gray-500 sm:not-sr-only sm:mt-1.5">{m.successRateHint}</p>
         </div>
-      </div>
-      {summary.attention > 0 && (
-        <section aria-label={m.attentionChannels} className="rounded-xl border border-amber-500/25 bg-gray-900/50 p-4">
+      </div>}
+      {view !== "summary" && summary.attention > 0 && (
+        <section aria-label={m.attentionChannels} className="ui-panel border-amber-500/25">
           <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
             <h2 className="text-sm font-semibold text-gray-200">{m.attentionChannels}</h2>
-            <p className="ui-copy text-[11px] text-gray-500">{m.latestStateHint}</p>
+            <p className="ui-copy text-xs text-gray-500">{m.latestStateHint}</p>
           </div>
-          <div className="grid gap-2 lg:grid-cols-2">
+          <div className="attention-list grid gap-2 lg:grid-cols-2">
             {attentionRows.slice(0, 6).map((row, index) => (
               <button
                 key={row.model.id} type="button" aria-label={m.inspectModel(row.model.name)}
                 aria-describedby={`${id}-attention-${index}`}
                 onClick={() => onInspectModel(row.model.name)}
-                className="flex min-h-12 min-w-0 items-center gap-3 rounded-lg border border-gray-800 bg-gray-950/50 px-3 py-2 text-left hover:border-blue-500/50 hover:bg-gray-800/30"
+                className="attention-item flex min-h-12 min-w-0 items-center gap-3 rounded-lg border border-gray-800 bg-gray-950/50 px-3 py-2 text-left hover:border-blue-500/50 hover:bg-gray-800/30"
               >
                 <span className="min-w-0 flex-1 text-xs font-medium leading-relaxed text-gray-200"><ModelName name={row.model.name} /></span>
                 <HealthBadge health={row.health} id={`${id}-attention-${index}`} />
@@ -103,8 +105,8 @@ function MonitoringOverview({ rows, catalogKnown, expectedCount, filter, onFilte
             onClick={() => onFilterChange("attention")}>{m.viewAllAttention} <span aria-hidden="true">→</span></button>
         </section>
       )}
-      {rows.length > 0 && (
-        <details className="group rounded-xl border border-gray-800 bg-gray-900/50 px-4 py-3">
+      {view !== "summary" && rows.length > 0 && (
+        <details className="ui-panel group">
           <summary className="flex min-h-6 cursor-pointer list-none items-center justify-between gap-3 text-xs [&::-webkit-details-marker]:hidden">
             <span className="font-medium text-gray-300">{m.allChannelStates} <span className="ml-2 font-normal text-gray-500">{m.channelCount(rows.length)}</span></span>
             <span aria-hidden="true" className="text-gray-500 transition-transform group-open:rotate-180">⌄</span>

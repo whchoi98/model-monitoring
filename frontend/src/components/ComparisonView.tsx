@@ -114,7 +114,7 @@ function DistributionBar({
           style={{ left: `${p50Pos}%` }}
         />
       </div>
-      <div className="flex justify-between text-[10px] text-gray-500 tabular-nums font-mono">
+      <div className="flex justify-between text-xs text-gray-500 tabular-nums font-mono">
         <span>min: {dist.min.toFixed(0)}{unit}</span>
         <span className="text-gray-300">p50: {dist.p50.toFixed(0)}{unit}</span>
         <span>p95: {dist.p95.toFixed(0)}{unit}</span>
@@ -162,7 +162,7 @@ export default function ComparisonView({ results }: ComparisonViewProps) {
         {distributions.map((dist) => (
           <div
             key={dist.model_name}
-            className="bg-gray-900 border border-gray-800 rounded-xl p-4"
+            className="ui-panel"
           >
             <h3 className="text-sm font-semibold text-gray-200 mb-3">
               {dist.model_name}

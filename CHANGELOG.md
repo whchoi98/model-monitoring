@@ -7,6 +7,24 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.36.0 — 2026-10-21
+
+### Changed
+- Rebuilt the website around a shared page heading, readable panels, filter/refresh toolbars and data tables. The dashboard places model results beside collection status, attention channels and AI insights. Analytics, pricing, catalog, verification, manual probing, prompts, results, history and chat use the same visual system.
+- 웹사이트 전체를 공통 제목·패널·필터·갱신 영역·데이터 표로 재구현했다. 대시보드는 모델 결과 옆에 수집 상태, 주의 채널, AI 분석을 배치했다. 분석·단가·탐색·검증·수동 프로브·프롬프트·결과·이력·챗봇을 같은 디자인으로 통일했다.
+- Default new visitors to light mode while honoring saved light/dark choices. Theme changes synchronize between tabs and remain usable when storage writes fail.
+- 처음 방문한 사용자는 라이트 테마로 시작하며 저장된 테마 선택을 우선한다. 여러 탭의 테마를 동기화하고 저장소 쓰기가 차단되어도 전환을 지원한다.
+- Keep the centered navigation, URL-based dashboard state, Sonnet 5.5 analysis, metric grading, authentication, pricing semantics and persistent visitor counts.
+- 가운데 정렬 메뉴, 대시보드 URL 상태, Sonnet 5.5 분석, 지표 등급, 인증, 단가 계산과 접속수 집계를 유지한다.
+
+### Added
+- Searchable quick navigation with Ctrl/Cmd+K and consistent Escape/focus behavior.
+- Ctrl/Cmd+K로 열 수 있는 페이지 검색과 일관된 Esc·포커스 동작을 추가했다.
+
+### Fixed
+- Fit the draggable chat dialog to small viewports and keep keyboard focus within navigation, login and chat dialogs. Increase small control text and preserve PWA safe areas and floating-control clearance.
+- 이동 가능한 챗봇 창이 작은 화면 안에 들어오도록 수정하고 검색·로그인·챗봇 대화상자의 키보드 포커스를 유지한다. 작은 글자를 키우고 PWA 안전 영역과 플로팅 도구의 여유 공간을 보존했다.
+
 ## v2.35.1 — 2026-10-21
 
 ### Changed

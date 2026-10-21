@@ -26,7 +26,7 @@ export const viewport: Viewport = {
   initialScale: 1,
   // 노치/Dynamic Island 영역까지 배경을 채우기 위해 필수 — env(safe-area-inset-*)의 전제.
   viewportFit: "cover",
-  themeColor: "#030712", // gray-950 — 다크 기본 테마 (화이트 토글은 수동이라 정적 값 유지)
+  themeColor: "#f5f7fb", // New visitors use light; the bootstrap restores saved preferences.
 };
 
 export default async function RootLayout({
@@ -36,14 +36,14 @@ export default async function RootLayout({
 }>) {
   const initialLang = (await cookies()).get("lang")?.value === "en" ? "en" : "ko";
   return (
-    <html lang={initialLang} className="dark" suppressHydrationWarning>
+    <html lang={initialLang} className="light" suppressHydrationWarning>
       <head>
         {/* 테마 FOUC 방지 — 하이드레이션 전에 localStorage의 화이트 테마 선택을 복원.
             React 렌더 밖에서 실행되어야 하므로 인라인 스크립트가 표준 패턴 (v2.8.0). */}
         <script
           dangerouslySetInnerHTML={{
             __html:
-              "try{if(localStorage.getItem('theme')==='light')document.documentElement.classList.add('light')}catch(e){}",
+              "(()=>{try{var t=localStorage.getItem('theme')==='dark'?'dark':'light';document.documentElement.classList.toggle('light',t==='light');document.documentElement.classList.toggle('dark',t==='dark');document.querySelector('meta[name=theme-color]')?.setAttribute('content',t==='dark'?'#101827':'#f5f7fb')}catch(e){}})()",
           }}
         />
       </head>

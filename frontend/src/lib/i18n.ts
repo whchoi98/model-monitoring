@@ -41,6 +41,29 @@ const koGradeNames: MetricGradeTexts["names"] = { normal: "양호", warning: "�
 const enGradeNames: MetricGradeTexts["names"] = { normal: "Normal", warning: "Warning", critical: "Critical" };
 
 export interface Translations {
+  workspace: {
+    quickNavigation: string;
+    searchPages: string;
+    searchPagesHint: string;
+    noPages: string;
+    navigationHint: string;
+    monitorWorkspace: string;
+    analysisWorkspace: string;
+    exploreWorkspace: string;
+    runWorkspace: string;
+    supportTitle: string;
+    insightsDescription: string;
+    expandInsight: string;
+    collapseInsight: string;
+    dashboardScope: string;
+    dataWorkspace: string;
+    latestSnapshot: string;
+    manualDescription: string;
+    chooseModels: string;
+    configureProbe: string;
+    resultsWorkspace: string;
+    signInDescription: string;
+  };
   common: {
     loading: string;
     retry: string;
@@ -274,6 +297,29 @@ export interface Translations {
 }
 
 export const ko: Translations = {
+  workspace: {
+    quickNavigation: "빠른 이동",
+    searchPages: "페이지 검색",
+    searchPagesHint: "페이지 이름을 입력하세요",
+    noPages: "일치하는 페이지가 없습니다.",
+    navigationHint: "Tab 키로 이동하고 Enter 키로 선택하세요. Esc 키로 닫을 수 있습니다.",
+    monitorWorkspace: "운영 현황",
+    analysisWorkspace: "성능과 비용 분석",
+    exploreWorkspace: "모델 탐색과 검증",
+    runWorkspace: "모델 실험",
+    supportTitle: "운영 인사이트",
+    insightsDescription: "수집한 결과를 바탕으로 성능 변화와 확인할 항목을 정리합니다.",
+    expandInsight: "전체 분석 읽기",
+    collapseInsight: "분석 접기",
+    dashboardScope: "비교할 워크로드를 선택하세요",
+    dataWorkspace: "모델별 성능",
+    latestSnapshot: "최신 수집 결과",
+    manualDescription: "모델과 프롬프트를 선택하고 응답을 실시간으로 비교하세요.",
+    chooseModels: "모델 선택",
+    configureProbe: "프롬프트와 실행 설정",
+    resultsWorkspace: "실행 결과",
+    signInDescription: "로그인하면 프로브 실행, 프롬프트 저장과 AI 분석을 사용할 수 있습니다.",
+  },
   common: {
     loading: "데이터를 불러오는 중…", retry: "다시 시도", refresh: "새로고침", refreshing: "갱신 중…",
     autoRefresh: "자동 새로고침", paused: "일시 정지", updatedAt: "마지막 확인", notUpdated: "아직 확인 전",
@@ -497,6 +543,29 @@ export const ko: Translations = {
 };
 
 export const en: Translations = {
+  workspace: {
+    quickNavigation: "Quick navigation",
+    searchPages: "Search pages",
+    searchPagesHint: "Find a page by name",
+    noPages: "No matching pages.",
+    navigationHint: "Use Tab to move, Enter to select, and Esc to close.",
+    monitorWorkspace: "Overview",
+    analysisWorkspace: "Performance & cost",
+    exploreWorkspace: "Explore & verify",
+    runWorkspace: "Model experiments",
+    supportTitle: "Operations insights",
+    insightsDescription: "Understand changes and what needs a closer look.",
+    expandInsight: "Read full analysis",
+    collapseInsight: "Show less",
+    dashboardScope: "Choose a workload to compare",
+    dataWorkspace: "Model performance",
+    latestSnapshot: "Latest observations",
+    manualDescription: "Choose models and a prompt, then compare their responses live.",
+    chooseModels: "Choose models",
+    configureProbe: "Prompt & configuration",
+    resultsWorkspace: "Run results",
+    signInDescription: "Sign in to run probes, save prompts and ask the AI assistant.",
+  },
   common: {
     loading: "Loading data…", retry: "Retry", refresh: "Refresh", refreshing: "Refreshing…",
     autoRefresh: "Auto refresh", paused: "Paused", updatedAt: "Last checked", notUpdated: "Not checked yet",

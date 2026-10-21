@@ -160,6 +160,7 @@ test("graded card values wrap before the marker instead of overflowing their col
 });
 
 test("card metric values are graded per workload category with a non-color cue in both themes", async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem("theme", "dark"));
   const fixture = await mockApi(page);
   // chat-short 기준: TTFT 3200ms → 경고(≥3000), 총 12s → 위험(≥10000), TPS 12 → 위험(<15)
   const latest = fixture.latest.map((row, index) => index === 0 ? { ...row, ttft_ms: 3200, total_latency_ms: 12_000, tps: 12 } : row);
@@ -192,7 +193,7 @@ test("card metric values are graded per workload category with a non-color cue i
   const colors = async () => [values.first(), values.nth(1), healthy.first()].reduce<Promise<string[]>>(
     async (acc, locator) => [...await acc, await locator.evaluate((node) => getComputedStyle(node).color)], Promise.resolve([]));
   expect(await colors()).toEqual(["rgb(252, 211, 77)", "rgb(251, 113, 133)", "rgb(147, 197, 253)"]);
-  await page.evaluate(() => document.documentElement.classList.add("light"));
+  await page.locator("header").getByRole("button", { name: /Switch to light theme|라이트 테마로 전환/ }).click();
   expect(await colors()).toEqual(["rgb(180, 83, 9)", "rgb(190, 18, 60)", "rgb(29, 78, 216)"]);
 
   await models.getByText("기준값 보기", { exact: true }).click();

@@ -1,5 +1,8 @@
 "use client";
 
+import PageHeading from "./PageHeading";
+import { useT as usePageCopy } from "@/lib/i18n-context";
+
 // GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol
 // 21채널 = Mantle 인리전 12 + CRIS 9 (미국 3리전 + Terra Global CRIS v2.20.1
 // + Astra Global·US CRIS·us-west-2 v2.25.1 + Sol/Luna Global·US CRIS·us-east-1 v2.28.0
@@ -227,7 +230,7 @@ function BenchLegend({ names, resetKey }: { names: string[]; resetKey: string })
       {/* 휴대폰 폭에서는 21개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
           2열 배치는 라벨이 2~3줄로 접혀 보이는 항목 수가 늘지 않아(390px 6개, 320px 4개) 쓰지 않았다. */}
       <ul ref={legend.ref} aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
-          className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-[11px] text-gray-400">
+          className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-xs text-gray-400">
         {names.map((name) => (
           <li key={name} className="flex min-w-0 items-center gap-2">
             <svg aria-hidden="true" width="40" height="8" viewBox="0 0 40 8" className="shrink-0">
@@ -238,7 +241,7 @@ function BenchLegend({ names, resetKey }: { names: string[]; resetKey: string })
         ))}
       </ul>
       {legend.below > 0 && (
-        <p aria-hidden="true" data-legend-more className="mt-1 text-[11px] text-gray-500 sm:hidden">
+        <p aria-hidden="true" data-legend-more className="mt-1 text-xs text-gray-500 sm:hidden">
           ↓ {L(`+${legend.below} more, scroll the legend`, `+${legend.below}개 더 있음, 범례를 스크롤하세요`)}
         </p>
       )}
@@ -270,7 +273,7 @@ function BenchChart({
   const showDots = rows.length * names.length <= 700;
 
   return (
-    <section aria-label={title} className="min-w-0 bg-gray-900/50 border border-gray-800 rounded-xl p-4">
+    <section aria-label={title} className="ui-panel min-w-0">
       <h3 className="text-sm font-semibold text-gray-300 mb-3">{title}</h3>
       {rows.length === 0 || names.length === 0 ? (
         <DataEmpty title={t.monitoring.noTrend} description={t.common.noDataHint} />
@@ -319,6 +322,7 @@ function BenchChart({
 }
 
 export default function GptOnAwsPanel() {
+  const pageCopy = usePageCopy().workspace;
   const { lang } = useLang();
   const t = useT();
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
@@ -371,29 +375,29 @@ export default function GptOnAwsPanel() {
             {c.family}
           </span>
         </div>
-        <span className="text-[11px] font-mono text-gray-500">{c.region}</span>
+        <span className="text-xs font-mono text-gray-500">{c.region}</span>
       </div>
       <div className="grid grid-cols-3 gap-1 text-center">
         <div>
           <div className={`text-lg font-bold tabular-nums ${ttfbColor(c.median_ttfb_ms)}`}>
             {fmtMs(c.median_ttfb_ms)}
           </div>
-          <div className="text-[11px] text-gray-500">TTFB</div>
+          <div className="text-xs text-gray-500">TTFB</div>
         </div>
         <div>
           <div className={`text-lg font-bold tabular-nums ${ttftColor(c.median_ttft_ms)}`}>
             {fmtMs(c.median_ttft_ms)}
           </div>
-          <div className="text-[11px] text-gray-500">TTFT</div>
+          <div className="text-xs text-gray-500">TTFT</div>
         </div>
         <div>
           <div className="text-lg font-bold tabular-nums text-gray-300">
             {fmtMs(c.median_gap_ms)}
           </div>
-          <div className="text-[11px] text-gray-500">GAP</div>
+          <div className="text-xs text-gray-500">GAP</div>
         </div>
       </div>
-      <div className="flex items-center justify-between text-[11px] text-gray-500 pt-1 border-t border-gray-800/60">
+      <div className="flex items-center justify-between text-xs text-gray-500 pt-1 border-t border-gray-800/60">
         <span>
           {L("ok", "성공")} {c.success}/{c.runs}
           {c.success < c.runs && <span className="text-rose-400"> ⚠</span>}
@@ -405,7 +409,7 @@ export default function GptOnAwsPanel() {
         </span>
       </div>
       {c.last_error && (
-        <div className="text-[11px] text-rose-400 break-words">
+        <div className="text-xs text-rose-400 break-words">
           {c.last_error}
         </div>
       )}
@@ -413,22 +417,26 @@ export default function GptOnAwsPanel() {
   );
 
   return (
-    <div className="p-4 sm:p-6 space-y-4 sm:space-y-6 max-w-7xl mx-auto">
-      <div className="flex items-start justify-between flex-wrap gap-3">
-        <div>
-          <h1 className="text-2xl font-bold text-gray-100">GPT on AWS</h1>
-          <p className="text-sm text-gray-500 mt-1">
+    <div className="page-stack">
+      <PageHeading eyebrow={pageCopy.exploreWorkspace} title={<>GPT on AWS</>} description={<>
+
+          <p>{L("Compare response speed across GPT models, regions and API channels under the same workload.", "같은 워크로드에서 GPT 모델·리전·호출 채널별 응답 속도를 비교하세요.")}</p>
+          <details className="methodology-details">
+            <summary>{L("Measurement method and metrics", "측정 방법과 지표")}</summary>
+            <div className="ui-panel-muted mt-3"><p className="text-sm text-gray-500 mt-1">
             {L(
               "Precision latency measurements for GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna and 6.1 Sol across 21 Bedrock Mantle and cross-region channels. Each 15-minute cycle makes 10 sequential calls per channel with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
               "Bedrock Mantle 및 교차 리전 21개 채널의 GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna, 6.1 Sol 정밀 레이턴시 측정입니다. 15분마다 채널당 10회 순차 호출하며, 약 55.8k 토큰의 고정 캐시 프롬프트를 사용합니다. TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
             )}
-          </p>
-        </div>
-        <RefreshControls refreshing={latestResource.refreshing || trendResource.refreshing}
+          </p></div>
+          </details>
+        </>}
+        >
+        <div className="ui-toolbar justify-between"><RefreshControls refreshing={latestResource.refreshing || trendResource.refreshing}
                          onRefresh={() => { autoRefresh.reset(); void refresh(); }}
                          updatedAt={latestResource.updatedAt} enabled={autoRefresh.enabled}
-                         onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} />
-      </div>
+                         onEnabledChange={autoRefresh.setEnabled} countdown={autoRefresh.countdown} /></div>
+      </PageHeading>
 
       <section aria-label={L("Benchmark cards", "벤치마크 카드")} className="space-y-4">
         <DataError error={latestResource.error} resource={L("benchmark cards", "벤치마크 카드")}
@@ -484,7 +492,7 @@ export default function GptOnAwsPanel() {
           <div className="space-y-6">
             {groups.map((group) => (
               <div key={group.key} role="group" aria-labelledby={`gptbench-group-${group.key}`} className="space-y-3">
-                <h2 id={`gptbench-group-${group.key}`} className="text-sm font-semibold text-gray-300 px-1">
+                <h2 id={`gptbench-group-${group.key}`} className="text-base font-semibold text-gray-300 px-1 section-title">
                   {L(group.en, group.ko)}
                 </h2>
                 <div className={group.columns.length > 3
@@ -496,7 +504,7 @@ export default function GptOnAwsPanel() {
                         {column.family}
                       </h3>
                       {column.cards.length === 0 ? (
-                        <p className="px-1 text-[11px] text-gray-500">
+                        <p className="px-1 text-xs text-gray-500">
                           {L("No results in this cycle.", "이번 사이클 결과가 없습니다.")}
                         </p>
                       ) : column.cards.map(renderCard)}
@@ -507,7 +515,7 @@ export default function GptOnAwsPanel() {
             ))}
             {other.length > 0 && (
               <div role="group" aria-labelledby="gptbench-group-other" className="space-y-3">
-                <h2 id="gptbench-group-other" className="text-sm font-semibold text-gray-300 px-1">
+                <h2 id="gptbench-group-other" className="text-base font-semibold text-gray-300 px-1 section-title">
                   {L("Other", "기타")}
                 </h2>
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
@@ -523,7 +531,7 @@ export default function GptOnAwsPanel() {
 
       <section aria-label={L("Benchmark trends", "벤치마크 추세")} className="space-y-4">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h2 className="text-base font-semibold text-gray-200">{L("Benchmark trends", "벤치마크 추세")}</h2>
+          <h2 className="text-base font-semibold text-gray-200 section-title">{L("Benchmark trends", "벤치마크 추세")}</h2>
           <div role="group" aria-label={L("Time range", "조회 기간")} className="flex flex-wrap items-center gap-1">
             <span className="mr-2 text-xs text-gray-400">{L("Range", "기간")}</span>
             {RANGE_OPTIONS.map((range) => (
