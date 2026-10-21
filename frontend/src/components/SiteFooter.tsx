@@ -38,7 +38,7 @@ export default function SiteFooter() {
       <details className="mt-2 text-[11px] text-gray-500">
         <summary className="w-fit cursor-pointer rounded py-2">{p.about}</summary>
         <div className="ui-copy max-w-3xl space-y-1 leading-relaxed">
-          <p>{p.criteria(snapshot?.initial_total ?? null)}</p>
+          <p>{p.criteria}</p>
           <p>{p.refreshHint}</p>
           {snapshot && <p>{t.common.updatedAt}: <time dateTime={snapshot.as_of}>{formatDateTime(snapshot.as_of, lang)}</time></p>}
         </div>

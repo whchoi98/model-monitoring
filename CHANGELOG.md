@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Changed
+- Remove the opening-balance sentence from the visitor footer in Korean and English; counting and stored totals are unchanged.
+- 접속 통계 안내의 초기값 문구를 한국어·영어 화면에서 제거했다. 집계 방식과 저장된 누적값은 유지한다.
+
 ## v2.35.0 — 2026-10-21
 
 ### Added

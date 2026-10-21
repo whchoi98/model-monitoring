@@ -29,8 +29,6 @@ test("footer displays server counts and keeps the same session across page navig
   await expect(footer.getByRole("definition").nth(0)).toHaveText("2");
   await expect(footer.getByRole("definition").nth(1)).toHaveText("10,007");
   await expect.poll(() => methods.slice(0, 2)).toEqual(["GET", "POST"]);
-  await footer.getByText("집계 기준", { exact: true }).click();
-  await expect(footer).toContainText("10,000");
   await page.getByRole("navigation", { name: "주요 메뉴" }).getByRole("link", { name: "비용 단가", exact: true }).click();
   await expect(page).toHaveURL(/\/pricing$/);
   await expect(footer.getByRole("definition").nth(1)).toHaveText("10,007");

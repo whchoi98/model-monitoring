@@ -69,7 +69,7 @@ export interface Translations {
     unavailable: string;
     stale: string;
     about: string;
-    criteria: (initial: number | null) => string;
+    criteria: string;
     refreshHint: string;
   };
   monitoring: {
@@ -288,7 +288,7 @@ export const ko: Translations = {
   presence: {
     title: "접속 통계", active: "현재 접속", total: "총 접속",
     loading: "접속 집계 확인 중", unavailable: "집계 확인 불가", stale: "마지막 확인값", about: "집계 기준",
-    criteria: (initial) => `현재 접속은 최근 90초 동안 활동한 브라우저 수입니다. 같은 브라우저의 새로고침과 여러 탭은 중복 집계하지 않습니다.${initial !== null ? ` 총 접속수는 초기값 ${initial.toLocaleString("ko-KR")}을 포함합니다.` : ""}`,
+    criteria: "현재 접속은 최근 90초 동안 활동한 브라우저 수입니다. 같은 브라우저의 새로고침과 여러 탭은 중복 집계하지 않습니다.",
     refreshHint: "화면이 보이고 온라인일 때 30초마다 갱신합니다.",
   },
   monitoring: {
@@ -511,7 +511,7 @@ export const en: Translations = {
   presence: {
     title: "Visitor counts", active: "Online", total: "Total visits",
     loading: "Loading visitor counts", unavailable: "Visitor counts unavailable", stale: "Last known count", about: "About these counts",
-    criteria: (initial) => `Online counts browsers active within the last 90 seconds. Reloads and multiple tabs in the same browser count once.${initial !== null ? ` Total visits includes an opening balance of ${initial.toLocaleString("en-US")}.` : ""}`,
+    criteria: "Online counts browsers active within the last 90 seconds. Reloads and multiple tabs in the same browser count once.",
     refreshHint: "Counts refresh every 30 seconds while this page is visible and online.",
   },
   monitoring: {
