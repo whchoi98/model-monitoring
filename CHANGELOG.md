@@ -7,7 +7,7 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
-## Unreleased
+## v2.37.1 — 2026-10-26
 
 ### Fixed
 - Chatbot answers that follow tool results no longer stop with no text: Haiku 5.5 chat requests turn thinking off and allow 4,096 output tokens (default thinking used the whole 1,024-token budget after three `compare_models` results). An answer that still ends at the output limit now shows a warning instead of finishing silently. Follow-up questions are unchanged.
