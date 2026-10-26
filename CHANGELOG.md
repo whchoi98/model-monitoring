@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Fixed
+- Chatbot answers that follow tool results no longer stop with no text: Haiku 5.5 chat requests turn thinking off and allow 4,096 output tokens (default thinking used the whole 1,024-token budget after three `compare_models` results). An answer that still ends at the output limit now shows a warning instead of finishing silently. Follow-up questions are unchanged.
+- 도구 결과 뒤 챗봇 답변이 본문 없이 끝나지 않도록 했다. Haiku 5.5 챗봇 요청은 추론을 끄고 출력 한도를 4,096토큰으로 늘렸다(기본 추론이 `compare_models` 결과 세 개 뒤 1,024토큰을 모두 썼다). 그래도 출력 한도에서 끝난 답은 조용히 끝내지 않고 경고를 표시한다. 후속 질문 설정은 그대로다.
+
 ## v2.37.0 — 2026-10-21
 
 ### Changed

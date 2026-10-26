@@ -213,7 +213,7 @@ async def _chat_generator(
         async for ev in bedrock_client.converse_stream_chat(
             messages=messages,
             tools=_TOOL_SPECS,
-            max_tokens=1024,
+            max_tokens=bedrock_client.CHAT_MAX_TOKENS,
         ):
             t = ev.get("type")
             if t == "text_delta":
@@ -277,6 +277,14 @@ async def _chat_generator(
                 {"message": f"MAX_TOOL_HOPS({MAX_TOOL_HOPS}) 도달, 종료"},
             )
             break
+
+    # 출력 한도에서 끝난 답은 조용히 끝내지 않는다 — 2026-10-25 브라우저에는 서두 한 문장만 남고 오류 표시가 없었다.
+    if stop_reason == "max_tokens":
+        yield sse_event(
+            "warning",
+            {"message": "답변이 출력 한도에서 잘렸습니다. 질문을 나눠 다시 시도해 주세요. "
+                        "The answer was cut off at the output limit; try a narrower question."},
+        )
 
     # 4) Memory에 assistant 최종 응답 기록.
     final_assistant = "".join(assistant_buffer).strip()

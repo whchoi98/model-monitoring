@@ -233,10 +233,26 @@ def test_default_helpers_send_haiku55_requests_without_deprecated_temperature(fa
     assert request.path == f"/model/global.anthropic.claude-haiku-5-5/{operation}"
     assert request.body["messages"] == messages
     assert request.body["inferenceConfig"] == {"maxTokens": 128}
-    if helper in ("stream", "collect"):
+    if helper in ("chat", "stream", "collect"):
         assert request.body["additionalModelRequestFields"] == {"thinking": {"type": "disabled"}}
     else:
         assert "additionalModelRequestFields" not in request.body
+
+
+def test_chat_default_budget_leaves_room_for_the_answer_after_tool_results(fake):
+    """2026-10-25: with default thinking and 1024 tokens, the answer hop after three compare_models results ended at
+    max_tokens with no text."""
+    fake.default = Stream(["answer"])
+
+    async def collect_chat():
+        return [event async for event in agent.bedrock.converse_stream_chat(
+            messages=[{"role": "user", "content": [{"text": "Which model is most cost-efficient this week?"}]}])]
+
+    asyncio.run(collect_chat())
+    (request,) = fake.requests
+    assert request.body["inferenceConfig"] == {"maxTokens": agent.bedrock.CHAT_MAX_TOKENS}
+    assert agent.bedrock.CHAT_MAX_TOKENS >= 4096
+    assert request.body["additionalModelRequestFields"] == {"thinking": {"type": "disabled"}}
 
 
 @pytest.mark.parametrize("lang", ["ko", "en"])

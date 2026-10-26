@@ -34,12 +34,24 @@ logger = logging.getLogger(__name__)
 CHAT_MODEL_ID = "global.anthropic.claude-haiku-5-5"
 INSIGHTS_MODEL_ID = "global.anthropic.claude-haiku-5-5"
 INSIGHTS_MAX_TOKENS = 16_384
+CHAT_MAX_TOKENS = 4096
+_HAIKU_55_MODEL_IDS = ("global.anthropic.claude-haiku-5-5", "us.anthropic.claude-haiku-5-5")
 
 
 def _insights_model_fields(model_id: str) -> Dict:
     # Summaries cover every monitored channel. Reserve the output budget for the
     # table and explanation; extended thinking exhausted 8192 tokens mid-answer.
-    if model_id in ("global.anthropic.claude-haiku-5-5", "us.anthropic.claude-haiku-5-5"):
+    if model_id in _HAIKU_55_MODEL_IDS:
+        return {"thinking": {"type": "disabled"}}
+    return {}
+
+
+def _chat_model_fields(model_id: str) -> Dict:
+    # After three compare_models results (~16k input tokens) Haiku 5.5's default
+    # thinking used the whole 1024-token budget and the answer hop ended at
+    # max_tokens with no text (2026-10-25). The tool loop also never replays
+    # reasoning blocks, so the chat runs without thinking.
+    if model_id in _HAIKU_55_MODEL_IDS:
         return {"thinking": {"type": "disabled"}}
     return {}
 
@@ -100,7 +112,7 @@ async def converse_stream_chat(
     model_id: str = CHAT_MODEL_ID,
     system: str = DEFAULT_CHAT_SYSTEM,
     tools: Optional[List[dict]] = None,
-    max_tokens: int = 1024,
+    max_tokens: int = CHAT_MAX_TOKENS,
     temperature: Optional[float] = None,
 ) -> AsyncIterator[Dict]:
     """챗봇용 ConverseStream — 이벤트를 비동기 generator로 yield.
@@ -118,6 +130,9 @@ async def converse_stream_chat(
     }
     if tools:
         params["toolConfig"] = {"tools": tools}
+    model_fields = _chat_model_fields(model_id)
+    if model_fields:
+        params["additionalModelRequestFields"] = model_fields
 
     try:
         response = _client().converse_stream(**params)

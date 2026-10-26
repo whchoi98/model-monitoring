@@ -143,6 +143,35 @@ def test_provider_errors_finish_as_failures_with_the_session_id(app, monkeypatch
     assert len([item for item in events(response) if item[0] == "final"]) == 1
 
 
+def test_chat_uses_the_chat_output_budget(app, monkeypatch):
+    seen = {}
+
+    async def reply(messages, **kwargs):
+        seen.update(kwargs)
+        yield {"type": "text_delta", "text": "Haiku 4.5 (Global) is the fastest this week."}
+        yield {"type": "stop", "stop_reason": "end_turn"}
+
+    monkeypatch.setattr(agent.bedrock, "converse_stream_chat", reply)
+    with client(app) as browser:
+        response = browser.post("/api/chat/stream", json={"message": "Recommend a model"})
+    assert final(response)["ok"] is True
+    assert seen["max_tokens"] == agent.bedrock.CHAT_MAX_TOKENS
+
+
+def test_an_answer_cut_at_the_output_limit_is_reported(app, monkeypatch):
+    """2026-10-25: the answer hop stopped at max_tokens and the browser saw only the opening sentence, with no error."""
+    async def truncated(messages, **kwargs):
+        yield {"type": "text_delta", "text": "Looking up this week's latency and throughput."}
+        yield {"type": "stop", "stop_reason": "max_tokens"}
+
+    monkeypatch.setattr(agent.bedrock, "converse_stream_chat", truncated)
+    with client(app) as browser:
+        response = browser.post("/api/chat/stream", json={"message": "Recommend a model"})
+    warnings = [data["message"] for event, data in events(response) if event == "warning"]
+    assert len(warnings) == 1 and "잘렸" in warnings[0] and "cut off" in warnings[0]
+    assert final(response)["ok"] is True
+
+
 @pytest.mark.parametrize("path", ["/api/insights/regenerate", "/api/insights/stream-regenerate"])
 def test_public_reading_does_not_change_insight_generation_permissions(app, path):
     with client(app) as browser:
