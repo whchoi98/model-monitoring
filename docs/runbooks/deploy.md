@@ -164,6 +164,11 @@ aws scheduler update-schedule --region $REGION --cli-input-json file:///tmp/sche
 > repo 이름만 넘기면(레지스트리 호스트 누락) ECS가 `docker.io/library/…`로 해석해 pull에 실패하고 서킷 브레이커가
 > 롤백한다. `make deploy`(= `cdk deploy --all`)는 이미지 context를 넘기지 않으므로 운영 배포에 쓰지 않는다.
 >
+> Scheduler 스택 갱신 직후 예약 작업 한 회차가 빠질 수 있다. 2026-10-26에는 Scheduler가 이전 리비전으로 `RunTask`를
+> 호출하기 2초 전에 CloudFormation 정리 단계가 그 리비전을 INACTIVE로 해제해 AutoProber 한 회차가
+> `TaskDefinition is inactive`로 거부됐다(CloudTrail `RunTask`에서 확인). 다음 회차는 새 리비전으로 정상 실행되므로
+> 배포 확인은 갱신 뒤 첫 회차가 아니라 그다음 회차의 리비전과 종료 코드로 한다.
+>
 > 대체 도메인(`llm-monitor.whchoi.net`)과 ACM cert 연결도 CDK(edge-stack)가 소유한다(인증서 자체는 ARN으로 가져옴) —
 > 콘솔에서 수동 추가한 배포판 설정은 다음 cdk deploy 때 제거되므로 금지.
 
