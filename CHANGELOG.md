@@ -7,7 +7,7 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
-## Unreleased
+## v2.39.0 — 2026-10-27
 
 ### Removed
 - Claude Opus 4.7, Opus 4.6, Sonnet 4.6 and Haiku 4.5 (Bedrock Global, US and Claude Platform on AWS) and GPT 5.4 (Mantle us-east-1 and its dormant 1P spec) are no longer monitored, by user decision on 2026-10-27, and every page drops them: 12 channels leave the catalog, the GPT on AWS bench, the price seeds, the trend colours, the manual probe view and the `/prompts` OptimizePrompt targets (ADR-034).
