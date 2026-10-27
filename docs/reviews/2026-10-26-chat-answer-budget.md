@@ -73,3 +73,38 @@
 Backend: 061525506239.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-backend-v2:v9b9149b@sha256:5e35a277281c5cbc437579fec432973156aab970534612e64427f4268c7d6d35
 Frontend: 061525506239.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-frontend:v6d662bf@sha256:46ee9b5895aa0266c1ccf63fc563a818c9c201f4565a30faf7066ba305421bd1
 ```
+
+## v2.37.1 운영 반영 (06:12–06:17 UTC)
+
+릴리스 커밋 `705c6ea`로 백엔드와 프런트엔드 이미지를 다시 만들어 배포했다. `9b9149b` 이후 바뀐 것은 버전 문자열뿐이다(`backend/main.py`, `frontend/src/lib/version.ts`, `frontend/package.json`, `frontend/package-lock.json`).
+
+| 검사 | 결과 |
+| --- | --- |
+| 백엔드 pytest (Python 3.12) | 1,653개 통과, 18개 건너뜀 |
+| 프런트엔드 vitest, 타입 검사 | 378개 통과, 타입 검사 통과 |
+| 이미지 내용 | 프런트엔드 번들에 `v2.37.1`과 RUM 엔드포인트가 있고 `v2.37.0`은 없다. 백엔드 `main.py`는 `2.37.1` |
+| `cdk diff` | 작업 정의 8개(백엔드 7, 프런트엔드 1)의 이미지 URI만 바뀐다 |
+| 서비스 | 백엔드 `:92`, 프런트엔드 `:97` 롤아웃 `COMPLETED`, 실행 컨테이너 digest가 배포값과 같다 |
+| 운영 화면 (헤드리스 Chromium) | 헤더 `v2.37.1`, RUM SDK 로드, 수집 POST 5건 모두 200, JS 오류 없음 |
+| 챗봇 비회원 질문 "지금 가장 빠른 모델은?" | 두 번째 호출 출력 722토큰, 답변 1,000자, 경고 없음, `final ok: true`, 9.7초 |
+| 예약 작업 | 06:21 Insights `:71`, AutoProber `:78`이 새 digest로 종료 코드 0, 06:26 GptBench `:40` 실행 |
+
+06:16:56 AutoProber 회차는 01:06:56과 같은 이유로 실행되지 않았다(이전 리비전 `:77`, `TaskDefinition is inactive`). 같은 날 Scheduler 스택을 갱신한 두 번 모두 한 회차가 빠졌으므로 일회성 경합이 아니라 매번 생길 수 있는 동작으로 본다.
+
+배포 뒤 인사이트 두 건(42328, 42329)의 한국어 요약은 3,395자와 2,950자로 짧았지만 모두 `end_turn`이었다. 배포 전 3시간의 한국어 요약 40건도 모두 `end_turn`이었고 길이는 1,733~8,261자(중앙값 6,502자)였다. 원래 있던 편차 안이므로 회귀가 아니다.
+
+| 대상 | 태그 | 작업 정의 리비전 |
+| --- | --- | --- |
+| 백엔드 | `v705c6ea` | 92 |
+| 프런트엔드 | `v705c6ea` | 97 |
+| AutoProber | `v705c6ea` | 78 |
+| FeaturesVerify | `v705c6ea` | 29 |
+| GptBench | `v705c6ea` | 40 |
+| Insights | `v705c6ea` | 71 |
+| ParityRun | `v705c6ea` | 51 |
+| PricingSync | `v705c6ea` | 17 |
+
+```text
+Backend: 061525506239.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-backend-v2:v705c6ea@sha256:3edd8a24b57aa197614425824cdaabfc92b96f2dcfadf5d8ad3869b12f4ccec6
+Frontend: 061525506239.dkr.ecr.ap-northeast-2.amazonaws.com/bedrock-monitor-frontend:v705c6ea@sha256:bf480d29f286a3d0e71a33d3bb9f2c1d2e6e03a67233b851ebead7fb322efd7c
+```
