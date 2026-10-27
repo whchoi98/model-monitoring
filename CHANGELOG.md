@@ -7,7 +7,7 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
-## Unreleased
+## v2.38.0 — 2026-10-27
 
 ### Added
 - OpenAI GPT 6.1 Terra on three channels: Global CRIS, US CRIS and Mantle us-east-1 (Mantle us-east-2 and us-west-2 return 404). It is priced from its Bedrock agreement offer: $1.10 / $5.50 per 1M tokens In Region and US CRIS, $1 / $5 Global. The offer's long-context prices are kept because they sit above the short-context ones. The OpenAI official price is $1 / $5. The GPT on AWS bench measures all three channels, and the card group, trend colours and line patterns include the new family (ADR-033).
