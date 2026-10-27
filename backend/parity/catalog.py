@@ -168,7 +168,8 @@ FEATURE_IDS = [f["id"] for f in FEATURES]
 # gpt-6(Astra·Sol·Luna)은 미포함: reasoning 프로브(effort low, "17 x 23은?")에서 reasoning_tokens=0
 # (Astra 2026-09-09, Sol/Luna 2026-09-23 실측 — Sol/Luna는 effort high에서만 13~18) → 넣으면 "미지원" 오판.
 # "sonnet-5"는 sonnet-5-5(Sonnet 5.5)와 in-region 키 bedrock:ap-northeast-2:anthropic.claude-sonnet-5도 포함한다.
-# gpt-6.1-sol은 "gpt-5"에 걸리지 않아 제외가 유지된다(reasoning_tokens 0, 2026-09-30).
+# gpt-6.1-sol, gpt-6.1-terra는 "gpt-5"에 걸리지 않아 제외가 유지된다(effort low reasoning_tokens 0 — 6.1 Sol 2026-09-30,
+# 6.1 Terra 2026-10-27 Responses와 Chat Completions 각 3회. 6.1 Terra는 effort 기본값에서 12~21을 보고한다).
 # "haiku-5"는 Claude Haiku 5.5(v2.33.0) — Sonnet 5.5처럼 adaptive 전용(thinking.type.enabled 400, 2026-10-07 실측)이라
 # Sonnet 5.5와 같은 판정을 받게 넣는다. haiku-4-5는 걸리지 않는다. forced tool_choice는 200이라 아래 마커에는 넣지 않는다.
 _REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "haiku-5", "gpt-5")  # "fable-5"는 fable-5-1도 포함

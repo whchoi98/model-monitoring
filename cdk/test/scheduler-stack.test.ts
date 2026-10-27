@@ -312,6 +312,12 @@ describe("SchedulerStack", () => {
     for (const c of containers) expect(c.Environment).toContainEqual({ Name: "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", Value: "openai.gpt-6.1-sol" });
   });
 
+  it("모든 스케줄 task def에 GPT-6.1 Terra model id가 주입된다 (v2.38.0)", () => {
+    const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
+    expect(containers).toHaveLength(6);
+    for (const c of containers) expect(c.Environment).toContainEqual({ Name: "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", Value: "openai.gpt-6.1-terra" });
+  });
+
   it("all six shared backend tasks retain the visitor origin configuration", () => {
     const tasks = Object.values(template.findResources("AWS::ECS::TaskDefinition"));
     expect(tasks).toHaveLength(6);

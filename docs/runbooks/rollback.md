@@ -46,6 +46,17 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
+**v2.38.0에서 v2.37.1로 되돌릴 때 (과도 상태)**. v2.38.0은 CDK env(`BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)를 더한 릴리스라 위 규칙대로
+v2.37.1 tag의 `cdk/`로 v2.37.1 이미지 digest(`v705c6ea`)를 배포한다. DB는 그대로 둔다. v2.37.1은 OpenAI Mantle us-east-2, us-west-2 채널 8개와
+GPT 6 Astra (us-west-2)를 다시 등록하고, 그 채널의 `price_history` 행은 지운 적이 없으므로 비용도 바로 이어진다. GPT 6.1 Terra 3채널과
+GPT 6 Astra (us-east-1)는 등록되지 않아 프로브가 멈춘다. 그 채널의 `price_history` 행(Terra 3, `openai-list:gpt-6.1-terra`, Astra us-east-1)은
+v2.37.1 `price_identity`가 분류는 해도 활성 채널이 아니라 `/api/pricing`에 나오지 않는다. 다만 다음이 잠시 보인다.
+1. `/gpt-on-aws`: v2.37.1 `FAMILY_GROUPS`에 GPT 6.1 Terra가 없어 남은 Terra 카드는 "기타" 열로 간다(다음 완료 사이클부터 사라진다).
+   벤치는 다시 네 갈래 21채널이다.
+2. 대시보드와 `/reliability`: 조회 창이 지날 때까지 GPT 6.1 Terra, GPT 6 Astra (us-east-1) 행이 남는다. v2.37.1 `FAMILY_ORDER`에 GPT 6.1 Terra가
+   없어 그 묶음은 아는 패밀리 뒤에 놓인다.
+데이터를 지울 필요는 없다. 다시 v2.38.0 이상으로 올리면 그대로 이어진다.
+
 **v2.33.0에서 v2.32.2로 되돌릴 때 (과도 상태)**. v2.33.0은 env, 스케줄, IAM을 바꾸지 않았다(CDK 변경은 FeaturesVerify 스케줄 설명
 "7 models"뿐). 그래서 현재 `cdk/`로 v2.32.2 이미지 digest(`v37b0280`)를 주입해 AppServices, Scheduler를 배포하면 된다. 설명 문자열이 남는 것은 무해하다.
 DB는 그대로 둔다. v2.32.2는 Haiku 5.5와 Sonnet 5.5 US를 카탈로그에 두지 않아 프로브를 멈춘다. 그 4채널의 `price_history` 행은

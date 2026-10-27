@@ -3,10 +3,11 @@
 import PageHeading from "./PageHeading";
 import { useT as usePageCopy } from "@/lib/i18n-context";
 
-// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol
-// 21채널 = Mantle 인리전 12 + CRIS 9 (미국 3리전 + Terra Global CRIS v2.20.1
-// + Astra Global·US CRIS·us-west-2 v2.25.1 + Sol/Luna Global·US CRIS·us-east-1 v2.28.0
-// + 6.1 Sol Global·US CRIS·us-east-1 v2.32.0)을
+// GPT on AWS (v2.18.0) — Bedrock Mantle 3P의 GPT 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol / 6.1 Terra
+// 19채널 = Mantle 인리전 us-east-1 8 + CRIS 11 (Terra Global CRIS v2.20.1 + Astra Global·US CRIS v2.25.1
+// + Sol/Luna Global·US CRIS·us-east-1 v2.28.0 + 6.1 Sol Global·US CRIS·us-east-1 v2.32.0
+// + 6.1 Terra Global·US CRIS·us-east-1 v2.38.0. Mantle 인리전은 v2.38.0부터 us-east-1 하나 — v2.37.x까지는
+// 미국 3리전, Astra는 us-west-2)을
 // 15분마다 채널당 10회 정밀 측정(TTFB/TTFT/GAP)한 결과의 스코어 카드 + 시계열.
 // 방법론은 docs/benchmarks (ttft_bench) 계보: TTFB=첫 스트림 이벤트, GAP≈thinking.
 
@@ -40,20 +41,21 @@ const RANGE_OPTIONS = [
   { hours: 168, labelKo: "7일", labelEn: "7d" },
 ];
 
-// 이중 인코딩으로 21개 라인 구분: 색 = 리전, 선 패턴 = 모델 family — (리전, family) 쌍이 모두 고유.
+// 이중 인코딩으로 19개 라인 구분: 색 = 리전, 선 패턴 = 모델 family — (리전, family) 쌍이 모두 고유.
 // (초기 버전의 초록 8단계는 구분 불가 피드백 → 리전 색 × family 패턴으로 교체)
 const REGION_COLORS: Record<string, string> = {
-  "us-east-1": "#3b82f6", // blue — GPT 6 Sol/Luna, 6.1 Sol의 유일한 Mantle 인리전 (v2.28.0, v2.32.0)
-  "us-east-2": "#f59e0b", // amber
-  "us-west-2": "#10b981", // emerald
+  "us-east-1": "#3b82f6", // blue — v2.38.0부터 모든 family의 유일한 Mantle 인리전
+  "us-east-2": "#f59e0b", // amber — v2.37.x까지 수집한 지난 사이클(7일 추세에만 남는다)
+  "us-west-2": "#10b981", // emerald — 같다(Astra는 v2.37.x까지 us-west-2)
   "Global": "#a855f7",    // violet — Global CRIS (Seoul 라우팅, Terra v2.20.1, Astra v2.25.1, Sol/Luna v2.28.0, 6.1 Sol v2.32.0)
   "US": "#db2777",        // pink-600 — US CRIS (us-east-1 라우팅, Astra v2.25.1, Sol/Luna v2.28.0, 6.1 Sol v2.32.0)
 };
 
-// family별 선 패턴 7종 — 모두 달라야 한다(GptOnAwsPanel.test.ts가 고정). 범례 스와치(40px)에
-// 한 주기 이상 보이도록 가장 긴 주기(6.1 Sol 28px)를 기준으로 맞췄다.
+// family별 선 패턴 8종 — 모두 달라야 한다(GptOnAwsPanel.test.ts가 고정). 범례 스와치(선 38px)에
+// 한 주기 이상 보이도록 가장 긴 주기(6.1 Terra 36px)를 기준으로 맞췄다.
 export const FAMILY_DASH: Record<string, string | undefined> = {
   "GPT 6.1 Sol": "16 4 4 4",      // 긴 파선 + 짧은 파선 (GPT 6 Sol "16 4" 계열, 주기 28px)
+  "GPT 6.1 Terra": "16 4 4 4 4 4", // 긴 파선 + 짧은 파선 둘 (6.1 Sol 계열, 주기 36px, v2.38.0)
   "GPT 6 Astra": "10 3 2 3",      // 일점쇄선
   "GPT 6 Sol": "16 4",            // 긴 파선
   "GPT 6 Luna": "10 3 2 3 2 3",   // 이점쇄선
@@ -66,7 +68,7 @@ export const FAMILY_DASH: Record<string, string | undefined> = {
 // 카드는 "기타" 열로 보낸다(조용히 사라지지 않게).
 export const FAMILY_GROUPS = [
   { key: "gpt-6", en: "GPT 6.x generation", ko: "GPT 6.x 세대",
-    families: ["GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"] },
+    families: ["GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"] },
   { key: "gpt-5", en: "GPT 5.x generation", ko: "GPT 5.x 세대",
     families: ["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"] },
 ] as const;
@@ -99,7 +101,7 @@ export function regionOf(name: string): string {
  * 뒤는 " (" 또는 끝이어야 해서 "GPT 5.45" 같은 접두 일치도 막는다. 모르는 family는 ""
  * (예전처럼 GPT 5.4로 접지 않는다 — 선 패턴은 undefined, 즉 실선).
  */
-const FAMILY_RE = /\bGPT (6\.1 Sol|6 (?:Astra|Sol|Luna)|5\.6 (?:Sol|Terra|Luna)|5\.5|5\.4)(?= \(|$)/;
+const FAMILY_RE = /\bGPT (6\.1 (?:Sol|Terra)|6 (?:Astra|Sol|Luna)|5\.6 (?:Sol|Terra|Luna)|5\.5|5\.4)(?= \(|$)/;
 
 export function familyOf(name: string): string {
   const m = name.match(FAMILY_RE);
@@ -220,14 +222,14 @@ export function toChartData(
 }
 
 /** 차트 범례 — 스크롤 상태(숨은 항목 수)를 이 컴포넌트에만 두어, 휴대폰에서 범례를 스크롤해도
- *  21개 라인의 LineChart 전체가 다시 그려지지 않게 한다. */
+ *  19개 라인의 LineChart 전체가 다시 그려지지 않게 한다. */
 function BenchLegend({ names, resetKey }: { names: string[]; resetKey: string }) {
   const { lang } = useLang();
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const legend = useLegendBelowFold(resetKey);
   return (
     <>
-      {/* 휴대폰 폭에서는 21개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
+      {/* 휴대폰 폭에서는 19개 중 6개 남짓만 보이므로 아래 안내 줄이 숨은 항목 수를 알려 준다(sm 미만만, 데스크톱은 그대로).
           2열 배치는 라벨이 2~3줄로 접혀 보이는 항목 수가 늘지 않아(390px 6개, 320px 4개) 쓰지 않았다. */}
       <ul ref={legend.ref} aria-label={lang === "en" ? "Chart legend" : "차트 범례"} tabIndex={0}
           className="mt-3 flex max-h-36 flex-wrap gap-x-4 gap-y-2 overflow-y-auto rounded-md p-1 text-xs text-gray-400">
@@ -425,8 +427,8 @@ export default function GptOnAwsPanel() {
             <summary>{L("Measurement method and metrics", "측정 방법과 지표")}</summary>
             <div className="ui-panel-muted mt-3"><p className="text-sm text-gray-500 mt-1">
             {L(
-              "Precision latency measurements for GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna and 6.1 Sol across 21 Bedrock Mantle and cross-region channels. Each 15-minute cycle makes 10 sequential calls per channel with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
-              "Bedrock Mantle 및 교차 리전 21개 채널의 GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna, 6.1 Sol 정밀 레이턴시 측정입니다. 15분마다 채널당 10회 순차 호출하며, 약 55.8k 토큰의 고정 캐시 프롬프트를 사용합니다. TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
+              "Precision latency measurements for GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna, 6.1 Sol and 6.1 Terra across 19 Bedrock Mantle (us-east-1) and cross-region channels. Each 15-minute cycle makes 10 sequential calls per channel with a fixed ~55.8k-token cached prompt. TTFB = first stream event, GAP ≈ server-side thinking.",
+              "Bedrock Mantle(us-east-1) 및 교차 리전 19개 채널의 GPT 5.4, 5.5, 5.6 Terra, 6 Astra, 6 Sol, 6 Luna, 6.1 Sol, 6.1 Terra 정밀 레이턴시 측정입니다. 15분마다 채널당 10회 순차 호출하며, 약 55.8k 토큰의 고정 캐시 프롬프트를 사용합니다. TTFB = 첫 스트림 이벤트, GAP ≈ 서버측 thinking 시간.",
             )}
           </p></div>
           </details>
@@ -487,7 +489,9 @@ export default function GptOnAwsPanel() {
             </div>
           )}
           {/* 세대별 그룹(GPT 6.x → GPT 5.x) 안에서 family별 열 배치 — 폰은 세로 스택, md 2열, lg 3열
-              (열이 4개인 그룹은 lg 2×2, xl 4열 — lg 4열은 카드 폭이 너무 좁다).
+              (열이 4개인 그룹은 lg 2×2, xl 4열 — lg 4열은 카드 폭이 너무 좁다. 열이 5개인 그룹(GPT 6.x, v2.38.0)은
+              lg 3열 두 줄, 1800px부터 5열 — 본문이 최대 폭 1680px에 닿아야 카드가 약 300px이 된다(1600px 5열은 약 266px라
+              지표 숫자가 붙는다). xl 4열이면 마지막 열만 둘째 줄에 남는다).
               알 수 없는 family의 카드는 마지막 "기타" 열로 모은다. */}
           <div className="space-y-6">
             {groups.map((group) => (
@@ -495,7 +499,9 @@ export default function GptOnAwsPanel() {
                 <h2 id={`gptbench-group-${group.key}`} className="text-base font-semibold text-gray-300 px-1 section-title">
                   {L(group.en, group.ko)}
                 </h2>
-                <div className={group.columns.length > 3
+                <div className={group.columns.length > 4
+                  ? "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 min-[1800px]:grid-cols-5 gap-4"
+                  : group.columns.length > 3
                   ? "grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4"
                   : "grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4"}>
                   {group.columns.map((column) => (

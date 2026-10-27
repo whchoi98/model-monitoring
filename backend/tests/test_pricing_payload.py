@@ -239,12 +239,12 @@ def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 66 active channels plus the 9 OpenAI official prices."""
+    """build_pricing_payload on the real seeds of the 61 active channels plus the 10 OpenAI official prices (v2.38.0)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 75
-    assert pricing_seed.ensure_seed(engine, active) == 75
+    assert len(active) == 71
+    assert pricing_seed.ensure_seed(engine, active) == 71
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -266,16 +266,16 @@ def test_production_references_list_only_cited_sources():
     payload = _production_payload(pricing_sources.PRICE_NOTES)
     _assert_every_reference_is_cited(payload)
     kinds = [r["kind"] for r in payload["references"]]
-    assert len(kinds) == 24  # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0)
+    assert len(kinds) == 25  # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0)
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 21, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 22, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(25, "note:gpt-5.4", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(26, "note:gpt-5.4", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
@@ -296,6 +296,18 @@ def test_production_payload_shows_the_v2_32_channels():
     g61 = _family(payload, "gpt-6.1-sol")["tiers"]
     assert [g61[t]["long"] for t in ("global", "us")] + [g61["in_region"][0]["long"]] == [None] * 3
     assert g61["openai_list"]["long"] == {"input": 4, "output": 15, "cache_read": 0.2, "cache_write": 5}
+    # GPT 6.1 Terra (v2.38.0): right after 6.1 Sol, and its offer's long context is plausible, so every tier keeps it
+    openai = [f["family_key"] for f in payload["families"] if f["provider"] == "openai"]
+    assert openai[:2] == ["gpt-6.1-sol", "gpt-6.1-terra"]
+    t61 = _family(payload, "gpt-6.1-terra")["tiers"]
+    (t61_e1,) = t61["in_region"]
+    assert (t61["global"]["input"], t61["global"]["output"], t61["us"]["input"], t61["us"]["output"],
+            t61_e1["input"], t61_e1["output"], t61["openai_list"]["input"]) == (1, 5, 1.1, 5.5, 1.1, 5.5, 1)
+    assert t61["global"]["long"] == {"input": 2, "output": 7.5, "cache_read": 0.1, "cache_write": 2.5}
+    assert t61_e1["long"] == {"input": 2.2, "output": 8.25, "cache_read": 0.11, "cache_write": 2.75}
+    # Mantle in-region is us-east-1 only (v2.38.0): one In Region cell per OpenAI family that has one
+    for fk in openai:
+        assert [c["regions"] for c in _family(payload, fk)["tiers"]["in_region"]] == [["us-east-1"]], fk
     assert payload["models"]["bedrock:ap-northeast-2:anthropic.claude-opus-5"]["input"] == 5.5
 
 
@@ -321,17 +333,18 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
     Session = sessionmaker(bind=engine)
     active = active_channels(ACTIVE_MODELS, [])
     old = {m: i for m, i in active.items()
-           if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS and i.family_key != "gpt-6.1-sol"}
-    assert len(old) == 63
+           if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra")}
+    assert len(old) == 55  # v2.38.0 catalog: the retired Mantle us-east-2/us-west-2 channels are not active at all
     try:
-        assert pricing_seed.ensure_seed(engine, old) == 63
+        assert pricing_seed.ensure_seed(engine, old) == 55
         synced = datetime(2026, 9, 29, 3, 0, tzinfo=timezone.utc)  # the last v2.31.2 sync
         with Session() as s:
             s.add(models.PriceSyncRun(started_at=synced, finished_at=synced + timedelta(seconds=31), status="completed"))
             for row in s.query(models.PriceHistory):
                 row.observed_at = synced
             s.commit()
-        assert pricing_seed.ensure_seed(engine, active) == 12  # the upgrade: backend lifespan seeds the new rows (8 + 4)
+        # the upgrade: backend lifespan seeds the new rows (8 + 4 v2.33.0 + 4 v2.38.0 GPT 6.1 Terra)
+        assert pricing_seed.ensure_seed(engine, active) == 16
         with Session() as s:
             payload = build_pricing_payload(s, active, now=datetime(2026, 9, 30, 13, 0, tzinfo=timezone.utc))
     finally:
@@ -339,10 +352,11 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 24
+    assert len(as_of) == 25
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
     assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol
+    assert as_of.pop("offer:offer-34pzbdgg26ley") == "2026-10-27"  # GPT 6.1 Terra (v2.38.0)
     assert set(as_of.values()) == {"2026-09-29"}  # incl. the offers and docs the other new rows cite
     s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
     assert (s55["global"]["verification"], s55["global"]["observed_at"]) == ("seed_only", None)

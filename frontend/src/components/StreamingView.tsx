@@ -57,10 +57,10 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 5.6 Luna (us-east-2)": "bg-green-300",
   "GPT 5.6 Luna (us-west-2)": "bg-teal-300",
   "GPT 5.6 Luna (1P)": "bg-lime-500",
-  // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 (배지 텍스트는 흰색).
+  // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / 인리전 (배지 텍스트는 흰색). 인리전은 v2.38.0부터 us-east-1(그 전 us-west-2).
   "GPT 6 Astra (Global)": "bg-lime-900",
   "GPT 6 Astra (US)": "bg-emerald-900",
-  "GPT 6 Astra (us-west-2)": "bg-green-900",
+  "GPT 6 Astra (us-east-1)": "bg-green-900",
   // GPT 6 Sol / Luna (v2.27.0) — Global CRIS / US CRIS / us-east-1 인리전 (배지 텍스트는 흰색).
   "GPT 6 Sol (Global)": "bg-teal-900",
   "GPT 6 Sol (US)": "bg-cyan-900",
@@ -72,6 +72,10 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 6.1 Sol (Global)": "bg-cyan-700",
   "GPT 6.1 Sol (US)": "bg-cyan-950",
   "GPT 6.1 Sol (us-east-1)": "bg-teal-950",
+  // GPT 6.1 Terra (v2.38.0) — 보라 계열(대시보드 추세 차트와 같은 계열)
+  "GPT 6.1 Terra (Global)": "bg-fuchsia-800",
+  "GPT 6.1 Terra (US)": "bg-purple-950",
+  "GPT 6.1 Terra (us-east-1)": "bg-purple-800",
 };
 
 function getModelColor(name: string): string {
@@ -133,6 +137,7 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
       : rawRegion === "us" ? "US"
       : rawRegion;
     const fam = modelId.includes("gpt-6.1-sol") ? "GPT 6.1 Sol"
+      : modelId.includes("gpt-6.1-terra") ? "GPT 6.1 Terra"
       : modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
       : modelId.includes("gpt-6-sol") ? "GPT 6 Sol"
       : modelId.includes("gpt-6-luna") ? "GPT 6 Luna"

@@ -84,9 +84,17 @@ export const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 6.1 Sol (Global)": "#aa8f09",
   "OpenAI GPT 6.1 Sol (US)": "#d7be7d",
   "OpenAI GPT 6.1 Sol (us-east-1)": "#4b3c00",
-  // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / us-west-2 인리전 3채널.
+  // GPT 6.1 Terra (v2.38.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 보라 계열 한 패밀리(같은 패턴 최근접 ΔE 19.3 —
+  // 초록, 청록, 금색은 다른 GPT가 쓴다).
+  "OpenAI GPT 6.1 Terra (Global)": "#d633ff",
+  "OpenAI GPT 6.1 Terra (US)": "#5f4266",
+  "OpenAI GPT 6.1 Terra (us-east-1)": "#9b3eb2",
+  // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / 인리전 3채널. 인리전은 v2.38.0부터 us-east-1(그 전에는 us-west-2).
+  // us-east-1 일점쇄선은 다른 OpenAI 인리전 초록과 겹쳐(초록 안에서는 최근접 ΔE 13.7이 한계) 청록 옆 세룰리안(최근접 ΔE 22.7).
   "OpenAI GPT 6 Astra (Global)": "#099268",
   "OpenAI GPT 6 Astra (US)": "#2e8b57",
+  "OpenAI GPT 6 Astra (us-east-1)": "#1898c0",
+  // ↓ v2.37.x까지의 Mantle us-east-2, us-west-2 채널(v2.38.0에서 수집 중단) — 지난 데이터가 추세 창에 남는 동안 같은 색으로 그린다.
   "OpenAI GPT 6 Astra (us-west-2)": "#2f855a",
   // GPT 6 Sol / Luna (v2.27.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널씩.
   "OpenAI GPT 6 Sol (Global)": "#20c997",
@@ -134,6 +142,7 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
   ["GPT 6.1 Sol", "#d9b40f"],
+  ["GPT 6.1 Terra", "#d633ff"],
   ["GPT 6 Astra", "#2e8b57"],
   ["GPT 6 Sol", "#12b886"],
   ["GPT 6 Luna", "#63e6be"],

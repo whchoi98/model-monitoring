@@ -164,7 +164,7 @@ def test_gpt6_sol_luna_pricing_per_channel_and_never_matches_astra():
         for mid in (
             "openai:global:global.openai.gpt-6-astra",
             "openai:us:us.openai.gpt-6-astra",
-            "openai:us-west-2:openai.gpt-6-astra",
+            "openai:us-east-1:openai.gpt-6-astra",  # v2.38.0 (us-west-2 before)
         )
     ]
     for mid, price in expected.items():

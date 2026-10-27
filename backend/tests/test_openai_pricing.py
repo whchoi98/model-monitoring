@@ -36,8 +36,10 @@ def test_dormant_1p_channel_is_not_priced():
 
 
 def test_gpt6_astra_official_pricing_per_channel():
-    """In-Region, Geo CRIS(US) = OpenAI list +10% ($11/$55), Global CRIS = list ($10/$50)."""
-    assert _seed("openai:us-west-2:openai.gpt-6-astra") == (11.0, 55.0)
+    """In-Region, Geo CRIS(US) = OpenAI list +10% ($11/$55), Global CRIS = list ($10/$50).
+    The in-region channel is us-east-1 since v2.38.0 (us-west-2 before)."""
+    assert _seed("openai:us-east-1:openai.gpt-6-astra") == (11.0, 55.0)
+    assert "openai:us-west-2:openai.gpt-6-astra" not in pricing_seed.SEED
     assert _seed("openai:us:us.openai.gpt-6-astra") == (11.0, 55.0)
     assert _seed("openai:global:global.openai.gpt-6-astra") == (10.0, 50.0)
 
@@ -52,7 +54,7 @@ def test_gpt6_sol_luna_seed_per_channel():
 
 def test_seed_openai_gpt54_gpt55():
     assert _seed("openai:us-east-1:openai.gpt-5.4") == (2.75, 16.5)
-    assert _seed("openai:us-east-2:openai.gpt-5.5") == (5.5, 33.0)
+    assert _seed("openai:us-east-1:openai.gpt-5.5") == (5.5, 33.0)
 
 
 def test_seed_gpt56_global_vs_in_region():
@@ -60,9 +62,27 @@ def test_seed_gpt56_global_vs_in_region():
     assert _seed("openai:global:global.openai.gpt-5.6-sol") == (4.0, 20.0)
     assert _seed("openai:us-east-1:openai.gpt-5.6-sol") == (4.4, 22.0)
     assert _seed("openai:global:global.openai.gpt-5.6-terra") == (2.0, 12.0)
-    assert _seed("openai:us-east-2:openai.gpt-5.6-terra") == (2.2, 13.2)
+    assert _seed("openai:us-east-1:openai.gpt-5.6-terra") == (2.2, 13.2)
     assert _seed("openai:global:global.openai.gpt-5.6-luna") == (0.2, 1.2)
-    assert _seed("openai:us-west-2:openai.gpt-5.6-luna") == (0.22, 1.32)
+    assert _seed("openai:us-east-1:openai.gpt-5.6-luna") == (0.22, 1.32)
+
+
+def test_openai_seed_has_only_us_east_1_mantle_channels():
+    """v2.38.0 (2026-10-27 user decision): every Mantle in-region channel is us-east-1."""
+    regions = {mid.split(":")[1] for mid in pricing_seed.SEED if mid.startswith("openai:")}
+    assert regions == {"global", "us", "us-east-1"}
+
+
+def test_gpt61_terra_seed_per_channel():
+    """GPT 6.1 Terra offer offer-34pzbdgg26ley (2026-10-27): In-Region and US CRIS $1.10/$5.50, Global $1/$5."""
+    assert _seed("openai:us-east-1:openai.gpt-6.1-terra") == (1.1, 5.5)
+    assert _seed("openai:us:us.openai.gpt-6.1-terra") == (1.1, 5.5)
+    assert _seed("openai:global:global.openai.gpt-6.1-terra") == (1.0, 5.0)
+    assert pricing_seed.OPENAI_LIST_SEED["gpt-6.1-terra"][:2] == pytest.approx((1.0, 5.0))
+    for mid in ("openai:us-east-1:openai.gpt-6.1-terra", "openai:us:us.openai.gpt-6.1-terra",
+                "openai:global:global.openai.gpt-6.1-terra"):
+        assert price_identity(mid).family_key == "gpt-6.1-terra", mid
+        assert price_identity(mid).family == "GPT 6.1 Terra", mid
 
 
 def test_existing_claude_seed_unbroken():

@@ -192,6 +192,38 @@ describe("trend chart line encoding", () => {
     }
   });
 
+  test("v2.38.0 channels (GPT 6.1 Terra, GPT 6 Astra us-east-1) stay clear of other models with the same pattern and keep the contrast floor", () => {
+    const added = ["OpenAI GPT 6.1 Terra (Global)", "OpenAI GPT 6.1 Terra (US)", "OpenAI GPT 6.1 Terra (us-east-1)",
+      "OpenAI GPT 6 Astra (us-east-1)"];
+    for (const name of added) {
+      expect(CATALOG).toContain(name);
+      const nearest = nearestSamePattern(name, (other) => other.includes("GPT 6.1 Terra"));
+      expect(nearest.delta, `${name} vs ${nearest.other} (${nearest.theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+      for (const theme of THEMES) {
+        for (const card of CARD_BACKGROUNDS[theme]) {
+          expect(contrastRatio(getColor(name, theme), card), `${name} on ${card} (${theme})`)
+            .toBeGreaterThanOrEqual(MIN_CONTRAST[theme]);
+        }
+      }
+    }
+  });
+
+  test("GPT 6.1 Terra channels read as one family (one hue, three distinct steps in both themes)", () => {
+    const names = ["(Global)", "(US)", "(us-east-1)"].map((channel) => `OpenAI GPT 6.1 Terra ${channel}`);
+    const hues = names.map((name) => {
+      const [, a, b] = hexToLab(MODEL_COLORS[name]);
+      return Math.atan2(b, a) * 180 / Math.PI;
+    });
+    expect(Math.max(...hues) - Math.min(...hues)).toBeLessThan(10);
+    for (const theme of THEMES) {
+      for (const [i, first] of names.entries()) {
+        for (const second of names.slice(i + 1)) {
+          expect(distance(first, second, theme), `${first} vs ${second} (${theme})`).toBeGreaterThanOrEqual(12);
+        }
+      }
+    }
+  });
+
   test("GPT 6.1 Sol channels read as one family (one hue, three distinct steps in both themes)", () => {
     const names = ["(Global)", "(US)", "(us-east-1)"].map((channel) => `OpenAI GPT 6.1 Sol ${channel}`);
     const hues = names.map((name) => {

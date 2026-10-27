@@ -250,6 +250,36 @@ describe("sortModels — GPT 6.1 Sol", () => {
   });
 });
 
+// GPT 6.1 Terra (v2.38.0) — GPT 6.1 Sol 바로 다음 family, GPT 6 Astra 앞. 채널은 Global → US → us-east-1.
+// 같은 날 Mantle 인리전이 us-east-1 하나가 됐다(지난 데이터의 us-east-2, us-west-2 라벨은 여전히 리전 티어로 정렬된다).
+describe("sortModels — GPT 6.1 Terra", () => {
+  it("ranks GPT 6.1 Terra right after GPT 6.1 Sol and above GPT 6 Astra, apart from GPT 5.6 Terra", () => {
+    const terra = familyRank("OpenAI GPT 6.1 Terra (Global)");
+    expect(terra).toBe(familyRank("OpenAI GPT 6.1 Sol (Global)") + 1);
+    expect(terra).toBe(familyRank("OpenAI GPT 6 Astra (Global)") - 1);
+    expect(terra).not.toBe(familyRank("OpenAI GPT 5.6 Terra (Global)"));
+  });
+
+  it("sorts the three channels Global → US → us-east-1 as one family", () => {
+    const rows = [
+      { model_name: "OpenAI GPT 6.1 Terra (us-east-1)" },
+      { model_name: "OpenAI GPT 6 Astra (us-east-1)" },
+      { model_name: "OpenAI GPT 6.1 Terra (US)" },
+      { model_name: "OpenAI GPT 6.1 Sol (us-east-1)" },
+      { model_name: "OpenAI GPT 6.1 Terra (Global)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "OpenAI GPT 6.1 Sol (us-east-1)",
+      "OpenAI GPT 6.1 Terra (Global)",
+      "OpenAI GPT 6.1 Terra (US)",
+      "OpenAI GPT 6.1 Terra (us-east-1)",
+      "OpenAI GPT 6 Astra (us-east-1)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([1, 3, 1]);
+    for (const row of rows) expect(isExcludedModel(row.model_name)).toBe(false);
+  });
+});
+
 // 신뢰성 페이지(v2.32.0) — backend가 family를 알파벳순으로 보내 "Claude Sonnet 5"가 "Claude Sonnet 5.5"보다 먼저 왔다.
 describe("sortByFamily — reliability family order", () => {
   it("orders family groups like the dashboard, 5.5 before 5 and 5.1 before 5", () => {

@@ -60,7 +60,7 @@ class TrendResponse(BaseModel):
     series: list[TrendSeries] = []
 
 
-# 사이클은 채널 단위로 커밋되므로 실행 중(21채널 호스트별 갈래 병렬, v2.32.1 — 18채널 순차 실측 p50 620s)에는
+# 사이클은 채널 단위로 커밋되므로 실행 중(19채널 호스트별 갈래 병렬 — v2.38.0 두 갈래, v2.32.1 네 갈래, 18채널 순차 실측 p50 620s)에는
 # max(cycle_ts)가 부분 사이클이다. 데드라인(13분) + 여유 = 14분 이상 지난 사이클만 "완료"로 간주하고, 최신이 진행 중이면
 # 직전 사이클로 폴백한다 (2026-07-22 "카드 4개만 보임" 실사고).
 # 15분으로 늘리지 않는 이유(v2.32.0): 화면에 보이는 사이클 나이가 최대 "이 값 + 15분 + 기동 지연"이 되어 프런트
@@ -130,8 +130,8 @@ def latest(db: Session = Depends(get_db)):
             last_error=(errs[-1].error_message if errs else None),
         ))
     # 정렬: family(최신 순, GPT 6.1 → GPT 6 세대 → 5.x) → region. 누락된 family는 rank 9로 맨 뒤.
-    fam_rank = {"GPT 6.1 Sol": 0, "GPT 6 Astra": 1, "GPT 6 Sol": 2, "GPT 6 Luna": 3,
-                "GPT 5.6 Terra": 4, "GPT 5.5": 5, "GPT 5.4": 6}
+    fam_rank = {"GPT 6.1 Sol": 0, "GPT 6.1 Terra": 1, "GPT 6 Astra": 2, "GPT 6 Sol": 3, "GPT 6 Luna": 4,
+                "GPT 5.6 Terra": 5, "GPT 5.5": 6, "GPT 5.4": 7}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
@@ -146,7 +146,7 @@ def trend(
 ):
     """시간 범위 내 사이클별 median 시계열 — 그래프용.
 
-    최대 범위(7일)에서 96사이클/일 × 21채널 × 10행 ≈ 14만 행을 읽는다. ORM 객체 대신 집계에 쓰는
+    최대 범위(7일)에서 96사이클/일 × 19채널 × 10행 ≈ 13만 행을 읽는다(v2.38.0, 21채널 시절 14만 행). ORM 객체 대신 집계에 쓰는
     7개 컬럼만 튜플로 읽어 행당 메모리를 줄이고(identity map·인스턴스 상태 없음), median은
     Python에서 계산한다.
     """

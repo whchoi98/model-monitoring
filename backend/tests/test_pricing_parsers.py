@@ -58,7 +58,9 @@ def test_fixtures_are_sanitized():
                      "pricelist_nova-2-lite.json", "anthropic_pricing.md", "openai_pricing.md",
                      # v2.32.0 (2026-09-30): Sonnet 5.5, GPT 6.1 Sol, Seoul in-region (APN2_*_standard) Opus 5 / Sonnet 5
                      "offers_claude-sonnet-5-5.json", "offers_gpt-6.1-sol.json", "offers_claude-opus-5.json",
-                     "offers_claude-sonnet-5.json"}
+                     "offers_claude-sonnet-5.json",
+                     # v2.38.0 (2026-10-27): GPT 6.1 Terra offer and the OpenAI doc of that day
+                     "offers_gpt-6.1-terra.json", "openai_pricing_20261027.md"}
     for f in FIXTURES.iterdir():
         text = f.read_text(encoding="utf-8")
         for forbidden in ("offerToken", "legalTerm", "X-Amz", "Security-Token", "awsmp-offer-legal"):
@@ -144,6 +146,14 @@ GPT54_STANDARD = U("2.75", "16.5", cache_read="0.275", long_input="5.5", long_ou
                                             long_cache_read="0.2", long_cache_write=5)),
     ("offers_gpt-6.1-sol.json", "us", U("2.2", 11, cache_read="0.11", cache_write="2.75", long_input="4.4",
                                         long_output="2.2", long_cache_read="0.22", long_cache_write="5.5")),
+    # GPT 6.1 Terra (2026-10-27, v2.38.0): the same flat scheme, half the Sol price, and a plausible long context
+    ("offers_gpt-6.1-terra.json", "global", U(1, 5, cache_read="0.05", cache_write="1.25", long_input=2,
+                                              long_output="7.5", long_cache_read="0.1", long_cache_write="2.5")),
+    ("offers_gpt-6.1-terra.json", "us", U("1.1", "5.5", cache_read="0.055", cache_write="1.375", long_input="2.2",
+                                          long_output="8.25", long_cache_read="0.11", long_cache_write="2.75")),
+    ("offers_gpt-6.1-terra.json", "inregion:us-east-1", U("1.1", "5.5", cache_read="0.055", cache_write="1.375",
+                                                          long_input="2.2", long_output="8.25", long_cache_read="0.11",
+                                                          long_cache_write="2.75")),
 ])
 def test_select_offer_price_from_real_rate_cards(fixture, channel, expected):
     assert select_offer_price(_card(fixture), channel) == expected

@@ -7,6 +7,26 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Added
+- OpenAI GPT 6.1 Terra on three channels: Global CRIS, US CRIS and Mantle us-east-1 (Mantle us-east-2 and us-west-2 return 404). It is priced from its Bedrock agreement offer: $1.10 / $5.50 per 1M tokens In Region and US CRIS, $1 / $5 Global. The offer's long-context prices are kept because they sit above the short-context ones. The OpenAI official price is $1 / $5. The GPT on AWS bench measures all three channels, and the card group, trend colours and line patterns include the new family (ADR-033).
+- OpenAI GPT 6.1 Terra를 세 채널로 추가했다. Global CRIS, US CRIS, Mantle us-east-1이고, Mantle us-east-2와 us-west-2는 404다. 단가는 Bedrock agreement offer에서 가져왔다. 1M 토큰당 In Region과 US CRIS는 $1.10 / $5.50, Global은 $1 / $5다. 긴 컨텍스트 단가는 짧은 컨텍스트보다 높아 그대로 둔다. OpenAI 공식 가격은 $1 / $5다. GPT on AWS 벤치도 세 채널을 측정하고, 카드 그룹, 추세 색, 선 패턴에 새 패밀리를 넣었다(ADR-033).
+
+### Changed
+- Every OpenAI Mantle in-region channel now uses us-east-1, by user decision on 2026-10-27. Monitoring of the eight us-east-2 and us-west-2 channels stopped, and GPT 6 Astra's in-region channel moved from us-west-2 to us-east-1, which now serves all ten GPT models.
+- The catalog has 61 active channels, down from 66; OpenAI has 23 (Mantle 10, Global 8, US 5).
+- The GPT on AWS bench runs 19 channels, down from 21, in two lanes: `cris` 11 and `mantle-us-east-1` 8.
+- Stored rows and prices of the dropped channels are kept, and they leave the dashboard within one cycle.
+- 사용자 결정(2026-10-27)으로 OpenAI Mantle 인리전 채널을 모두 us-east-1로 모았다. us-east-2, us-west-2 채널 8개는 수집을 멈췄다. GPT 6 Astra의 인리전 채널은 us-west-2에서 us-east-1로 옮겼고, us-east-1은 이제 GPT 10개 모델을 모두 서빙한다.
+- 활성 채널은 66개에서 61개로 줄었다. OpenAI는 23개다(Mantle 10, Global 8, US 5).
+- GPT on AWS 벤치는 21채널에서 19채널로 줄었고, `cris` 11과 `mantle-us-east-1` 8의 두 갈래로 돈다.
+- 빠진 채널의 저장 행과 단가는 그대로 두고, 대시보드에서는 한 사이클 안에 사라진다.
+
+### Infra
+- New environment variable `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID` on the backend and all six scheduled task definitions — deploy both the AppServices and the Scheduler stacks. `OPENAI_US_EAST_2_BASE_URL` and `OPENAI_US_WEST_2_BASE_URL` stay injected so a region can come back with a spec change only.
+- 백엔드와 스케줄 작업 정의 6개에 새 환경 변수 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`를 넣었다. AppServices와 Scheduler 두 스택을 함께 배포한다. `OPENAI_US_EAST_2_BASE_URL`, `OPENAI_US_WEST_2_BASE_URL`은 리전을 스펙만으로 되살릴 수 있게 주입을 남겼다.
+
 ## v2.37.1 — 2026-10-26
 
 ### Fixed

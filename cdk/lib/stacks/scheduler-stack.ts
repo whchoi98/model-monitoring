@@ -236,6 +236,7 @@ export class SchedulerStack extends cdk.Stack {
           PRESENCE_ALLOWED_ORIGINS: this.node.tryGetContext("presenceAllowedOrigins")
             ?? `https://${this.node.tryGetContext("monitorDomain") ?? "llm-monitor.whchoi.net"}`,
           OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
+          // us-east-2, us-west-2는 v2.38.0부터 쓰는 채널이 없다(Mantle 인리전 us-east-1 일원화) — 리전을 되살릴 때를 위해 주입만 둔다.
           OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
           OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
           // global CRIS(global.openai.*)는 bedrock-mantle 호스트 미지원 — bedrock-runtime
@@ -254,7 +255,7 @@ export class SchedulerStack extends cdk.Stack {
           BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
           BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
           // GPT-6 Astra — Mantle 인리전 native id. Global/US 프로파일 id는 prober가 파생.
-          // Mantle us-east-1/us-east-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외 (ADR-027).
+          // Mantle 인리전은 v2.38.0부터 us-east-1(2026-10-27 200, 그 전에는 us-west-2 — ADR-027, ADR-033).
           BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID: "openai.gpt-6-astra",
           // GPT-6 Sol/Luna (v2.27.0) — Mantle 인리전 us-east-1만 서빙(us-east-2/us-west-2는 현재 미지원 —
           // 2026-09-23 사용자 결정으로 제외). 프로파일 id는 prober가 파생 (ADR-028).
@@ -262,6 +263,8 @@ export class SchedulerStack extends cdk.Stack {
           BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID: "openai.gpt-6-luna",
           // GPT-6.1 Sol (v2.32.0) — Mantle 인리전 us-east-1만(us-east-2/us-west-2 404 — 제외). 프로파일 id는 prober가 파생 (ADR-031).
           BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID: "openai.gpt-6.1-sol",
+          // GPT-6.1 Terra (v2.38.0) — Global, US, Mantle us-east-1(us-east-2/us-west-2 404). 프로파일 id는 prober가 파생 (ADR-033).
+          BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID: "openai.gpt-6.1-terra",
           // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.
           ...(ENABLE_OPENAI_1P ? {
             OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
@@ -325,7 +328,8 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/parityrun",
     );
 
-    // GPT on AWS 벤치 (v2.18.0) — GPT 21채널(Mantle 인리전 12 + CRIS 9 — GPT-6.1 Sol Global/US/us-east-1 v2.32.0) × 10회 TTFB/TTFT 측정, 15분 주기.
+    // GPT on AWS 벤치 (v2.18.0) — GPT 19채널(Mantle 인리전 us-east-1 8 + CRIS 11 — GPT-6.1 Terra 편입과 Mantle us-east-1 일원화
+    // v2.38.0) × 10회 TTFB/TTFT 측정, 15분 주기.
     // OpenAI bearer 키(secret)만 사용 — bedrock IAM 불필요하지만 autoprober role 재사용 (패턴 통일).
     const gptBenchTaskDef = buildTaskDef(
       "GptBenchTaskDef",
@@ -345,7 +349,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/features",
     );
 
-    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 66채널(v2.33.0) + OpenAI 공식 가격 9채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
+    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 61채널(v2.38.0) + OpenAI 공식 가격 10채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
     // price_history에 기록한다(50% 초과 변화는 검토 대기). 같은 env/secret(buildTaskDef 기본값)으로 CP 디스커버리와
     // OpenAI 채널 등록을 AutoProber와 똑같이 해야 활성 채널 집합이 맞는다. extraEnvironment 없음.
     const pricingSyncTaskDef = buildTaskDef(
@@ -437,8 +441,9 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "GptBenchSchedule", {
-      // 15분 주기 — 21채널 × (워밍업 1 + 10회). 호스트별 갈래 병렬(갈래 안은 순차): v2.32.0은 CRIS 9 / Mantle 12 두 갈래,
-      //   v2.32.1부터 cris 9 + Mantle 리전마다 한 갈래(us-east-1 6, us-east-2 3, us-west-2 3 — GPT 5.4 us-east-2 저하 뒤 사용자 결정).
+      // 15분 주기 — 19채널 × (워밍업 1 + 10회). 호스트별 갈래 병렬(갈래 안은 순차): v2.32.0은 CRIS 9 / Mantle 12 두 갈래,
+      //   v2.32.1부터 cris 9 + Mantle 리전마다 한 갈래(us-east-1 6, us-east-2 3, us-west-2 3 — GPT 5.4 us-east-2 저하 뒤 사용자 결정),
+      //   v2.38.0부터 cris 11 + mantle-us-east-1 8 두 갈래(Mantle 인리전 us-east-1 일원화, 2026-10-27 사용자 결정).
       //   18채널 순차 실측(2026-09-30 24h) p50 623s, p90 750s, max 790s. 데드라인 13분(780s)은 모든 갈래가 공유하고 넘으면
       //   그 갈래의 남은 채널만 skip (사용자 결정 2026-09-30, D2 대체)
       //   겹침 방지: 사이클 데드라인(GPT_BENCH_DEADLINE) + 호출당 wall-clock 상한(GPT_BENCH_CALL_TIMEOUT, 재시도 0회).

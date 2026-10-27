@@ -35,7 +35,7 @@ _ENV = {
     "OPENAI_US_EAST_1_BASE_URL": "https://e1/v1", "OPENAI_US_EAST_2_BASE_URL": "https://e2/v1",
     "OPENAI_US_WEST_2_BASE_URL": "https://w2/v1",
     **{f"BEDROCK_OPENAI_GPT_{k}_MODEL_ID": f"openai.gpt-{v}" for k, v in (
-        ("61_SOL", "6.1-sol"), ("6_ASTRA", "6-astra"), ("6_SOL", "6-sol"), ("6_LUNA", "6-luna"), ("56_SOL", "5.6-sol"),
+        ("61_SOL", "6.1-sol"), ("61_TERRA", "6.1-terra"), ("6_ASTRA", "6-astra"), ("6_SOL", "6-sol"), ("6_LUNA", "6-luna"), ("56_SOL", "5.6-sol"),
         ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},
     **{f"OPENAI_1P_GPT_{k}_MODEL_ID": f"gpt-{v}" for k, v in (
         ("56_SOL", "5.6-sol"), ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},
@@ -78,17 +78,17 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_66_active_channels():
+def test_expected_table_is_the_61_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
     assert counts == {("anthropic", "global"): 12, ("anthropic", "us"): 12, ("anthropic", "cp"): 11,
-                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 7, ("openai", "us"): 4,
-                      ("openai", "in_region"): 17}
-    assert len(EXPECTED_IDENTITY) == 66
+                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 8, ("openai", "us"): 5,
+                      ("openai", "in_region"): 10}  # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널)
+    assert len(EXPECTED_IDENTITY) == 61
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_66_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_61_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -104,7 +104,7 @@ def test_registered_catalog_minus_hidden_is_exactly_the_66_channels(monkeypatch)
     active = active_channels(catalog, ["(1P)"])
     listed = [m for m in active if m.startswith(ps.OPENAI_LIST_PREFIX)]
     assert {m: catalog[m] for m in active if m not in listed} == ACTIVE_MODELS  # 라벨까지 prober 규약과 같다
-    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 9개
+    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 10개
 
 
 def test_active_channels_hidden_and_unclassifiable(caplog):
@@ -198,9 +198,10 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 22
+    assert len(ps.FAMILY_ORDER) == 23
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
-    assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
+    assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Terra")
+    assert ps.FAMILY_ORDER.index("GPT 6.1 Terra") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
     assert {v[1] for v in EXPECTED_IDENTITY.values()} == set(ps.FAMILY_ORDER)
     assert ps.PROVIDER_ORDER == ("anthropic", "openai", "amazon")
 
@@ -222,8 +223,8 @@ def test_openai_list_ids_are_classified(family_key):
         family_key, OPENAI_FAMILIES[family_key], "openai", "openai_list", "openai_doc", family_key)
 
 
-def test_openai_list_ids_are_the_nine_bedrock_gpt_families_and_rows_of_the_openai_doc():
-    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 9
+def test_openai_list_ids_are_the_ten_bedrock_gpt_families_and_rows_of_the_openai_doc():
+    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 10
     prices = parse_openai_pricing_md((FIXTURES / "openai_pricing.md").read_text(encoding="utf-8"))
     assert all(price_identity(m).source_ref in prices for m in OPENAI_LIST_IDS)  # exact doc model names
 

@@ -176,6 +176,8 @@ export class AppServicesStack extends cdk.Stack {
       PRESENCE_ALLOWED_ORIGINS: this.node.tryGetContext("presenceAllowedOrigins")
         ?? `https://${this.node.tryGetContext("monitorDomain") ?? "llm-monitor.whchoi.net"}`,
       OPENAI_US_EAST_1_BASE_URL: "https://bedrock-mantle.us-east-1.api.aws/openai/v1",
+      // us-east-2, us-west-2는 v2.38.0부터 쓰는 채널이 없다(Mantle 인리전 us-east-1 일원화, 2026-10-27 사용자 결정).
+      // 주입은 남겨 리전을 되살릴 때 prober 스펙 튜플만 고치게 한다.
       OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
       OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
       // global CRIS(global.openai.*)는 bedrock-mantle 호스트 미지원 — bedrock-runtime
@@ -194,9 +196,8 @@ export class AppServicesStack extends cdk.Stack {
       BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
       BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
       // GPT-6 Astra — Mantle 인리전 native id. Global/US 프로파일 id(global./us. 접두)는
-      // prober가 이 값에서 파생한다 (별도 env 없음). Mantle us-east-1/us-east-2는 현재 미지원
-      // (404 not_found_error, 2026-09-09·2026-09-23 실측) — 2026-09-23 사용자 결정으로 제외, 채널
-      // 미등록. 정기 재확인 대상 아님, AWS가 지원을 발표하면 prober 스펙 튜플에 리전만 추가 (ADR-027).
+      // prober가 이 값에서 파생한다 (별도 env 없음). Mantle 인리전은 v2.38.0부터 us-east-1(2026-10-27 200 —
+      // 2026-09-09·09-23에는 404라 us-west-2였다, ADR-027, ADR-033).
       BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID: "openai.gpt-6-astra",
       // GPT-6 Sol/Luna (v2.27.0) — Mantle 인리전은 us-east-1만 서빙. us-east-2/us-west-2는 현재 미지원
       // (404, 2026-09-23 실측) — 2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님.
@@ -206,6 +207,9 @@ export class AppServicesStack extends cdk.Stack {
       // GPT-6.1 Sol (v2.32.0) — Mantle 인리전은 us-east-1만(us-east-2/us-west-2 404, 2026-09-30 — 제외).
       // Global/US 프로파일 id는 prober가 파생 (ADR-031).
       BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID: "openai.gpt-6.1-sol",
+      // GPT-6.1 Terra (v2.38.0) — 6.1 Sol과 같은 3채널(Global, US, Mantle us-east-1 — us-east-2/us-west-2 404,
+      // 2026-10-27). 프로파일 id는 prober가 파생 (ADR-033).
+      BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID: "openai.gpt-6.1-terra",
       // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.
       ...(ENABLE_OPENAI_1P ? {
         OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",

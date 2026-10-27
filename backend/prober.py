@@ -355,30 +355,30 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
     "us": ("us.", "US"),
 }
 
-# 모델별 가용 리전 — 모델이 모든 리전에 있는 건 아님(예: gpt-5.5/5.6-sol은 us-west-2 미제공 → 404).
-# (model-id env var, display family, 제공 리전 튜플)
+# 모델별 채널 리전 — (model-id env var, display family, 채널 리전 튜플).
 # "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
-# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30 라이브 200) — 5.x는 미검증이라 미기재.
-# GPT 6.1 Sol(2026-09-30)의 Mantle 인리전은 us-east-1만 — us-east-2/us-west-2 404 not_found_error → 제외(스펙 미기재).
-# us-east-1 첫 호출은 401 "subscription is being set up"(Marketplace 구독 자동 개시, 과도 상태).
+# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30, 6.1 Terra 2026-10-27
+# 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
-# GPT 6 Astra의 Mantle 인리전은 us-west-2만 서빙 — us-east-1/us-east-2는 현재 미지원
-# (404 not_found_error, 2026-09-09·2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재).
-# 정기 재확인 대상 아님 — AWS가 지원을 발표하면 아래 스펙 튜플에 리전만 추가하면 된다.
-# GPT 6 Sol/Luna(2026-09-22 출시)의 Mantle 인리전은 반대로 us-east-1만 서빙 — us-east-2/us-west-2는
-# 현재 미지원(404 not_found_error, 2026-09-23 실측) → 2026-09-23 사용자 결정으로 제외(스펙 미기재),
-# 정기 재확인 대상 아님. us-east-1 첫 호출은 401 "subscription is being set up"
-# (Marketplace 구독 자동 개시)이었다가 수 분 뒤 200.
+# Mantle 인리전은 모든 모델이 us-east-1 하나다 (v2.38.0, 2026-10-27 사용자 결정 "gpt mantle은 모두 us-east-1으로 변경").
+# 같은 날 us-east-1 Mantle이 10개 모델 모두 200 — GPT 6 Astra도 서빙한다(2026-09-09·09-23에는 404라 us-west-2였다).
+# 그 전에는 모델마다 리전이 달랐다: 5.4 us-east-1/us-east-2/us-west-2, 5.5와 5.6 Sol us-east-1/us-east-2,
+# 5.6 Terra와 5.6 Luna 세 리전, Astra us-west-2. 빠진 us-east-2, us-west-2 채널의 저장 행은 그대로 둔다.
+# OPENAI_US_EAST_2_BASE_URL, OPENAI_US_WEST_2_BASE_URL은 주입이 남아 있어 리전을 되살릴 때는 튜플에 리전만 더하면 된다.
+# GPT 6.1 Sol(2026-09-30)과 6.1 Terra(2026-10-27)는 us-east-2/us-west-2가 404 not_found_error였다.
+# 새 모델의 Mantle us-east-1 첫 호출은 401 "subscription is being set up"(Marketplace 구독 자동 개시, 과도 상태)이었다가
+# 수 분 뒤 200이다(GPT 6 Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30, 6.1 Terra 2026-10-27 — 약 2분).
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-west-2")),
+    ("BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", "GPT 6.1 Terra", ("global", "us", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", "GPT 6 Luna", ("global", "us", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1", "us-east-2")),
-    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1", "us-east-2", "us-west-2")),
-    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1", "us-east-2", "us-west-2")),
-    ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1", "us-east-2", "us-west-2")),
-    ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1", "us-east-2")),
+    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1",)),
+    ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1",)),
 ]
 
 # =====================================================================
@@ -484,7 +484,7 @@ def _openai_stop_reason(status: str | None, incomplete_reason: str | None) -> st
 def _register_openai_models() -> None:
     """OpenAI 채널 등록 — Bedrock Mantle(Path 4) + 1P direct(Path 5)를 독립적으로 gate.
 
-    Mantle: OPENAI_API_KEY(bearer) + _OPENAI_MODEL_SPECS(모델별 가용 리전, gpt-5.5는 us-west-2 미제공).
+    Mantle: OPENAI_API_KEY(bearer) + _OPENAI_MODEL_SPECS(모델별 채널 리전, Mantle 인리전은 us-east-1만 — v2.38.0).
     1P: OPENAI_1P_API_KEY(platform 키) + _OPENAI_1P_MODEL_SPECS(리전 없음, key "openai:1p:<native_id>").
     한쪽 키만 있어도 그쪽만 등록. 누락 시 조용히 skip (해당 채널만 미등록 — 나머지 정상).
     """

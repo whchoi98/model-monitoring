@@ -262,26 +262,30 @@ curl -i "https://$CF_DOMAIN/api/health"
 # 첫 자동 프로빙 결과 (5분 후).
 curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 
-# OpenAI (v2.32.0 기준) — 28개 채널 토큰 수 확인 (Mantle 인리전 17 + Global CRIS 7 + US CRIS 4).
+# OpenAI (v2.38.0 기준) — 23개 채널 토큰 수 확인 (Mantle 인리전 us-east-1 10 + Global CRIS 8 + US CRIS 5).
+#   v2.38.0부터 Mantle 인리전은 모든 모델이 us-east-1 하나다(사용자 결정 2026-10-27, ADR-033) — openai:us-east-2:, openai:us-west-2: 행은 없는 것이 정상.
 # Bedrock Mantle 엔드포인트가 stream_options.include_usage를 무시하면
 # input_tokens/output_tokens 가 0 으로 silent drop → TPS·비용도 0.
 # 1P direct 채널(openai:1p:*)은 v2.19.1부터 휴면(env 미주입 + visibility "(1P)" 필터) — 0행이 정상.
-# Global CRIS 7채널(openai:global:global.openai.gpt-5.6-*, gpt-6-*, gpt-6.1-sol)은 첫 success 확인 필수:
+# Global CRIS 8채널(openai:global:global.openai.gpt-5.6-*, gpt-6-*, gpt-6.1-sol, gpt-6.1-terra)은 첫 success 확인 필수:
 #   bedrock-runtime.ap-northeast-2 호스트는 BedrockRuntime interface VPC endpoint 경유라
 #   로컬 라이브 검증과 Fargate 내부의 네트워크 경로가 다름 (ADR-025).
-# US CRIS 4채널(openai:us:us.openai.gpt-6-*, gpt-6.1-sol)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
-#   미주입이면 prober가 조용히 skip해 28행이 24행이 된다 (ADR-027).
+# US CRIS 5채널(openai:us:us.openai.gpt-6-*, gpt-6.1-sol, gpt-6.1-terra)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
+#   미주입이면 prober가 조용히 skip해 23행이 18행이 된다 (ADR-027).
 # GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원(2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님),
 #   GPT-6 Sol/Luna Mantle us-east-2/us-west-2도 현재 미지원(404, 2026-09-23 사용자 결정으로 제외) — 그 채널은 없는 것이 정상 (ADR-027, ADR-028).
 #   Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가 빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지,
 #   CDK 양 스택 배포 (v2.27.0). GPT-6.1 Sol env(BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID)도 같다 — 빠지면 3채널이 조용히 사라진다 (v2.32.0).
 #   GPT-6.1 Sol Mantle us-east-2/us-west-2는 404라 제외 — 그 채널은 없는 것이 정상 (ADR-031).
+#   GPT-6.1 Terra env(BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID)도 같다 — 빠지면 3채널이 조용히 사라진다 (v2.38.0, ADR-033).
+#   v2.38.0부터 GPT-6 Astra의 Mantle 인리전은 us-east-1이다(2026-10-27 200, 위 2026-09-23 제외 결정은 그날까지의 기록).
 # v2.28.0부터 GPT-6 Sol/Luna 6채널도 비용이 표시된다(agreement offer rate card 단가 — Sol $2.20/$11, Global $2/$10,
 #   Luna $0.11/$0.55, Global $0.10/$0.50). /cost에서 이 6채널이 "-"면 이미지가 v2.28.0이 아니다(pricing 키 누락).
-# 첫 프로브 cycle 후 아래 명령으로 28행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
+# 첫 프로브 cycle 후 아래 명령으로 23행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
-# 기댓값: 28개 행 (Mantle 17 + Global 7 + US 4), status "success", input_tokens > 0, output_tokens > 0.
+# 기댓값: 23개 행 (Mantle us-east-1 10 + Global 8 + US 5), status "success", input_tokens > 0, output_tokens > 0.
+#   v2.32.0~v2.37.x는 28개 행(Mantle 17 + Global 7 + US 4)이었다.
 # CP(anthropic:*)는 11행(v2.33.0) — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
 #   "Anthropic Claude Opus 5.5 (US)", anthropic:claude-sonnet-5-5가 "Anthropic Claude Sonnet 5.5 (US)",
 #   anthropic:claude-sonnet-5가 "Anthropic Claude Sonnet 5 (US)", anthropic:claude-haiku-5-5가 "Anthropic Claude Haiku 5.5 (US)"인지 확인
@@ -804,6 +808,65 @@ curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version
 - AutoProber 사이클 소요(`/ecs/autoprober`)가 300초에 가까워지면(66채널) `CycleAlreadyRunning` 위험이 있으니 보고한다.
 - 오등록 확인(선택): `SELECT DISTINCT model_id, model_name FROM probe_results WHERE model_id LIKE 'anthropic:claude-haiku%'` — 두 id가 각자
   자기 라벨이면 정상이다.
+
+### 5-10. v2.38.0 배포 경로와 확인 (GPT-6.1 Terra, OpenAI Mantle 인리전 us-east-1 일원화)
+
+**배포 경로**: 새 env `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`가 있어 이미지-only 경로(§6)는 쓰지 않는다. backend 서비스와 스케줄 태스크 6개에
+env가 들어가도록 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다(§3 경고, jest가 두 스택의 env를 고정).
+IAM, DB 스키마 변경은 없다. backend 기동 seed가 GPT-6.1 Terra 3채널과 `openai-list:gpt-6.1-terra` 단가 행을 넣는다. 사용자 결정(2026-10-27)으로
+Mantle us-east-2, us-west-2 채널 8개는 더 이상 등록되지 않고, GPT 6 Astra 인리전은 us-east-1로 옮긴다. 빠진 채널의 저장 행과 `price_history` 행은
+그대로 둔다. 자세히는 ADR-033.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 카탈로그 — /status 61, /api/models 61
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count, channel_intervals}'
+curl -s "https://$CF_DOMAIN/api/models" | jq 'length'
+# 기댓값: expected_model_count 61, channel_intervals {"anthropic": 300}, 61
+
+# 2. OpenAI 23채널 — 첫 사이클(5분) 뒤. Mantle 인리전은 us-east-1만, GPT-6.1 Terra 3채널 success
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | startswith("openai:")) | .model_id | split(":")[1]] | group_by(.) | map({(.[0]): length}) | add'
+# 기댓값: {"global": 8, "us": 5, "us-east-1": 10} — us-east-2, us-west-2 키가 없어야 한다(빠진 채널 행은 15분 안에 /latest에서 사라진다)
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | test("gpt-6.1-terra|gpt-6-astra")) | {model_id, model_name, status}]'
+# 기댓값: 6행, status "success"
+#   openai:global:global.openai.gpt-6.1-terra   "OpenAI GPT 6.1 Terra (Global)"
+#   openai:us:us.openai.gpt-6.1-terra           "OpenAI GPT 6.1 Terra (US)"
+#   openai:us-east-1:openai.gpt-6.1-terra       "OpenAI GPT 6.1 Terra (us-east-1)"
+#   openai:us-east-1:openai.gpt-6-astra         "OpenAI GPT 6 Astra (us-east-1)"   (v2.37.x까지는 us-west-2)
+#   (Global, US Astra 2행 포함). Mantle us-east-1 첫 호출이 401 "subscription is being set up"이면 Marketplace 구독 개시 과도 상태다 —
+#   2026-10-27 스파이크에서 약 2분 뒤 200이 됐다(스파이크 계정에서 이미 개시됐으므로 운영 첫 사이클은 바로 200일 가능성이 높다).
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
+# 기댓값: {"anthropic": 11, "bedrock": 27, "openai": 23}
+
+# 3. GPT on AWS 벤치 — 배포 뒤 첫 15분 사이클
+aws logs tail /ecs/gptbench --since 20m --region $REGION | grep -E 'GPT bench (lanes|lane done|cycle)'
+# 기댓값: "cycle start: 19 channels x 10 runs", "GPT bench lanes: cris=11 mantle-us-east-1=8", "lane done" 두 줄,
+#   "cycle done: rows=190 errors=0 skipped=none"(GPT_BENCH_RUNS 10).
+#   직전 24시간(2026-10-26~27) 실측은 cris 9채널 p90 244초, mantle-us-east-1 6채널 p90 138초 — 두 갈래가 2채널씩 늘어도 780초 안이다.
+
+# 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'
+# 기댓값: "pricing_sync_runner: 71 active channels"(61 + OpenAI 공식 가격 10), 런 요약 pending=0, errors=0.
+#   GPT-6.1 Terra 오퍼는 긴 컨텍스트가 정상값이라 WARNING이 없다(GPT-6.1 Sol WARNING은 v2.32.0과 같이 정상).
+
+# 5. /api/pricing — families 23, models 61, references 25, GPT 6.1 Terra 셀, OpenAI In Region은 us-east-1만
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pending_review,
+  families: (.families | length), models: (.models | length), references: (.references | length),
+  terra61: (.families[] | select(.family_key == "gpt-6.1-terra") | {list: (.tiers.openai_list | {input, output}),
+    global: (.tiers.global | {input, output, long}), us: (.tiers.us | {input, output}), in_region: [.tiers.in_region[] | {regions, input, output}]}),
+  openai_regions: ([.families[] | select(.provider == "openai") | .tiers.in_region[].regions[]] | unique)}'
+# 기댓값: families 23, models 61, references 25(오퍼 22, Price List 1, Anthropic 1, OpenAI 1),
+#   terra61 list {1, 5}, global {1, 5, long {2, 7.5, 0.1, 2.5}}, us {1.1, 5.5}, in_region [{["us-east-1"], 1.1, 5.5}],
+#   openai_regions ["us-east-1"]
+```
+
+- 화면 확인: 대시보드 카드 61장(GPT 6.1 Terra 행이 6.1 Sol 바로 뒤, OpenAI 인리전 카드는 모두 `(us-east-1)`), `/gpt-on-aws` GPT 6.x 세대 다섯 열
+  (6.1 Sol, 6.1 Terra, Astra, Sol, Luna — 1799px까지 3 + 2 두 줄, 1800px부터 한 줄), 벤치 범례 19개(배포 뒤 7일 동안은 지난 us-east-2, us-west-2 선도
+  보인다), `/pricing` OpenAI 표의 GPT 6.1 Terra 행(셋째 줄 긴 컨텍스트), 추이 차트의 GPT 6.1 Terra 보라 3색과 GPT 6 Astra (us-east-1) 세룰리안.
+- 빠진 채널의 지난 측정은 신뢰성(7일), 비용(30일), 벤치 추세(7일)에 기간이 지날 때까지 남는다. 바로 숨기려면 코드 수정 없이
+  `HIDDEN_MODEL_PATTERNS="(1P),(us-east-2),(us-west-2)"`를 backend와 스케줄 태스크에 주입한다(v2.38.0에서는 적용하지 않음).
+- 롤백 지점은 v2.37.1(`v705c6ea`)이다. 되돌리면 us-east-2, us-west-2 채널과 Astra us-west-2가 다시 등록되고 6.1 Terra 3채널은 조용히 빠진다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 

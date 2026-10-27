@@ -22,8 +22,8 @@ PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 
 FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
     "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Sonnet 4.6",
-    "Claude Haiku 5.5", "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol",
-    "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5", "GPT 5.4",
+    "Claude Haiku 5.5", "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol",
+    "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5", "GPT 5.4",
 )
 
 
@@ -72,7 +72,7 @@ NOVA_CACHE_USAGETYPES: dict[str, tuple[str, str]] = {
 _PRICELIST_MODEL_IDS = {"us.amazon.nova-2-lite-v1:0": ("nova-2-lite", "Nova 2.0 Lite", "us")}
 # OpenAI offer FM id(= Mantle in-region id) → (family_key, family)
 _OPENAI_FM: dict[str, tuple[str, str]] = {
-    "openai.gpt-6.1-sol": ("gpt-6.1-sol", "GPT 6.1 Sol"),
+    "openai.gpt-6.1-sol": ("gpt-6.1-sol", "GPT 6.1 Sol"), "openai.gpt-6.1-terra": ("gpt-6.1-terra", "GPT 6.1 Terra"),
     "openai.gpt-6-astra": ("gpt-6-astra", "GPT 6 Astra"), "openai.gpt-6-sol": ("gpt-6-sol", "GPT 6 Sol"),
     "openai.gpt-6-luna": ("gpt-6-luna", "GPT 6 Luna"), "openai.gpt-5.6-sol": ("gpt-5.6-sol", "GPT 5.6 Sol"),
     "openai.gpt-5.6-terra": ("gpt-5.6-terra", "GPT 5.6 Terra"), "openai.gpt-5.6-luna": ("gpt-5.6-luna", "GPT 5.6 Luna"),

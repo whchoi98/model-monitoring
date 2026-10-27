@@ -322,11 +322,12 @@ ORDER BY l.granted DESC, xact_age DESC;
 
 ## 비용 단가 동기화 실패 — "자동 확인 안 됨" 배지 (v2.30.0, ADR-030)
 
-**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 4개에서 활성 66채널(v2.33.0)과 OpenAI 공식
-가격 9채널(표시 전용 `openai-list:<family_key>`, v2.31.0)의 단가(입력, 출력, 캐시, 긴 컨텍스트)를 읽는다. Bedrock agreement offer rate
-card(Bedrock Claude 23 + OpenAI 28, FM 20개를 순차 호출, 서울 in-region 2채널은 `APN2_*_standard`, v2.32.0), AWS Price List API(Nova 2.0 Lite), Anthropic
-`https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS 10), OpenAI
-`https://developers.openai.com/api/docs/pricing.md`(OpenAI 공식 가격 9)다. 공식 값을 구하지 못한 채널은
+**배경**: PricingSync 태스크(`python -m pricing_sync_runner --once`, `rate(12 hours)`)가 공식 출처 4개에서 활성 61채널(v2.38.0)과 OpenAI 공식
+가격 10채널(표시 전용 `openai-list:<family_key>`, v2.31.0)의 단가(입력, 출력, 캐시, 긴 컨텍스트)를 읽는다. Bedrock agreement offer rate
+card(Bedrock Claude 26 + OpenAI 23, FM 22개를 순차 호출 — v2.38.0, 서울 in-region 2채널은 `APN2_*_standard`, v2.32.0), AWS Price List API(Nova 2.0 Lite), Anthropic
+`https://platform.claude.com/docs/en/about-claude/pricing.md`(Claude Platform on AWS 11), OpenAI
+`https://developers.openai.com/api/docs/pricing.md`(OpenAI 공식 가격 10)다. 2026-10-27 확인으로 OpenAI 문서 Standard 표의 "cache writes" 열이
+"30m write"와 "12h write"로 바뀌어 OpenAI 공식 가격의 캐시 쓰기 두 필드는 동기화가 읽지 못한다(None 관측은 변경이 아니라 seed 값이 남는다, ADR-033 후속). 공식 값을 구하지 못한 채널은
 기존 단가를 그대로 두고(`skipped:<reason>`) 화면에 "자동 확인 안 됨"으로 드러난다. 비용 계산은 멈추지 않는다 — 마지막 유효 단가를
 계속 쓴다.
 
@@ -377,7 +378,7 @@ done
 | 5분 상한 초과 | 런 `partial`, 채널 결과 `skipped:deadline`, 로그에 `pricing sync: deadline: 300s exceeded before <출처> <호출>` 경고 한 줄(예: `before offers openai.gpt-5.6-sol`). 적힌 호출은 상한을 넘긴 뒤 처음 건너뛴 호출이고, 호출 순서가 Anthropic 문서 → OpenAI 문서(v2.31.0) → Price List → 오퍼(FM id 사전순)라 그 호출과 뒤의 호출이 모두 `skipped:deadline`이다 | 대개 출처 응답 지연이다. 다음 런에서 회복하는지 본다. 상한은 호출 직전에만 검사한다. 재시도된 호출은 `retry n/3` 경고를 남기지만, 재시도 없이 느리게 성공한 호출(시도 1회에 연결 10초, 읽기 대기 30초 상한)은 로그를 남기지 않고 호출별 소요 시간도 기록하지 않는다. 그래서 반복되는데 재시도 경고가 없으면 특정 출처가 아니라 호출들이 고르게 느린 것이다. 태스크의 외부 경로(NAT 게이트웨이 경유 us-east-1, `platform.claude.com`, `developers.openai.com`)를 확인한다 |
 | 다른 런이 실행 중 | 로그에 잠금을 못 잡아 종료했다는 한 줄(`lock 917350004 held by another sync`), 새 런 행 없음, exit code 1 | 정상이다(`pg_try_advisory_lock(917350004)`로 수동 실행과 스케줄 실행이 겹치지 않게 한다. 기다리지 않는 잠금이라 두 번째 런은 즉시 끝난다). 앞 런이 끝난 뒤 다시 실행한다 |
 | seed 또는 테이블 준비 실패 | 로그에 `pricing_sync_runner: create_tables failed`, `pricing_sync_runner: ensure_price_columns failed`(v2.31.0, 위 "단가 열 마이그레이션 실패"), `pricing_sync_runner: ensure_seed failed — sync skipped` 중 하나와 예외 traceback 한 묶음, 런 요약 줄 없음, 새 런 행 없음(`last_sync`가 그대로), exit code 1 | 동기화 전에 멈춘 것이다. 먼저 DB 연결(RDS 상태, 태스크 보안 그룹, DB secret)을 확인한다. `ensure_seed` 예외가 `canceling statement due to lock timeout`이면 seed 잠금 `pg_advisory_xact_lock(917350003)`을 5초(`lock_timeout`) 안에 못 잡은 것이다. 같은 잠금을 쓰는 backend 기동 seed와 겹쳤으면 backend 배포가 끝난 뒤 다시 실행한다. 반복되면 잠금을 쥔 세션을 찾는다(`SELECT a.pid, a.state, a.xact_start, a.query FROM pg_locks l JOIN pg_stat_activity a USING (pid) WHERE l.locktype = 'advisory' AND l.objid = 917350003`). `canceling statement due to statement timeout`이면 30초 안에 끝나지 않은 느린 쿼리다 |
-| CP 디스커버리 실패 | CP 11셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 64 active channels`(평소 75 = 66 + OpenAI 공식 가격 9, v2.33.0. v2.32.x에서는 61과 71, v2.31.x에서는 54와 63, v2.30.0에서는 46과 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
+| CP 디스커버리 실패 | CP 11셀만 `stale`, 런 `partial`. 로그에 `pricing_sync_runner: 60 active channels`(평소 71 = 61 + OpenAI 공식 가격 10, v2.38.0. v2.33.0에서는 64와 75, v2.32.x에서는 61과 71, v2.31.x에서는 54와 63, v2.30.0에서는 46과 55)와 경고 `pricing sync: anthropic_doc: no active channels`가 있고, 그 앞에 prober의 `Failed to discover CP on AWS models`(예외 traceback) 또는 `ANTHROPIC_API_KEY or ANTHROPIC_WORKSPACE_ID not set - skipping CP on AWS models`가 있다. 등록 함수가 예외를 밖으로 던지면(CP, OpenAI 공통) `pricing_sync_runner: model registration failed (non-fatal)`이다. 일부 CP 모델만 빠지면 모델마다 `CP on AWS model substring '<substring>' not found in /v1/models` 경고가 찍히고 그 셀만 `stale`이며, 남은 CP 채널이 있으니 `no active channels`는 없고 런은 `completed`일 수 있다 | Claude Platform on AWS `/v1/models` 호출이 실패한 것이다(키, workspace, 조직 상태). 표는 최근 30일에 관측된 CP model_id로 계속 채워진다 |
 
 ### 조치
 
@@ -594,15 +595,16 @@ aws ecs stop-task --cluster bedrock-monitor --task <taskArn> --region $REGION \
   신뢰성 화면(`network` 버킷)에 오류로 보이는 것이 의도한 동작이다. 상한 조정이 필요하면 `PROBE_WALL_CLOCK_S`
   env를 바꾼다(모델별 사이클 타임아웃은 max(120초, 상한 + 30초)로 따라간다).
 
-## GPT on AWS 벤치 카드 누락 — `skipped=`, 갈래 정지 (v2.32.1 호스트별 네 갈래)
+## GPT on AWS 벤치 카드 누락 — `skipped=`, 갈래 정지 (v2.32.1 호스트별 갈래, v2.38.0부터 두 갈래)
 
-**배경**: GptBench 태스크(`python -m gptbench_runner --once`, `rate(15 minutes)`)가 GPT 21채널(Mantle 인리전 12 + CRIS 9)을
-호스트별 갈래로 동시에 측정한다(ADR-031). `cris` 갈래는 Global, US CRIS 9채널(Bedrock Runtime OpenAI 호환 호스트)이고, 인리전
-채널은 Mantle 리전(`bedrock-mantle.<region>`)마다 한 갈래 `mantle-<region>`이다. 지금은 `mantle-us-east-1` 6, `mantle-us-east-2` 3,
-`mantle-us-west-2` 3채널이고, 새 Mantle 리전은 코드 수정 없이 자기 갈래를 얻는다. 갈래 안에서는 채널을 `_BENCH_SPECS` 순서대로
+**배경**: GptBench 태스크(`python -m gptbench_runner --once`, `rate(15 minutes)`)가 GPT 19채널(Mantle 인리전 us-east-1 8 + CRIS 11)을
+호스트별 갈래로 동시에 측정한다(ADR-031, ADR-033). `cris` 갈래는 Global, US CRIS 11채널(Bedrock Runtime OpenAI 호환 호스트)이고, 인리전
+채널은 Mantle 리전(`bedrock-mantle.<region>`)마다 한 갈래 `mantle-<region>`이다. v2.38.0부터 Mantle 인리전이 us-east-1 하나라
+`mantle-us-east-1` 8채널 한 갈래다(v2.32.1~v2.37.x는 `mantle-us-east-1` 6, `mantle-us-east-2` 3, `mantle-us-west-2` 3). 새 Mantle 리전이나
+되살린 리전은 코드 수정 없이 자기 갈래를 얻는다. 갈래 안에서는 채널을 `_BENCH_SPECS` 순서대로
 하나씩 측정한다(워밍업 1 + `GPT_BENCH_RUNS` 10회, 같은 호스트 호출은 겹치지 않는다). 사이클 데드라인 `GPT_BENCH_DEADLINE`(780초)은
-모든 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만 건너뛴다(GPT 6.1 Sol은 `cris`와 `mantle-us-east-1` 갈래의 끝이라 그
-갈래의 컷이 신규 채널부터 떨어진다). 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(기본 885초)가 지나도 끝나지 않는 갈래는
+모든 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만 건너뛴다(v2.38.0부터 GPT 6.1 Terra가 `cris`와 `mantle-us-east-1` 갈래의 끝이라 그
+갈래의 컷이 신규 채널부터 떨어진다. v2.32.0~v2.37.x는 GPT 6.1 Sol이 끝). 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(기본 885초)가 지나도 끝나지 않는 갈래는
 기다리지 않는다. 이미 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`, 시작하지 못한 채널은
 `라벨`로 skip에 보고한다. DB 저장은 메인 스레드가 채널 단위로 한다.
 
@@ -610,10 +612,12 @@ aws ecs stop-task --cluster bedrock-monitor --task <taskArn> --region $REGION \
 9사이클이 끝 채널을 건너뛰었다. v2.32.0은 `cris` 9, `mantle` 12 두 갈래였다. 배포 뒤 GPT 5.4 (us-east-2)가 업스트림 저하로 느려지자
 (TTFT 중앙값 34초, 11호출 합계 427초, 527초) `mantle` 갈래가 783초, 802초로 데드라인을 넘겨 us-east-1 끝 채널(GPT 6 Sol, GPT 6 Luna,
 GPT 6.1 Sol)이 잘렸다(210행 중 205행, 181행). 그래서 v2.32.1에서 사용자 결정(2026-09-30)으로 Mantle을 리전별 갈래로 나눴다.
+v2.38.0(2026-10-27 사용자 결정)에서 Mantle 인리전을 us-east-1로 모아 갈래가 둘이 됐다. 직전 24시간 실측은 `cris` 9채널 p90 244초,
+`mantle-us-east-1` 6채널 p90 138초였다.
 
 ### 증상
 
-- `/gpt-on-aws`에 카드가 21장보다 적거나 특정 채널 카드만 오래된 값이다. `/api/gptbench/latest`는 시작 후 14분이 지난 사이클만
+- `/gpt-on-aws`에 카드가 19장(v2.38.0, 그 전에는 21장)보다 적거나 특정 채널 카드만 오래된 값이다. `/api/gptbench/latest`는 시작 후 14분이 지난 사이클만
   완료로 보므로(`_CYCLE_COMPLETE_AFTER`) 진행 중에는 직전 사이클을 돌려준다 — 배포 직후 18장은 옛 사이클이다.
 - 로그 `GPT bench cycle done: … skipped=[…]`에 채널 라벨(채널 전체를 건너뜀) 또는 `라벨 (run N+)`(도중부터 건너뜀)이 찍힌다.
 
@@ -626,17 +630,18 @@ aws logs tail /ecs/gptbench --since 2h --region $REGION \
   | grep -E "cycle start|GPT bench lanes|lane done|cycle done|did not finish|lane .* stopped|WallClockTimeout|deadline exceeded"
 ```
 
-- 정상: `GPT bench lanes: cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3`, 갈래마다
-  `GPT bench lane done: <lane> channels=N elapsed=Ns` 한 줄(네 줄), 끝에 `GPT bench cycle done: rows=210 errors=0 skipped=none elapsed=…s`.
-  채널별 실측 기준 `lane done` elapsed는 `mantle-us-east-1` 약 240초, `mantle-us-east-2` 약 590초(느린 GPT 5.4 포함),
-  `mantle-us-west-2` 약 80초이고, `cris`는 v2.32.0 실측 409초, 443초다. 사이클 elapsed는 가장 느린 갈래가 정한다.
+- 정상(v2.38.0): `GPT bench lanes: cris=11 mantle-us-east-1=8`, 갈래마다 `GPT bench lane done: <lane> channels=N elapsed=Ns` 한 줄(두 줄),
+  끝에 `GPT bench cycle done: rows=190 errors=0 skipped=none elapsed=…s`. 직전 실측으로 추정한 elapsed는 `cris` 약 300초, `mantle-us-east-1`
+  약 185초다(2026-10-26~27, 9채널 p90 244초, 6채널 p90 138초에서 채널당 시간으로 늘림). 사이클 elapsed는 가장 느린 갈래가 정한다.
+  v2.32.1~v2.37.x의 정상은 `cris=9 mantle-us-east-1=6 mantle-us-east-2=3 mantle-us-west-2=3`, 네 줄, rows=210이었다(채널별 실측 기준
+  `mantle-us-east-1` 약 240초, `mantle-us-east-2` 약 590초 — 느린 GPT 5.4 포함, `mantle-us-west-2` 약 80초, `cris`는 v2.32.0 실측 409초, 443초).
 - **느린 호스트 하나 찾기**: 한 갈래의 `lane done` elapsed만 780초 가까이 가고 다른 갈래는 일찍 끝나면 그 갈래의 호스트(리전) 하나가
-  느린 것이다. `skipped=`에는 그 갈래의 뒤 채널만 찍힌다(예: `mantle-us-east-2`면 GPT 5.5, GPT 5.6 Terra의 us-east-2). 어느 채널이
+  느린 것이다. `skipped=`에는 그 갈래의 뒤 채널만 찍힌다(예: v2.37.x의 `mantle-us-east-2`면 GPT 5.5, GPT 5.6 Terra의 us-east-2). 어느 채널이
   느린지는 그 리전 채널의 TTFT로 본다.
 
   ```bash
   curl -s https://d36s7ml54xwemr.cloudfront.net/api/gptbench/latest \
-    | jq -r '.channels[] | select(.region=="us-east-2") | "\(.model_name) ttft=\(.median_ttft_ms) p95=\(.p95_ttft_ms)"'
+    | jq -r '.channels[] | select(.region=="us-east-1") | "\(.model_name) ttft=\(.median_ttft_ms) p95=\(.p95_ttft_ms)"'
   ```
 
   2026-09-30 사례는 GPT 5.4 (us-east-2) TTFT 중앙값 34초였다.

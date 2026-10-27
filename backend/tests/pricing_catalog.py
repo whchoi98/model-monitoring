@@ -1,6 +1,7 @@
-"""pricing 테스트 공용 데이터 — 활성 66채널: 운영 /api/models(2026-09-26) 55채널 (v2.30.0) + v2.32.0 Claude Sonnet 5.5
+"""pricing 테스트 공용 데이터 — 활성 61채널: 운영 /api/models(2026-09-26) 55채널 (v2.30.0) + v2.32.0 Claude Sonnet 5.5
 (Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5 + v2.33.0 Claude Haiku 5.5
-(Global, US, CP), Claude Sonnet 5.5 US. 수집 대상 아님."""
+(Global, US, CP), Claude Sonnet 5.5 US + v2.38.0 GPT 6.1 Terra (Global, US, us-east-1), OpenAI Mantle 인리전 us-east-1 일원화
+(us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1). 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
@@ -25,16 +26,17 @@ _CP_IDS = {
     "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-sonnet-4-6": "claude-sonnet-4-6",
     "claude-haiku-5-5": "claude-haiku-5-5", "claude-haiku-4-5": "claude-haiku-4-5-20251001",
 }
-_OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전
+_OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전(Mantle 인리전 us-east-1만, v2.38.0)
     ("openai.gpt-6.1-sol", "gpt-6.1-sol", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
-    ("openai.gpt-6-astra", "gpt-6-astra", "GPT 6 Astra", ("global", "us", "us-west-2")),
+    ("openai.gpt-6.1-terra", "gpt-6.1-terra", "GPT 6.1 Terra", ("global", "us", "us-east-1")),
+    ("openai.gpt-6-astra", "gpt-6-astra", "GPT 6 Astra", ("global", "us", "us-east-1")),
     ("openai.gpt-6-sol", "gpt-6-sol", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("openai.gpt-6-luna", "gpt-6-luna", "GPT 6 Luna", ("global", "us", "us-east-1")),
-    ("openai.gpt-5.6-sol", "gpt-5.6-sol", "GPT 5.6 Sol", ("global", "us-east-1", "us-east-2")),
-    ("openai.gpt-5.6-terra", "gpt-5.6-terra", "GPT 5.6 Terra", ("global", "us-east-1", "us-east-2", "us-west-2")),
-    ("openai.gpt-5.6-luna", "gpt-5.6-luna", "GPT 5.6 Luna", ("global", "us-east-1", "us-east-2", "us-west-2")),
-    ("openai.gpt-5.5", "gpt-5.5", "GPT 5.5", ("us-east-1", "us-east-2")),
-    ("openai.gpt-5.4", "gpt-5.4", "GPT 5.4", ("us-east-1", "us-east-2", "us-west-2")),
+    ("openai.gpt-5.6-sol", "gpt-5.6-sol", "GPT 5.6 Sol", ("global", "us-east-1")),
+    ("openai.gpt-5.6-terra", "gpt-5.6-terra", "GPT 5.6 Terra", ("global", "us-east-1")),
+    ("openai.gpt-5.6-luna", "gpt-5.6-luna", "GPT 5.6 Luna", ("global", "us-east-1")),
+    ("openai.gpt-5.5", "gpt-5.5", "GPT 5.5", ("us-east-1",)),
+    ("openai.gpt-5.4", "gpt-5.4", "GPT 5.4", ("us-east-1",)),
 ]
 
 

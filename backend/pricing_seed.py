@@ -13,6 +13,10 @@ v2.33.0: 2026-10-07 오퍼와 문서로 4채널을 더했다 — Claude Haiku 5.
 생겼다). Haiku 5.5는 100K 토큰 초과 프롬프트 단가를 긴 컨텍스트 4필드로 둔다(Claude 중 유일, pricing_sources.CLAUDE_LONG_CONTEXT_FAMILIES).
 같은 날 Sonnet 5.5 Bedrock 캐시 읽기가 0.2 → 0.1(US 0.22 → 0.11)로 내렸다. CP는 Anthropic 문서 표가 아직 0.2라 그대로 둔다
 (pricing_sources.PRICE_NOTES 문서 불일치 메모). 활성 66채널, offer FM 21개, openai-list 9개, 합계 75채널.
+v2.38.0: 2026-10-27 오퍼와 문서로 GPT 6.1 Terra 3채널(Global, US, us-east-1)과 openai-list:gpt-6.1-terra를 더했고, 같은 날
+사용자 결정으로 OpenAI Mantle 인리전을 us-east-1 하나로 모았다 — us-east-2, us-west-2 채널 8개가 빠지고 GPT 6 Astra의
+인리전 채널은 us-west-2에서 us-east-1로 옮겼다. 활성 61채널, offer FM 22개, openai-list 10개, 합계 71채널.
+빠진 채널의 price_history 행은 그대로 둔다(그 채널의 과거 비용 계산에 쓰인다).
 """
 
 import logging
@@ -37,6 +41,7 @@ SEED_SOURCE_DATES: dict[str, date] = {
     offer_source_id("offer-5fu2rhus3byrs"): date(2026, 9, 30),  # Claude Sonnet 5.5
     offer_source_id("offer-wbhj4kycntgkk"): date(2026, 9, 30),  # GPT 6.1 Sol
     offer_source_id("offer-u3aih6zr7uw5u"): date(2026, 10, 7),  # Claude Haiku 5.5 (v2.33.0)
+    offer_source_id("offer-34pzbdgg26ley"): date(2026, 10, 27),  # GPT 6.1 Terra (v2.38.0)
 }
 # backend 태스크 기동과 PricingSync 러너가 겹쳐도 같은 model_id를 두 번 seed하지 않는다(트랜잭션 잠금).
 # 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
@@ -64,16 +69,18 @@ _CLAUDE: dict[str, tuple[str, float, float, float, float, tuple[str, ...]]] = {
     "anthropic.claude-haiku-4-5-20251001-v1:0": ("offer-fudwqbphlos64", 1.0, 5.0, 1.1, 5.5, ("global", "us")),
 }
 # OpenAI FM id → (offerId, US CRIS와 in-region in, out, Global in, out, 채널 리전)
+# 채널 리전은 prober._OPENAI_MODEL_SPECS와 같다 — Mantle 인리전은 us-east-1만(v2.38.0, tests가 고정).
 _OPENAI: dict[str, tuple[str, float, float, float | None, float | None, tuple[str, ...]]] = {
     "openai.gpt-6.1-sol": ("offer-wbhj4kycntgkk", 2.2, 11.0, 2.0, 10.0, ("global", "us", "us-east-1")),
-    "openai.gpt-6-astra": ("offer-7epta7rbw5aws", 11.0, 55.0, 10.0, 50.0, ("global", "us", "us-west-2")),
+    "openai.gpt-6.1-terra": ("offer-34pzbdgg26ley", 1.1, 5.5, 1.0, 5.0, ("global", "us", "us-east-1")),  # v2.38.0
+    "openai.gpt-6-astra": ("offer-7epta7rbw5aws", 11.0, 55.0, 10.0, 50.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-sol": ("offer-pycji3sz5gpcc", 2.2, 11.0, 2.0, 10.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-luna": ("offer-gmo53nkzc5or6", 0.11, 0.55, 0.1, 0.5, ("global", "us", "us-east-1")),
-    "openai.gpt-5.6-sol": ("offer-gnqokrqqvdbgw", 4.4, 22.0, 4.0, 20.0, ("global", "us-east-1", "us-east-2")),
-    "openai.gpt-5.6-terra": ("offer-3dvyrx3okd4lq", 2.2, 13.2, 2.0, 12.0, ("global", "us-east-1", "us-east-2", "us-west-2")),
-    "openai.gpt-5.6-luna": ("offer-bklbyf2ewuawu", 0.22, 1.32, 0.2, 1.2, ("global", "us-east-1", "us-east-2", "us-west-2")),
-    "openai.gpt-5.5": ("offer-rtwlbb46hcxpw", 5.5, 33.0, None, None, ("us-east-1", "us-east-2")),
-    "openai.gpt-5.4": ("offer-5l5a5izq5fbec", 2.75, 16.5, None, None, ("us-east-1", "us-east-2", "us-west-2")),
+    "openai.gpt-5.6-sol": ("offer-gnqokrqqvdbgw", 4.4, 22.0, 4.0, 20.0, ("global", "us-east-1")),
+    "openai.gpt-5.6-terra": ("offer-3dvyrx3okd4lq", 2.2, 13.2, 2.0, 12.0, ("global", "us-east-1")),
+    "openai.gpt-5.6-luna": ("offer-bklbyf2ewuawu", 0.22, 1.32, 0.2, 1.2, ("global", "us-east-1")),
+    "openai.gpt-5.5": ("offer-rtwlbb46hcxpw", 5.5, 33.0, None, None, ("us-east-1",)),
+    "openai.gpt-5.4": ("offer-5l5a5izq5fbec", 2.75, 16.5, None, None, ("us-east-1",)),
 }
 
 
@@ -90,7 +97,7 @@ def _openai_seed(fm: str, region: str, spec: tuple) -> tuple[str, tuple[float, f
     return mid, (r_in, r_out, src)
 
 
-# model_id → (input, output, source_id) — CP를 뺀 활성 55채널
+# model_id → (input, output, source_id) — CP를 뺀 활성 50채널(v2.38.0)
 SEED: dict[str, tuple[float, float, str]] = {
     **{_claude_channel_id(fm, ch): ((g_in, g_out) if ch == "global" else (r_in, r_out)) + (offer_source_id(o),)
        for fm, (o, g_in, g_out, r_in, r_out, channels) in _CLAUDE.items() for ch in channels},
@@ -114,7 +121,8 @@ CP_SEED: dict[str, tuple[float, float, str]] = {
 OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
     fk: (i, o, OPENAI_SOURCE_ID)
     for fk, i, o in (
-        ("gpt-6.1-sol", 2.0, 10.0), ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0), ("gpt-6-luna", 0.1, 0.5),
+        ("gpt-6.1-sol", 2.0, 10.0), ("gpt-6.1-terra", 1.0, 5.0), ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0),
+        ("gpt-6-luna", 0.1, 0.5),
         ("gpt-5.6-sol", 4.0, 20.0), ("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2),
         ("gpt-5.5", 5.0, 30.0), ("gpt-5.4", 2.5, 15.0),
     )
@@ -165,6 +173,8 @@ _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
     # GPT 6.1 Sol: 2026-09-30 오퍼의 긴 컨텍스트 출력(2.2 / 2)이 짧은 컨텍스트 출력보다 낮다 — 동기화가 긴 컨텍스트
     # 단가를 버리므로(pricing_sync._plausible_long) seed도 None으로 둔다(None은 동기화가 채울 수 있다)
     "openai.gpt-6.1-sol": ((0.11, 2.75, None, None, None, None), (0.1, 2.5, None, None, None, None)),
+    # GPT 6.1 Terra: 2026-10-27 오퍼(offer-34pzbdgg26ley) — 긴 컨텍스트 출력 8.25 / 7.5가 짧은 컨텍스트(5.5 / 5)보다 높아 정상값
+    "openai.gpt-6.1-terra": ((0.055, 1.375, 2.2, 8.25, 0.11, 2.75), (0.05, 1.25, 2.0, 7.5, 0.1, 2.5)),
     "openai.gpt-6-astra": ((1.1, 13.75, 22.0, 82.5, 2.2, 27.5), (1.0, 12.5, 20.0, 75.0, 2.0, 25.0)),
     "openai.gpt-6-sol": ((0.22, 2.75, 4.4, 16.5, 0.44, 5.5), (0.2, 2.5, 4.0, 15.0, 0.4, 5.0)),
     "openai.gpt-6-luna": ((0.011, 0.1375, 0.22, 0.825, 0.022, 0.275), (0.01, 0.125, 0.2, 0.75, 0.02, 0.25)),
@@ -177,6 +187,7 @@ _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
 # OpenAI 공식 가격(openai-list:<family_key>) — OpenAI 문서 "### Standard pricing data" 첫 표, _GPT_FIELDS 순서
 _OPENAI_LIST_EXTRA: dict[str, tuple] = {
     "gpt-6.1-sol": (0.1, 2.5, 4.0, 15.0, 0.2, 5.0),
+    "gpt-6.1-terra": (0.05, 1.25, 2.0, 7.5, 0.1, 2.5),  # v2.38.0, 2026-10-27 문서
     "gpt-6-astra": (1.0, 12.5, 20.0, 75.0, 2.0, 25.0),
     "gpt-6-sol": (0.2, 2.5, 4.0, 15.0, 0.4, 5.0),
     "gpt-6-luna": (0.01, 0.125, 0.2, 0.75, 0.02, 0.25),

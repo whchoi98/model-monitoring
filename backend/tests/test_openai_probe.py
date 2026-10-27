@@ -84,6 +84,7 @@ def _isolate_ambient_openai_env(monkeypatch):
         "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID",
         "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID",
         "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID",
+        "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID",
     ):
         monkeypatch.delenv(env, raising=False)
 
@@ -100,16 +101,17 @@ def test_register_openai_models_per_region_availability(monkeypatch):
     monkeypatch.setenv("BEDROCK_OPENAI_GPT_55_MODEL_ID", "openai.gpt-5.5")
     prober._register_openai_models()
     openai_keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
-    # gpt-5.4 in e1/e2/w2 (3) + gpt-5.5 in e1/e2 (2) = 5; gpt-5.5 NOT in us-west-2.
+    # v2.38.0 (2026-10-27 user decision): Mantle in-region is us-east-1 only — the us-east-2 and us-west-2 base URLs
+    # are still injected, yet no spec names those regions, so neither model registers there.
     assert openai_keys == [
         "openai:us-east-1:openai.gpt-5.4",
         "openai:us-east-1:openai.gpt-5.5",
-        "openai:us-east-2:openai.gpt-5.4",
-        "openai:us-east-2:openai.gpt-5.5",
-        "openai:us-west-2:openai.gpt-5.4",
     ]
-    assert prober.AVAILABLE_MODELS["openai:us-west-2:openai.gpt-5.4"] == "OpenAI GPT 5.4 (us-west-2)"
-    assert "openai:us-west-2:openai.gpt-5.5" not in prober.AVAILABLE_MODELS
+    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-5.4"] == "OpenAI GPT 5.4 (us-east-1)"
+    in_region = {r for _, _, regions in prober._OPENAI_MODEL_SPECS for r in regions
+                 if r not in prober._OPENAI_PSEUDO_REGIONS}
+    assert in_region == {"us-east-1"}
+    assert all("us-east-1" in regions for _, _, regions in prober._OPENAI_MODEL_SPECS)  # every family keeps one
 
 
 def test_register_openai_models_global_not_for_54_55(monkeypatch):
@@ -140,12 +142,11 @@ def test_register_openai_models_global_not_for_54_55(monkeypatch):
 
 
 def test_register_gpt6_astra_three_channels(monkeypatch):
-    """GPT 6 Astra = Global CRIS + US CRIS + Mantle 인리전 us-west-2, 정확히 3채널 (v2.25.0).
+    """GPT 6 Astra = Global CRIS + US CRIS + Mantle 인리전 us-east-1, 정확히 3채널 (v2.25.0, 인리전 v2.38.0).
 
-    us-east-1, us-east-2는 현재 미지원(404 not_found_error, 2026-09-09·2026-09-23 실측) —
-    2026-09-23 사용자 결정으로 제외돼 스펙에 없다(정기 재확인 대상 아님, AWS가 지원을 발표하면
-    스펙 튜플에 리전만 추가). base_url env가 있어도 등록되지 않아야 한다(스펙 리전이 404면 매
-    프로브가 error 행).
+    v2.25.0~v2.37.x는 Mantle 인리전이 us-west-2였다(us-east-1, us-east-2는 2026-09-09·09-23 404). 2026-10-27
+    us-east-1이 200이고 같은 날 사용자 결정으로 Mantle 인리전을 us-east-1로 모았다. us-east-2, us-west-2 base_url env가
+    있어도 등록되지 않아야 한다.
     """
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
@@ -163,13 +164,13 @@ def test_register_gpt6_astra_three_channels(monkeypatch):
     keys = sorted(k for k in prober.AVAILABLE_MODELS if "gpt-6-astra" in k)
     assert keys == [
         "openai:global:global.openai.gpt-6-astra",
-        "openai:us-west-2:openai.gpt-6-astra",
+        "openai:us-east-1:openai.gpt-6-astra",
         "openai:us:us.openai.gpt-6-astra",
     ]
     # 라벨은 DB model_name에 영구 기록 — frontend MODEL_COLORS와 정확히 일치해야 함.
     assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-6-astra"] == "OpenAI GPT 6 Astra (Global)"
     assert prober.AVAILABLE_MODELS["openai:us:us.openai.gpt-6-astra"] == "OpenAI GPT 6 Astra (US)"
-    assert prober.AVAILABLE_MODELS["openai:us-west-2:openai.gpt-6-astra"] == "OpenAI GPT 6 Astra (us-west-2)"
+    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-6-astra"] == "OpenAI GPT 6 Astra (us-east-1)"
 
 
 def test_register_openai_models_skips_without_key(monkeypatch):

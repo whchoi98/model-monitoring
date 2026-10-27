@@ -4,6 +4,8 @@
 was effective at each probe's timestamp from price_history. The equivalence test pins the new calculation
 to a frozen copy of the v2.29.1 table (tests/_legacy_pricing_v2291.py) on the 44 channels whose price did
 not change, and pins the 11 corrected channels (Bedrock Claude US x1.1, Nova 2.0 Lite) to official values.
+Since v2.38.0 nine of the 44 (OpenAI Mantle us-east-2 and us-west-2) are retired and have no seed: a fresh database
+prices them at nothing, while production keeps the price_history rows they were costed with.
 All data lives in in-memory SQLite; no network.
 """
 
@@ -52,6 +54,14 @@ OPENAI = (
 )
 ACTIVE_IDS = BEDROCK_GLOBAL + BEDROCK_US + [NOVA] + CP + OPENAI
 UNCHANGED = BEDROCK_GLOBAL + CP + OPENAI
+# v2.38.0 (2026-10-27 user decision): every OpenAI Mantle in-region channel is us-east-1 — these channels are no longer
+# registered or seeded (GPT 6 Astra's in-region channel moved from us-west-2 to us-east-1).
+RETIRED_V238 = {
+    "openai:us-west-2:openai.gpt-6-astra",
+    *(f"openai:us-east-2:openai.gpt-5.6-{f}" for f in ("sol", "terra", "luna")),
+    *(f"openai:us-west-2:openai.gpt-5.6-{f}" for f in ("terra", "luna")),
+    "openai:us-east-2:openai.gpt-5.5", "openai:us-east-2:openai.gpt-5.4", "openai:us-west-2:openai.gpt-5.4",
+}
 CORRECTED = {
     "us.anthropic.claude-fable-5-1": (11.0, 55.0),
     "us.anthropic.claude-fable-5": (11.0, 55.0),
@@ -193,6 +203,8 @@ def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected
     active = {mid: price_identity(mid) for mid in ACTIVE_IDS}
     assert len(active) == 55 and all(active.values()), [m for m, i in active.items() if i is None]
     assert len(UNCHANGED) == 44 and len(CORRECTED) == 11
+    assert len(RETIRED_V238) == 9 and RETIRED_V238 <= set(UNCHANGED)
+    assert not RETIRED_V238 & set(pricing_seed.SEED)
     pricing_seed.ensure_seed(engine, active)
     in_tok, out_tok = 12_345, 6_789
     for mid in ACTIVE_IDS:
@@ -201,6 +213,9 @@ def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected
     rows = {r["model_id"]: r["cost_usd"] for r in client.get("/api/cost/summary?window=24h").json()["rows"]}
     assert set(rows) == set(ACTIVE_IDS)
     for mid in UNCHANGED:
+        if mid in RETIRED_V238:
+            assert rows[mid] is None, mid  # no seed for a retired channel in a fresh database
+            continue
         assert type(rows[mid]) is float, mid
         assert rows[mid] == pytest.approx(legacy.estimate_cost_usd(mid, in_tok, out_tok), rel=1e-12), mid
     for mid, (inp, out) in CORRECTED.items():

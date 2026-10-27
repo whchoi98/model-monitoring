@@ -1,6 +1,7 @@
-"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 21채널 TTFB/TTFT 정밀 측정 (v2.18.0).
+"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 19채널 TTFB/TTFT 정밀 측정 (v2.18.0).
 
-21채널 = Mantle 인리전 12 + CRIS 9 (GPT 6 Sol/Luna 편입 v2.28.0, GPT 6.1 Sol 편입 v2.32.0 — 2026-09-30 사용자 요청).
+19채널 = Mantle 인리전(us-east-1) 8 + CRIS 11 (GPT 6 Sol/Luna 편입 v2.28.0, GPT 6.1 Sol 편입 v2.32.0, GPT 6.1 Terra 편입과
+Mantle us-east-1 일원화 v2.38.0 — 2026-10-27 사용자 요청).
 
 docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   TTFB = 요청→첫 스트림 이벤트, TTFT = 요청→첫 output_text.delta, GAP = TTFT−TTFB ≈ thinking.
@@ -9,7 +10,7 @@ docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
 호스트별 갈래 병렬: 채널을 호스트별 갈래로 나눠 동시에 돈다.
   - cris              = 유사 리전 global/us 채널 (bedrock-runtime OpenAI 호환 호스트, 사용자 선택으로 한 갈래)
   - mantle-<region>   = 인리전 채널, Mantle 리전마다 한 갈래 (bedrock-mantle.<region> 호스트)
-  지금 카탈로그는 네 갈래다: cris 9, mantle-us-east-1 6, mantle-us-east-2 3, mantle-us-west-2 3.
+  지금 카탈로그는 두 갈래다: cris 11, mantle-us-east-1 8 (v2.38.0 — Mantle 인리전을 us-east-1로 모았다).
   갈래 이름은 채널 리전에서 파생하므로 새 Mantle 리전은 코드 수정 없이 자기 갈래를 얻는다.
   갈래 **안**은 채널 하나씩 순차다(갈래 안 병렬화 금지 — 같은 호스트 호출이 겹치면 contention이
   레이턴시를 왜곡, 벤치 방법론과 동일 이유). 갈래는 호스트가 달라 서로의 대기열에 끼지 않는다.
@@ -19,7 +20,9 @@ docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   중앙값 623초, p90 750초, 최대 790초, 9사이클이 끝 채널을 건너뜀. v2.32.1(2026-09-30 사용자 결정)에서 mantle을
   리전별로 나눴다 — GPT 5.4 (us-east-2)가 업스트림 저하로 느려지자(TTFT 중앙값 34초, 11호출 427초, 527초) mantle
   갈래가 783초, 802초로 데드라인을 넘겨 us-east-1 끝 채널(GPT 6 Sol, 6 Luna, 6.1 Sol)이 잘렸다. 채널별 실측으로
-  리전 갈래는 us-east-1 약 240초, us-east-2 약 590초, us-west-2 약 80초다.
+  리전 갈래는 us-east-1 약 240초, us-east-2 약 590초, us-west-2 약 80초다. v2.38.0 직전 24시간(2026-10-26~27)은
+  cris 9 p90 244초, mantle-us-east-1 6 p90 138초였다 — 두 갈래가 2채널씩 늘어도(cris 11, mantle-us-east-1 8 — 채널당
+  시간으로 각각 약 300초, 185초) 데드라인 780초 안이다.
 
 auto_prober와 분리된 이유: 측정 지표가 다름(TTFB/GAP은 프로브에 없음) + 고정 대형 프롬프트
 비용 프로파일이 달라 독립 테이블(gpt_bench_results)/스케줄(rate 15 min)로 운영.
@@ -68,28 +71,27 @@ _clock = time.perf_counter
 INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sentence."
 
 # (family, model-id env var, 제공 리전) — prober._OPENAI_MODEL_SPECS의 3P(Mantle) 서브셋.
-# 21채널 = Mantle 인리전 12 + CRIS 9 (v2.32.0).
-# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol).
+# 19채널 = Mantle 인리전(us-east-1) 8 + CRIS 11 (v2.38.0).
+# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol / 6.1 Terra).
 # pseudo-region "global" = Global CRIS 채널 (Terra v2.20.1, 2026-08-18 사용자 승인) —
 # 5.4/5.5는 global 프로파일 미지원. pseudo-region "us" = US CRIS (GPT 6 세대 전용 — Astra v2.25.1,
 # Sol/Luna v2.28.0). pseudo-region 채널의 모델 id/라벨은 prober 규약(_OPENAI_PSEUDO_REGIONS)으로 파생한다.
-# GPT 6 Astra는 v2.25.1(2026-09-11) 사용자 결정으로 편입 — Mantle 인리전은 us-west-2 단독.
-# us-east-1/us-east-2는 현재 미지원(404, 2026-09-09·09-23 실측) — 2026-09-23 사용자 결정으로 제외,
-# 정기 재확인 대상 아님.
-# GPT 6 Sol/Luna는 v2.28.0(2026-09-23) 사용자 결정으로 편입 — Mantle 인리전은 us-east-1 단독
-# (us-east-2/us-west-2는 현재 미지원(404) — 2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님). 목록 **끝**에 두는 이유: 사이클이 데드라인에
-# 걸리면 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에 떨어져 기존 채널 시계열이 끊기지 않는다.
-# GPT 6.1 Sol(v2.32.0): Global CRIS(Seoul bedrock-runtime 200), US CRIS(us-east-1 bedrock-runtime 200), Mantle us-east-1(구독 개시 401 후 200).
-# us-east-2/us-west-2는 404로 제외. 목록 끝 = 6.1 Sol이 있는 갈래(cris, mantle-us-east-1) 각각의 끝 — 데드라인 컷이
-# 그 갈래에서 6.1 Sol부터 떨어져 기존 18채널 시계열을 보존한다(갈래 안 순서는 이 목록 순서를 갈래별로 거른 것).
+# Mantle 인리전은 모든 모델이 us-east-1 하나다 (v2.38.0, 2026-10-27 사용자 결정 — prober와 같다). 그 전에는 5.4가
+# us-east-1/us-east-2/us-west-2, 5.5가 us-east-1/us-east-2, 5.6 Terra가 세 리전, GPT 6 Astra가 us-west-2 단독이었다
+# (Astra는 2026-09-09·09-23 us-east-1 404, 2026-10-27 us-east-1 200).
+# 신규 채널은 목록 **끝**에 둔다: 사이클이 데드라인에 걸리면 갈래마다 뒤쪽 채널부터 skip되므로, 컷이 신규 채널에
+# 떨어져 기존 채널 시계열이 끊기지 않는다(갈래 안 순서는 이 목록 순서를 갈래별로 거른 것).
+# GPT 6.1 Sol(v2.32.0)과 GPT 6.1 Terra(v2.38.0): Global CRIS(Seoul bedrock-runtime 200), US CRIS(us-east-1
+# bedrock-runtime 200), Mantle us-east-1(구독 개시 401 후 200). 6.1 Terra는 2026-10-27 벤치 요청 형태 세 채널 200.
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
-    ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1", "us-east-2", "us-west-2")),
-    ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1", "us-east-2")),
-    ("GPT 5.6 Terra", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", ("global", "us-east-1", "us-east-2", "us-west-2")),
-    ("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-west-2")),
+    ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1",)),
+    ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1",)),
+    ("GPT 5.6 Terra", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", ("global", "us-east-1")),
+    ("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-east-1")),
     ("GPT 6 Sol", "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", ("global", "us", "us-east-1")),
     ("GPT 6 Luna", "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", ("global", "us", "us-east-1")),
     ("GPT 6.1 Sol", "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", ("global", "us", "us-east-1")),
+    ("GPT 6.1 Terra", "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", ("global", "us", "us-east-1")),
 ]
 
 # ~55.8k 토큰 고정 컨텍스트 — 벤치 스크립트와 동일 (변경 시 캐시 무효 + 측정 연속성 깨짐 주의).
@@ -191,8 +193,8 @@ def lane_of(channel: dict) -> str:
 def bench_lanes(chans: list[dict]) -> dict[str, list[tuple[int, dict]]]:
     """갈래별 (bench_channels 위치, 채널) 목록 — 빈 갈래는 빠진다.
 
-    갈래 순서는 cris가 먼저, 그다음 Mantle 갈래는 첫 채널이 bench_channels에 나오는 순서(결정적, 지금은 us-east-1,
-    us-east-2, us-west-2). 갈래 안 순서는 bench_channels 순서다.
+    갈래 순서는 cris가 먼저, 그다음 Mantle 갈래는 첫 채널이 bench_channels에 나오는 순서(결정적, 지금은 us-east-1
+    하나 — v2.38.0). 갈래 안 순서는 bench_channels 순서다.
     """
     lanes: dict[str, list[tuple[int, dict]]] = {LANE_CRIS: []}
     for index, ch in enumerate(chans):

@@ -30,6 +30,13 @@ describe("extractModelName", () => {
     expect(name("openai:us-east-1:openai.gpt-6.1-sol:1")).toBe("GPT 6.1 Sol (us-east-1)");
     expect(name("openai:us-east-1:openai.gpt-6-sol:1")).toBe("GPT 6 Sol (us-east-1)");
   });
+  test("GPT 6.1 Terra 3채널(v2.38.0)은 GPT 6.1 Sol, GPT 5.6 Terra와 구분되고, Astra 인리전은 us-east-1이다", () => {
+    expect(name("openai:global:global.openai.gpt-6.1-terra:1")).toBe("GPT 6.1 Terra (Global)");
+    expect(name("openai:us:us.openai.gpt-6.1-terra:1")).toBe("GPT 6.1 Terra (US)");
+    expect(name("openai:us-east-1:openai.gpt-6.1-terra:2")).toBe("GPT 6.1 Terra (us-east-1)");
+    expect(name("openai:us-east-1:openai.gpt-5.6-terra:1")).toBe("GPT 5.6 Terra (us-east-1)");
+    expect(name("openai:us-east-1:openai.gpt-6-astra:1")).toBe("GPT 6 Astra (us-east-1)");
+  });
   test("FM id 안의 ':'는 마지막 iteration 세그먼트만 떼어 낸다", () => {
     expect(name("us.amazon.nova-2-lite-v1:0:1")).toBe("Nova 2.0 Lite");
     expect(name("global.anthropic.claude-haiku-4-5-20251001-v1:0:3")).toBe("Claude Haiku 4.5 (Global)");
