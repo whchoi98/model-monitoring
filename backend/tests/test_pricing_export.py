@@ -52,8 +52,8 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 | GPT 6 Luna | — | — | — | — |
 | GPT 5.6 Sol | — | 4 / 20 (검토 대기 9 / 45, 캐시 읽기 0.9, 긴 컨텍스트 18 / 67.5)[^3]<br>캐시 읽기 0.4, 쓰기 5<br>긴 컨텍스트 8 / 30, 캐시 읽기 0.8, 쓰기 10 | — | 4.4 / 22 us-east-1 (자동 확인 안 됨)[^3]<br>캐시 읽기 0.44, 쓰기 5.5<br>긴 컨텍스트 8.8 / 33, 캐시 읽기 0.88, 쓰기 11 |
 | GPT 5.6 Terra | — | 2 / 12[^5]<br>캐시 읽기 0.2, 쓰기 2.5<br>긴 컨텍스트 4 / 18, 캐시 읽기 0.4, 쓰기 5 | — | 2.2 / 13.2 us-east-1, us-east-2[^5]<br>캐시 읽기 0.22, 쓰기 2.75<br>긴 컨텍스트 4.4 / 19.8, 캐시 읽기 0.44, 쓰기 5.5<br><br>2.4 / 14.4 us-west-2[^5] |
-| GPT 5.5 | — | — | — | 5.5 / 33 us-east-1 (자동 확인 안 됨)[^6]<br>캐시 읽기 0.55<br>긴 컨텍스트 11 / 49.5, 캐시 읽기 1.1 |
-| GPT 5.4 | 2.5 / 15[^4]<br>캐시 읽기 0.25<br>긴 컨텍스트 5 / 22.5, 캐시 읽기 0.5 | — | — | 2.75 / 16.5 us-east-1, us-east-2, us-west-2[^7]<br>캐시 읽기 0.275<br>긴 컨텍스트 5.5 / 24.75, 캐시 읽기 0.55 |
+| GPT 5.6 Luna | — | — | — | 5.5 / 33 us-east-1 (자동 확인 안 됨)[^6]<br>캐시 읽기 0.55<br>긴 컨텍스트 11 / 49.5, 캐시 읽기 1.1 |
+| GPT 5.5 | 2.5 / 15[^4]<br>캐시 읽기 0.25<br>긴 컨텍스트 5 / 22.5, 캐시 읽기 0.5 | — | — | 2.75 / 16.5 us-east-1, us-east-2, us-west-2[^7]<br>캐시 읽기 0.275<br>긴 컨텍스트 5.5 / 24.75, 캐시 읽기 0.55 |
 
 ## Amazon Nova
 
@@ -67,7 +67,7 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 2. AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다.
 3. GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다.
 4. 캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다.
-5. 긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다.
+5. 긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다.
 6. OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다.
 7. 캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다.
 8. batch, flex, priority(fast) 단가는 포함하지 않는다.
@@ -81,8 +81,8 @@ GOLDEN_MD_KO = """> 이 가격표는 공개 자료를 자동으로 수집해 정
 [^3]: Amazon Bedrock 약정 오퍼 요금표, offer-gnqokrqqvdbgw (GPT 5.6 Sol), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
 [^4]: OpenAI API 요금 (Standard), https://developers.openai.com/api/docs/pricing, 확인일 2026-09-25
 [^5]: Amazon Bedrock 약정 오퍼 요금표, offer-terra0example (GPT 5.6 Terra), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
-[^6]: Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-27
-[^7]: Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
+[^6]: Amazon Bedrock 약정 오퍼 요금표, offer-luna0example (GPT 5.6 Luna), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-27
+[^7]: Amazon Bedrock 약정 오퍼 요금표, offer-rtwlbb46hcxpw (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, 확인일 2026-09-25
 [^8]: AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite), https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html, 확인일 2026-09-24
 
 > 이 가격표는 공개 자료를 자동으로 수집해 정리한 참고용 정보이며, AWS의 공식 입장이 아닙니다. 최종 가격은 반드시 공식 사이트에서 확인하세요.
@@ -111,8 +111,8 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 | GPT 6 Luna | — | — | — | — |
 | GPT 5.6 Sol | — | 4 / 20 (Pending review 9 / 45, cache read 0.9, long context 18 / 67.5)[^3]<br>cache read 0.4, write 5<br>long context 8 / 30, cache read 0.8, write 10 | — | 4.4 / 22 us-east-1 (not verified automatically)[^3]<br>cache read 0.44, write 5.5<br>long context 8.8 / 33, cache read 0.88, write 11 |
 | GPT 5.6 Terra | — | 2 / 12[^5]<br>cache read 0.2, write 2.5<br>long context 4 / 18, cache read 0.4, write 5 | — | 2.2 / 13.2 us-east-1, us-east-2[^5]<br>cache read 0.22, write 2.75<br>long context 4.4 / 19.8, cache read 0.44, write 5.5<br><br>2.4 / 14.4 us-west-2[^5] |
-| GPT 5.5 | — | — | — | 5.5 / 33 us-east-1 (not verified automatically)[^6]<br>cache read 0.55<br>long context 11 / 49.5, cache read 1.1 |
-| GPT 5.4 | 2.5 / 15[^4]<br>cache read 0.25<br>long context 5 / 22.5, cache read 0.5 | — | — | 2.75 / 16.5 us-east-1, us-east-2, us-west-2[^7]<br>cache read 0.275<br>long context 5.5 / 24.75, cache read 0.55 |
+| GPT 5.6 Luna | — | — | — | 5.5 / 33 us-east-1 (not verified automatically)[^6]<br>cache read 0.55<br>long context 11 / 49.5, cache read 1.1 |
+| GPT 5.5 | 2.5 / 15[^4]<br>cache read 0.25<br>long context 5 / 22.5, cache read 0.5 | — | — | 2.75 / 16.5 us-east-1, us-east-2, us-west-2[^7]<br>cache read 0.275<br>long context 5.5 / 24.75, cache read 0.55 |
 
 ## Amazon Nova
 
@@ -126,7 +126,7 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 2. AWS Bedrock - Global CRIS prices can differ from the same model's US CRIS and In Region prices.
 3. GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price.
 4. Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price.
-5. Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5) and to Claude Haiku 5.5 prompts over 100K tokens.
+5. Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.5) and to Claude Haiku 5.5 prompts over 100K tokens.
 6. The OpenAI official price is OpenAI's direct API price and is not used for cost calculations.
 7. Cache and long-context prices are shown for reference, and the cost pages use input and output prices.
 8. Batch, flex and priority (fast) prices are not included.
@@ -140,8 +140,8 @@ GOLDEN_MD_EN = """> This price list is compiled automatically from public source
 [^3]: Amazon Bedrock agreement offer rate card, offer-gnqokrqqvdbgw (GPT 5.6 Sol), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
 [^4]: OpenAI API pricing (Standard), https://developers.openai.com/api/docs/pricing, checked 2026-09-25
 [^5]: Amazon Bedrock agreement offer rate card, offer-terra0example (GPT 5.6 Terra), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
-[^6]: Amazon Bedrock agreement offer rate card, offer-gpt55example (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-27
-[^7]: Amazon Bedrock agreement offer rate card, offer-5l5a5izq5fbec (GPT 5.4), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
+[^6]: Amazon Bedrock agreement offer rate card, offer-luna0example (GPT 5.6 Luna), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-27
+[^7]: Amazon Bedrock agreement offer rate card, offer-rtwlbb46hcxpw (GPT 5.5), https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html, checked 2026-09-25
 [^8]: AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite), https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html, checked 2026-09-24
 
 > This price list is compiled automatically from public sources for reference only and is not an official AWS statement. Always confirm final prices on the official pricing pages.
@@ -157,9 +157,9 @@ openai,GPT 5.6 Sol,in_region,us-east-1,openai:us-east-1:openai.gpt-5.6-sol,4.4,2
 openai,GPT 5.6 Terra,global,,openai:global:global.openai.gpt-5.6-terra,2,12,0.2,2.5,,4,18,0.4,5,verified,2026-09-25T15:00:00Z,5,offer:offer-terra0example
 openai,GPT 5.6 Terra,in_region,us-east-1 us-east-2,openai:us-east-1:openai.gpt-5.6-terra openai:us-east-2:openai.gpt-5.6-terra,2.2,13.2,0.22,2.75,,4.4,19.8,0.44,5.5,verified,2026-09-25T15:00:00Z,5,offer:offer-terra0example
 openai,GPT 5.6 Terra,in_region,us-west-2,openai:us-west-2:openai.gpt-5.6-terra,2.4,14.4,,,,,,,,verified,2026-09-25T15:00:00Z,5,offer:offer-terra0example
-openai,GPT 5.5,in_region,us-east-1,openai:us-east-1:openai.gpt-5.5,5.5,33,0.55,,,11,49.5,1.1,,seed_only,,6,offer:offer-gpt55example
-openai,GPT 5.4,openai_list,,openai-list:gpt-5.4,2.5,15,0.25,,,5,22.5,0.5,,verified,2026-09-25T15:00:00Z,4,openai-pricing
-openai,GPT 5.4,in_region,us-east-1 us-east-2 us-west-2,openai:us-east-1:openai.gpt-5.4 openai:us-east-2:openai.gpt-5.4 openai:us-west-2:openai.gpt-5.4,2.75,16.5,0.275,,,5.5,24.75,0.55,,verified,2026-09-25T15:00:00Z,7,offer:offer-5l5a5izq5fbec
+openai,GPT 5.6 Luna,in_region,us-east-1,openai:us-east-1:openai.gpt-5.6-luna,5.5,33,0.55,,,11,49.5,1.1,,seed_only,,6,offer:offer-luna0example
+openai,GPT 5.5,openai_list,,openai-list:gpt-5.5,2.5,15,0.25,,,5,22.5,0.5,,verified,2026-09-25T15:00:00Z,4,openai-pricing
+openai,GPT 5.5,in_region,us-east-1 us-east-2 us-west-2,openai:us-east-1:openai.gpt-5.5 openai:us-east-2:openai.gpt-5.5 openai:us-west-2:openai.gpt-5.5,2.75,16.5,0.275,,,5.5,24.75,0.55,,verified,2026-09-25T15:00:00Z,7,offer:offer-rtwlbb46hcxpw
 amazon,Nova 2.0 Lite,us,,us.amazon.nova-2-lite-v1:0,0.33,2.75,0.0825,0,,,,,,stale,2026-09-24T15:00:00Z,8,pricelist:USE1-Nova2.0Lite-input-tokens
 
 reference_n,reference_id,kind,title,url,as_of
@@ -168,8 +168,8 @@ reference_n,reference_id,kind,title,url,as_of
 3,offer:offer-gnqokrqqvdbgw,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-gnqokrqqvdbgw (GPT 5.6 Sol)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
 4,openai-pricing,openai_doc,OpenAI API 요금 (Standard),https://developers.openai.com/api/docs/pricing,2026-09-25
 5,offer:offer-terra0example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-terra0example (GPT 5.6 Terra)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
-6,offer:offer-gpt55example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-27
-7,offer:offer-5l5a5izq5fbec,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
+6,offer:offer-luna0example,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-luna0example (GPT 5.6 Luna)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-27
+7,offer:offer-rtwlbb46hcxpw,agreement_offer,"Amazon Bedrock 약정 오퍼 요금표, offer-rtwlbb46hcxpw (GPT 5.5)",https://docs.aws.amazon.com/bedrock/latest/APIReference/API_ListFoundationModelAgreementOffers.html,2026-09-25
 8,pricelist:USE1-Nova2.0Lite-input-tokens,price_list,"AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",https://docs.aws.amazon.com/aws-cost-management/latest/APIReference/API_pricing_GetProducts.html,2026-09-24
 """
 
@@ -326,11 +326,11 @@ def test_csv_parses_back_into_two_tables():
         ("us-east-1 us-east-2", "2.2", "0.22"), ("us-west-2", "2.4", "")]
     (listed,) = [r for r in rows if r["channel"] == "openai_list"]
     assert (listed["family"], listed["model_ids"], listed["long_input_usd_per_1m"], listed["long_cache_write_usd_per_1m"],
-            listed["source_ids"]) == ("GPT 5.4", "openai-list:gpt-5.4", "5", "", "openai-pricing")
+            listed["source_ids"]) == ("GPT 5.5", "openai-list:gpt-5.5", "5", "", "openai-pricing")
     (nova,) = [r for r in rows if r["provider"] == "amazon"]
     assert (nova["cache_read_usd_per_1m"], nova["cache_write_usd_per_1m"], nova["cache_write_1h_usd_per_1m"]) == (
         "0.0825", "0", "")
-    assert [r["channel"] for r in rows if r["family"] == "GPT 5.4"] == ["openai_list", "in_region"]
+    assert [r["channel"] for r in rows if r["family"] == "GPT 5.5"] == ["openai_list", "in_region"]
     refs = list(csv.DictReader(io.StringIO(references)))
     assert [int(r["reference_n"]) for r in refs] == list(range(1, 9))
 

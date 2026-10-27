@@ -28,14 +28,14 @@ T1, T2 = T0 + timedelta(hours=12), T0 + timedelta(hours=24)
 OPUS_G, OPUS_US = "global.anthropic.claude-opus-5-5", "us.anthropic.claude-opus-5-5"
 SOL_G, SOL_E1 = "openai:global:global.openai.gpt-5.6-sol", "openai:us-east-1:openai.gpt-5.6-sol"
 NOVA = "us.amazon.nova-2-lite-v1:0"
-CP_HAIKU = "anthropic:claude-haiku-4-5-20251001"  # CP ids carry the /v1/models date suffix
+CP_OPUS48 = "anthropic:claude-opus-4-8"  # CP ids come from /v1/models (Haiku 4.5 with its date suffix until v2.38.x)
 OL_SOL = "openai-list:gpt-5.6-sol"  # OpenAI official price (display only), from the OpenAI pricing markdown
-ALL = (OPUS_G, OPUS_US, SOL_G, SOL_E1, NOVA, CP_HAIKU, OL_SOL)
+ALL = (OPUS_G, OPUS_US, SOL_G, SOL_E1, NOVA, CP_OPUS48, OL_SOL)
 SOL_OFFER_ID = "offer-gnqokrqqvdbgw"
 BASELINE = {  # current official values = seed rows: (input, output, source_id)
     OPUS_G: (4.0, 20.0, "offer:offer-7sp77cpl4rveu"), OPUS_US: (4.4, 22.0, "offer:offer-7sp77cpl4rveu"),
     SOL_G: (4.0, 20.0, f"offer:{SOL_OFFER_ID}"), SOL_E1: (4.4, 22.0, f"offer:{SOL_OFFER_ID}"),
-    NOVA: (0.33, 2.75, "pricelist:USE1-Nova2.0Lite-input-tokens"), CP_HAIKU: (1.0, 5.0, "anthropic-pricing"),
+    NOVA: (0.33, 2.75, "pricelist:USE1-Nova2.0Lite-input-tokens"), CP_OPUS48: (5.0, 25.0, "anthropic-pricing"),
     OL_SOL: (4.0, 20.0, "openai-pricing"),
 }
 # The cache and long-context values the committed fixtures carry for the same channels (the fake Sol offer has
@@ -44,7 +44,7 @@ BASELINE_EXTRAS = {
     OPUS_G: {"cache_read": 0.2, "cache_write": 5.0, "cache_write_1h": 8.0},
     OPUS_US: {"cache_read": 0.22, "cache_write": 5.5, "cache_write_1h": 8.8},
     NOVA: {"cache_read": 0.0825, "cache_write": 0.0},
-    CP_HAIKU: {"cache_read": 0.1, "cache_write": 1.25, "cache_write_1h": 2.0},
+    CP_OPUS48: {"cache_read": 0.5, "cache_write": 6.25, "cache_write_1h": 10.0},
     OL_SOL: {"cache_read": 0.4, "cache_write": 5.0, "long_input": 8.0, "long_output": 30.0, "long_cache_read": 0.8,
              "long_cache_write": 10.0},
 }
@@ -309,11 +309,11 @@ def test_a_model_without_baseline_is_pending_from_epoch(Session):
 def test_one_failing_source_changes_nothing_for_its_channels_and_is_partial(Session):
     _seed(Session)
     run = _sync(Session, fail={"anthropic_doc"})
-    assert run.status == "partial" and run.summary["channels"][CP_HAIKU] == "skipped:fetch_failed"
-    assert all(run.summary["channels"][m] == "unchanged" for m in ALL if m != CP_HAIKU)
+    assert run.status == "partial" and run.summary["channels"][CP_OPUS48] == "skipped:fetch_failed"
+    assert all(run.summary["channels"][m] == "unchanged" for m in ALL if m != CP_OPUS48)
     assert run.summary["sources"]["anthropic_doc"] == {"calls": 1, "ok": 0, "failed": 1}
     assert any(e.startswith("anthropic_doc pricing.md: ConnectionError") for e in run.summary["errors"])
-    (row,) = _rows(Session, CP_HAIKU)
+    (row,) = _rows(Session, CP_OPUS48)
     assert row.observed_at is None and row.run_id is None
 
 
@@ -366,7 +366,7 @@ def test_a_malformed_offers_response_skips_only_that_models_channels(Session, re
 
 
 @pytest.mark.parametrize(("parser", "skipped"), [
-    ("parse_anthropic_pricing_md", {CP_HAIKU}),
+    ("parse_anthropic_pricing_md", {CP_OPUS48}),
     ("parse_pricelist", {NOVA}),
     ("select_offer_price", {OPUS_G, OPUS_US, SOL_G, SOL_E1}),
     ("parse_openai_pricing_md", {OL_SOL}),
@@ -388,9 +388,9 @@ def test_any_parser_exception_only_skips_that_sources_channels(Session, monkeypa
 def test_no_claude_platform_on_aws_channels_makes_the_run_partial(Session):
     _seed(Session)
     calls = []
-    run = _sync(Session, active=_active(*(m for m in ALL if m != CP_HAIKU)), calls=calls)
+    run = _sync(Session, active=_active(*(m for m in ALL if m != CP_OPUS48)), calls=calls)
     assert run.status == "partial" and "anthropic_doc" not in calls
-    assert "anthropic_doc: no active channels" in run.summary["errors"] and CP_HAIKU not in run.summary["channels"]
+    assert "anthropic_doc: no active channels" in run.summary["errors"] and CP_OPUS48 not in run.summary["channels"]
 
 
 def test_the_deadline_skips_the_remaining_channels(Session, caplog):
@@ -404,7 +404,7 @@ def test_the_deadline_skips_the_remaining_channels(Session, caplog):
     run = _run(Session, run_sync(Session, _active(*ALL), _fetchers(on_call=slow, calls=calls),
                                  now=lambda: clock["t"], deadline_s=300))
     assert calls == ["anthropic_doc", "openai_doc"]   # 400 s > 300 s before the Price List call
-    assert run.status == "partial" and run.summary["channels"][CP_HAIKU] == run.summary["channels"][OL_SOL] == "unchanged"
+    assert run.status == "partial" and run.summary["channels"][CP_OPUS48] == run.summary["channels"][OL_SOL] == "unchanged"
     assert all(run.summary["channels"][m] == "skipped:deadline" for m in (NOVA, OPUS_G, OPUS_US, SOL_G, SOL_E1))
     assert run.summary["sources"]["offers"] == run.summary["sources"]["pricelist"] == {"calls": 0, "ok": 0, "failed": 0}
     assert any(e.startswith("deadline: 300s exceeded") for e in run.summary["errors"])
@@ -605,7 +605,7 @@ def test_seed_rows_without_extras_are_enriched_in_place(Session):
     _seed(Session, extras={})                                         # v2.30.0 rows: every extra column NULL
     run = _sync(Session)
     assert (run.status, run.changes, run.pending) == ("completed", 0, 0)
-    assert run.summary["channels"] == {**{m: "enriched" for m in (OPUS_G, OPUS_US, NOVA, CP_HAIKU, OL_SOL)},
+    assert run.summary["channels"] == {**{m: "enriched" for m in (OPUS_G, OPUS_US, NOVA, CP_OPUS48, OL_SOL)},
                                        SOL_G: "unchanged", SOL_E1: "unchanged"}   # the fake Sol offer has no extras
     for model_id in ALL:
         (row,) = _rows(Session, model_id)                             # filled in place, no new history row

@@ -80,10 +80,10 @@ def _seed(session, *, now=None):
 
     session.add_all(
         [
-            result(runs["recent_auto"], "Bedrock Claude Haiku 4.5 (US)", "chat-short", 100.0),
+            result(runs["recent_auto"], "Bedrock Claude Haiku 5.5 (US)", "chat-short", 100.0),
             result(runs["recent_auto"], "OpenAI GPT 5.5 (us-east-1)", "reasoning", 200.0),
-            result(runs["old_auto"], "Bedrock Claude Haiku 4.5 (US)", "chat-short", 300.0),
-            result(runs["recent_manual"], "Bedrock Claude Haiku 4.5 (US)", "chat-short", 400.0),
+            result(runs["old_auto"], "Bedrock Claude Haiku 5.5 (US)", "chat-short", 300.0),
+            result(runs["recent_manual"], "Bedrock Claude Haiku 5.5 (US)", "chat-short", 400.0),
         ]
     )
     session.commit()
@@ -162,7 +162,7 @@ def _seed_hourly(session, *, now=None):
     def add_result(run, ts, ttft):
         session.add(
             models.ProbeResult(
-                run_id=run.id, model_id="m1", model_name="Bedrock Claude Haiku 4.5 (US)",
+                run_id=run.id, model_id="m1", model_name="Bedrock Claude Haiku 5.5 (US)",
                 timestamp=ts, prompt="p", status="success",
                 ttft_ms=ttft, total_latency_ms=ttft * 2, tps=40.0,
                 output_text="X", category="chat-short",

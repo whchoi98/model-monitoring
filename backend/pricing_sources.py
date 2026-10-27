@@ -6,6 +6,8 @@ Lite를 1세대 Nova Lite 단가로 매칭한 오류). CP는 prober _ANTHROPIC_T
 v2.31.0: 표시 전용 "OpenAI 공식 가격" 채널 — 합성 model_id openai-list:<family_key>(AVAILABLE_MODELS, probe_results에는
 없음). active_channels가 활성 OpenAI 패밀리마다 덧붙이고, 출처는 OpenAI 공식 요금 문서(source_kind openai_doc)다.
 v2.32.0: Bedrock in-region 온디맨드 키 bedrock:<region>:<FM id> → channel inregion:<region> (서울 Claude만 허용).
+v2.39.0: 모니터링에서 뺀 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4는 분류하지 않는다(None, 사용자 결정
+2026-10-27, ADR-034). 운영 DB에 남은 그 채널의 price_history 행은 그대로 둔다.
 """
 
 import logging
@@ -19,17 +21,17 @@ logger = logging.getLogger(__name__)
 EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)  # seed, no_baseline 행의 effective_from
 PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 표 순서 (v2.31.0)
 # frontend/src/lib/sortModels.ts FAMILY_ORDER와 바이트 단위로 같아야 한다(tests가 파일을 읽어 고정).
+# v2.39.0: Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4를 뺐다(사용자 결정 2026-10-27, ADR-034).
 FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
-    "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Sonnet 4.6",
-    "Claude Haiku 5.5", "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol",
-    "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5", "GPT 5.4",
+    "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra",
+    "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5",
 )
 
 
 @dataclass(frozen=True)
 class PriceIdentity:
-    family_key: str   # claude-opus-4-6 | claude-haiku-4-5 | nova-2-lite | gpt-6-astra | gpt-5.6-sol | gpt-5.4 ...
+    family_key: str   # claude-opus-4-8 | claude-haiku-5-5 | nova-2-lite | gpt-6-astra | gpt-5.6-sol | gpt-5.5 ...
     family: str       # FAMILY_ORDER 문자열
     provider: str     # anthropic | amazon | openai
     channel: str      # cp | openai_list | global | us | inregion:<aws-region>
@@ -44,18 +46,13 @@ _BEDROCK_CLAUDE_FM: dict[str, tuple[str, str]] = {
     "anthropic.claude-opus-5-5": ("claude-opus-5-5", "Claude Opus 5.5"),
     "anthropic.claude-opus-5": ("claude-opus-5", "Claude Opus 5"),
     "anthropic.claude-opus-4-8": ("claude-opus-4-8", "Claude Opus 4.8"),
-    "anthropic.claude-opus-4-7": ("claude-opus-4-7", "Claude Opus 4.7"),
-    "anthropic.claude-opus-4-6-v1": ("claude-opus-4-6", "Claude Opus 4.6"),
     "anthropic.claude-sonnet-5-5": ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
     "anthropic.claude-sonnet-5": ("claude-sonnet-5", "Claude Sonnet 5"),
-    "anthropic.claude-sonnet-4-6": ("claude-sonnet-4-6", "Claude Sonnet 4.6"),
     "anthropic.claude-haiku-5-5": ("claude-haiku-5-5", "Claude Haiku 5.5"),
-    "anthropic.claude-haiku-4-5-20251001-v1:0": ("claude-haiku-4-5", "Claude Haiku 4.5"),
 }
 _CLAUDE_FAMILY_NAMES = {fk: fam for fk, fam in _BEDROCK_CLAUDE_FM.values()}
 # CP — prober._ANTHROPIC_TARGETS와 같은 substring, 같은 순서(tests가 고정). family_key = "claude-" + substring.
-_CP_TARGETS = ("fable-5-1", "fable-5", "opus-5-5", "opus-5", "opus-4-8", "opus-4-7", "sonnet-5-5", "sonnet-5", "sonnet-4-6",
-               "haiku-5-5", "haiku-4-5")
+_CP_TARGETS = ("fable-5-1", "fable-5", "opus-5-5", "opus-5", "opus-4-8", "sonnet-5-5", "sonnet-5", "haiku-5-5")
 # Anthropic 문서 표의 모델 이름 = family 이름. Haiku 5.5 행은 "(for prompts up to/over 100,000 tokens)" 두 줄이고
 # 파서가 괄호를 지운 같은 이름으로 합친다(100K 이하 = 표준, 초과 = 긴 컨텍스트, v2.33.0).
 ANTHROPIC_DOC_NAMES: dict[str, str] = {f"claude-{s}": _CLAUDE_FAMILY_NAMES[f"claude-{s}"] for s in _CP_TARGETS}
@@ -76,7 +73,7 @@ _OPENAI_FM: dict[str, tuple[str, str]] = {
     "openai.gpt-6-astra": ("gpt-6-astra", "GPT 6 Astra"), "openai.gpt-6-sol": ("gpt-6-sol", "GPT 6 Sol"),
     "openai.gpt-6-luna": ("gpt-6-luna", "GPT 6 Luna"), "openai.gpt-5.6-sol": ("gpt-5.6-sol", "GPT 5.6 Sol"),
     "openai.gpt-5.6-terra": ("gpt-5.6-terra", "GPT 5.6 Terra"), "openai.gpt-5.6-luna": ("gpt-5.6-luna", "GPT 5.6 Luna"),
-    "openai.gpt-5.5": ("gpt-5.5", "GPT 5.5"), "openai.gpt-5.4": ("gpt-5.4", "GPT 5.4"),
+    "openai.gpt-5.5": ("gpt-5.5", "GPT 5.5"),
 }
 # OpenAI 공식 가격(openai_list, v2.31.0) — 문서 "### Standard pricing data" 표의 모델 이름 = family_key(정확 일치)
 _OPENAI_LIST_FAMILIES: dict[str, str] = {fk: fam for fk, fam in _OPENAI_FM.values()}

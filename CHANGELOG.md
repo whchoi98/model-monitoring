@@ -7,6 +7,26 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Removed
+- Claude Opus 4.7, Opus 4.6, Sonnet 4.6 and Haiku 4.5 (Bedrock Global, US and Claude Platform on AWS) and GPT 5.4 (Mantle us-east-1 and its dormant 1P spec) are no longer monitored, by user decision on 2026-10-27, and every page drops them: 12 channels leave the catalog, the GPT on AWS bench, the price seeds, the trend colours, the manual probe view and the `/prompts` OptimizePrompt targets (ADR-034).
+- 사용자 결정(2026-10-27)으로 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5(Bedrock Global, US, Claude Platform on AWS)와 GPT 5.4(Mantle us-east-1, 휴면 1P 스펙)를 더 이상 모니터링하지 않고 모든 화면에서 뺐다. 12채널을 카탈로그, GPT on AWS 벤치, 단가 seed, 추세 색, 수동 프로브 화면, `/prompts` OptimizePrompt 대상에서 지웠다(ADR-034).
+
+### Changed
+- The catalog has 49 active channels, down from 61: Bedrock 19, Claude Platform on AWS 8, OpenAI 22 (Mantle us-east-1 9, Global 8, US 5).
+- Stored rows are kept and hidden: the default `HIDDEN_MODEL_PATTERNS` adds `Claude Opus 4.7`, `Claude Opus 4.6`, `Claude Sonnet 4.6`, `Claude Haiku 4.5` and `GPT 5.4`, and the GPT on AWS (`/api/gptbench/latest`, `/trend`) and parity (`/api/parity/latest`) reads now apply it too, so reliability, cost, efficiency, analysis, insights, the chatbot, the bench trend and the parity matrix drop the five families at once. The frontend `EXCLUDED_FAMILIES` adds the same five names.
+- The GPT on AWS bench runs 18 channels, down from 19 (`cris` 11, `mantle-us-east-1` 7); its GPT 5.x group has two columns.
+- `/pricing` lists 18 families and 20 references (17 agreement offers), and its long-context note reads "272K for GPT 5.5".
+- 활성 채널은 61개에서 49개로 줄었다. Bedrock 19, Claude Platform on AWS 8, OpenAI 22(Mantle us-east-1 9, Global 8, US 5)다.
+- 저장 행은 지우지 않고 숨긴다. 기본 `HIDDEN_MODEL_PATTERNS`에 `Claude Opus 4.7`, `Claude Opus 4.6`, `Claude Sonnet 4.6`, `Claude Haiku 4.5`, `GPT 5.4`를 더했고, GPT on AWS(`/api/gptbench/latest`, `/trend`)와 패리티(`/api/parity/latest`) 조회도 이 패턴을 쓴다. 그래서 신뢰성, 비용, 효율성, 분석, 인사이트, 챗봇, 벤치 추세, 패리티 매트릭스에서 다섯 패밀리가 바로 사라진다. 프런트 `EXCLUDED_FAMILIES`에도 같은 다섯 이름을 더했다.
+- GPT on AWS 벤치는 19채널에서 18채널로 줄었다(`cris` 11, `mantle-us-east-1` 7). GPT 5.x 세대는 두 열이다.
+- `/pricing`은 패밀리 18개, 참고 자료 20개(약정 오퍼 17)이고, 긴 컨텍스트 안내는 "GPT 5.5는 272K"다.
+
+### Infra
+- `BEDROCK_OPENAI_GPT_54_MODEL_ID` and `OPENAI_1P_GPT_54_MODEL_ID` are removed from the backend and the six scheduled task definitions — deploy both the AppServices and the Scheduler stacks. No IAM or schema change.
+- 백엔드와 스케줄 작업 정의 6개에서 `BEDROCK_OPENAI_GPT_54_MODEL_ID`, `OPENAI_1P_GPT_54_MODEL_ID`를 뺐다. AppServices와 Scheduler 두 스택을 함께 배포한다. IAM과 스키마 변경은 없다.
+
 ## v2.38.0 — 2026-10-27
 
 ### Added

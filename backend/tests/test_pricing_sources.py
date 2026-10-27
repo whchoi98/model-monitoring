@@ -36,7 +36,7 @@ _ENV = {
     "OPENAI_US_WEST_2_BASE_URL": "https://w2/v1",
     **{f"BEDROCK_OPENAI_GPT_{k}_MODEL_ID": f"openai.gpt-{v}" for k, v in (
         ("61_SOL", "6.1-sol"), ("61_TERRA", "6.1-terra"), ("6_ASTRA", "6-astra"), ("6_SOL", "6-sol"), ("6_LUNA", "6-luna"), ("56_SOL", "5.6-sol"),
-        ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},
+        ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},  # 5.4: v2.38.x env — 남아도 등록 안 됨
     **{f"OPENAI_1P_GPT_{k}_MODEL_ID": f"gpt-{v}" for k, v in (
         ("56_SOL", "5.6-sol"), ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},
 }
@@ -78,17 +78,18 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_61_active_channels():
+def test_expected_table_is_the_49_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
-    assert counts == {("anthropic", "global"): 12, ("anthropic", "us"): 12, ("anthropic", "cp"): 11,
+    # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널). v2.39.0: Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 제외
+    assert counts == {("anthropic", "global"): 8, ("anthropic", "us"): 8, ("anthropic", "cp"): 8,
                       ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 8, ("openai", "us"): 5,
-                      ("openai", "in_region"): 10}  # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널)
-    assert len(EXPECTED_IDENTITY) == 61
+                      ("openai", "in_region"): 9}
+    assert len(EXPECTED_IDENTITY) == 49
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_61_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_49_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -104,7 +105,7 @@ def test_registered_catalog_minus_hidden_is_exactly_the_61_channels(monkeypatch)
     active = active_channels(catalog, ["(1P)"])
     listed = [m for m in active if m.startswith(ps.OPENAI_LIST_PREFIX)]
     assert {m: catalog[m] for m in active if m not in listed} == ACTIVE_MODELS  # 라벨까지 prober 규약과 같다
-    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 10개
+    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 9개
 
 
 def test_active_channels_hidden_and_unclassifiable(caplog):
@@ -146,13 +147,15 @@ def test_unclassifiable_model_ids_return_none(model_id):
 
 def test_cp_point_release_safety():
     fk = {m: price_identity(f"anthropic:{m}") for m in (
-        "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-haiku-4-5-20251001",
+        "claude-opus-5", "claude-opus-5-5", "claude-fable-5", "claude-fable-5-1", "claude-opus-4-8-20260101",
+        "claude-haiku-4-5-20251001", "claude-opus-4-7", "claude-sonnet-4-6",
         "claude-opus-5-20261015", "claude-fable-5-1-20261015", "claude-sonnet-5-5", "claude-sonnet-5",
         "claude-sonnet-5-5-20261101", "claude-sonnet-5-6", "claude-opus-5-6")}
     assert {m: (i.family_key if i else None) for m, i in fk.items()} == {
         "claude-opus-5": "claude-opus-5", "claude-opus-5-5": "claude-opus-5-5",
         "claude-fable-5": "claude-fable-5", "claude-fable-5-1": "claude-fable-5-1",
-        "claude-haiku-4-5-20251001": "claude-haiku-4-5",  # 8자리 날짜 접미사는 점 버전이 아니다
+        "claude-opus-4-8-20260101": "claude-opus-4-8",  # 8자리 날짜 접미사는 점 버전이 아니다
+        "claude-haiku-4-5-20251001": None, "claude-opus-4-7": None, "claude-sonnet-4-6": None,  # v2.39.0 제외
         "claude-opus-5-20261015": "claude-opus-5", "claude-fable-5-1-20261015": "claude-fable-5-1",
         "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5",  # v2.32.0 타깃
         "claude-sonnet-5-5-20261101": "claude-sonnet-5-5",
@@ -198,7 +201,8 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 23
+    assert len(ps.FAMILY_ORDER) == 18
+    assert not {"Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"} & set(ps.FAMILY_ORDER)
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Terra")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Terra") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
@@ -223,31 +227,32 @@ def test_openai_list_ids_are_classified(family_key):
         family_key, OPENAI_FAMILIES[family_key], "openai", "openai_list", "openai_doc", family_key)
 
 
-def test_openai_list_ids_are_the_ten_bedrock_gpt_families_and_rows_of_the_openai_doc():
-    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 10
+def test_openai_list_ids_are_the_nine_bedrock_gpt_families_and_rows_of_the_openai_doc():
+    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 9
     prices = parse_openai_pricing_md((FIXTURES / "openai_pricing.md").read_text(encoding="utf-8"))
     assert all(price_identity(m).source_ref in prices for m in OPENAI_LIST_IDS)  # exact doc model names
 
 
 def test_active_channels_appends_one_openai_list_channel_per_visible_openai_family(caplog):
     models = {
-        "openai:us-east-1:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-1)",
+        "openai:us-east-1:openai.gpt-5.6-terra": "OpenAI GPT 5.6 Terra (us-east-1)",
         "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
         "openai:global:global.openai.gpt-6-sol": "OpenAI GPT 6 Sol (Global)",
-        "openai:us-east-2:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-2)",
+        "openai:global:global.openai.gpt-5.6-terra": "OpenAI GPT 5.6 Terra (Global)",
         "us.amazon.nova-2-lite-v1:0": "Bedrock Nova 2.0 Lite (US)",
         "openai:us-east-1:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-1)",
     }
     with caplog.at_level(logging.WARNING, logger="pricing_sources"):
         active = active_channels(models, ["(us-east-1)"])
     assert list(active) == [
-        "global.anthropic.claude-opus-5-5", "openai:global:global.openai.gpt-6-sol", "openai:us-east-2:openai.gpt-5.4",
-        "us.amazon.nova-2-lite-v1:0", "openai-list:gpt-6-sol", "openai-list:gpt-5.4",  # GPT 5.5 is hidden: none
+        "global.anthropic.claude-opus-5-5", "openai:global:global.openai.gpt-6-sol",
+        "openai:global:global.openai.gpt-5.6-terra", "us.amazon.nova-2-lite-v1:0",
+        "openai-list:gpt-6-sol", "openai-list:gpt-5.6-terra",  # GPT 5.5 is hidden: none
     ]
-    assert active["openai-list:gpt-5.4"].channel == "openai_list" and _warnings(caplog) == []
-    again = active_channels({"openai-list:gpt-5.4": "OpenAI GPT 5.4 (official)", **models}, [])
+    assert active["openai-list:gpt-5.6-terra"].channel == "openai_list" and _warnings(caplog) == []
+    again = active_channels({"openai-list:gpt-5.6-terra": "OpenAI GPT 5.6 Terra (official)", **models}, [])
     assert [m for m in again if m.startswith("openai-list:")] == [
-        "openai-list:gpt-5.4", "openai-list:gpt-6-sol", "openai-list:gpt-5.5"]  # an id already present is kept once
+        "openai-list:gpt-5.6-terra", "openai-list:gpt-6-sol", "openai-list:gpt-5.5"]  # an id already present is kept once
     no_openai = active_channels({"global.anthropic.claude-opus-5-5": "a", "us.amazon.nova-2-lite-v1:0": "b"}, [])
     assert list(no_openai) == ["global.anthropic.claude-opus-5-5", "us.amazon.nova-2-lite-v1:0"]
 
@@ -270,7 +275,7 @@ def test_source_metadata_constants():
         "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
         "https://developers.openai.com/api/docs/pricing", "openai-list:",
     )
-    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 11
+    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 8
     assert ps.ANTHROPIC_DOC_NAMES["claude-haiku-5-5"] == "Claude Haiku 5.5"
     assert ps.CLAUDE_LONG_CONTEXT_FAMILIES == frozenset({"claude-haiku-5-5"})
     assert ps.ANTHROPIC_DOC_NAMES["claude-sonnet-5-5"] == "Claude Sonnet 5.5"

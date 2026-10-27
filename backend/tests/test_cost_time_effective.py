@@ -5,7 +5,9 @@ was effective at each probe's timestamp from price_history. The equivalence test
 to a frozen copy of the v2.29.1 table (tests/_legacy_pricing_v2291.py) on the 44 channels whose price did
 not change, and pins the 11 corrected channels (Bedrock Claude US x1.1, Nova 2.0 Lite) to official values.
 Since v2.38.0 nine of the 44 (OpenAI Mantle us-east-2 and us-west-2) are retired and have no seed: a fresh database
-prices them at nothing, while production keeps the price_history rows they were costed with.
+prices them at nothing, while production keeps the price_history rows they were costed with. v2.39.0 retired twelve
+more (Claude Opus 4.7, Opus 4.6, Sonnet 4.6 and Haiku 4.5 on Global, US and CP, and GPT 5.4 us-east-1): they are no
+longer classified at all, so they get no seed either; four of them are corrected channels.
 All data lives in in-memory SQLite; no network.
 """
 
@@ -31,7 +33,7 @@ HOUR = NOW.replace(minute=0, second=0, microsecond=0) - timedelta(hours=3)
 CHANGE_AT = HOUR + timedelta(hours=1)  # verified price change inside the 24h window
 A = ("global.anthropic.claude-sonnet-5", "Bedrock Claude Sonnet 5 (Global)")
 UNKNOWN = ("mystery.model-v9", "Bedrock Mystery (Global)")
-HIDDEN = ("openai:1p:gpt-5.4", "OpenAI GPT 5.4 (1P)")
+HIDDEN = ("openai:1p:gpt-5.5", "OpenAI GPT 5.5 (1P)")
 
 # Production /api/models on 2026-09-26: the 55 active channels (CP ids come from discovery).
 _CLAUDE = ("claude-fable-5-1", "claude-fable-5", "claude-opus-5-5", "claude-opus-5", "claude-opus-4-8",
@@ -62,6 +64,14 @@ RETIRED_V238 = {
     *(f"openai:us-west-2:openai.gpt-5.6-{f}" for f in ("terra", "luna")),
     "openai:us-east-2:openai.gpt-5.5", "openai:us-east-2:openai.gpt-5.4", "openai:us-west-2:openai.gpt-5.4",
 }
+# v2.39.0 (2026-10-27 user decision, ADR-034): the five families left out of monitoring — not classified any more
+RETIRED_V239 = {
+    *(f"{p}.anthropic.{m}" for p in ("global", "us")
+      for m in ("claude-opus-4-7", "claude-opus-4-6-v1", "claude-sonnet-4-6", "claude-haiku-4-5-20251001-v1:0")),
+    "anthropic:claude-opus-4-7", "anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5-20251001",
+    "openai:us-east-1:openai.gpt-5.4",
+}
+UNCLASSIFIED = RETIRED_V239 | {"openai:us-east-2:openai.gpt-5.4", "openai:us-west-2:openai.gpt-5.4"}  # GPT 5.4 family gone
 CORRECTED = {
     "us.anthropic.claude-fable-5-1": (11.0, 55.0),
     "us.anthropic.claude-fable-5": (11.0, 55.0),
@@ -200,11 +210,14 @@ def test_efficiency_category_filter_still_applies(env):
 
 def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected_ones(env):
     engine, factory, client = env
-    active = {mid: price_identity(mid) for mid in ACTIVE_IDS}
-    assert len(active) == 55 and all(active.values()), [m for m, i in active.items() if i is None]
+    identities = {mid: price_identity(mid) for mid in ACTIVE_IDS}
+    assert {m for m, i in identities.items() if i is None} == UNCLASSIFIED
+    active = {m: i for m, i in identities.items() if i is not None}
+    assert len(ACTIVE_IDS) == 55 and len(active) == 55 - 14
     assert len(UNCHANGED) == 44 and len(CORRECTED) == 11
     assert len(RETIRED_V238) == 9 and RETIRED_V238 <= set(UNCHANGED)
-    assert not RETIRED_V238 & set(pricing_seed.SEED)
+    assert len(RETIRED_V239) == 12 and len(RETIRED_V239 & set(CORRECTED)) == 4
+    assert not (RETIRED_V238 | RETIRED_V239) & set(pricing_seed.SEED)
     pricing_seed.ensure_seed(engine, active)
     in_tok, out_tok = 12_345, 6_789
     for mid in ACTIVE_IDS:
@@ -213,11 +226,14 @@ def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected
     rows = {r["model_id"]: r["cost_usd"] for r in client.get("/api/cost/summary?window=24h").json()["rows"]}
     assert set(rows) == set(ACTIVE_IDS)
     for mid in UNCHANGED:
-        if mid in RETIRED_V238:
+        if mid in RETIRED_V238 | RETIRED_V239:
             assert rows[mid] is None, mid  # no seed for a retired channel in a fresh database
             continue
         assert type(rows[mid]) is float, mid
         assert rows[mid] == pytest.approx(legacy.estimate_cost_usd(mid, in_tok, out_tok), rel=1e-12), mid
     for mid, (inp, out) in CORRECTED.items():
+        if mid in RETIRED_V239:
+            assert rows[mid] is None, mid
+            continue
         assert rows[mid] == pytest.approx((in_tok * inp + out_tok * out) / 1_000_000.0, rel=1e-12), mid
         assert rows[mid] != pytest.approx(legacy.estimate_cost_usd(mid, in_tok, out_tok), rel=1e-6), mid

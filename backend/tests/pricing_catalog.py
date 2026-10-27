@@ -1,7 +1,8 @@
 """pricing 테스트 공용 데이터 — 활성 61채널: 운영 /api/models(2026-09-26) 55채널 (v2.30.0) + v2.32.0 Claude Sonnet 5.5
 (Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5 + v2.33.0 Claude Haiku 5.5
 (Global, US, CP), Claude Sonnet 5.5 US + v2.38.0 GPT 6.1 Terra (Global, US, us-east-1), OpenAI Mantle 인리전 us-east-1 일원화
-(us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1). 수집 대상 아님."""
+(us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1) − v2.39.0 Claude Opus 4.7, Opus 4.6, Sonnet 4.6,
+Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 = 활성 49채널. 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
@@ -10,21 +11,15 @@ _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS
     ("anthropic.claude-opus-5-5", "claude-opus-5-5", "Claude Opus 5.5", _GU),
     ("anthropic.claude-opus-5", "claude-opus-5", "Claude Opus 5", (*_GU, "ap-northeast-2")),
     ("anthropic.claude-opus-4-8", "claude-opus-4-8", "Claude Opus 4.8", _GU),
-    ("anthropic.claude-opus-4-7", "claude-opus-4-7", "Claude Opus 4.7", _GU),
-    ("anthropic.claude-opus-4-6-v1", "claude-opus-4-6", "Claude Opus 4.6", _GU),
     ("anthropic.claude-sonnet-5-5", "claude-sonnet-5-5", "Claude Sonnet 5.5", _GU),  # us.는 2026-10-07부터(v2.33.0)
     ("anthropic.claude-sonnet-5", "claude-sonnet-5", "Claude Sonnet 5", (*_GU, "ap-northeast-2")),
-    ("anthropic.claude-sonnet-4-6", "claude-sonnet-4-6", "Claude Sonnet 4.6", _GU),
     ("anthropic.claude-haiku-5-5", "claude-haiku-5-5", "Claude Haiku 5.5", _GU),
-    ("anthropic.claude-haiku-4-5-20251001-v1:0", "claude-haiku-4-5", "Claude Haiku 4.5", _GU),
 ]
-# CP 디스커버리 id (Opus 4.6은 CP 채널 없음, Haiku는 날짜 접미사)
+# CP 디스커버리 id
 _CP_IDS = {
     "claude-fable-5-1": "claude-fable-5-1", "claude-fable-5": "claude-fable-5",
-    "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5",
-    "claude-opus-4-8": "claude-opus-4-8", "claude-opus-4-7": "claude-opus-4-7",
-    "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-sonnet-4-6": "claude-sonnet-4-6",
-    "claude-haiku-5-5": "claude-haiku-5-5", "claude-haiku-4-5": "claude-haiku-4-5-20251001",
+    "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5", "claude-opus-4-8": "claude-opus-4-8",
+    "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-haiku-5-5",
 }
 _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전(Mantle 인리전 us-east-1만, v2.38.0)
     ("openai.gpt-6.1-sol", "gpt-6.1-sol", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
@@ -36,7 +31,6 @@ _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SP
     ("openai.gpt-5.6-terra", "gpt-5.6-terra", "GPT 5.6 Terra", ("global", "us-east-1")),
     ("openai.gpt-5.6-luna", "gpt-5.6-luna", "GPT 5.6 Luna", ("global", "us-east-1")),
     ("openai.gpt-5.5", "gpt-5.5", "GPT 5.5", ("us-east-1",)),
-    ("openai.gpt-5.4", "gpt-5.4", "GPT 5.4", ("us-east-1",)),
 ]
 
 
@@ -77,7 +71,7 @@ OPENAI_LIST_IDS: list[str] = [f"openai-list:{fk}" for _, fk, _, _ in _OPENAI]
 HIDDEN_1P_MODELS: dict[str, str] = {  # 휴면 1P — 기본 숨김 패턴 "(1P)"
     f"openai:1p:{fk}": f"OpenAI {fam} (1P)"
     for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"),
-                    ("gpt-5.6-luna", "GPT 5.6 Luna"), ("gpt-5.4", "GPT 5.4"), ("gpt-5.5", "GPT 5.5"))
+                    ("gpt-5.6-luna", "GPT 5.6 Luna"), ("gpt-5.5", "GPT 5.5"))
 }
 
 # 2026-09-23 CP /v1/models 실측 순서 — 점 버전이 base보다 먼저 온다
@@ -90,3 +84,16 @@ CP_MODEL_IDS_20260923 = [
 CP_MODEL_IDS_20260930 = ["claude-sonnet-5-5", *CP_MODEL_IDS_20260923]
 # 2026-10-07 실측 — claude-haiku-5-5가 맨 앞에 온다(v2.33.0)
 CP_MODEL_IDS_20261007 = ["claude-haiku-5-5", *CP_MODEL_IDS_20260930]
+
+# v2.39.0(2026-10-27 사용자 결정, ADR-034)에 모니터링에서 뺀 채널 — 카탈로그에 없고, 저장 행은 기본 숨김 패턴이 가린다
+RETIRED_V239_MODELS: dict[str, str] = {
+    **{f"{ch}.{fm}": f"Bedrock {fam} ({'Global' if ch == 'global' else 'US'})"
+       for fm, fam in (("anthropic.claude-opus-4-7", "Claude Opus 4.7"), ("anthropic.claude-opus-4-6-v1", "Claude Opus 4.6"),
+                       ("anthropic.claude-sonnet-4-6", "Claude Sonnet 4.6"),
+                       ("anthropic.claude-haiku-4-5-20251001-v1:0", "Claude Haiku 4.5"))
+       for ch in _GU},
+    "anthropic:claude-opus-4-7": "Anthropic Claude Opus 4.7 (US)",
+    "anthropic:claude-sonnet-4-6": "Anthropic Claude Sonnet 4.6 (US)",
+    "anthropic:claude-haiku-4-5-20251001": "Anthropic Claude Haiku 4.5 (US)",
+    "openai:us-east-1:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-1)",
+}

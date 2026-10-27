@@ -4,6 +4,7 @@ gptbench.run_cycle()이 15분마다 저장한 gpt_bench_results를 집계해 제
   - /latest : 최신 사이클의 채널별 스코어 카드 (median TTFB/TTFT/GAP, 캐시 히트율, 성공률)
   - /trend  : 시간 범위(1~168h) 내 사이클×채널 median 시계열 (그래프용)
 조회 전용·공개 (auto-probe 계열과 동일 정책).
+두 조회 모두 visibility.visible_only로 숨김 라벨을 뺀다 — 모니터링에서 뺀 GPT 5.4의 지난 사이클(v2.39.0)이 그 예다.
 """
 
 import statistics
@@ -16,6 +17,7 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from models import GptBenchResult
+from visibility import visible_only
 
 router = APIRouter(prefix="/api/gptbench", tags=["gptbench"])
 
@@ -60,7 +62,7 @@ class TrendResponse(BaseModel):
     series: list[TrendSeries] = []
 
 
-# 사이클은 채널 단위로 커밋되므로 실행 중(19채널 호스트별 갈래 병렬 — v2.38.0 두 갈래, v2.32.1 네 갈래, 18채널 순차 실측 p50 620s)에는
+# 사이클은 채널 단위로 커밋되므로 실행 중(18채널 호스트별 갈래 병렬 — v2.38.0부터 두 갈래, v2.32.1 네 갈래, 18채널 순차 실측 p50 620s)에는
 # max(cycle_ts)가 부분 사이클이다. 데드라인(13분) + 여유 = 14분 이상 지난 사이클만 "완료"로 간주하고, 최신이 진행 중이면
 # 직전 사이클로 폴백한다 (2026-07-22 "카드 4개만 보임" 실사고).
 # 15분으로 늘리지 않는 이유(v2.32.0): 화면에 보이는 사이클 나이가 최대 "이 값 + 15분 + 기동 지연"이 되어 프런트
@@ -102,7 +104,7 @@ def latest(db: Session = Depends(get_db)):
     last_cycle = _latest_complete_cycle(db)
     if last_cycle is None:
         return LatestResponse()
-    rows = (db.query(GptBenchResult)
+    rows = (visible_only(db.query(GptBenchResult), GptBenchResult.model_name)
             .filter(GptBenchResult.cycle_ts == last_cycle).all())
     by_channel: dict[str, list[GptBenchResult]] = {}
     for r in rows:
@@ -131,7 +133,7 @@ def latest(db: Session = Depends(get_db)):
         ))
     # 정렬: family(최신 순, GPT 6.1 → GPT 6 세대 → 5.x) → region. 누락된 family는 rank 9로 맨 뒤.
     fam_rank = {"GPT 6.1 Sol": 0, "GPT 6.1 Terra": 1, "GPT 6 Astra": 2, "GPT 6 Sol": 3, "GPT 6 Luna": 4,
-                "GPT 5.6 Terra": 5, "GPT 5.5": 6, "GPT 5.4": 7}
+                "GPT 5.6 Terra": 5, "GPT 5.5": 6}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
@@ -146,14 +148,15 @@ def trend(
 ):
     """시간 범위 내 사이클별 median 시계열 — 그래프용.
 
-    최대 범위(7일)에서 96사이클/일 × 19채널 × 10행 ≈ 13만 행을 읽는다(v2.38.0, 21채널 시절 14만 행). ORM 객체 대신 집계에 쓰는
+    최대 범위(7일)에서 96사이클/일 × 18채널 × 10행 ≈ 12만 행을 읽는다(v2.39.0, 21채널 시절 14만 행). ORM 객체 대신 집계에 쓰는
     7개 컬럼만 튜플로 읽어 행당 메모리를 줄이고(identity map·인스턴스 상태 없음), median은
     Python에서 계산한다.
     """
     since = datetime.now(timezone.utc) - timedelta(hours=hours)
-    query = (db.query(GptBenchResult.model_id, GptBenchResult.model_name,
-                      GptBenchResult.cycle_ts, GptBenchResult.status,
-                      GptBenchResult.ttfb_ms, GptBenchResult.ttft_ms, GptBenchResult.gap_ms)
+    query = (visible_only(db.query(GptBenchResult.model_id, GptBenchResult.model_name,
+                                   GptBenchResult.cycle_ts, GptBenchResult.status,
+                                   GptBenchResult.ttfb_ms, GptBenchResult.ttft_ms, GptBenchResult.gap_ms),
+                          GptBenchResult.model_name)
              .filter(GptBenchResult.cycle_ts >= since))
     # 진행 중 사이클의 부분 median이 그래프 끝점을 왜곡하지 않도록 완료 사이클까지만 포함.
     cutoff = _latest_complete_cycle(db)

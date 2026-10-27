@@ -103,11 +103,10 @@ def test_register_openai_models_per_region_availability(monkeypatch):
     openai_keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
     # v2.38.0 (2026-10-27 user decision): Mantle in-region is us-east-1 only — the us-east-2 and us-west-2 base URLs
     # are still injected, yet no spec names those regions, so neither model registers there.
-    assert openai_keys == [
-        "openai:us-east-1:openai.gpt-5.4",
-        "openai:us-east-1:openai.gpt-5.5",
-    ]
-    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-5.4"] == "OpenAI GPT 5.4 (us-east-1)"
+    # v2.39.0 (same day, ADR-034): GPT 5.4 left monitoring — its env alone registers nothing.
+    assert openai_keys == ["openai:us-east-1:openai.gpt-5.5"]
+    assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-5.5"] == "OpenAI GPT 5.5 (us-east-1)"
+    assert "GPT 5.4" not in [family for _, family, _ in prober._OPENAI_MODEL_SPECS]
     in_region = {r for _, _, regions in prober._OPENAI_MODEL_SPECS for r in regions
                  if r not in prober._OPENAI_PSEUDO_REGIONS}
     assert in_region == {"us-east-1"}
@@ -188,13 +187,14 @@ def test_register_openai_models_partial_skip(monkeypatch):
     _isolate_ambient_openai_env(monkeypatch)
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     monkeypatch.setenv("OPENAI_US_EAST_1_BASE_URL", "https://e1/openai/v1")
-    monkeypatch.delenv("OPENAI_US_EAST_2_BASE_URL", raising=False)
-    monkeypatch.setenv("BEDROCK_OPENAI_GPT_54_MODEL_ID", "openai.gpt-5.4")
-    monkeypatch.delenv("BEDROCK_OPENAI_GPT_55_MODEL_ID", raising=False)
+    monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL", raising=False)
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_55_MODEL_ID", "openai.gpt-5.5")
+    monkeypatch.setenv("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "openai.gpt-5.6-terra")
+    monkeypatch.delenv("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", raising=False)
     prober._register_openai_models()
     keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
-    # gpt-5.5 model-id absent → skipped; us-east-2 base-url absent → skipped.
-    assert keys == ["openai:us-east-1:openai.gpt-5.4"]
+    # gpt-5.6-sol model-id absent → skipped; global base-url absent → the 5.6 Terra Global channel is skipped.
+    assert keys == ["openai:us-east-1:openai.gpt-5.5", "openai:us-east-1:openai.gpt-5.6-terra"]
 
 
 def test_register_openai_1p_models(monkeypatch):
@@ -202,12 +202,11 @@ def test_register_openai_1p_models(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)  # Mantle off — 1P is independent
     monkeypatch.setenv("OPENAI_1P_API_KEY", "sk-proj-fake")
-    monkeypatch.setenv("OPENAI_1P_GPT_54_MODEL_ID", "gpt-5.4")
+    monkeypatch.setenv("OPENAI_1P_GPT_54_MODEL_ID", "gpt-5.4")  # v2.38.x env: the GPT 5.4 1P spec is gone (v2.39.0)
     monkeypatch.setenv("OPENAI_1P_GPT_55_MODEL_ID", "gpt-5.5")
     prober._register_openai_models()
     keys = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:1p:"))
-    assert keys == ["openai:1p:gpt-5.4", "openai:1p:gpt-5.5"]
-    assert prober.AVAILABLE_MODELS["openai:1p:gpt-5.4"] == "OpenAI GPT 5.4 (1P)"
+    assert keys == ["openai:1p:gpt-5.5"]
     assert prober.AVAILABLE_MODELS["openai:1p:gpt-5.5"] == "OpenAI GPT 5.5 (1P)"
 
 
@@ -215,7 +214,7 @@ def test_register_openai_1p_skips_without_key(monkeypatch):
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_API_KEY", raising=False)
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
-    monkeypatch.setenv("OPENAI_1P_GPT_54_MODEL_ID", "gpt-5.4")  # id present but no key → skip
+    monkeypatch.setenv("OPENAI_1P_GPT_55_MODEL_ID", "gpt-5.5")  # id present but no key → skip
     prober._register_openai_models()
     assert not [k for k in prober.AVAILABLE_MODELS if k.startswith("openai:1p:")]
 

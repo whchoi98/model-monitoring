@@ -46,6 +46,14 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
+**v2.39.0에서 v2.38.0으로 되돌릴 때 (과도 상태)**. v2.39.0은 CDK env(`BEDROCK_OPENAI_GPT_54_MODEL_ID`, 휴면 1P의
+`OPENAI_1P_GPT_54_MODEL_ID`)를 뺀 릴리스라 위 규칙대로 v2.38.0 tag의 `cdk/`로 v2.38.0 이미지 digest(`v2d64a44`, 값은
+`docs/reviews/2026-10-27-v238-deployment.md`)를 배포한다. 현재 `cdk/`로 v2.38.0 이미지만 넣으면 GPT 5.4 env가 없어 그 채널은 계속 빠진다.
+DB는 그대로 둔다. v2.38.0은 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5(Global, US, CP 타깃)와 GPT 5.4 us-east-1을 다시 등록하고
+(활성 61채널, 벤치 19채널 `cris=11 mantle-us-east-1=8`), 그 채널의 `price_history` 행은 지운 적이 없으므로 비용도 바로 이어진다.
+v2.38.0의 기본 숨김 패턴은 `(1P)`뿐이라 v2.39.0 동안 가려졌던 지난 행이 모든 화면에 다시 보이고, 제외 기간에는 측정이 없어
+추세 선이 그 구간에서 끊긴다. 데이터를 지울 필요는 없다. 다시 v2.39.0 이상으로 올리면 다섯 패밀리는 다시 숨는다.
+
 **v2.38.0에서 v2.37.1로 되돌릴 때 (과도 상태)**. v2.38.0은 CDK env(`BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)를 더한 릴리스라 위 규칙대로
 v2.37.1 tag의 `cdk/`로 v2.37.1 이미지 digest(`v705c6ea`)를 배포한다. DB는 그대로 둔다. v2.37.1은 OpenAI Mantle us-east-2, us-west-2 채널 8개와
 GPT 6 Astra (us-west-2)를 다시 등록하고, 그 채널의 `price_history` 행은 지운 적이 없으므로 비용도 바로 이어진다. GPT 6.1 Terra 3채널과

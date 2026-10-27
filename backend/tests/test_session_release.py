@@ -33,7 +33,7 @@ from auth import create_access_token
 from database import get_db
 
 _USER = "tester@example.com"
-_MODEL = "global.anthropic.claude-sonnet-4-6"
+_MODEL = "global.anthropic.claude-sonnet-5"
 
 
 @pytest.fixture()
@@ -87,7 +87,7 @@ def test_parity_run_holds_no_transaction_during_the_sweep(tracked, monkeypatch):
     import parity.runner as parity_runner
     from parity.probes import ProbeOutcome
 
-    monkeypatch.setattr(prober, "AVAILABLE_MODELS", {_MODEL: "Bedrock Claude Sonnet 4.6 (Global)"})
+    monkeypatch.setattr(prober, "AVAILABLE_MODELS", {_MODEL: "Bedrock Claude Sonnet 5 (Global)"})
     monkeypatch.setattr(parity_runner, "SessionLocal", tracked.factory)
     seen: list[list[int]] = []
 

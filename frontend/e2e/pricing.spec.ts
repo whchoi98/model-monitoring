@@ -34,7 +34,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(page.getByRole("main").getByRole("heading", { level: 2 }))
     .toHaveText(["Anthropic Claude", "OpenAI", "Amazon Nova", "참고 사항", "참고 자료"]);
   await expect(page.getByRole("region", { name: "OpenAI 단가 표" }).getByRole("rowheader"))
-    .toHaveText(["GPT 6 Astra", "GPT 5.6 Sol", "GPT 5.4"]);
+    .toHaveText(["GPT 6 Astra", "GPT 5.6 Sol", "GPT 5.5"]);
   await expect(page.getByRole("region", { name: "Anthropic Claude 단가 표" }).getByRole("columnheader"))
     .toHaveText(["모델", "Claude Platform on AWS", ...BEDROCK_COLUMNS]);
   await expect(page.getByRole("region", { name: "OpenAI 단가 표" }).getByRole("columnheader"))
@@ -90,15 +90,15 @@ test("unit prices render the backend table, badges and both disclaimers", async 
   await expect(novaUs.locator("[data-cache-line]")).toHaveText("캐시 읽기 $0.0825, 쓰기 $0.00");
   await expect(novaUs.locator("[data-long-line]")).toHaveCount(0);
 
-  const gpt54 = page.locator('tr[data-family="gpt-5.4"] td[data-tier="in_region"] [data-price-line]');
-  await expect(gpt54).toHaveCount(2);
-  await expect(gpt54.nth(0)).toContainText("$2.75 / $16.50 us-east-1, us-east-2");
-  await expect(gpt54.nth(1)).toContainText("$2.50 / $15.00 us-west-2");
-  await expect(gpt54.nth(0).locator("[data-long-line]")).toHaveText("긴 컨텍스트 $5.50 / $24.75, 캐시 읽기 $0.55");
+  const gpt55 = page.locator('tr[data-family="gpt-5.5"] td[data-tier="in_region"] [data-price-line]');
+  await expect(gpt55).toHaveCount(2);
+  await expect(gpt55.nth(0)).toContainText("$2.75 / $16.50 us-east-1, us-east-2");
+  await expect(gpt55.nth(1)).toContainText("$2.50 / $15.00 us-west-2");
+  await expect(gpt55.nth(0).locator("[data-long-line]")).toHaveText("긴 컨텍스트 $5.50 / $24.75, 캐시 읽기 $0.55");
   // Badge explanations are visible text next to the badge (touch and keyboard users never see a title tooltip).
   await expect(page.locator("[data-badge][title]")).toHaveCount(0);
-  await expect(gpt54.nth(0).locator('[data-badge-detail="pending"]')).toBeVisible();
-  await expect(gpt54.nth(0).locator('[data-badge-detail="pending"]')).toHaveText("새 값 $3.00 / $18.00");
+  await expect(gpt55.nth(0).locator('[data-badge-detail="pending"]')).toBeVisible();
+  await expect(gpt55.nth(0).locator('[data-badge-detail="pending"]')).toHaveText("새 값 $3.00 / $18.00");
 
   const fableUs = page.locator('tr[data-family="claude-fable-5-1"] td[data-tier="us"]');
   await expect(fableUs.locator('[data-badge="unverified"]')).toContainText("자동 확인 안 됨");
@@ -120,7 +120,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
     "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
     "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
     "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
-    "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
+    "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
     "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
     "캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다",
     "batch, flex, priority(fast) 단가는 포함하지 않는다",
@@ -169,9 +169,9 @@ test("the model-ID toggle lists each price's model IDs, by keyboard too", async 
   await toggle.focus();
   await page.keyboard.press("Enter");
   await expect(toggle).toHaveAttribute("aria-pressed", "true");
-  const ids = page.locator('tr[data-family="gpt-5.4"] td[data-tier="in_region"] [data-price-line]').nth(0).locator("[data-model-ids]");
+  const ids = page.locator('tr[data-family="gpt-5.5"] td[data-tier="in_region"] [data-price-line]').nth(0).locator("[data-model-ids]");
   await expect(ids).toBeVisible();
-  await expect(ids.locator("span")).toHaveText(["openai:us-east-1:openai.gpt-5.4", "openai:us-east-2:openai.gpt-5.4"]);
+  await expect(ids.locator("span")).toHaveText(["openai:us-east-1:openai.gpt-5.5", "openai:us-east-2:openai.gpt-5.5"]);
   await expect(page.locator('tr[data-family="claude-opus-5-5"] td[data-tier="cp"] [data-model-ids]')).toHaveText("anthropic:claude-opus-5-5");
 
   await page.keyboard.press("Space");
@@ -190,7 +190,7 @@ test("a promotion past its minimum date asks to check whether it ended", async (
 
 test("a footnote jumps to its reference and highlights it for 1.5 seconds", async ({ page }) => {
   await page.goto("/pricing");
-  await page.locator('tr[data-family="gpt-5.4"]').getByRole("link", { name: "참고 자료 7" }).first().click();
+  await page.locator('tr[data-family="gpt-5.5"]').getByRole("link", { name: "참고 자료 7" }).first().click();
   await expect(page).toHaveURL(/#ref-7$/);
   const reference = page.locator("#ref-7");
   await expect(reference).toHaveAttribute("data-highlighted", "true");

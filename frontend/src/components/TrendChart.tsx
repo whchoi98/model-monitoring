@@ -35,6 +35,7 @@ interface Props {
 // Backend는 "Bedrock <family> (channel)" 또는 "Anthropic <family> (US)" prefix가 붙은 model_name으로 응답.
 // 매칭 안 되면 family substring 기반 fallback.
 // 색은 선 패턴(lineDash)과 함께 읽힌다 — 같은 패턴끼리 가까운 색이 되지 않게 고른다(TrendChart.test.ts가 새 채널의 색 차이를 고정).
+// v2.39.0: 모니터링에서 뺀 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4의 색을 지웠다 — 지난 행은 백엔드가 숨긴다.
 export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Fable 5.1 (Global)": "#7dd3fc",
   "Bedrock Claude Fable 5.1 (US)": "#0ea5e9",
@@ -47,10 +48,6 @@ export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Opus 5 (ap-northeast-2)": "#fda4af",
   "Bedrock Claude Opus 4.8 (Global)": "#fb7185",
   "Bedrock Claude Opus 4.8 (US)": "#e11d48",
-  "Bedrock Claude Opus 4.7 (Global)": "#f97316",
-  "Bedrock Claude Opus 4.7 (US)": "#ef4444",
-  "Bedrock Claude Opus 4.6 (Global)": "#f59e0b",
-  "Bedrock Claude Opus 4.6 (US)": "#ec4899",
   // Claude Sonnet 5.5 (v2.32.0) — Bedrock Global + CP, US는 2026-10-07에 us. 프로파일이 생겨 v2.33.0에 더했다.
   // US 파선은 보라, 남색이 Sonnet 5 US 파선과 ΔE 15 안쪽이거나 다크 카드 대비 4.5:1 아래라 계열 밖 올리브(같은 패턴 최근접 ΔE 18.7).
   "Bedrock Claude Sonnet 5.5 (Global)": "#818cf8",
@@ -58,28 +55,21 @@ export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Sonnet 5 (Global)": "#6366f1",
   "Bedrock Claude Sonnet 5 (US)": "#4f46e5",
   "Bedrock Claude Sonnet 5 (ap-northeast-2)": "#a5b4fc",
-  "Bedrock Claude Sonnet 4.6 (Global)": "#3b82f6",
-  "Bedrock Claude Sonnet 4.6 (US)": "#8b5cf6",
-  // Claude Haiku 5.5 (v2.33.0) — 따뜻한 계열 한 패밀리(Global 적갈색 실선, US 주황 파선, CP 금색 점선). 청록과 보라는 Haiku 4.5가 쓴다.
+  // Claude Haiku 5.5 (v2.33.0) — 따뜻한 계열 한 패밀리(Global 적갈색 실선, US 주황 파선, CP 금색 점선). 청록과 보라는 v2.38.x까지 Haiku 4.5가 썼다.
   "Bedrock Claude Haiku 5.5 (Global)": "#aa5533",
   "Bedrock Claude Haiku 5.5 (US)": "#cc6600",
-  "Bedrock Claude Haiku 4.5 (Global)": "#06b6d4",
-  "Bedrock Claude Haiku 4.5 (US)": "#a855f7",
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
   "Anthropic Claude Fable 5.1 (US)": "#0369a1",
   "Anthropic Claude Fable 5 (US)": "#115e59",
   "Anthropic Claude Opus 5.5 (US)": "#a4161a",
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
-  "Anthropic Claude Opus 4.7 (US)": "#7c3aed",
   // CP Sonnet 5.5는 CP Sonnet 5(#4338ca)와 같은 점선이라 Sonnet 계열에서 떨어진 밝은 자홍 (v2.32.0).
   // 짙은 보라(#3b0764)는 다크 카드에서 3.05:1로 묻혔다 — 이 색은 다크 8.7:1, 라이트(보정 #8b5e81) 5.1:1.
   "Anthropic Claude Sonnet 5.5 (US)": "#e098d0",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
-  "Anthropic Claude Sonnet 4.6 (US)": "#9333ea",
   "Anthropic Claude Haiku 5.5 (US)": "#ddbb11",
-  "Anthropic Claude Haiku 4.5 (US)": "#d946ef",
-  // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 금색 계열(청록은 Haiku 4.5 Global과 겹친다).
+  // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 금색 계열(청록은 v2.38.x까지 Haiku 4.5 Global과 겹쳤다).
   // 라이트 테마가 밝은 US를 어둡게 보정해 밝기 순서는 테마마다 다르지만, 두 테마 모두 세 채널 쌍이 CIEDE2000 16 이상 떨어진다.
   "OpenAI GPT 6.1 Sol (Global)": "#aa8f09",
   "OpenAI GPT 6.1 Sol (US)": "#d7be7d",
@@ -120,10 +110,6 @@ export const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 5.5 (us-east-1)": "#10a37f",
   "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
   "OpenAI GPT 5.5 (1P)": "#047857",
-  "OpenAI GPT 5.4 (us-east-1)": "#34d399",
-  "OpenAI GPT 5.4 (us-east-2)": "#059669",
-  "OpenAI GPT 5.4 (us-west-2)": "#10b981",
-  "OpenAI GPT 5.4 (1P)": "#6ee7b7",
 };
 
 // ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에, "Opus 5"는 "Opus 5.5"에, "Sonnet 5"는 "Sonnet 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
@@ -133,13 +119,9 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Opus 5.5", "#e5383b"],
   ["Opus 5", "#f43f5e"],
   ["Opus 4.8", "#e11d48"],
-  ["Opus 4.7", "#ef4444"],
-  ["Opus 4.6", "#f59e0b"],
   ["Sonnet 5.5", "#818cf8"],
   ["Sonnet 5", "#4f46e5"],
-  ["Sonnet 4.6", "#8b5cf6"],
   ["Haiku 5.5", "#aa5533"],
-  ["Haiku 4.5", "#06b6d4"],
   ["Nova", "#84cc16"],
   ["GPT 6.1 Sol", "#d9b40f"],
   ["GPT 6.1 Terra", "#d633ff"],
@@ -150,7 +132,6 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["GPT 5.6 Terra", "#a3e635"],
   ["GPT 5.6 Luna", "#4ade80"],
   ["GPT 5.5", "#10a37f"],
-  ["GPT 5.4", "#34d399"],
 ];
 
 export function getColor(modelName: string, theme: "dark" | "light"): string {

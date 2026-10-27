@@ -46,9 +46,11 @@ def test_bedrock_haiku55_and_sonnet55_us_channels():
     assert models_[S_US] == "Bedrock Claude Sonnet 5.5 (US)"
     assert "bedrock:ap-northeast-2:anthropic.claude-haiku-5-5" not in models_  # INFERENCE_PROFILE only
     keys = list(models_)
-    assert keys.index(H_G) + 1 == keys.index("global.anthropic.claude-haiku-4-5-20251001-v1:0")
-    assert keys.index(H_US) + 1 == keys.index("us.anthropic.claude-haiku-4-5-20251001-v1:0")
+    # v2.39.0: Haiku 4.5 left monitoring (ADR-034), so Haiku 5.5 ends the Global block and the US Claude block
+    assert keys.index(H_G) + 1 == keys.index("us.anthropic.claude-fable-5-1")
+    assert keys.index(H_US) + 1 == keys.index("bedrock:ap-northeast-2:anthropic.claude-opus-5")
     assert keys.index(S_US) + 1 == keys.index("us.anthropic.claude-sonnet-5")
+    assert not [k for k in models_ if "haiku-4-5" in k]
 
 
 def test_temperature_is_suppressed_for_haiku55_only():
@@ -58,9 +60,9 @@ def test_temperature_is_suppressed_for_haiku55_only():
     assert not prober._is_reasoning_model("anthropic:claude-haiku-4-5-20251001")
 
 
-def test_cp_target_haiku55_right_before_haiku45_and_mirrored_by_pricing():
+def test_cp_target_haiku55_is_the_last_target_and_mirrored_by_pricing():
     substrings = [s for s, _ in prober._ANTHROPIC_TARGETS]
-    assert substrings.index("haiku-5-5") + 1 == substrings.index("haiku-4-5")
+    assert substrings[-1] == "haiku-5-5" and "haiku-4-5" not in substrings  # haiku-4-5 followed it until v2.38.x
     assert dict(prober._ANTHROPIC_TARGETS)["haiku-5-5"] == "Anthropic Claude Haiku 5.5 (US)"
     assert tuple(substrings) == pricing_sources._CP_TARGETS
 
@@ -69,8 +71,9 @@ def test_cp_discovery_with_20261007_model_order_labels_every_id_once():
     """claude-haiku-5-5 comes first; every target still finds its own id and no id gets two labels."""
     matched = {s: prober._match_anthropic_model(s, CP_MODEL_IDS_20261007) for s, _ in prober._ANTHROPIC_TARGETS}
     assert matched["haiku-5-5"] == "claude-haiku-5-5"
-    assert matched["haiku-4-5"] == "claude-haiku-4-5-20251001"
     assert None not in matched.values()
+    # the list still has the v2.39.0 retired ids; no target registers them
+    assert not {"claude-haiku-4-5-20251001", "claude-opus-4-7", "claude-sonnet-4-6"} & set(matched.values())
     assert len(set(matched.values())) == len(matched)
     # a dated Haiku 5.5 id still matches its own target, and a later point release never hijacks it
     assert prober._match_anthropic_model("haiku-5-5", ["claude-haiku-5-5-20261101"]) == "claude-haiku-5-5-20261101"
@@ -109,10 +112,11 @@ def test_price_identity_of_the_new_channels():
             "claude-haiku-5-5", "Claude Haiku 5.5", channel, source_kind), mid
     assert price_identity(S_US).channel == "us" and price_identity(S_US).family_key == "claude-sonnet-5-5"
     assert pricing_sources.FAMILY_ORDER.index("Claude Haiku 5.5") + 1 == pricing_sources.FAMILY_ORDER.index(
-        "Claude Haiku 4.5")
+        "Nova 2.0 Lite")  # Claude Haiku 4.5 sat in between until v2.38.x
     assert pricing_sources.keeps_long_context(price_identity(H_CP))
     assert not pricing_sources.keeps_long_context(price_identity(S_G))
-    assert not pricing_sources.keeps_long_context(price_identity("us.anthropic.claude-haiku-4-5-20251001-v1:0"))
+    assert not pricing_sources.keeps_long_context(price_identity("us.anthropic.claude-opus-4-8"))
+    assert price_identity("us.anthropic.claude-haiku-4-5-20251001-v1:0") is None  # v2.39.0
 
 
 def test_new_seed_values():

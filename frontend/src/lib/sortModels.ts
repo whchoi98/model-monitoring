@@ -1,5 +1,5 @@
 // 모델 카드/이력 정렬 공통 유틸.
-// 1차: 모델 family 우선순위 (Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Haiku 4.5 > Nova > GPT ...)
+// 1차: 모델 family 우선순위 (Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Nova > GPT ...)
 // ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
 // 라벨에도 포함된다 — 더 긴 이름(5.1, 5.5)이 반드시 앞에 와야 함.
 // "Claude Sonnet 5"도 "Claude Sonnet 5.5" 라벨에 포함된다(v2.32.0).
@@ -12,13 +12,9 @@ export const FAMILY_ORDER = [
   "Claude Opus 5.5",
   "Claude Opus 5",
   "Claude Opus 4.8",
-  "Claude Opus 4.7",
-  "Claude Opus 4.6",
   "Claude Sonnet 5.5",
   "Claude Sonnet 5",
-  "Claude Sonnet 4.6",
   "Claude Haiku 5.5",
-  "Claude Haiku 4.5",
   "Nova 2.0 Lite",
   "GPT 6.1 Sol",
   "GPT 6.1 Terra",
@@ -29,13 +25,17 @@ export const FAMILY_ORDER = [
   "GPT 5.6 Terra",
   "GPT 5.6 Luna",
   "GPT 5.5",
-  "GPT 5.4",
 ];
 
 // 모니터링 catalogue에서 제외된 모델 (ADR-017). backend silent bug 대비 frontend hard-filter.
 // "(1P)": OpenAI 1P direct 채널 — 2026-07-31 사용자 결정으로 비교에서 제외(비노출).
 // 백엔드 등록은 env로 꺼졌고(ENABLE_OPENAI_1P), 이 필터는 과거 DB 행의 노출을 막는 이중 방어.
-const EXCLUDED_FAMILIES = ["Opus 4.5", "Sonnet 4.5", "(1P)"];
+// Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5, GPT 5.4: 2026-10-27 사용자 결정으로 모니터링과 화면 메뉴에서 제외(v2.39.0,
+// ADR-034). 백엔드 visibility.py 기본 숨김 패턴과 같은 이중 방어다. 남은 패밀리 이름은 이 문자열을 포함하지 않는다(tests 고정).
+const EXCLUDED_FAMILIES = [
+  "Opus 4.5", "Sonnet 4.5", "(1P)",
+  "Opus 4.7", "Opus 4.6", "Sonnet 4.6", "Haiku 4.5", "GPT 5.4",
+];
 
 export function isExcludedModel(modelName: string): boolean {
   return EXCLUDED_FAMILIES.some((p) => modelName.includes(p));

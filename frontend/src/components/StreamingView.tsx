@@ -20,29 +20,17 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Opus 5 (ap-northeast-2)": "bg-rose-900",
   "Claude Opus 4.8": "bg-fuchsia-700",
   "Claude Opus 4.8 (Global)": "bg-fuchsia-600",
-  "Claude Opus 4.7": "bg-rose-600",
-  "Claude Opus 4.7 (Global)": "bg-rose-500",
-  "Claude Opus 4.6": "bg-purple-600",
-  "Claude Opus 4.6 (Global)": "bg-purple-500",
   "Claude Sonnet 5.5": "bg-violet-700",
   "Claude Sonnet 5.5 (Global)": "bg-violet-600",
   "Claude Sonnet 5": "bg-indigo-600",
   "Claude Sonnet 5 (Global)": "bg-indigo-500",
   "Claude Sonnet 5 (ap-northeast-2)": "bg-indigo-800",
-  "Claude Sonnet 4.6": "bg-blue-600",
-  "Claude Sonnet 4.6 (Global)": "bg-blue-500",
   "Claude Haiku 5.5": "bg-orange-700",
   "Claude Haiku 5.5 (Global)": "bg-orange-600",
-  "Claude Haiku 4.5": "bg-cyan-600",
-  "Claude Haiku 4.5 (Global)": "bg-cyan-500",
   "Nova 2.0 Lite": "bg-amber-600",
   "GPT 5.5 (us-east-1)": "bg-emerald-600",
   "GPT 5.5 (us-east-2)": "bg-emerald-700",
   "GPT 5.5 (1P)": "bg-emerald-800",
-  "GPT 5.4 (us-east-1)": "bg-green-600",
-  "GPT 5.4 (us-east-2)": "bg-green-700",
-  "GPT 5.4 (us-west-2)": "bg-green-800",
-  "GPT 5.4 (1P)": "bg-green-500",
   "GPT 5.6 Sol (Global)": "bg-lime-400",
   "GPT 5.6 Sol (us-east-1)": "bg-lime-600",
   "GPT 5.6 Sol (us-east-2)": "bg-lime-700",
@@ -107,24 +95,12 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
   if (modelId.includes("opus-4-8")) {
     return `Claude Opus 4.8${claudeSuffix}`;
   }
-  if (modelId.includes("opus-4-7")) {
-    return `Claude Opus 4.7${claudeSuffix}`;
-  }
-  if (modelId.includes("opus-4-6")) {
-    return `Claude Opus 4.6${claudeSuffix}`;
-  }
   // "sonnet-5"는 "sonnet-5-5"에도 포함 — 5.5 분기가 먼저 와야 함.
   if (modelId.includes("sonnet-5-5")) return `Claude Sonnet 5.5${claudeSuffix}`;
   if (modelId.includes("sonnet-5")) {
     return `Claude Sonnet 5${claudeSuffix}`;
   }
-  if (modelId.includes("sonnet-4-6")) {
-    return `Claude Sonnet 4.6${claudeSuffix}`;
-  }
   if (modelId.includes("haiku-5-5")) return `Claude Haiku 5.5${claudeSuffix}`;
-  if (modelId.includes("haiku-4-5")) {
-    return `Claude Haiku 4.5${claudeSuffix}`;
-  }
   if (modelId.includes("nova")) return "Nova 2.0 Lite";
   if (modelId.startsWith("openai:")) {
     // openai:<region>:<actual_id> — region 직접 파싱.
@@ -144,8 +120,7 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
       : modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
       : modelId.includes("gpt-5.6-terra") ? "GPT 5.6 Terra"
       : modelId.includes("gpt-5.6-luna") ? "GPT 5.6 Luna"
-      : modelId.includes("gpt-5.5") ? "GPT 5.5"
-      : modelId.includes("gpt-5.4") ? "GPT 5.4" : "GPT";
+      : modelId.includes("gpt-5.5") ? "GPT 5.5" : "GPT";
     return `${fam} (${region})`;
   }
   return modelId;

@@ -100,7 +100,7 @@ def _normalize_target_model_id(model_id: str) -> str:
 
     OptimizePrompt API는 cross-region inference profile ID(`global.*`, `us.*`)를 받지 않음
     → 첫 prefix 제거해 plain foundation-model ID로 시도.
-    예: `global.anthropic.claude-opus-4-7` → `anthropic.claude-opus-4-7`
+    예: `global.anthropic.claude-opus-4-8` → `anthropic.claude-opus-4-8`
         `us.amazon.nova-2-lite-v1:0` → `amazon.nova-2-lite-v1:0`
         `bedrock:ap-northeast-2:anthropic.claude-opus-5` → `anthropic.claude-opus-5`
     이미 plain ID면 그대로.

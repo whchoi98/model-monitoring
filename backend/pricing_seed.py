@@ -17,6 +17,9 @@ v2.38.0: 2026-10-27 오퍼와 문서로 GPT 6.1 Terra 3채널(Global, US, us-eas
 사용자 결정으로 OpenAI Mantle 인리전을 us-east-1 하나로 모았다 — us-east-2, us-west-2 채널 8개가 빠지고 GPT 6 Astra의
 인리전 채널은 us-west-2에서 us-east-1로 옮겼다. 활성 61채널, offer FM 22개, openai-list 10개, 합계 71채널.
 빠진 채널의 price_history 행은 그대로 둔다(그 채널의 과거 비용 계산에 쓰인다).
+v2.39.0: 같은 날 사용자 결정으로 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1,
+openai-list:gpt-5.4)를 모니터링에서 뺐다(ADR-034). 활성 49채널, offer FM 17개, openai-list 9개, 합계 58채널.
+그 채널의 price_history 행도 그대로 둔다(조회는 visibility.py가 숨긴다).
 """
 
 import logging
@@ -59,14 +62,10 @@ _CLAUDE: dict[str, tuple[str, float, float, float, float, tuple[str, ...]]] = {
     "anthropic.claude-opus-5-5": ("offer-7sp77cpl4rveu", 4.0, 20.0, 4.4, 22.0, ("global", "us")),
     "anthropic.claude-opus-5": ("offer-f3u6lgbrem3zs", 5.0, 25.0, 5.5, 27.5, ("global", "us", "ap-northeast-2")),
     "anthropic.claude-opus-4-8": ("offer-wdkl4yk6s7uu4", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
-    "anthropic.claude-opus-4-7": ("offer-sltne4evyuyeu", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
-    "anthropic.claude-opus-4-6-v1": ("offer-ee7a27hh4hr62", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
     # Sonnet 5.5: v2.32.0은 Global만(us. 프로파일 없음, 2026-09-30), v2.33.0에 US(USE1_*_standard 2.2 / 11, 2026-10-07)
     "anthropic.claude-sonnet-5-5": ("offer-5fu2rhus3byrs", 2.0, 10.0, 2.2, 11.0, ("global", "us")),
     "anthropic.claude-sonnet-5": ("offer-2ykemehpsyf7g", 2.0, 10.0, 2.2, 11.0, ("global", "us", "ap-northeast-2")),
-    "anthropic.claude-sonnet-4-6": ("offer-ldnd26nhxx676", 3.0, 15.0, 3.3, 16.5, ("global", "us")),
     "anthropic.claude-haiku-5-5": ("offer-u3aih6zr7uw5u", 0.1, 0.5, 0.11, 0.55, ("global", "us")),  # v2.33.0
-    "anthropic.claude-haiku-4-5-20251001-v1:0": ("offer-fudwqbphlos64", 1.0, 5.0, 1.1, 5.5, ("global", "us")),
 }
 # OpenAI FM id → (offerId, US CRIS와 in-region in, out, Global in, out, 채널 리전)
 # 채널 리전은 prober._OPENAI_MODEL_SPECS와 같다 — Mantle 인리전은 us-east-1만(v2.38.0, tests가 고정).
@@ -80,7 +79,6 @@ _OPENAI: dict[str, tuple[str, float, float, float | None, float | None, tuple[st
     "openai.gpt-5.6-terra": ("offer-3dvyrx3okd4lq", 2.2, 13.2, 2.0, 12.0, ("global", "us-east-1")),
     "openai.gpt-5.6-luna": ("offer-bklbyf2ewuawu", 0.22, 1.32, 0.2, 1.2, ("global", "us-east-1")),
     "openai.gpt-5.5": ("offer-rtwlbb46hcxpw", 5.5, 33.0, None, None, ("us-east-1",)),
-    "openai.gpt-5.4": ("offer-5l5a5izq5fbec", 2.75, 16.5, None, None, ("us-east-1",)),
 }
 
 
@@ -97,7 +95,7 @@ def _openai_seed(fm: str, region: str, spec: tuple) -> tuple[str, tuple[float, f
     return mid, (r_in, r_out, src)
 
 
-# model_id → (input, output, source_id) — CP를 뺀 활성 50채널(v2.38.0)
+# model_id → (input, output, source_id) — CP를 뺀 활성 41채널(v2.39.0)
 SEED: dict[str, tuple[float, float, str]] = {
     **{_claude_channel_id(fm, ch): ((g_in, g_out) if ch == "global" else (r_in, r_out)) + (offer_source_id(o),)
        for fm, (o, g_in, g_out, r_in, r_out, channels) in _CLAUDE.items() for ch in channels},
@@ -110,9 +108,9 @@ CP_SEED: dict[str, tuple[float, float, str]] = {
     fk: (i, o, ANTHROPIC_SOURCE_ID)
     for fk, i, o in (
         ("claude-fable-5-1", 10.0, 50.0), ("claude-fable-5", 10.0, 50.0), ("claude-opus-5-5", 4.0, 20.0),
-        ("claude-opus-5", 5.0, 25.0), ("claude-opus-4-8", 5.0, 25.0), ("claude-opus-4-7", 5.0, 25.0),
-        ("claude-sonnet-5-5", 2.0, 10.0), ("claude-sonnet-5", 2.0, 10.0), ("claude-sonnet-4-6", 3.0, 15.0),
-        ("claude-haiku-5-5", 0.1, 0.5), ("claude-haiku-4-5", 1.0, 5.0),
+        ("claude-opus-5", 5.0, 25.0), ("claude-opus-4-8", 5.0, 25.0),
+        ("claude-sonnet-5-5", 2.0, 10.0), ("claude-sonnet-5", 2.0, 10.0),
+        ("claude-haiku-5-5", 0.1, 0.5),
     )
 }
 
@@ -124,7 +122,7 @@ OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
         ("gpt-6.1-sol", 2.0, 10.0), ("gpt-6.1-terra", 1.0, 5.0), ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0),
         ("gpt-6-luna", 0.1, 0.5),
         ("gpt-5.6-sol", 4.0, 20.0), ("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2),
-        ("gpt-5.5", 5.0, 30.0), ("gpt-5.4", 2.5, 15.0),
+        ("gpt-5.5", 5.0, 30.0),
     )
 }
 
@@ -143,14 +141,10 @@ _CLAUDE_CACHE: dict[str, tuple[tuple[float, float, float], tuple[float, float, f
     "anthropic.claude-opus-5-5": ((0.2, 5.0, 8.0), (0.22, 5.5, 8.8)),
     "anthropic.claude-opus-5": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
     "anthropic.claude-opus-4-8": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
-    "anthropic.claude-opus-4-7": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
-    "anthropic.claude-opus-4-6-v1": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
     # Sonnet 5.5 캐시 읽기는 2026-10-07 인하(0.2 → 0.1, US 0.22 → 0.11 — offer-5fu2rhus3byrs, v2.33.0)
     "anthropic.claude-sonnet-5-5": ((0.1, 2.5, 4.0), (0.11, 2.75, 4.4)),
     "anthropic.claude-sonnet-5": ((0.2, 2.5, 4.0), (0.22, 2.75, 4.4)),
-    "anthropic.claude-sonnet-4-6": ((0.3, 3.75, 6.0), (0.33, 4.125, 6.6)),
     "anthropic.claude-haiku-5-5": ((0.01, 0.125, 0.2), (0.011, 0.1375, 0.22)),
-    "anthropic.claude-haiku-4-5-20251001-v1:0": ((0.1, 1.25, 2.0), (0.11, 1.375, 2.2)),
 }
 # 프롬프트 길이로 단가가 갈리는 Claude(pricing_sources.CLAUDE_LONG_CONTEXT_FAMILIES)의 긴 컨텍스트 단가 — (Global, US),
 # 각각 _LONG_FIELDS 순서. offer `_long_ctx` 차원(100K 토큰 초과, v2.33.0). 1시간 캐시 쓰기의 긴 컨텍스트 단가는 필드가 없다.
@@ -161,14 +155,14 @@ _CLAUDE_LONG: dict[str, tuple[tuple[float, float, float, float], tuple[float, fl
 # Claude Platform on AWS — Anthropic 문서 "Cache hits and refreshes", "5m cache writes", "1h cache writes" 열
 _CP_CACHE: dict[str, tuple[float, float, float]] = {
     "claude-fable-5-1": (0.25, 12.5, 20.0), "claude-fable-5": (1.0, 12.5, 20.0), "claude-opus-5-5": (0.2, 5.0, 8.0),
-    "claude-opus-5": (0.5, 6.25, 10.0), "claude-opus-4-8": (0.5, 6.25, 10.0), "claude-opus-4-7": (0.5, 6.25, 10.0),
-    "claude-sonnet-5-5": (0.2, 2.5, 4.0), "claude-sonnet-5": (0.2, 2.5, 4.0), "claude-sonnet-4-6": (0.3, 3.75, 6.0),
-    "claude-haiku-5-5": (0.01, 0.125, 0.2), "claude-haiku-4-5": (0.1, 1.25, 2.0),
+    "claude-opus-5": (0.5, 6.25, 10.0), "claude-opus-4-8": (0.5, 6.25, 10.0),
+    "claude-sonnet-5-5": (0.2, 2.5, 4.0), "claude-sonnet-5": (0.2, 2.5, 4.0),
+    "claude-haiku-5-5": (0.01, 0.125, 0.2),
 }
 # Claude Platform on AWS 긴 컨텍스트 — Anthropic 문서 "(for prompts over 100,000 tokens)" 행, _LONG_FIELDS 순서(v2.33.0)
 _CP_LONG: dict[str, tuple[float, float, float, float]] = {"claude-haiku-5-5": (0.5, 2.5, 0.05, 0.625)}
 # OpenAI FM id → (standard = US CRIS와 모든 in-region, global = Global CRIS), 각각 _GPT_FIELDS 순서.
-# 캐시 쓰기 = offer cache_write_tokens_30m, 1시간 캐시 쓰기 없음. GPT 5.5, 5.4는 캐시 쓰기와 Global 채널이 없다.
+# 캐시 쓰기 = offer cache_write_tokens_30m, 1시간 캐시 쓰기 없음. GPT 5.5는 캐시 쓰기와 Global 채널이 없다.
 _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
     # GPT 6.1 Sol: 2026-09-30 오퍼의 긴 컨텍스트 출력(2.2 / 2)이 짧은 컨텍스트 출력보다 낮다 — 동기화가 긴 컨텍스트
     # 단가를 버리므로(pricing_sync._plausible_long) seed도 None으로 둔다(None은 동기화가 채울 수 있다)
@@ -182,7 +176,6 @@ _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
     "openai.gpt-5.6-terra": ((0.22, 2.75, 4.4, 19.8, 0.44, 5.5), (0.2, 2.5, 4.0, 18.0, 0.4, 5.0)),
     "openai.gpt-5.6-luna": ((0.022, 0.275, 0.44, 1.98, 0.044, 0.55), (0.02, 0.25, 0.4, 1.8, 0.04, 0.5)),
     "openai.gpt-5.5": ((0.55, None, 11.0, 49.5, 1.1, None), None),
-    "openai.gpt-5.4": ((0.275, None, 5.5, 24.75, 0.55, None), None),
 }
 # OpenAI 공식 가격(openai-list:<family_key>) — OpenAI 문서 "### Standard pricing data" 첫 표, _GPT_FIELDS 순서
 _OPENAI_LIST_EXTRA: dict[str, tuple] = {
@@ -195,7 +188,6 @@ _OPENAI_LIST_EXTRA: dict[str, tuple] = {
     "gpt-5.6-terra": (0.2, 2.5, 4.0, 18.0, 0.4, 5.0),
     "gpt-5.6-luna": (0.02, 0.25, 0.4, 1.8, 0.04, 0.5),
     "gpt-5.5": (0.5, None, 10.0, 45.0, 1.0, None),
-    "gpt-5.4": (0.25, None, 5.0, 22.5, 0.5, None),
 }
 # Nova 2.0 Lite — Price List USE1 cache read / cache write usagetype(1K tokens × 1000), 공식 캐시 쓰기는 $0
 _NOVA_CACHE: dict[str, tuple[float, float]] = {"us.amazon.nova-2-lite-v1:0": (0.0825, 0.0)}
@@ -217,7 +209,7 @@ def _openai_channel_id(fm: str, region: str) -> str:
     return f"openai:{region}:{region}.{fm}" if region in ("global", "us") else f"openai:{region}:{fm}"
 
 
-# model_id → 확장 필드 — CP와 OpenAI 공식 가격을 뺀 활성 55채널(SEED와 같은 키)
+# model_id → 확장 필드 — CP와 OpenAI 공식 가격을 뺀 활성 41채널(SEED와 같은 키)
 _SEED_EXTRA: dict[str, dict[str, float | None]] = {
     **{_claude_channel_id(fm, ch): {**_extra(_CACHE_FIELDS, g if ch == "global" else r),
                                     **_long_extra(_CLAUDE_LONG.get(fm, (None, None))[0 if ch == "global" else 1])}

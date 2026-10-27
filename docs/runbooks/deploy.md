@@ -262,8 +262,9 @@ curl -i "https://$CF_DOMAIN/api/health"
 # 첫 자동 프로빙 결과 (5분 후).
 curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 
-# OpenAI (v2.38.0 기준) — 23개 채널 토큰 수 확인 (Mantle 인리전 us-east-1 10 + Global CRIS 8 + US CRIS 5).
+# OpenAI (v2.39.0 기준) — 22개 채널 토큰 수 확인 (Mantle 인리전 us-east-1 9 + Global CRIS 8 + US CRIS 5).
 #   v2.38.0부터 Mantle 인리전은 모든 모델이 us-east-1 하나다(사용자 결정 2026-10-27, ADR-033) — openai:us-east-2:, openai:us-west-2: 행은 없는 것이 정상.
+#   v2.39.0부터 GPT 5.4 계열은 모니터링하지 않는다(ADR-034) — openai:*:openai.gpt-5.4 행은 없는 것이 정상.
 # Bedrock Mantle 엔드포인트가 stream_options.include_usage를 무시하면
 # input_tokens/output_tokens 가 0 으로 silent drop → TPS·비용도 0.
 # 1P direct 채널(openai:1p:*)은 v2.19.1부터 휴면(env 미주입 + visibility "(1P)" 필터) — 0행이 정상.
@@ -271,7 +272,7 @@ curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 #   bedrock-runtime.ap-northeast-2 호스트는 BedrockRuntime interface VPC endpoint 경유라
 #   로컬 라이브 검증과 Fargate 내부의 네트워크 경로가 다름 (ADR-025).
 # US CRIS 5채널(openai:us:us.openai.gpt-6-*, gpt-6.1-sol, gpt-6.1-terra)은 OPENAI_US_BASE_URL(bedrock-runtime.us-east-1) 주입 필수.
-#   미주입이면 prober가 조용히 skip해 23행이 18행이 된다 (ADR-027).
+#   미주입이면 prober가 조용히 skip해 22행이 17행이 된다 (ADR-027).
 # GPT-6 Astra Mantle us-east-1/us-east-2는 현재 미지원(2026-09-23 사용자 결정으로 제외, 정기 재확인 대상 아님),
 #   GPT-6 Sol/Luna Mantle us-east-2/us-west-2도 현재 미지원(404, 2026-09-23 사용자 결정으로 제외) — 그 채널은 없는 것이 정상 (ADR-027, ADR-028).
 #   Sol/Luna env(BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID)가 빠지면 6채널이 조용히 사라진다 — 이미지-only 배포 금지,
@@ -281,12 +282,12 @@ curl -i "https://$CF_DOMAIN/api/auto-probe/latest"
 #   v2.38.0부터 GPT-6 Astra의 Mantle 인리전은 us-east-1이다(2026-10-27 200, 위 2026-09-23 제외 결정은 그날까지의 기록).
 # v2.28.0부터 GPT-6 Sol/Luna 6채널도 비용이 표시된다(agreement offer rate card 단가 — Sol $2.20/$11, Global $2/$10,
 #   Luna $0.11/$0.55, Global $0.10/$0.50). /cost에서 이 6채널이 "-"면 이미지가 v2.28.0이 아니다(pricing 키 누락).
-# 첫 프로브 cycle 후 아래 명령으로 23행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
+# 첫 프로브 cycle 후 아래 명령으로 22행 + non-zero 토큰 수를 반드시 확인 (응답은 배열).
 curl -s "https://$CF_DOMAIN/api/auto-probe/latest" \
   | jq '[.[] | select(.model_id|startswith("openai:")) | {model_name, status, input_tokens, output_tokens}]'
-# 기댓값: 23개 행 (Mantle us-east-1 10 + Global 8 + US 5), status "success", input_tokens > 0, output_tokens > 0.
-#   v2.32.0~v2.37.x는 28개 행(Mantle 17 + Global 7 + US 4)이었다.
-# CP(anthropic:*)는 11행(v2.33.0) — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
+# 기댓값: 22개 행 (Mantle us-east-1 9 + Global 8 + US 5), status "success", input_tokens > 0, output_tokens > 0.
+#   v2.38.0은 23개 행(Mantle 10 + Global 8 + US 5), v2.32.0~v2.37.x는 28개 행(Mantle 17 + Global 7 + US 4)이었다.
+# CP(anthropic:*)는 8행(v2.39.0, v2.33.0~v2.38.x는 11행 — Opus 4.7, Sonnet 4.6, Haiku 4.5 타깃을 뺐다) — anthropic:claude-opus-5가 "Anthropic Claude Opus 5 (US)", anthropic:claude-opus-5-5가
 #   "Anthropic Claude Opus 5.5 (US)", anthropic:claude-sonnet-5-5가 "Anthropic Claude Sonnet 5.5 (US)",
 #   anthropic:claude-sonnet-5가 "Anthropic Claude Sonnet 5 (US)", anthropic:claude-haiku-5-5가 "Anthropic Claude Haiku 5.5 (US)"인지 확인
 #   (v2.27.0 점 버전 오등록 수정 ADR-028, v2.32.0 ADR-031, v2.33.0 ADR-032).
@@ -868,9 +869,62 @@ curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pe
   `HIDDEN_MODEL_PATTERNS="(1P),(us-east-2),(us-west-2)"`를 backend와 스케줄 태스크에 주입한다(v2.38.0에서는 적용하지 않음).
 - 롤백 지점은 v2.37.1(`v705c6ea`)이다. 되돌리면 us-east-2, us-west-2 채널과 Astra us-west-2가 다시 등록되고 6.1 Terra 3채널은 조용히 빠진다.
 
+### 5-11. v2.39.0 배포 경로와 확인 (Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 모니터링 제외)
+
+**배포 경로**: CDK env `BEDROCK_OPENAI_GPT_54_MODEL_ID`(휴면 1P의 `OPENAI_1P_GPT_54_MODEL_ID` 포함)를 뺀 릴리스다. 작업 정의에서 env를 지우도록
+**digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다(§3 경고, jest가 두 스택에 env가 없음을 고정).
+이미지만 바꿔도 남은 env는 prober가 읽지 않아 해롭지 않지만, 작업 정의를 코드와 맞추려고 CDK로 배포한다. IAM, DB 스키마 변경은 없다.
+사용자 결정(2026-10-27, ADR-034)으로 Claude Opus 4.7(Global, US, CP), Opus 4.6(Global, US), Sonnet 4.6(Global, US, CP), Haiku 4.5(Global, US, CP)와
+GPT 5.4(Mantle us-east-1) 12채널이 더 이상 등록되지 않는다(활성 61 → 49). 저장 행(probe_results, gpt_bench_results, parity_results, price_history)은
+지우지 않고, backend `visibility.py` 기본 숨김 패턴과 프런트 `EXCLUDED_FAMILIES`가 모든 화면에서 가린다. 그래서 신뢰성(7일), 비용(30일),
+벤치 추세(7일), 패리티 매트릭스에서도 배포 직후 바로 사라진다(v2.38.0의 리전 제외와 다르다).
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 카탈로그 — /status 49, /api/models 49
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count, channel_intervals}'
+curl -s "https://$CF_DOMAIN/api/models" | jq 'length'
+# 기댓값: expected_model_count 49, channel_intervals {"anthropic": 300}, 49
+
+# 2. 첫 새 AutoProber 회차(새 리비전) 뒤 — 제공자별 행 수와 빠진 다섯 패밀리
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
+# 기댓값: {"anthropic": 8, "bedrock": 19, "openai": 22}
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_name | test("Opus 4\\.[67]|Sonnet 4\\.6|Haiku 4\\.5|GPT 5\\.4")) | .model_name]'
+# 기댓값: [] — 숨김 패턴이라 옛 리비전 회차의 행도 처음부터 보이지 않는다.
+#   v2.38.0 배포 때처럼 Scheduler 갱신 직전에 이전 리비전으로 시작한 회차가 있으면(옛 코드, 61채널) 그 회차 행은 /latest의 15분 창에 남지만,
+#   다섯 패밀리 행은 숨김 패턴이 가리므로 위 두 기댓값은 그 회차가 끝나도 같다.
+
+# 3. GPT on AWS 벤치 — 배포 뒤 첫 15분 사이클
+aws logs tail /ecs/gptbench --since 20m --region $REGION | grep -E 'GPT bench (lanes|lane done|cycle)'
+# 기댓값: "cycle start: 18 channels x 10 runs", "GPT bench lanes: cris=11 mantle-us-east-1=7", "lane done" 두 줄,
+#   "cycle done: rows=180 errors=0 skipped=none"(GPT_BENCH_RUNS 10). v2.38.0 첫 사이클은 cris 278초, mantle-us-east-1(8채널) 165초였다.
+curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), gpt54: [.channels[] | select(.family == "GPT 5.4")] | length}'
+# 기댓값: n 18, gpt54 0 — 새 사이클이 완료로 보이기 전(시작 뒤 14분)의 옛 사이클에서도 GPT 5.4 카드는 숨는다.
+
+# 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:'
+# 기댓값: "pricing_sync_runner: 58 active channels"(49 + OpenAI 공식 가격 9), "ensure_seed inserted 0 rows", 런 요약 pending=0, errors=0.
+
+# 5. /api/pricing — families 18, models 49, references 20
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pending_review,
+  families: (.families | length), models: (.models | length), references: (.references | length),
+  kinds: ([.references[].kind] | group_by(.) | map({(.[0]): length}) | add),
+  retired: [.families[] | select(.family | test("Opus 4\\.[67]|Sonnet 4\\.6|Haiku 4\\.5|GPT 5\\.4")) | .family]}'
+# 기댓값: families 18, models 49, references 20, kinds {"agreement_offer": 17, "anthropic_doc": 1, "openai_doc": 1, "price_list": 1}, retired []
+```
+
+- 화면 확인: 어느 메뉴에도 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5, GPT 5.4가 없어야 한다 — 대시보드 카드 49장과 추세 선택,
+  `/reliability`, `/cost`, `/efficiency`, `/analysis`, `/models`, `/parity`, `/pricing`(OpenAI 표 고정 안내는 "GPT 5.5는 272K"), `/prompts` OptimizePrompt
+  대상 목록(Bedrock 17개), 수동 프로브 모델 목록, `/gpt-on-aws`(GPT 5.x 세대 두 열 — 5.6 Terra, 5.5, 범례 18개, 7일 추세에도 GPT 5.4 선 없음).
+- AI 인사이트와 챗봇도 숨김 패턴을 쓴다(`insights_runner`, `agent/tools.py`). 배포 전에 만든 인사이트 본문에는 다섯 패밀리 이름이 남을 수 있다.
+- 시간당 CP 호출은 132회에서 96회(8채널 × 12)가 된다.
+- 롤백 지점은 v2.38.0(`v2d64a44`, digest는 `docs/reviews/2026-10-27-v238-deployment.md`)이다. 절차는 [rollback.md](rollback.md)의
+  "v2.39.0에서 v2.38.0으로 되돌릴 때"를 따른다.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
-⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`)에는 이미지-only
+⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)에는 이미지-only
 경로(§2-1 기존 task-def 복사 재등록)를 쓰지 말 것** — 기존 task definition의 env가
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포

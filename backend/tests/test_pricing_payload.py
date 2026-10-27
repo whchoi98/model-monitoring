@@ -3,7 +3,7 @@
 Dataset (tests/_pricing_dataset.py): Claude Opus 5.5 on three channels with prompt-caching prices, a stale Nova
 row whose cache write is exactly 0, GPT 6 Luna with no price rows, GPT 5.6 Sol with two pending rows on its
 Global channel, a seed-only in-region row and an OpenAI-doc promo note, GPT 5.6 Terra whose us-west-2 price
-differs from us-east-1/us-east-2, GPT 5.5 seed-only, GPT 5.4 on three equal regions plus its OpenAI official
+differs from us-east-1/us-east-2, GPT 5.6 Luna seed-only, GPT 5.5 on three equal regions plus its OpenAI official
 price (openai_list), and rows for inactive model_ids that must never appear. PRICE_NOTES is pinned to a test
 copy so the golden does not depend on its production wording; DISCLAIMER is the spec text. References list only
 cited sources (v2.31.1): the invariant test at the bottom builds the payload on the real seeds of the 55 active
@@ -23,7 +23,7 @@ import pricing_sources
 from pricing_payload import build_pricing_payload, price_number, price_number_or_none, price_text
 from pricing_sources import active_channels, price_identity
 from tests import _pricing_dataset as ds
-from tests._pricing_dataset import EXPECTED_PAYLOAD, G54, G55, NOVA, OPUS, SOL, TERRA
+from tests._pricing_dataset import EXPECTED_PAYLOAD, G55, LUNA, NOVA, OPUS, SOL, TERRA
 from tests.pricing_catalog import ACTIVE_MODELS
 
 TIER_ORDER = ["cp", "openai_list", "global", "us", "in_region"]
@@ -66,7 +66,7 @@ def test_tiers_always_have_five_keys_in_display_order(db):
     for family in payload["families"]:
         assert list(family["tiers"]) == TIER_ORDER
         assert isinstance(family["tiers"]["in_region"], list)
-    assert _family(payload, "gpt-5.4")["tiers"]["openai_list"]["model_ids"] == ["openai-list:gpt-5.4"]
+    assert _family(payload, "gpt-5.5")["tiers"]["openai_list"]["model_ids"] == ["openai-list:gpt-5.5"]
     assert _family(payload, "claude-opus-5-5")["tiers"]["openai_list"] is None
 
 
@@ -86,7 +86,7 @@ def test_every_cell_and_pending_object_carries_the_extra_price_keys(db):
 
 def test_models_leave_out_the_display_only_openai_list_channels(db):
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
-    assert "openai-list:gpt-5.4" not in payload["models"]
+    assert "openai-list:gpt-5.5" not in payload["models"]
     assert set(payload["models"]) == {
         mid for mid in ds.ACTIVE_IDS if not mid.startswith("openai-list:") and mid != "openai:global:global.openai.gpt-6-luna"}
 
@@ -117,22 +117,22 @@ def test_numbers_serialize_without_trailing_zeros():
 
 
 def test_equal_input_output_with_a_different_cache_price_forms_its_own_in_region_element(db):
-    ds.add_price(db, "openai:us-west-2:openai.gpt-5.4", 2.75, 16.5, effective_from=ds.RUN2, status="verified",
-                 observed_at=ds.RUN2, source_id=G54, **{**ds.G54_STANDARD_EXTRA, "cache_read": 0.3})
+    ds.add_price(db, "openai:us-west-2:openai.gpt-5.5", 2.75, 16.5, effective_from=ds.RUN2, status="verified",
+                 observed_at=ds.RUN2, source_id=G55, **{**ds.G55_STANDARD_EXTRA, "cache_read": 0.3})
     db.commit()
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
-    elements = _family(payload, "gpt-5.4")["tiers"]["in_region"]
+    elements = _family(payload, "gpt-5.5")["tiers"]["in_region"]
     assert [(e["regions"], e["input"], e["output"], e["cache_read"]) for e in elements] == [
         (["us-east-1", "us-east-2"], 2.75, 16.5, 0.275), (["us-west-2"], 2.75, 16.5, 0.3)]
 
 
 def test_a_pending_value_that_differs_only_in_an_extra_field_splits_the_group(db):
-    ds.add_price(db, "openai:us-east-2:openai.gpt-5.4", 2.75, 16.5, effective_from=ds.RUN2,
-                 status="pending_review", observed_at=ds.RUN2, source_id=G54,
-                 **{**ds.G54_STANDARD_EXTRA, "cache_read": 0.3})
+    ds.add_price(db, "openai:us-east-2:openai.gpt-5.5", 2.75, 16.5, effective_from=ds.RUN2,
+                 status="pending_review", observed_at=ds.RUN2, source_id=G55,
+                 **{**ds.G55_STANDARD_EXTRA, "cache_read": 0.3})
     db.commit()
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
-    elements = _family(payload, "gpt-5.4")["tiers"]["in_region"]
+    elements = _family(payload, "gpt-5.5")["tiers"]["in_region"]
     assert [e["regions"] for e in elements] == [["us-east-1", "us-west-2"], ["us-east-2"]]
     assert elements[0]["pending"] is None
     assert (elements[1]["pending"]["input"], elements[1]["pending"]["cache_read"]) == (2.75, 0.3)
@@ -140,11 +140,11 @@ def test_a_pending_value_that_differs_only_in_an_extra_field_splits_the_group(db
 
 
 def test_a_cell_without_long_input_and_output_has_long_null(db):
-    ds.add_price(db, "openai:us-east-1:openai.gpt-5.5", 5.5, 33.0, effective_from=ds.RUN2, status="verified",
-                 observed_at=ds.RUN2, source_id=G55, cache_read=0.55, long_input=11.0, long_cache_read=1.1)
+    ds.add_price(db, "openai:us-east-1:openai.gpt-5.6-luna", 5.5, 33.0, effective_from=ds.RUN2, status="verified",
+                 observed_at=ds.RUN2, source_id=LUNA, cache_read=0.55, long_input=11.0, long_cache_read=1.1)
     db.commit()
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
-    (element,) = _family(payload, "gpt-5.5")["tiers"]["in_region"]
+    (element,) = _family(payload, "gpt-5.6-luna")["tiers"]["in_region"]
     assert (element["cache_read"], element["long"]) == (0.55, None)  # long_output missing -> no long object
 
 
@@ -152,12 +152,12 @@ def test_openai_doc_note_cites_its_source_right_after_the_family_cells(db):
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
     ids = [r["id"] for r in payload["references"]]
     # Sol cells cite SOL (3); the Sol note then cites openai-pricing (4) before Terra's offer (5).
-    assert ids[:8] == ["anthropic-pricing", OPUS, SOL, "openai-pricing", TERRA, G55, G54, NOVA]
+    assert ids[:8] == ["anthropic-pricing", OPUS, SOL, "openai-pricing", TERRA, LUNA, G55, NOVA]
     ref = payload["references"][3]
     assert {k: ref[k] for k in ("kind", "title_en", "title_ko", "url")} == {
         "kind": "openai_doc", "title_en": "OpenAI API pricing (Standard)", "title_ko": "OpenAI API 요금 (Standard)",
         "url": "https://developers.openai.com/api/docs/pricing"}
-    assert _family(payload, "gpt-5.4")["tiers"]["openai_list"]["footnotes"] == [4]
+    assert _family(payload, "gpt-5.5")["tiers"]["openai_list"]["footnotes"] == [4]
 
 
 def test_promo_note_drops_once_the_prior_price_is_observed(db):
@@ -166,9 +166,9 @@ def test_promo_note_drops_once_the_prior_price_is_observed(db):
     db.commit()
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
     assert _family(payload, "gpt-5.6-sol")["notes"] == []
-    # without the note, openai-pricing is first cited by the GPT 5.4 openai_list cell
+    # without the note, openai-pricing is first cited by the GPT 5.5 openai_list cell
     ids = [r["id"] for r in payload["references"]]
-    assert ids[:8] == ["anthropic-pricing", OPUS, SOL, TERRA, G55, "openai-pricing", G54, NOVA]
+    assert ids[:8] == ["anthropic-pricing", OPUS, SOL, TERRA, LUNA, "openai-pricing", G55, NOVA]
     assert "manual_note" not in [r["kind"] for r in payload["references"]]
 
 
@@ -183,21 +183,21 @@ def test_promo_note_drops_once_the_openai_list_tier_shows_the_prior_price(db):
 
 
 def test_manual_note_keeps_its_reference_right_after_the_cited_sources(db, monkeypatch):
-    note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
+    note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.5", "prior_price": {}}
     monkeypatch.setattr(pricing_sources, "PRICE_NOTES", [note])
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
     assert payload["references"][-1] == {
-        "n": 9, "id": "note:gpt-5.4", "kind": "manual_note",
-        "title_en": "GPT 5.4 promotion (manual note, 2026-09-23 AWS model card)",
-        "title_ko": "GPT 5.4 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)", "url": None, "as_of": None}
+        "n": 9, "id": "note:gpt-5.5", "kind": "manual_note",
+        "title_en": "GPT 5.5 promotion (manual note, 2026-09-23 AWS model card)",
+        "title_ko": "GPT 5.5 프로모션 (수동 메모, 2026-09-23 AWS 모델 카드 기준)", "url": None, "as_of": None}
     assert [r["kind"] for r in payload["references"]][-2:] == ["price_list", "manual_note"]  # Nova (8) is last cited
-    (payload_note,) = _family(payload, "gpt-5.4")["notes"]
+    (payload_note,) = _family(payload, "gpt-5.5")["notes"]
     assert payload_note == {
-        "family_key": "gpt-5.4", "kind": "promo", "min_until": "2026-11-21", "prior_price": {},
+        "family_key": "gpt-5.5", "kind": "promo", "min_until": "2026-11-21", "prior_price": {},
         "text_ko": "프로모션 단가, 최소 2026-11-21까지", "text_en": "Promotional price, at least until 2026-11-21",
-        "source": "manual_note", "source_id": "note:gpt-5.4"}  # basis fields never leave the backend
+        "source": "manual_note", "source_id": "note:gpt-5.5"}  # basis fields never leave the backend
     # a manual note is numbered at the end, never through the cell citations
-    assert "note:gpt-5.4" not in [s for f in payload["families"] for c in _cells(f) for s in c["source_ids"]]
+    assert "note:gpt-5.5" not in [s for f in payload["families"] for c in _cells(f) for s in c["source_ids"]]
 
 
 def test_price_rows_effective_after_now_are_not_current_yet(db):
@@ -216,11 +216,11 @@ def test_empty_active_set_still_returns_the_fixed_sections(db):
 
 
 def test_an_unknown_source_id_is_still_listed_so_its_footnote_resolves(db):
-    ds.add_price(db, "openai:us-east-1:openai.gpt-5.5", 5.5, 33.0, effective_from=ds.RUN2, status="verified",
+    ds.add_price(db, "openai:us-east-1:openai.gpt-5.6-luna", 5.5, 33.0, effective_from=ds.RUN2, status="verified",
                  observed_at=ds.RUN2, source_id="mystery-source")
     db.commit()
     payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
-    (element,) = _family(payload, "gpt-5.5")["tiers"]["in_region"]
+    (element,) = _family(payload, "gpt-5.6-luna")["tiers"]["in_region"]
     (ref,) = [r for r in payload["references"] if r["n"] == element["footnotes"][0]]
     assert ref == {"n": 6, "id": "mystery-source", "kind": "official_page", "title_en": "mystery-source",
                    "title_ko": "mystery-source", "url": None, "as_of": "2026-09-25"}
@@ -239,12 +239,12 @@ def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 61 active channels plus the 10 OpenAI official prices (v2.38.0)."""
+    """build_pricing_payload on the real seeds of the 49 active channels plus the 9 OpenAI official prices (v2.39.0)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 71
-    assert pricing_seed.ensure_seed(engine, active) == 71
+    assert len(active) == 58
+    assert pricing_seed.ensure_seed(engine, active) == 58
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -266,16 +266,18 @@ def test_production_references_list_only_cited_sources():
     payload = _production_payload(pricing_sources.PRICE_NOTES)
     _assert_every_reference_is_cited(payload)
     kinds = [r["kind"] for r in payload["references"]]
-    assert len(kinds) == 25  # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0)
+    # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0) = 25,
+    # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0)
+    assert len(kinds) == 20
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 22, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 17, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
-    note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.4", "prior_price": {}}
+    note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.5", "prior_price": {}}
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(26, "note:gpt-5.4", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(21, "note:gpt-5.5", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
@@ -334,9 +336,11 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
     active = active_channels(ACTIVE_MODELS, [])
     old = {m: i for m, i in active.items()
            if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra")}
-    assert len(old) == 55  # v2.38.0 catalog: the retired Mantle us-east-2/us-west-2 channels are not active at all
+    # v2.39.0 catalog: the retired Mantle us-east-2/us-west-2 channels (v2.38.0) and the five families left out in
+    # v2.39.0 are not active at all
+    assert len(old) == 42
     try:
-        assert pricing_seed.ensure_seed(engine, old) == 55
+        assert pricing_seed.ensure_seed(engine, old) == 42
         synced = datetime(2026, 9, 29, 3, 0, tzinfo=timezone.utc)  # the last v2.31.2 sync
         with Session() as s:
             s.add(models.PriceSyncRun(started_at=synced, finished_at=synced + timedelta(seconds=31), status="completed"))
@@ -352,7 +356,7 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 25
+    assert len(as_of) == 20
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
     assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol

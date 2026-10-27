@@ -50,7 +50,7 @@ const NOTES_KO = [
   "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
   "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
   "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
-  "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
+  "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
   "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
   "캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다",
   "batch, flex, priority(fast) 단가는 포함하지 않는다",
@@ -61,7 +61,7 @@ const NOTES_EN = [
   "AWS Bedrock - Global CRIS prices can differ from the same model's US CRIS and In Region prices",
   "GPT prices on AWS Bedrock - US CRIS and In Region are the same: AWS adds 10% to the OpenAI official price on both, and Global CRIS equals the OpenAI official price",
   "Cache write is the Claude 5-minute cache price, OpenAI's cache writes price and the Nova cache write price, and 1h write is the Claude 1-hour cache price",
-  "Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5) and to Claude Haiku 5.5 prompts over 100K tokens",
+  "Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.5) and to Claude Haiku 5.5 prompts over 100K tokens",
   "The OpenAI official price is OpenAI's direct API price and is not used for cost calculations",
   "Cache and long-context prices are shown for reference, and the cost pages use input and output prices",
   "Batch, flex and priority (fast) prices are not included",
@@ -165,7 +165,7 @@ describe("PricingContent", () => {
   });
 
   test("In Region 원소마다 한 줄 (가격, 리전)", () => {
-    const inRegion = cell(render("ko"), "gpt-5.4", "in_region");
+    const inRegion = cell(render("ko"), "gpt-5.5", "in_region");
     expect(count(inRegion, "data-price-line")).toBe(2);
     expect(plain(inRegion)).toContain("$2.75 / $16.50 us-east-1, us-east-2[7]");
     expect(plain(inRegion)).toContain("$2.50 / $15.00 us-west-2[7]");
@@ -212,9 +212,9 @@ describe("PricingContent", () => {
       + '<span class="whitespace-nowrap">$20.00 / $75.00</span>, <span class="whitespace-nowrap">캐시 읽기 $2.00</span>, '
       + '<span class="whitespace-nowrap">쓰기 $25.00</span></span>',
     );
-    // GPT 5.4 has no cache write in either context.
-    expect(line(cell(ko, "gpt-5.4", "openai_list"), "cache")).toBe("캐시 읽기 $0.25");
-    expect(line(cell(ko, "gpt-5.4", "openai_list"), "long")).toBe("긴 컨텍스트 $5.00 / $22.50, 캐시 읽기 $0.50");
+    // GPT 5.5 has no cache write in either context (the fixture rows were GPT 5.4 until v2.39.0).
+    expect(line(cell(ko, "gpt-5.5", "openai_list"), "cache")).toBe("캐시 읽기 $0.25");
+    expect(line(cell(ko, "gpt-5.5", "openai_list"), "long")).toBe("긴 컨텍스트 $5.00 / $22.50, 캐시 읽기 $0.50");
     // Nova: up to four decimals, and the official $0.00 cache write is shown.
     expect(line(cell(ko, "nova-2-lite", "us"), "cache")).toBe("캐시 읽기 $0.0825, 쓰기 $0.00");
     expect(line(cell(ko, "nova-2-lite", "us"), "long")).toBeNull();
@@ -225,7 +225,7 @@ describe("PricingContent", () => {
   });
 
   test("가격 줄, 캐시 줄, 긴 컨텍스트 줄, 배지 순서이고 In Region 원소마다 따로 있다", () => {
-    const inRegion = cell(render("ko"), "gpt-5.4", "in_region");
+    const inRegion = cell(render("ko"), "gpt-5.5", "in_region");
     const first = inRegion.slice(0, inRegion.indexOf("data-price-line", inRegion.indexOf("data-price-line") + 1));
     const at = ["$2.75 / $16.50", "data-cache-line", "data-long-line", 'data-badge="pending"'].map((needle) => first.indexOf(needle));
     expect(at.every((i) => i >= 0)).toBe(true);
@@ -236,7 +236,7 @@ describe("PricingContent", () => {
 
   test("리전 id, 가격 쌍, 각주는 토큰 중간에서 줄이 바뀌지 않는다 (리전 목록은 항목 사이에서만)", () => {
     const html = render("ko");
-    const inRegion = cell(html, "gpt-5.4", "in_region");
+    const inRegion = cell(html, "gpt-5.5", "in_region");
     // Each region is its own nowrap span; the footnote rides inside the last one.
     expect(inRegion).toMatch(/data-regions="true"[^>]*><span class="whitespace-nowrap">us-east-1<\/span>, <span class="whitespace-nowrap">us-east-2<sup/);
     expect(inRegion).toMatch(/<span class="whitespace-nowrap"><span class="tabular-nums text-gray-100"[^>]*>\$2\.75 \/ \$16\.50<\/span><\/span>/);
@@ -350,8 +350,8 @@ describe("PricingContent", () => {
   test("배지 설명은 title 툴팁이 아니라 배지 옆 글자, 프로모션은 OpenAI 공식 요금 문서 참고 자료로 각주", () => {
     const html = render("ko");
     expect(html).not.toMatch(/data-badge="[a-z_]+"[^>]*title=/);
-    expect(plain(cell(html, "gpt-5.4", "in_region"))).toContain("새 값 $3.00 / $18.00");
-    expect(cell(html, "gpt-5.4", "in_region")).toMatch(/data-badge-detail="pending"[^>]*><span class="tabular-nums">새 값 <span class="whitespace-nowrap">\$3\.00 \/ \$18\.00<\/span><\/span>/);
+    expect(plain(cell(html, "gpt-5.5", "in_region"))).toContain("새 값 $3.00 / $18.00");
+    expect(cell(html, "gpt-5.5", "in_region")).toMatch(/data-badge-detail="pending"[^>]*><span class="tabular-nums">새 값 <span class="whitespace-nowrap">\$3\.00 \/ \$18\.00<\/span><\/span>/);
     expect(plain(cell(html, "claude-fable-5-1", "us"))).toContain("공식 출처 확인 2026-09-20");
     expect(plain(cell(render("en"), "claude-fable-5-1", "us"))).toContain("Confirmed at source 2026-09-20");
     expect(cell(html, "nova-2-lite", "us")).toMatch(/data-badge-detail="unverified"[^>]*><span[^>]*>초기값<\/span>/);

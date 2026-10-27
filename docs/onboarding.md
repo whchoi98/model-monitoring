@@ -63,10 +63,10 @@ npm run dev
 - **Unit Prices** (`/pricing`, v2.30.0; v2.31.0 adds prompt-caching prices on every channel, GPT long-context prices and an OpenAI official price column): Standard input/output price per model family and channel with source footnotes and CSV / Markdown / JSON download. The PricingSync Fargate task refreshes prices from official sources every 12 hours into `price_history`; costs use the price in effect at each probe's time, and a change above 50% waits for admin approval — see ADR-030
 - **Parity Run** (`/parity`, v2.11.0): Fargate sweep every 12 hours probing model × API surface × feature with execution evidence — see `backend/parity/CLAUDE.md` and ADR-021
 - **Comparison Lab**: one prompt → N models in parallel via `/api/compare/run` (SSE, auth)
-- **GPT on AWS** (`/gpt-on-aws`, v2.18.0): GPT TTFB/TTFT bench on 19 channels every 15 minutes (GptBench Fargate task, parallel lanes per host — `cris` and `mantle-us-east-1` since v2.38.0) — see `backend/gptbench.py`
+- **GPT on AWS** (`/gpt-on-aws`, v2.18.0): GPT TTFB/TTFT bench on 18 channels every 15 minutes (GptBench Fargate task, parallel lanes per host — `cris` and `mantle-us-east-1` since v2.38.0, GPT 5.4 dropped in v2.39.0) — see `backend/gptbench.py`
 - **Claude API Features** (`/claude-features`, v2.23.0): daily (17:30 UTC) execution-evidence sweep of 39 rows × 5 surfaces × 7 representative models (1365 cells since v2.33.0) — see `backend/claude_features/CLAUDE.md` and ADR-026
-- **Insights**: Sonnet 4.6 KO and EN summaries every 5 minutes (Insights Fargate task, `insights_runner.py`)
-- **Channels**: 61 active channels (v2.38.0) — Bedrock Global, US and Seoul in-region (`bedrock:<region>:<fm-id>` keys, ADR-031), Claude Platform on AWS, OpenAI Mantle (us-east-1 only since v2.38.0, ADR-033) and Global/US CRIS; adding a model touches both `backend/prober.py` and the pricing tables (`pricing_sources.py`, `pricing_seed.py`)
+- **Insights**: Claude Haiku 5.5 (`INSIGHTS_MODEL_ID`) KO and EN summaries every 5 minutes (Insights Fargate task, `insights_runner.py`)
+- **Channels**: 49 active channels (v2.39.0 — Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 left monitoring, their stored rows hidden by `backend/visibility.py`, ADR-034) — Bedrock Global, US and Seoul in-region (`bedrock:<region>:<fm-id>` keys, ADR-031), Claude Platform on AWS, OpenAI Mantle (us-east-1 only since v2.38.0, ADR-033) and Global/US CRIS; adding a model touches both `backend/prober.py` and the pricing tables (`pricing_sources.py`, `pricing_seed.py`)
 
 ## Common Tasks
 

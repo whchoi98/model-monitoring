@@ -7,7 +7,7 @@
 - [Rollback](runbooks/rollback.md)
 - [Troubleshooting](runbooks/troubleshooting.md) (Claude Platform on AWS monthly usage-cap 429 / dashboard frozen, skipping overlapping cycle)
 - [Monitoring UX review and test evidence](reviews/2026-09-22-monitoring-ux.md)
-- [Architecture decision records](decisions/) (ADR-001 to ADR-033, a few numbers unused)
+- [Architecture decision records](decisions/) (ADR-001 to ADR-034, a few numbers unused)
 - [Release history](../CHANGELOG.md)
 - [Project guidance](../CLAUDE.md)
 

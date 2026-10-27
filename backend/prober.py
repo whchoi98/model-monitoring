@@ -111,17 +111,13 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
     "global.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (Global)",
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
-    "global.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (Global)",
-    "global.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (Global)",
     # Sonnet 5.5 (v2.32.0, 2026-09-30 실측): Global CRIS(Seoul 호출) 200, us. 프로파일 없음("model identifier is invalid").
     # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "sonnet-5"가 substring으로 포함.
     "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
     "global.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (Global)",
-    "global.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (Global)",
     # Haiku 5.5 (v2.33.0, 2026-10-07 출시·실측): Global(Seoul 호출)과 us.(us-east-1) 모두 200, 서울 평문 id는 INFERENCE_PROFILE 전용.
     # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "haiku-5". forced tool_choice(any)는 200.
     "global.anthropic.claude-haiku-5-5": "Bedrock Claude Haiku 5.5 (Global)",
-    "global.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
     # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용 — 예외: Seoul Opus 5, Sonnet 5는 2026-09-30부터 ON_DEMAND(아래 In-Region 블록).
     "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
@@ -129,14 +125,10 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
     "us.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (US)",
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
-    "us.anthropic.claude-opus-4-7": "Bedrock Claude Opus 4.7 (US)",
-    "us.anthropic.claude-opus-4-6-v1": "Bedrock Claude Opus 4.6 (US)",
     # Sonnet 5.5 US (v2.33.0): 2026-09-30에는 us. 프로파일이 없었고 2026-10-07 us-east-1/us-east-2/us-west-2에 생겼다(us-east-1 converse 200).
     "us.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (US)",
     "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
-    "us.anthropic.claude-sonnet-4-6": "Bedrock Claude Sonnet 4.6 (US)",
     "us.anthropic.claude-haiku-5-5": "Bedrock Claude Haiku 5.5 (US)",
-    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "Bedrock Claude Haiku 4.5 (US)",
     # Bedrock - In-Region 온디맨드 (v2.32.0, 2026-09-30 실측, ADR-031): Seoul list-foundation-models가
     # anthropic.claude-opus-5 / anthropic.claude-sonnet-5를 ON_DEMAND로 표시, converse_stream 200, temperature 400.
     # 키 "bedrock:<aws-region>:<Bedrock FM id>" — 호출 리전과 실제 modelId는 _bedrock_target()이 푼다.
@@ -144,6 +136,8 @@ AVAILABLE_MODELS: dict[str, str] = {
     "bedrock:ap-northeast-2:anthropic.claude-opus-5": "Bedrock Claude Opus 5 (ap-northeast-2)",
     "bedrock:ap-northeast-2:anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (ap-northeast-2)",
     # Opus 4.5, Sonnet 4.5는 사용자 요청으로 모니터링 대상에서 제외 (2026-05-20).
+    # Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5도 사용자 결정(2026-10-27)으로 제외 (v2.39.0, ADR-034) — Global, US와
+    # Claude Platform on AWS 채널(_ANTHROPIC_TARGETS)을 함께 뺐다. 저장 행은 남기고 visibility.py가 조회에서 숨긴다.
     # Bedrock - Amazon Nova (1P). 사용자 요청으로 Nova 2.0 Lite (US)만 유지.
     "us.amazon.nova-2-lite-v1:0": "Bedrock Nova 2.0 Lite (US)",
 }
@@ -162,12 +156,9 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("opus-5-5", "Anthropic Claude Opus 5.5 (US)"),  # v2.27.0 — CP가 2026-09-22부터 서빙
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
-    ("opus-4-7", "Anthropic Claude Opus 4.7 (US)"),
     ("sonnet-5-5", "Anthropic Claude Sonnet 5.5 (US)"),  # v2.32.0 — CP /v1/models 첫 항목(2026-09-30)
     ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
-    ("sonnet-4-6", "Anthropic Claude Sonnet 4.6 (US)"),
     ("haiku-5-5", "Anthropic Claude Haiku 5.5 (US)"),  # v2.33.0 — CP /v1/models 첫 항목(2026-10-07)
-    ("haiku-4-5", "Anthropic Claude Haiku 4.5 (US)"),
 ]
 
 # Claude Platform on AWS Path 3 External endpoint - vendor-hosted AWS API.
@@ -327,7 +318,7 @@ def _is_reasoning_model(model_id: str) -> bool:
 
 # =====================================================================
 # OpenAI GPT via Bedrock Mantle (OpenAI-compatible /openai/v1) — Path 4.
-# model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-5.4).
+# model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-5.5).
 # region이 채널 식별자 (같은 model_id를 두 리전에 호출). bearer 토큰 인증.
 # pseudo-region "global" (v2.20.0): Bedrock global cross-region 프로파일 —
 # "openai:global:global.openai.gpt-5.6-sol" 형태 (actual_id 자체에 global. 접두사 포함).
@@ -360,6 +351,7 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30, 6.1 Terra 2026-10-27
 # 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
+# GPT 5.4는 사용자 결정(2026-10-27)으로 모니터링에서 뺐다 (v2.39.0, ADR-034 — Mantle과 휴면 1P 스펙 모두, 저장 행은 visibility.py가 숨긴다).
 # Mantle 인리전은 모든 모델이 us-east-1 하나다 (v2.38.0, 2026-10-27 사용자 결정 "gpt mantle은 모두 us-east-1으로 변경").
 # 같은 날 us-east-1 Mantle이 10개 모델 모두 200 — GPT 6 Astra도 서빙한다(2026-09-09·09-23에는 404라 us-west-2였다).
 # 그 전에는 모델마다 리전이 달랐다: 5.4 us-east-1/us-east-2/us-west-2, 5.5와 5.6 Sol us-east-1/us-east-2,
@@ -377,14 +369,13 @@ _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_54_MODEL_ID", "GPT 5.4", ("us-east-1",)),
     ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1",)),
 ]
 
 # =====================================================================
 # OpenAI GPT 1P direct (api.openai.com) — Path 5.
 # Mantle와 별개 자격증명(OpenAI *platform* 키 sk-proj-…, OPENAI_1P_API_KEY)·리전 개념 없음.
-# key 스킴: "openai:1p:<native_id>" (예: openai:1p:gpt-5.4). native id는 접두사 없음(gpt-5.4).
+# key 스킴: "openai:1p:<native_id>" (예: openai:1p:gpt-5.5). native id는 접두사 없음(gpt-5.5).
 # base_url은 항상 api.openai.com (OPENAI_1P_BASE_URL로 override 가능).
 # =====================================================================
 _OPENAI_1P_DEFAULT_BASE_URL = "https://api.openai.com/v1"
@@ -394,7 +385,6 @@ _OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = [
     ("OPENAI_1P_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol"),
     ("OPENAI_1P_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra"),
     ("OPENAI_1P_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna"),
-    ("OPENAI_1P_GPT_54_MODEL_ID", "GPT 5.4"),
     ("OPENAI_1P_GPT_55_MODEL_ID", "GPT 5.5"),
 ]
 

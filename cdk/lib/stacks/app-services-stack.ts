@@ -190,7 +190,7 @@ export class AppServicesStack extends cdk.Stack {
       // MCP 커넥터 프로브용 공개 read-only MCP 서버 (서버 장애는 inconclusive로 격리).
       MANTLE_ANTHROPIC_REGION: "us-east-1",
       FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
-      BEDROCK_OPENAI_GPT_54_MODEL_ID: "openai.gpt-5.4",
+      // GPT 5.4는 v2.39.0에 모니터링에서 뺐다(사용자 결정 2026-10-27, ADR-034) — BEDROCK_/OPENAI_1P_GPT_54_MODEL_ID 미주입.
       BEDROCK_OPENAI_GPT_55_MODEL_ID: "openai.gpt-5.5",
       BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
       BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
@@ -212,7 +212,6 @@ export class AppServicesStack extends cdk.Stack {
       BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID: "openai.gpt-6.1-terra",
       // 1P direct — native ids. ENABLE_OPENAI_1P=false면 미주입 → prober가 조용히 skip.
       ...(ENABLE_OPENAI_1P ? {
-        OPENAI_1P_GPT_54_MODEL_ID: "gpt-5.4",
         OPENAI_1P_GPT_55_MODEL_ID: "gpt-5.5",
         OPENAI_1P_GPT_56_SOL_MODEL_ID: "gpt-5.6-sol",
         OPENAI_1P_GPT_56_TERRA_MODEL_ID: "gpt-5.6-terra",

@@ -80,8 +80,8 @@ const NOTES: { en: string; ko: string }[] = [
     ko: "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
   },
   {
-    en: "Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.4 and 5.5) and to Claude Haiku 5.5 prompts over 100K tokens",
-    ko: "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.4, 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
+    en: "Long-context prices apply to GPT requests above OpenAI's short-context limit (272K for GPT 5.5) and to Claude Haiku 5.5 prompts over 100K tokens",
+    ko: "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
   },
   {
     en: "The OpenAI official price is OpenAI's direct API price and is not used for cost calculations",

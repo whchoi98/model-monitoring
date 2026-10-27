@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { channelRank, familyRank, groupByFamily, hasAwsRegionSuffix, isExcludedModel, sortByFamily, sortResults } from "./sortModels";
+import { FAMILY_ORDER, channelRank, familyRank, groupByFamily, hasAwsRegionSuffix, isExcludedModel, sortByFamily, sortResults } from "./sortModels";
 
 // Fable 5.1 (v2.22.0) — includes 매칭에서 "Claude Fable 5"가 "Claude Fable 5.1"에 포함되는 접두 충돌 회귀 방지.
 describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
@@ -154,9 +154,9 @@ describe("sortModels — GPT 6 Sol / Luna", () => {
 // Sonnet 5.5 (v2.32.0) — includes 매칭에서 "Claude Sonnet 5"가 "Claude Sonnet 5.5"에 포함되는 접두 충돌 회귀 방지.
 // Sonnet 5.5는 us. 프로파일이 없어 Bedrock Global + CP 2채널이다.
 describe("sortModels — Sonnet 5.5 vs Sonnet 5 family ranking", () => {
-  it("ranks Sonnet 5.5 between Opus 4.6 and Sonnet 5, as separate families", () => {
+  it("ranks Sonnet 5.5 between Opus 4.8 and Sonnet 5, as separate families", () => {
     const r55 = familyRank("Bedrock Claude Sonnet 5.5 (Global)");
-    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Opus 4.6 (Global)"));
+    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Opus 4.8 (Global)"));
     expect(r55).toBeLessThan(familyRank("Bedrock Claude Sonnet 5 (Global)"));
     expect(familyRank("Anthropic Claude Sonnet 5.5 (US)")).toBe(r55);
   });
@@ -284,18 +284,18 @@ describe("sortModels — GPT 6.1 Terra", () => {
 describe("sortByFamily — reliability family order", () => {
   it("orders family groups like the dashboard, 5.5 before 5 and 5.1 before 5", () => {
     const alphabetical = [
-      "Claude Fable 5", "Claude Fable 5.1", "Claude Haiku 4.5", "Claude Opus 5", "Claude Opus 5.5",
+      "Claude Fable 5", "Claude Fable 5.1", "Claude Haiku 5.5", "Claude Opus 5", "Claude Opus 5.5",
       "Claude Sonnet 5", "Claude Sonnet 5.5", "GPT 6 Sol", "GPT 6.1 Sol", "Nova 2.0 Lite",
     ].map((family) => ({ family }));
     expect(sortByFamily(alphabetical).map((group) => group.family)).toEqual([
       "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5",
-      "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 4.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Sol",
+      "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Sol",
     ]);
   });
 
   it("puts unknown families after the known ones, alphabetically, without mutating the input", () => {
-    const groups = [{ family: "Zeta 1" }, { family: "GPT 5.4" }, { family: "Alpha 2" }, { family: "Claude Opus 4.8" }];
-    expect(sortByFamily(groups).map((group) => group.family)).toEqual(["Claude Opus 4.8", "GPT 5.4", "Alpha 2", "Zeta 1"]);
+    const groups = [{ family: "Zeta 1" }, { family: "GPT 5.5" }, { family: "Alpha 2" }, { family: "Claude Opus 4.8" }];
+    expect(sortByFamily(groups).map((group) => group.family)).toEqual(["Claude Opus 4.8", "GPT 5.5", "Alpha 2", "Zeta 1"]);
     expect(groups[0].family).toBe("Zeta 1");
   });
 });
@@ -306,6 +306,30 @@ describe("hasAwsRegionSuffix", () => {
     expect(hasAwsRegionSuffix("OpenAI GPT 5.4 (us-west-2)")).toBe(true);
     for (const name of ["Bedrock Claude Opus 5 (Global)", "Bedrock Claude Opus 5 (US)", "OpenAI GPT 5.4 (1P)", "Anthropic Claude Opus 5 (US)"]) {
       expect(hasAwsRegionSuffix(name)).toBe(false);
+    }
+  });
+});
+
+// v2.39.0 (2026-10-27 사용자 결정, ADR-034): Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4는 모니터링과 화면 메뉴에서 뺐다.
+describe("isExcludedModel — families left out of monitoring", () => {
+  it("hides every stored label of the five families, 1P and the 2026-05-20 exclusions", () => {
+    for (const label of [
+      "Bedrock Claude Opus 4.7 (Global)", "Bedrock Claude Opus 4.7 (US)", "Anthropic Claude Opus 4.7 (US)",
+      "Bedrock Claude Opus 4.6 (Global)", "Bedrock Claude Opus 4.6 (US)",
+      "Bedrock Claude Sonnet 4.6 (Global)", "Bedrock Claude Sonnet 4.6 (US)", "Anthropic Claude Sonnet 4.6 (US)",
+      "Bedrock Claude Haiku 4.5 (Global)", "Bedrock Claude Haiku 4.5 (US)", "Anthropic Claude Haiku 4.5 (US)",
+      "OpenAI GPT 5.4 (us-east-1)", "OpenAI GPT 5.4 (us-east-2)", "OpenAI GPT 5.4 (us-west-2)", "OpenAI GPT 5.4 (1P)",
+      "OpenAI GPT 5.5 (1P)", "Bedrock Claude Opus 4.5 (Global)", "Bedrock Claude Sonnet 4.5 (US)",
+    ]) {
+      expect(isExcludedModel(label), label).toBe(true);
+    }
+  });
+
+  it("keeps every family still monitored", () => {
+    expect(FAMILY_ORDER).toHaveLength(18);
+    for (const family of FAMILY_ORDER) expect(isExcludedModel(family), family).toBe(false);
+    for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"]) {
+      expect(FAMILY_ORDER).not.toContain(family);
     }
   });
 });

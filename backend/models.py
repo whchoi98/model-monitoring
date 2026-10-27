@@ -232,8 +232,8 @@ class GptBenchResult(Base):
     cycle_ts = Column(DateTime(timezone=True), nullable=False)   # 사이클 시작 시각 (그룹 키)
     timestamp = Column(DateTime(timezone=True), nullable=False)  # 개별 호출 시각
     model_id = Column(Text, nullable=False)     # openai:<region>:<actual_id>
-    model_name = Column(Text, nullable=False)   # "OpenAI GPT 5.4 (us-east-1)"
-    family = Column(Text, nullable=False)       # "GPT 5.4" | "GPT 5.5" | "GPT 5.6 Terra" | "GPT 6 Astra" (v2.25.1) | "GPT 6 Sol" | "GPT 6 Luna" (v2.28.0)
+    model_name = Column(Text, nullable=False)   # "OpenAI GPT 5.5 (us-east-1)"
+    family = Column(Text, nullable=False)       # "GPT 5.5" | "GPT 5.6 Terra" | "GPT 6 Astra" (v2.25.1) | "GPT 6 Sol" | "GPT 6 Luna" (v2.28.0) | "GPT 6.1 Sol" | "GPT 6.1 Terra" — 지난 행에는 "GPT 5.4"(v2.38.x까지)
     region = Column(Text, nullable=False)
     run_no = Column(Integer, nullable=False)    # 1..RUNS_PER_CHANNEL
     status = Column(Text, nullable=False)       # success | error

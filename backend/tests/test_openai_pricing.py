@@ -17,7 +17,8 @@ def _seed(model_id):
 
 
 def test_openai_channels_classify_per_channel():
-    assert price_identity("openai:us-east-1:openai.gpt-5.4").channel == "inregion:us-east-1"
+    assert price_identity("openai:us-east-1:openai.gpt-5.5").channel == "inregion:us-east-1"
+    assert price_identity("openai:us-east-1:openai.gpt-5.4") is None  # GPT 5.4 left monitoring in v2.39.0 (ADR-034)
     assert price_identity("openai:us-east-2:openai.gpt-5.5").channel == "inregion:us-east-2"
     assert price_identity("openai:global:global.openai.gpt-5.6-sol").channel == "global"
     assert price_identity("openai:us:us.openai.gpt-6-astra").channel == "us"
@@ -52,9 +53,10 @@ def test_gpt6_sol_luna_seed_per_channel():
             assert mid in pricing_seed.SEED, mid
 
 
-def test_seed_openai_gpt54_gpt55():
-    assert _seed("openai:us-east-1:openai.gpt-5.4") == (2.75, 16.5)
+def test_seed_openai_gpt55_and_no_gpt54():
     assert _seed("openai:us-east-1:openai.gpt-5.5") == (5.5, 33.0)
+    assert not [m for m in pricing_seed.SEED if "gpt-5.4" in m]  # v2.39.0: no GPT 5.4 channel or seed
+    assert "gpt-5.4" not in pricing_seed.OPENAI_LIST_SEED
 
 
 def test_seed_gpt56_global_vs_in_region():

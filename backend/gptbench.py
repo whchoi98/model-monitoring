@@ -1,7 +1,7 @@
-"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 19채널 TTFB/TTFT 정밀 측정 (v2.18.0).
+"""GPT on AWS 벤치 사이클 — Bedrock Mantle 3P의 GPT 18채널 TTFB/TTFT 정밀 측정 (v2.18.0).
 
-19채널 = Mantle 인리전(us-east-1) 8 + CRIS 11 (GPT 6 Sol/Luna 편입 v2.28.0, GPT 6.1 Sol 편입 v2.32.0, GPT 6.1 Terra 편입과
-Mantle us-east-1 일원화 v2.38.0 — 2026-10-27 사용자 요청).
+18채널 = Mantle 인리전(us-east-1) 7 + CRIS 11 (GPT 6 Sol/Luna 편입 v2.28.0, GPT 6.1 Sol 편입 v2.32.0, GPT 6.1 Terra 편입과
+Mantle us-east-1 일원화 v2.38.0 — 2026-10-27 사용자 요청, GPT 5.4 제외 v2.39.0 — 같은 날 사용자 결정).
 
 docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
   TTFB = 요청→첫 스트림 이벤트, TTFT = 요청→첫 output_text.delta, GAP = TTFT−TTFB ≈ thinking.
@@ -10,7 +10,7 @@ docs/benchmarks/ttft_bench_n20.py 방법론을 상시 스케줄화한 것:
 호스트별 갈래 병렬: 채널을 호스트별 갈래로 나눠 동시에 돈다.
   - cris              = 유사 리전 global/us 채널 (bedrock-runtime OpenAI 호환 호스트, 사용자 선택으로 한 갈래)
   - mantle-<region>   = 인리전 채널, Mantle 리전마다 한 갈래 (bedrock-mantle.<region> 호스트)
-  지금 카탈로그는 두 갈래다: cris 11, mantle-us-east-1 8 (v2.38.0 — Mantle 인리전을 us-east-1로 모았다).
+  지금 카탈로그는 두 갈래다: cris 11, mantle-us-east-1 7 (v2.38.0에 Mantle 인리전을 us-east-1로 모았고, v2.39.0에 GPT 5.4를 뺐다).
   갈래 이름은 채널 리전에서 파생하므로 새 Mantle 리전은 코드 수정 없이 자기 갈래를 얻는다.
   갈래 **안**은 채널 하나씩 순차다(갈래 안 병렬화 금지 — 같은 호스트 호출이 겹치면 contention이
   레이턴시를 왜곡, 벤치 방법론과 동일 이유). 갈래는 호스트가 달라 서로의 대기열에 끼지 않는다.
@@ -71,8 +71,9 @@ _clock = time.perf_counter
 INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sentence."
 
 # (family, model-id env var, 제공 리전) — prober._OPENAI_MODEL_SPECS의 3P(Mantle) 서브셋.
-# 19채널 = Mantle 인리전(us-east-1) 8 + CRIS 11 (v2.38.0).
-# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.4 / 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol / 6.1 Terra).
+# 18채널 = Mantle 인리전(us-east-1) 7 + CRIS 11 (v2.39.0).
+# GPT 5.6 Sol/Luna는 대상 아님 (사용자 지정: 5.5 / 5.6 Terra / 6 Astra / 6 Sol / 6 Luna / 6.1 Sol / 6.1 Terra).
+# GPT 5.4는 사용자 결정(2026-10-27)으로 모니터링에서 뺐다 (v2.39.0, ADR-034 — 벤치 첫 항목이었다).
 # pseudo-region "global" = Global CRIS 채널 (Terra v2.20.1, 2026-08-18 사용자 승인) —
 # 5.4/5.5는 global 프로파일 미지원. pseudo-region "us" = US CRIS (GPT 6 세대 전용 — Astra v2.25.1,
 # Sol/Luna v2.28.0). pseudo-region 채널의 모델 id/라벨은 prober 규약(_OPENAI_PSEUDO_REGIONS)으로 파생한다.
@@ -84,7 +85,6 @@ INSTRUCTIONS = "You are a precise technical assistant. Answer in one short sente
 # GPT 6.1 Sol(v2.32.0)과 GPT 6.1 Terra(v2.38.0): Global CRIS(Seoul bedrock-runtime 200), US CRIS(us-east-1
 # bedrock-runtime 200), Mantle us-east-1(구독 개시 401 후 200). 6.1 Terra는 2026-10-27 벤치 요청 형태 세 채널 200.
 _BENCH_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
-    ("GPT 5.4", "BEDROCK_OPENAI_GPT_54_MODEL_ID", ("us-east-1",)),
     ("GPT 5.5", "BEDROCK_OPENAI_GPT_55_MODEL_ID", ("us-east-1",)),
     ("GPT 5.6 Terra", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", ("global", "us-east-1")),
     ("GPT 6 Astra", "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", ("global", "us", "us-east-1")),

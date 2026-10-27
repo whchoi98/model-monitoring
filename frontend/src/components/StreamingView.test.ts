@@ -39,6 +39,6 @@ describe("extractModelName", () => {
   });
   test("FM id 안의 ':'는 마지막 iteration 세그먼트만 떼어 낸다", () => {
     expect(name("us.amazon.nova-2-lite-v1:0:1")).toBe("Nova 2.0 Lite");
-    expect(name("global.anthropic.claude-haiku-4-5-20251001-v1:0:3")).toBe("Claude Haiku 4.5 (Global)");
+    expect(name("bedrock:ap-northeast-2:anthropic.claude-sonnet-5:3")).toBe("Claude Sonnet 5 (ap-northeast-2)");
   });
 });

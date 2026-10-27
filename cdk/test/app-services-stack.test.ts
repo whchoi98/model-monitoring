@@ -209,4 +209,13 @@ describe("AppServicesStack", () => {
       ContainerDefinitions: Match.arrayWith([Match.objectLike({ Name: "backend",
         Environment: Match.arrayWith([Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", Value: "openai.gpt-6.1-terra" })]) })]) }));
   });
+
+  it("backend env에 GPT 5.4 model id가 없다 (v2.39.0 — 모니터링에서 뺐다)", () => {
+    const backend = Object.values(template.findResources("AWS::ECS::TaskDefinition"))
+      .flatMap((r: any) => r.Properties.ContainerDefinitions).filter((c: any) => c.Name === "backend");
+    expect(backend).toHaveLength(1);
+    const names = backend[0].Environment.map((e: any) => e.Name);
+    expect(names).not.toContain("BEDROCK_OPENAI_GPT_54_MODEL_ID");
+    expect(names).not.toContain("OPENAI_1P_GPT_54_MODEL_ID");
+  });
 });

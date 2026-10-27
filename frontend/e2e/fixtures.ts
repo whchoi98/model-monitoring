@@ -55,7 +55,8 @@ export const categories = [
 ];
 
 // ── GET /api/pricing (v2.30.0, v2.31.0) ────────────────────────────────────
-// Offer ids other than the three real ones quoted in the design (Opus 5.5, GPT 6 Astra, GPT 5.4) are
+// Offer ids other than the three real ones quoted in the design (Opus 5.5, GPT 6 Astra, GPT 5.5 — these rows were GPT 5.5
+// with its offer until v2.39.0, ADR-034) are
 // synthetic. Offer tokens, legal-term links and presigned URLs never belong in a fixture. Prices, cache
 // prices and GPT long-context prices are the 2026-09-27 official values (plan Interface Contract C8), and
 // footnote numbers follow the backend's walk: cells in display order (a family's official-source note right after
@@ -153,20 +154,20 @@ const pricingFamilies: PricingFamily[] = [
     }],
   },
   {
-    // Production has one price for all three GPT 5.4 regions; the us-west-2 split (at the OpenAI list price) is
+    // Production has one In Region cell (us-east-1); the us-east-2 and us-west-2 cells (the us-west-2 one at the OpenAI list price) are
     // synthetic so the e2e suite exercises a multi-line In Region cell. The pending value changes input and output
     // only, so its badge detail is the pair.
-    family_key: "gpt-5.4", family: "GPT 5.4", provider: "openai",
+    family_key: "gpt-5.5", family: "GPT 5.5", provider: "openai",
     tiers: {
       cp: null,
       openai_list: priceTier(2.5, 15, extras(0.25, null, null, longContext(5, 22.5, 0.5, null)),
-        ["openai-list:gpt-5.4"], "openai-pricing", 4),
+        ["openai-list:gpt-5.5"], "openai-pricing", 4),
       global: null, us: null,
       in_region: [
         {
           regions: ["us-east-1", "us-east-2"],
           ...priceTier(2.75, 16.5, extras(0.275, null, null, longContext(5.5, 24.75, 0.55, null)),
-            ["openai:us-east-1:openai.gpt-5.4", "openai:us-east-2:openai.gpt-5.4"], "offer:offer-5l5a5izq5fbec", 7,
+            ["openai:us-east-1:openai.gpt-5.5", "openai:us-east-2:openai.gpt-5.5"], "offer:offer-rtwlbb46hcxpw", 7,
             { pending: {
               id: 91, input: 3, output: 18, ...extras(0.275, null, null, longContext(5.5, 24.75, 0.55, null)),
               observed_at: "2026-09-26T15:00:00Z",
@@ -175,7 +176,7 @@ const pricingFamilies: PricingFamily[] = [
         {
           regions: ["us-west-2"],
           ...priceTier(2.5, 15, extras(0.25, null, null, longContext(5, 22.5, 0.5, null)),
-            ["openai:us-west-2:openai.gpt-5.4"], "offer:offer-5l5a5izq5fbec", 7),
+            ["openai:us-west-2:openai.gpt-5.5"], "offer:offer-rtwlbb46hcxpw", 7),
         },
       ],
     },
@@ -219,7 +220,7 @@ const pricingReferences: PricingReference[] = [
   },
   offerReference(5, "offer-7epta7rbw5aws", "GPT 6 Astra", "2026-09-26"),
   offerReference(6, "offer-e2esol56", "GPT 5.6 Sol", "2026-09-26"),
-  offerReference(7, "offer-5l5a5izq5fbec", "GPT 5.4", "2026-09-26"),
+  offerReference(7, "offer-rtwlbb46hcxpw", "GPT 5.5", "2026-09-26"),
   {
     n: 8, id: "pricelist:USE1-Nova2.0Lite-input-tokens", kind: "price_list",
     title_en: "AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",

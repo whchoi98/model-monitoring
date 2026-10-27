@@ -10,8 +10,8 @@ const catalog = [
 
 function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
   const cycle = new Date(Date.now() - 20 * 60_000).toISOString();
-  // 19채널 (v2.38.0) — /api/gptbench/latest 정렬(6.1 Sol → 6.1 Terra → Astra → Sol → Luna → 5.6 Terra → 5.5 → 5.4)과
-  // 동일. Mantle 인리전은 v2.38.0부터 us-east-1 하나다(v2.37.x 21채널은 미국 3리전, Astra us-west-2).
+  // 18채널 (v2.39.0) — /api/gptbench/latest 정렬(6.1 Sol → 6.1 Terra → Astra → Sol → Luna → 5.6 Terra → 5.5)과
+  // 동일. Mantle 인리전은 v2.38.0부터 us-east-1 하나다(v2.37.x 21채널은 미국 3리전, Astra us-west-2). GPT 5.4는 v2.39.0에 뺐다.
   const families = [
     ["GPT 6.1 Sol", ["Global", "US", "us-east-1"]],
     ["GPT 6.1 Terra", ["Global", "US", "us-east-1"]],
@@ -20,7 +20,6 @@ function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
     ["GPT 6 Luna", ["Global", "US", "us-east-1"]],
     ["GPT 5.6 Terra", ["Global", "us-east-1"]],
     ["GPT 5.5", ["us-east-1"]],
-    ["GPT 5.4", ["us-east-1"]],
   ] as const;
   const channels = families.flatMap(([family, regions]) => regions.map((region) => ({
     model_id: `${family}:${region}`, model_name: `OpenAI ${family} (${region})`,
@@ -59,9 +58,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/models", (route) => route.fulfill({ json: catalog }));
 });
 
-test("benchmark cards show all 19 channels grouped by generation", async ({ page }) => {
+test("benchmark cards show all 18 channels grouped by generation", async ({ page }) => {
   const data = await mockBenchmark(page);
-  expect(data.latest.channels).toHaveLength(19);
+  expect(data.latest.channels).toHaveLength(18);
   await page.goto("/gpt-on-aws");
   const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
   for (const channel of data.latest.channels) {
@@ -71,9 +70,9 @@ test("benchmark cards show all 19 channels grouped by generation", async ({ page
   const gpt5 = cards.getByRole("group", { name: "GPT 5.x generation", exact: true });
   await expect(gpt6.getByRole("heading", { level: 3 })).toHaveText(
     ["GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
-  await expect(gpt5.getByRole("heading", { level: 3 })).toHaveText(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"]);
+  await expect(gpt5.getByRole("heading", { level: 3 })).toHaveText(["GPT 5.6 Terra", "GPT 5.5"]);
   await expect(gpt6.getByRole("button")).toHaveCount(15);
-  await expect(gpt5.getByRole("button")).toHaveCount(4);
+  await expect(gpt5.getByRole("button")).toHaveCount(3);
   for (const name of ["OpenAI GPT 6.1 Sol (Global)", "OpenAI GPT 6.1 Sol (US)", "OpenAI GPT 6.1 Sol (us-east-1)",
     "OpenAI GPT 6.1 Terra (Global)", "OpenAI GPT 6.1 Terra (US)", "OpenAI GPT 6.1 Terra (us-east-1)",
     "OpenAI GPT 6 Sol (Global)", "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (us-east-1)",
@@ -82,7 +81,7 @@ test("benchmark cards show all 19 channels grouped by generation", async ({ page
   }
   await expect(cards.getByRole("group", { name: "Other", exact: true })).toHaveCount(0);
   const legend = page.getByRole("list", { name: "Chart legend" }).first();
-  await expect(legend.getByRole("listitem")).toHaveCount(19);
+  await expect(legend.getByRole("listitem")).toHaveCount(18);
 });
 
 test("the five-column GPT 6.x group uses three columns at lg and five from 1800px (v2.38.0)", async ({ page }) => {
@@ -255,7 +254,7 @@ test("benchmark charts use elapsed time and keep failed or missing cycles as gap
 test("dense benchmark charts keep isolated successes without ordinary marker nodes", async ({ page }) => {
   const data = await mockBenchmark(page);
   const latest = Date.parse(data.latest.cycle_ts!);
-  // 96 shared cycles across 19 channels exceed the 700-point marker limit.
+  // 96 shared cycles across 18 channels exceed the 700-point marker limit.
   data.trend.series = data.trend.series.map((series, channel) => ({
     ...series,
     points: Array.from({ length: 96 }, (_, index) => {
@@ -410,7 +409,7 @@ test("the phone trend legend tells how many channels are below the fold and desk
   await page.goto("/gpt-on-aws");
   const chart = page.getByRole("region", { name: "TTFB trend (median per cycle)", exact: true });
   const list = chart.getByRole("list", { name: "Chart legend" });
-  await expect(list.getByRole("listitem")).toHaveCount(19);
+  await expect(list.getByRole("listitem")).toHaveCount(18);
   const cue = chart.locator("[data-legend-more]");
   await expect(cue).toBeVisible();
   const hidden = await list.evaluate((element) => {

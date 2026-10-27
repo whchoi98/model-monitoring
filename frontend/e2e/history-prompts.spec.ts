@@ -365,7 +365,7 @@ test("optimizer results still populate a new prompt set and a copy failure is an
       value: { writeText: async () => { throw new DOMException("Fixture clipboard denial", "NotAllowedError"); } },
     });
   });
-  const target = "us.anthropic.claude-sonnet-4-6";
+  const target = "us.anthropic.claude-sonnet-5";
   let payload: unknown;
   await page.route("**/api/prompts/optimize", (route) => {
     payload = route.request().postDataJSON();

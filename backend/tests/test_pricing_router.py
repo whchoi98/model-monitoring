@@ -27,12 +27,12 @@ from tests._pricing_dataset import add_price
 MODELS = {
     "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
     "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
-    "openai:us-east-1:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-1)",
-    "openai:us-east-2:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-2)",
-    "openai:1p:gpt-5.4": "OpenAI GPT 5.4 (1P)",  # hidden by HIDDEN_MODEL_PATTERNS
+    "openai:us-east-1:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-1)",
+    "openai:us-east-2:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-2)",
+    "openai:1p:gpt-5.5": "OpenAI GPT 5.5 (1P)",  # hidden by HIDDEN_MODEL_PATTERNS
 }
 OPUS_OFFER = "offer:offer-7sp77cpl4rveu"
-G54_OFFER = "offer:offer-5l5a5izq5fbec"
+G55_OFFER = "offer:offer-rtwlbb46hcxpw"
 
 
 @pytest.fixture()
@@ -53,9 +53,9 @@ def env(monkeypatch):
         add_price(db, "us.anthropic.claude-opus-5-5", 4.4, 22.0, observed_at=now - timedelta(hours=1),
                   source_id=OPUS_OFFER, cache_read=0.22, cache_write=5.5, cache_write_1h=8.8)
         for region in ("us-east-1", "us-east-2"):
-            add_price(db, f"openai:{region}:openai.gpt-5.4", 2.75, 16.5, observed_at=now - timedelta(hours=1),
-                      source_id=G54_OFFER)
-        add_price(db, "openai:1p:gpt-5.4", 2.75, 16.5, source_id=G54_OFFER)
+            add_price(db, f"openai:{region}:openai.gpt-5.5", 2.75, 16.5, observed_at=now - timedelta(hours=1),
+                      source_id=G55_OFFER)
+        add_price(db, "openai:1p:gpt-5.5", 2.75, 16.5, source_id=G55_OFFER)
         db.commit()
 
     app = FastAPI()
@@ -91,13 +91,13 @@ def test_pricing_shape_and_active_set(env):
     body = client.get("/api/pricing").json()
     assert body["currency"] == "USD" and body["unit"] == "per_1m_tokens"
     assert body["disclaimer"] == {"en": DISCLAIMER["en"], "ko": DISCLAIMER["ko"]}
-    assert [f["family_key"] for f in body["families"]] == ["claude-opus-5-5", "gpt-5.4"]
+    assert [f["family_key"] for f in body["families"]] == ["claude-opus-5-5", "gpt-5.5"]
     for family in body["families"]:
         assert list(family["tiers"]) == ["cp", "openai_list", "global", "us", "in_region"]
         assert isinstance(family["tiers"]["in_region"], list)
-    gpt54 = body["families"][1]["tiers"]["in_region"]
-    assert [(e["regions"], e["input"], e["output"]) for e in gpt54] == [(["us-east-1", "us-east-2"], 2.75, 16.5)]
-    assert "openai:1p:gpt-5.4" not in body["models"]  # hidden channel never appears
+    gpt55 = body["families"][1]["tiers"]["in_region"]
+    assert [(e["regions"], e["input"], e["output"]) for e in gpt55] == [(["us-east-1", "us-east-2"], 2.75, 16.5)]
+    assert "openai:1p:gpt-5.5" not in body["models"]  # hidden channel never appears
     assert body["models"]["us.anthropic.claude-opus-5-5"] == {"input": 4.4, "output": 22, "verification": "verified"}
     refs = {r["n"]: r["id"] for r in body["references"]}
     for family in body["families"]:
@@ -112,12 +112,12 @@ def test_cp_ids_observed_in_the_last_30_days_stay_in_the_table_when_discovery_fa
     with factory() as db:
         add_price(db, "anthropic:claude-opus-5-5", 4.0, 20.0, observed_at=now - timedelta(days=2),
                   source_id="anthropic-pricing")
-        add_price(db, "anthropic:claude-opus-4-7", 5.0, 25.0, observed_at=now - timedelta(days=31),
+        add_price(db, "anthropic:claude-opus-4-8", 5.0, 25.0, observed_at=now - timedelta(days=31),
                   source_id="anthropic-pricing")
         db.commit()
     body = client.get("/api/pricing").json()
     assert body["families"][0]["tiers"]["cp"]["model_ids"] == ["anthropic:claude-opus-5-5"]
-    assert "anthropic:claude-opus-4-7" not in body["models"]  # older than 30 days
+    assert "anthropic:claude-opus-4-8" not in body["models"]  # older than 30 days
 
 
 def test_payload_is_cached_for_60_seconds(env, monkeypatch):
@@ -203,7 +203,7 @@ def test_approve_warns_about_a_verified_row_with_the_same_start_and_a_higher_id(
 
 def test_approve_no_baseline_row_applies_from_1970(env):
     factory, client, now = env
-    row_id = _pending(factory, "openai:us-east-1:openai.gpt-5.4", 3.0, 18.0, effective_from=EPOCH, observed_at=now)
+    row_id = _pending(factory, "openai:us-east-1:openai.gpt-5.5", 3.0, 18.0, effective_from=EPOCH, observed_at=now)
     listed = client.get("/api/admin/pricing/pending", headers=_auth("admin")).json()["pending"]
     assert [(p["id"], p["reason"]) for p in listed] == [(row_id, "no_baseline")]
     res = client.post(f"/api/admin/pricing/pending/{row_id}/approve", headers=_auth("admin")).json()
@@ -253,15 +253,15 @@ def test_pending_list_long_context_ratios_and_zero_baseline(env):
     with factory() as db:
         add_price(db, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, observed_at=now - timedelta(hours=1),
                   source_id="pricelist:USE1-Nova2.0Lite-input-tokens", cache_read=0.0825, cache_write=0.0)
-        add_price(db, "openai:us-east-1:openai.gpt-5.4", 2.75, 16.5, effective_from=now - timedelta(minutes=30),
-                  status="verified", observed_at=now - timedelta(minutes=30), source_id=G54_OFFER,
+        add_price(db, "openai:us-east-1:openai.gpt-5.5", 2.75, 16.5, effective_from=now - timedelta(minutes=30),
+                  status="verified", observed_at=now - timedelta(minutes=30), source_id=G55_OFFER,
                   long_input=5.5, long_output=24.75)
         db.commit()
     nova_id = _pending(factory, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, effective_from=now, observed_at=now,
                        cache_read=0.0825, cache_write=0.1)
     nova_same_zero_id = _pending(factory, "us.amazon.nova-2-lite-v1:0", 0.33, 2.75, effective_from=now,
                                  observed_at=now, cache_read=0.165, cache_write=0.0)
-    gpt_id = _pending(factory, "openai:us-east-1:openai.gpt-5.4", 2.75, 16.5, effective_from=now, observed_at=now,
+    gpt_id = _pending(factory, "openai:us-east-1:openai.gpt-5.5", 2.75, 16.5, effective_from=now, observed_at=now,
                       long_input=11.0, long_output=24.75)
     listed = {p["id"]: p for p in client.get("/api/admin/pricing/pending", headers=_auth("admin")).json()["pending"]}
     # old cache write 0 -> no finite ratio for a new non-zero value
@@ -276,16 +276,16 @@ def test_pending_list_long_context_ratios_and_zero_baseline(env):
 def test_openai_official_price_is_in_the_table_but_not_in_the_cost_map(env):
     factory, client, now = env
     with factory() as db:
-        add_price(db, "openai-list:gpt-5.4", 2.5, 15.0, observed_at=now - timedelta(hours=1),
+        add_price(db, "openai-list:gpt-5.5", 2.5, 15.0, observed_at=now - timedelta(hours=1),
                   source_id="openai-pricing", cache_read=0.25, long_input=5.0, long_output=22.5,
                   long_cache_read=0.5)
         db.commit()
     body = client.get("/api/pricing").json()
-    gpt54 = next(f for f in body["families"] if f["family_key"] == "gpt-5.4")
-    cell = gpt54["tiers"]["openai_list"]
+    gpt55 = next(f for f in body["families"] if f["family_key"] == "gpt-5.5")
+    cell = gpt55["tiers"]["openai_list"]
     assert (cell["model_ids"], cell["input"], cell["output"], cell["cache_read"], cell["long"]) == (
-        ["openai-list:gpt-5.4"], 2.5, 15, 0.25, {"input": 5, "output": 22.5, "cache_read": 0.5, "cache_write": None})
-    assert "openai-list:gpt-5.4" not in body["models"]
+        ["openai-list:gpt-5.5"], 2.5, 15, 0.25, {"input": 5, "output": 22.5, "cache_read": 0.5, "cache_write": None})
+    assert "openai-list:gpt-5.5" not in body["models"]
     ref = next(r for r in body["references"] if r["n"] == cell["footnotes"][0])
     assert (ref["id"], ref["kind"], ref["url"]) == (
         "openai-pricing", "openai_doc", "https://developers.openai.com/api/docs/pricing")
@@ -349,5 +349,5 @@ def test_hidden_model_patterns_drop_classifiable_channels(env, monkeypatch):
     _, client, _ = env
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", "(1P),(us-east-2)")
     body = client.get("/api/pricing").json()
-    assert "openai:us-east-2:openai.gpt-5.4" not in body["models"]
-    assert "openai:us-east-1:openai.gpt-5.4" in body["models"]
+    assert "openai:us-east-2:openai.gpt-5.5" not in body["models"]
+    assert "openai:us-east-1:openai.gpt-5.5" in body["models"]

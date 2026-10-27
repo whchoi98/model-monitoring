@@ -38,7 +38,7 @@ describe("familyOf", () => {
     expect(familyOf("OpenAI GPT 6 Astra (us-west-2)")).toBe("GPT 6 Astra");
     expect(familyOf("OpenAI GPT 5.6 Terra (us-east-1)")).toBe("GPT 5.6 Terra");
     expect(familyOf("OpenAI GPT 5.5 (us-east-2)")).toBe("GPT 5.5");
-    expect(familyOf("OpenAI GPT 5.4 (us-west-2)")).toBe("GPT 5.4");
+    expect(familyOf("OpenAI GPT 5.4 (us-west-2)")).toBe("");  // v2.39.0: GPT 5.4 left monitoring (ADR-034)
   });
   test("GPT 6 Sol/Luna (v2.28.0)", () => {
     expect(familyOf("OpenAI GPT 6 Sol (us-east-1)")).toBe("GPT 6 Sol");
@@ -70,7 +70,7 @@ describe("familyOf", () => {
   });
   test("라벨 서픽스가 없어도 family만 있으면 판별", () => {
     expect(familyOf("GPT 6 Sol")).toBe("GPT 6 Sol");
-    expect(familyOf("OpenAI GPT 5.4")).toBe("GPT 5.4");
+    expect(familyOf("OpenAI GPT 5.5")).toBe("GPT 5.5");
   });
   test("모르는 family는 빈 문자열 — 더 이상 GPT 5.4로 접히지 않는다", () => {
     expect(familyOf("OpenAI GPT 7 Nova (us-east-1)")).toBe("");
@@ -82,9 +82,10 @@ describe("familyOf", () => {
 });
 
 describe("FAMILY_DASH", () => {
-  test("벤치 family 8종의 선 패턴이 모두 다르다 (실선 = undefined 1종 포함)", () => {
+  test("벤치 family 7종의 선 패턴이 모두 다르다 (실선 = undefined 1종 포함)", () => {
     const families = FAMILY_GROUPS.flatMap((group) => group.families);
-    expect(families).toHaveLength(8);
+    expect(families).toHaveLength(7);  // v2.39.0: GPT 5.4 left (8 in v2.38.0)
+    expect("GPT 5.4" in FAMILY_DASH).toBe(false);
     for (const family of families) expect(family in FAMILY_DASH).toBe(true);
     const patterns = families.map((family) => FAMILY_DASH[family] ?? "solid");
     expect(new Set(patterns).size).toBe(families.length);
@@ -110,7 +111,7 @@ describe("groupCardsByFamily", () => {
 
   test("GPT 6.x 세대와 GPT 5.x 세대로 나누고 family 열 순서를 고정한다", () => {
     const { groups, other } = groupCardsByFamily([
-      card("OpenAI GPT 5.4 (us-east-1)", "GPT 5.4"),
+      card("OpenAI GPT 5.5 (us-east-1)", "GPT 5.5"),
       card("OpenAI GPT 6 Luna (Global)", "GPT 6 Luna"),
       card("OpenAI GPT 6 Sol (US)", "GPT 6 Sol"),
       card("OpenAI GPT 6 Sol (Global)", "GPT 6 Sol"),
@@ -122,7 +123,7 @@ describe("groupCardsByFamily", () => {
     ]);
     expect(groups[0].columns.map((column) => column.family)).toEqual(
       ["GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
-    expect(groups[1].columns.map((column) => column.family)).toEqual(["GPT 5.6 Terra", "GPT 5.5", "GPT 5.4"]);
+    expect(groups[1].columns.map((column) => column.family)).toEqual(["GPT 5.6 Terra", "GPT 5.5"]);
     // 열 안에서는 입력(API 응답) 순서를 그대로 유지한다 — 여기서 재정렬하지 않는다(US가 Global보다 앞선 입력 그대로).
     expect(groups[0].columns[3].cards.map((c) => c.model_name)).toEqual([
       "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (Global)",

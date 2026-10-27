@@ -4,6 +4,9 @@
 - GET  /api/parity/evidence  — 특정 셀의 전체 증거
 - GET  /api/parity/catalog   — 피처 카탈로그 (라벨·설명)
 - POST /api/parity/trigger   — 수동 런 시작 (인증 필요, 백그라운드 스레드)
+
+/latest는 현재 런의 셀에서 visibility.visible_only로 숨김 라벨을 뺀다(v2.39.0) — 모니터링에서 뺀 모델이 다음 런 전까지
+매트릭스와 변경 배너에 남지 않게. 직전 런에만 있는 셀은 diff_statuses가 원래 무시하므로 직전 런 조회에는 걸지 않는다.
 """
 
 from __future__ import annotations
@@ -20,6 +23,7 @@ from database import get_db
 from models import ParityResult, ParityRun
 from parity.catalog import FEATURES, SURFACES
 from parity.engine import diff_statuses
+from visibility import visible_only
 
 logger = logging.getLogger(__name__)
 router = APIRouter(prefix="/api/parity", tags=["parity"])
@@ -46,8 +50,9 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
     if not run:
         return {"run": None, "results": []}
     rows = (
-        db.query(ParityResult.model_id, ParityResult.model_name, ParityResult.surface,
-                 ParityResult.feature, ParityResult.status, ParityResult.latency_ms)
+        visible_only(db.query(ParityResult.model_id, ParityResult.model_name, ParityResult.surface,
+                              ParityResult.feature, ParityResult.status, ParityResult.latency_ms),
+                     ParityResult.model_name)
         .filter(ParityResult.run_id == run.id)
         .all()
     )

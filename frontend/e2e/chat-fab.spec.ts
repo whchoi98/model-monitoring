@@ -42,7 +42,7 @@ test.beforeEach(async ({ page }) => {
 test("on a 390px phone the chat button hides while scrolling down or sideways and comes back up, at the bottom and on focus", async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await page.goto("/pricing");
-  await expect(page.locator('tr[data-family="gpt-5.4"]')).toBeVisible();
+  await expect(page.locator('tr[data-family="gpt-5.5"]')).toBeVisible();
   const button = page.getByRole("button", { name: "챗봇 열기", exact: true });
   await expect(button).toBeEnabled();
   await expectShown(button);
@@ -107,7 +107,7 @@ test("on a 390px phone the chat button hides while scrolling down or sideways an
 test("at 1440px the visible chat button stays clear of the price tables at the page end", async ({ page }) => {
   await page.setViewportSize({ width: 1440, height: 900 });
   await page.goto("/pricing");
-  await expect(page.locator('tr[data-family="gpt-5.4"]')).toBeVisible();
+  await expect(page.locator('tr[data-family="gpt-5.5"]')).toBeVisible();
   const button = page.getByRole("button", { name: "챗봇 열기", exact: true });
   await expectShown(button);
   // 64px, 24px from the right and bottom edges from the sm breakpoint.

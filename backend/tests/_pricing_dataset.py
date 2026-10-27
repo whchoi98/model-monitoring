@@ -6,7 +6,12 @@ fictional. Extra prices come from the 2026-09-27 official values (Contract C8) e
 whose values are fictional. References list only cited sources (v2.31.1): no official pages.
 
 Numbering on purpose: GPT 5.6 Sol has no openai_list channel here, so its OpenAI-doc note is what first cites
-"openai-pricing" (number 4, right after the Sol cells); GPT 5.4's openai_list cell later reuses that number.
+"openai-pricing" (number 4, right after the Sol cells); GPT 5.5's openai_list cell later reuses that number.
+
+v2.39.0 (GPT 5.4 left the catalog, ADR-034): the families moved up one name so the order and every number stay —
+the former GPT 5.5 rows are GPT 5.6 Luna (offer-luna0example) and the former GPT 5.4 rows are GPT 5.5 (its real
+offer id, offer-rtwlbb46hcxpw). Their prices are the old GPT 5.5 and GPT 5.4 values, so they are fictional for
+these two families.
 """
 
 from datetime import datetime, timedelta, timezone
@@ -23,8 +28,8 @@ OPUS = "offer:offer-7sp77cpl4rveu"
 NOVA = "pricelist:USE1-Nova2.0Lite-input-tokens"
 SOL = "offer:offer-gnqokrqqvdbgw"
 TERRA = "offer:offer-terra0example"
-G55 = "offer:offer-gpt55example"
-G54 = "offer:offer-5l5a5izq5fbec"
+LUNA = "offer:offer-luna0example"
+G55 = "offer:offer-rtwlbb46hcxpw"
 OPENAI_DOC = "openai-pricing"
 
 ACTIVE_IDS = [
@@ -39,11 +44,11 @@ ACTIVE_IDS = [
     "openai:us-east-1:openai.gpt-5.6-terra",
     "openai:us-east-2:openai.gpt-5.6-terra",
     "openai:us-west-2:openai.gpt-5.6-terra",
+    "openai:us-east-1:openai.gpt-5.6-luna",
+    "openai-list:gpt-5.5",
+    "openai:us-west-2:openai.gpt-5.5",
     "openai:us-east-1:openai.gpt-5.5",
-    "openai-list:gpt-5.4",
-    "openai:us-west-2:openai.gpt-5.4",
-    "openai:us-east-1:openai.gpt-5.4",
-    "openai:us-east-2:openai.gpt-5.4",
+    "openai:us-east-2:openai.gpt-5.5",
 ]
 
 # The production note's shape (Contract C6): cites the OpenAI pricing doc, no basis fields.
@@ -82,9 +87,9 @@ TERRA_GLOBAL_EXTRA = {"cache_read": 0.2, "cache_write": 2.5, "long_input": 4.0, 
                       "long_cache_read": 0.4, "long_cache_write": 5.0}
 TERRA_STANDARD_EXTRA = {"cache_read": 0.22, "cache_write": 2.75, "long_input": 4.4, "long_output": 19.8,
                         "long_cache_read": 0.44, "long_cache_write": 5.5}
-G55_STANDARD_EXTRA = {"cache_read": 0.55, "long_input": 11.0, "long_output": 49.5, "long_cache_read": 1.1}
-G54_STANDARD_EXTRA = {"cache_read": 0.275, "long_input": 5.5, "long_output": 24.75, "long_cache_read": 0.55}
-G54_OPENAI_LIST_EXTRA = {"cache_read": 0.25, "long_input": 5.0, "long_output": 22.5, "long_cache_read": 0.5}
+LUNA_STANDARD_EXTRA = {"cache_read": 0.55, "long_input": 11.0, "long_output": 49.5, "long_cache_read": 1.1}
+G55_STANDARD_EXTRA = {"cache_read": 0.275, "long_input": 5.5, "long_output": 24.75, "long_cache_read": 0.55}
+G55_OPENAI_LIST_EXTRA = {"cache_read": 0.25, "long_input": 5.0, "long_output": 22.5, "long_cache_read": 0.5}
 SOL_PENDING_EXTRA = {"cache_read": 0.9, "long_input": 18.0, "long_output": 67.5}  # fictional
 
 
@@ -139,16 +144,16 @@ def load(db):
     # A later verified row without extra prices: that cell shows cache_* and long as null.
     add_price(db, "openai:us-west-2:openai.gpt-5.6-terra", 2.4, 14.4, effective_from=RUN2, status="verified",
               observed_at=RUN2, source_id=TERRA)
-    add_price(db, "openai:us-east-1:openai.gpt-5.5", 5.5, 33.0, source_id=G55, **G55_STANDARD_EXTRA)
+    add_price(db, "openai:us-east-1:openai.gpt-5.6-luna", 5.5, 33.0, source_id=LUNA, **LUNA_STANDARD_EXTRA)
     for region in ("us-west-2", "us-east-2", "us-east-1"):
-        add_price(db, f"openai:{region}:openai.gpt-5.4", 2.75, 16.5, observed_at=RUN2, source_id=G54,
-                  **G54_STANDARD_EXTRA)
+        add_price(db, f"openai:{region}:openai.gpt-5.5", 2.75, 16.5, observed_at=RUN2, source_id=G55,
+                  **G55_STANDARD_EXTRA)
     # OpenAI official price (display-only openai_list channel): in the table, never in the cost map.
-    add_price(db, "openai-list:gpt-5.4", 2.5, 15.0, observed_at=RUN2, source_id=OPENAI_DOC, **G54_OPENAI_LIST_EXTRA)
+    add_price(db, "openai-list:gpt-5.5", 2.5, 15.0, observed_at=RUN2, source_id=OPENAI_DOC, **G55_OPENAI_LIST_EXTRA)
     # Not in the active set: never shown.
     add_price(db, "us.anthropic.claude-opus-4-6-v1", 5.5, 27.5, observed_at=RUN2, source_id="offer:offer-hidden")
-    add_price(db, "openai:us-east-2:openai.gpt-5.5", 5.5, 33.0, effective_from=RUN2, status="pending_review",
-              observed_at=RUN2, source_id=G55)
+    add_price(db, "openai:us-east-2:openai.gpt-5.6-luna", 5.5, 33.0, effective_from=RUN2, status="pending_review",
+              observed_at=RUN2, source_id=LUNA)
     # An older pending value for the same Sol Global channel: the cell still shows the newer one (id 6), and
     # pending_review counts the channel once.
     add_price(db, "openai:global:global.openai.gpt-5.6-sol", 8.0, 40.0, effective_from=RUN1,
@@ -198,14 +203,14 @@ def _ref(n, rid, kind, title_en, title_ko, url, as_of):
 
 OPUS_GLOBAL_PRICES = _prices(4, 20, 0.2, 5, 8)
 TERRA_STANDARD_PRICES = _prices(2.2, 13.2, 0.22, 2.75, long=_long(4.4, 19.8, 0.44, 5.5))
-G54_STANDARD_PRICES = _prices(2.75, 16.5, 0.275, long=_long(5.5, 24.75, 0.55))
+G55_STANDARD_PRICES = _prices(2.75, 16.5, 0.275, long=_long(5.5, 24.75, 0.55))
 
 EXPECTED_PAYLOAD = {
     "currency": "USD",
     "unit": "per_1m_tokens",
     "generated_at": "2026-09-25T16:00:00Z",
     "last_sync": {"id": 2, "started_at": R2, "finished_at": "2026-09-25T15:00:31Z", "status": "completed"},
-    "pending_review": 1,  # distinct channels: Sol Global has two pending rows, gpt-5.5 us-east-2 is not active
+    "pending_review": 1,  # distinct channels: Sol Global has two pending rows, gpt-5.6-luna us-east-2 is not active
     "families": [
         _family("claude-opus-5-5", "Claude Opus 5.5", "anthropic",
                 cp=_cell(OPUS_GLOBAL_PRICES, ["anthropic:claude-opus-5-5"], ["anthropic-pricing"], [1],
@@ -232,33 +237,33 @@ EXPECTED_PAYLOAD = {
                     _cell(_prices(2.4, 14.4), ["openai:us-west-2:openai.gpt-5.6-terra"], [TERRA], [5], "verified",
                           R2, regions=["us-west-2"]),
                 ]),
-        _family("gpt-5.5", "GPT 5.5", "openai",
+        _family("gpt-5.6-luna", "GPT 5.6 Luna", "openai",
                 in_region=[_cell(_prices(5.5, 33, 0.55, long=_long(11, 49.5, 1.1)),
-                                 ["openai:us-east-1:openai.gpt-5.5"], [G55], [6], "seed_only", None,
+                                 ["openai:us-east-1:openai.gpt-5.6-luna"], [LUNA], [6], "seed_only", None,
                                  regions=["us-east-1"])]),
-        _family("gpt-5.4", "GPT 5.4", "openai",
-                openai_list=_cell(_prices(2.5, 15, 0.25, long=_long(5, 22.5, 0.5)), ["openai-list:gpt-5.4"],
+        _family("gpt-5.5", "GPT 5.5", "openai",
+                openai_list=_cell(_prices(2.5, 15, 0.25, long=_long(5, 22.5, 0.5)), ["openai-list:gpt-5.5"],
                                   [OPENAI_DOC], [4], "verified", R2),
-                in_region=[_cell(G54_STANDARD_PRICES,
-                                 ["openai:us-east-1:openai.gpt-5.4", "openai:us-east-2:openai.gpt-5.4",
-                                  "openai:us-west-2:openai.gpt-5.4"],
-                                 [G54], [7], "verified", R2, regions=["us-east-1", "us-east-2", "us-west-2"])]),
+                in_region=[_cell(G55_STANDARD_PRICES,
+                                 ["openai:us-east-1:openai.gpt-5.5", "openai:us-east-2:openai.gpt-5.5",
+                                  "openai:us-west-2:openai.gpt-5.5"],
+                                 [G55], [7], "verified", R2, regions=["us-east-1", "us-east-2", "us-west-2"])]),
         _family("nova-2-lite", "Nova 2.0 Lite", "amazon",
                 us=_cell(_prices(0.33, 2.75, 0.0825, 0), ["us.amazon.nova-2-lite-v1:0"], [NOVA], [8], "stale", R1)),
     ],
-    # openai-list:gpt-5.4 has a current row but is display-only: never in the cost map
+    # openai-list:gpt-5.5 has a current row but is display-only: never in the cost map
     "models": {
         "anthropic:claude-opus-5-5": {"input": 4, "output": 20, "verification": "verified"},
         "global.anthropic.claude-opus-5-5": {"input": 4, "output": 20, "verification": "verified"},
         "openai:global:global.openai.gpt-5.6-sol": {"input": 4, "output": 20, "verification": "verified"},
         "openai:global:global.openai.gpt-5.6-terra": {"input": 2, "output": 12, "verification": "verified"},
-        "openai:us-east-1:openai.gpt-5.4": {"input": 2.75, "output": 16.5, "verification": "verified"},
-        "openai:us-east-1:openai.gpt-5.5": {"input": 5.5, "output": 33, "verification": "seed_only"},
+        "openai:us-east-1:openai.gpt-5.5": {"input": 2.75, "output": 16.5, "verification": "verified"},
+        "openai:us-east-1:openai.gpt-5.6-luna": {"input": 5.5, "output": 33, "verification": "seed_only"},
         "openai:us-east-1:openai.gpt-5.6-sol": {"input": 4.4, "output": 22, "verification": "seed_only"},
         "openai:us-east-1:openai.gpt-5.6-terra": {"input": 2.2, "output": 13.2, "verification": "verified"},
-        "openai:us-east-2:openai.gpt-5.4": {"input": 2.75, "output": 16.5, "verification": "verified"},
+        "openai:us-east-2:openai.gpt-5.5": {"input": 2.75, "output": 16.5, "verification": "verified"},
         "openai:us-east-2:openai.gpt-5.6-terra": {"input": 2.2, "output": 13.2, "verification": "verified"},
-        "openai:us-west-2:openai.gpt-5.4": {"input": 2.75, "output": 16.5, "verification": "verified"},
+        "openai:us-west-2:openai.gpt-5.5": {"input": 2.75, "output": 16.5, "verification": "verified"},
         "openai:us-west-2:openai.gpt-5.6-terra": {"input": 2.4, "output": 14.4, "verification": "verified"},
         "us.amazon.nova-2-lite-v1:0": {"input": 0.33, "output": 2.75, "verification": "stale"},
         "us.anthropic.claude-opus-5-5": {"input": 4.4, "output": 22, "verification": "verified"},
@@ -273,19 +278,19 @@ EXPECTED_PAYLOAD = {
         _ref(3, SOL, "agreement_offer",
              "Amazon Bedrock agreement offer rate card, offer-gnqokrqqvdbgw (GPT 5.6 Sol)",
              "Amazon Bedrock 약정 오퍼 요금표, offer-gnqokrqqvdbgw (GPT 5.6 Sol)", OFFER_URL, "2026-09-25"),
-        # first cited by the GPT 5.6 Sol note, right after the Sol cells; as_of from the openai-list:gpt-5.4 row
+        # first cited by the GPT 5.6 Sol note, right after the Sol cells; as_of from the openai-list:gpt-5.5 row
         _ref(4, OPENAI_DOC, "openai_doc", "OpenAI API pricing (Standard)", "OpenAI API 요금 (Standard)", OPENAI_URL,
              "2026-09-25"),
         _ref(5, TERRA, "agreement_offer",
              "Amazon Bedrock agreement offer rate card, offer-terra0example (GPT 5.6 Terra)",
              "Amazon Bedrock 약정 오퍼 요금표, offer-terra0example (GPT 5.6 Terra)", OFFER_URL, "2026-09-25"),
         # only seed rows (observed_at NULL) cite it -> the seed check date (pricing_seed.SEED_SOURCE_DATE)
-        _ref(6, G55, "agreement_offer",
-             "Amazon Bedrock agreement offer rate card, offer-gpt55example (GPT 5.5)",
-             "Amazon Bedrock 약정 오퍼 요금표, offer-gpt55example (GPT 5.5)", OFFER_URL, "2026-09-27"),
-        _ref(7, G54, "agreement_offer",
-             "Amazon Bedrock agreement offer rate card, offer-5l5a5izq5fbec (GPT 5.4)",
-             "Amazon Bedrock 약정 오퍼 요금표, offer-5l5a5izq5fbec (GPT 5.4)", OFFER_URL, "2026-09-25"),
+        _ref(6, LUNA, "agreement_offer",
+             "Amazon Bedrock agreement offer rate card, offer-luna0example (GPT 5.6 Luna)",
+             "Amazon Bedrock 약정 오퍼 요금표, offer-luna0example (GPT 5.6 Luna)", OFFER_URL, "2026-09-27"),
+        _ref(7, G55, "agreement_offer",
+             "Amazon Bedrock agreement offer rate card, offer-rtwlbb46hcxpw (GPT 5.5)",
+             "Amazon Bedrock 약정 오퍼 요금표, offer-rtwlbb46hcxpw (GPT 5.5)", OFFER_URL, "2026-09-25"),
         _ref(8, NOVA, "price_list",
              "AWS Price List API, AmazonBedrock usage type USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",
              "AWS Price List API, AmazonBedrock 사용 유형 USE1-Nova2.0Lite-input-tokens (Nova 2.0 Lite)",
