@@ -132,11 +132,14 @@ export async function fetchStats(
   endTime?: string,
   category?: string | null,
   signal?: AbortSignal,
+  { activeOnly = false }: { activeOnly?: boolean } = {},
 ): Promise<ModelStats[]> {
   const searchParams = new URLSearchParams();
   if (startTime) searchParams.set("start_time", startTime);
   if (endTime) searchParams.set("end_time", endTime);
   if (category) searchParams.set("category", category);
+  // Only the channels of the current catalog (/api/models), the dashboard's list.
+  if (activeOnly) searchParams.set("active_only", "true");
 
   const qs = searchParams.toString();
   const data = await fetchJson<{ models?: ModelStats[] }>(`${BASE}/api/results/stats${qs ? `?${qs}` : ""}`, { signal });

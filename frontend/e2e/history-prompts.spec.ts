@@ -94,8 +94,10 @@ test.beforeEach(async ({ page }) => {
 
 test("history fetches only while open, keeps background inert, and Escape returns focus", async ({ page }) => {
   let reads = 0;
+  const activeOnly: (string | null)[] = [];
   await page.route("**/api/results/stats?*", (route) => {
     reads += 1;
+    activeOnly.push(new URL(route.request().url()).searchParams.get("active_only"));
     return route.fulfill({ json: { models: [stats()] } });
   });
   await page.goto("/");
@@ -106,6 +108,8 @@ test("history fetches only while open, keeps background inert, and Escape return
   const dialog = page.getByRole("dialog", { name: "Historical Stats", exact: true });
   await expect(dialog.getByRole("heading", { name: MODEL, exact: true })).toBeVisible();
   expect(reads).toBeGreaterThan(0);
+  // History shows the dashboard's channels only (stopped channels stay out of 7d/30d).
+  expect(activeOnly.every((value) => value === "true")).toBe(true);
   await dialog.getByRole("button").last().focus();
   await page.keyboard.press("Tab");
   // Chromium may visit browser chrome at the native dialog boundary. It must

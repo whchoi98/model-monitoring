@@ -258,7 +258,10 @@ read as now − 31 days (the History dialog offers up to 30 days; the extra day 
 `start_time` is that clamped value. So without `run_id`, an `end_time` older than now − 31 days yields an empty result
 (`"models": []`, HTTP 200) even when `start_time` is older still: the clamped range ends before it starts. Pass `run_id` to
 read an older run; with `run_id` neither bound is clamped. `run_id` must be 1 or more (0 and negatives are HTTP 422, v2.32.1 —
-`run_id=0` used to skip both the 24-hour default and the floor and read every retained row).
+`run_id=0` used to skip both the 24-hour default and the floor and read every retained row). `active_only=true` keeps only the
+channels of the current catalog (`/api/models`, the dashboard's list), so channels whose collection stopped drop out even while
+their rows are inside the window; the History dialog sends it (2026-10-29). Without it every visible channel with rows is
+returned.
 
 ---
 

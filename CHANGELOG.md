@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## Unreleased
+
+### Changed
+- The History dialog lists the same channels as the dashboard's model monitoring, by user request on 2026-10-29: it asks `/api/results/stats?active_only=true`, which keeps only the channels of the current catalog (`/api/models`, 49). Before, its 7-day and 30-day ranges also showed the seven OpenAI Mantle us-east-2 and us-west-2 channels whose collection stopped in v2.38.0 (56 in production). Without `active_only` the endpoint answers as before, and the stored rows are kept.
+- 사용자 요청(2026-10-29)으로 이력 조회 화면이 대시보드 모델 모니터링과 같은 채널만 보인다. `/api/results/stats?active_only=true`로 현행 카탈로그(`/api/models`, 49개) 채널만 집계한다. 전에는 7일, 30일 범위에 v2.38.0에서 수집을 멈춘 OpenAI Mantle us-east-2, us-west-2 채널 7개가 함께 나왔다(운영 56개). `active_only`를 보내지 않으면 응답은 예전과 같고, 저장 행은 그대로 둔다.
+
 ## v2.39.0 — 2026-10-27
 
 ### Removed

@@ -81,12 +81,15 @@ def get_stats(
     end_time: Optional[datetime] = Query(None),
     run_id: Optional[int] = Query(None, ge=1),
     category: Optional[str] = Query(None),
+    active_only: bool = Query(False),
     db: Session = Depends(get_db),
 ):
     """Get aggregated statistics (avg/p50/p95/p99) per model.
 
     Only successful probes are included in the statistics.
     category 지정 시 그 workload preset 카테고리의 결과만 집계.
+    active_only=true면 현행 카탈로그(`/api/models`, 대시보드 모델 모니터링과 같은 목록) 채널만 집계 — 이력 조회 화면이
+    보낸다. 창 안에 행이 남아 있어도 수집을 멈춘 채널(예: v2.38.0의 Mantle us-east-2, us-west-2)은 빠진다(2026-10-29).
     """
     # 통계에 쓰는 열만 나눠 읽는다 — ORM 엔티티는 prompt, output_text까지 담아 화면의 30d 선택 하나가 1 GB를 넘었다.
     query = visible_only(
@@ -120,6 +123,8 @@ def get_stats(
         query = query.filter(ProbeResult.run_id == run_id)
     if category:
         query = query.filter(ProbeResult.category == category)
+    if active_only:  # 요청 시점의 카탈로그 — 기동 때 등록하는 CP, OpenAI 채널도 들어 있다
+        query = query.filter(ProbeResult.model_id.in_(list(AVAILABLE_MODELS)))
 
     # model_id별로 행 수, 지표 값 목록(행 순서 그대로), 가장 최근 행의 라벨만 누적한다.
     model_groups: dict[str, dict] = {}

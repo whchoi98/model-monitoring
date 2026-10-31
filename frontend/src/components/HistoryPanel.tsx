@@ -155,9 +155,11 @@ function OpenHistoryPanel({ onClose, timeRange, onTimeRangeChange, selectedModel
 }) {
   const t = useT();
   const { lang } = useLang();
+  // Same channels as the dashboard's model monitoring: rows of channels that are no longer
+  // probed (still inside a 7d/30d window) are left out by the backend.
   const resource = useAsyncResource<ModelStats[]>(
     `history:${timeRange}`,
-    (signal) => fetchStats(getStartTime(timeRange), undefined, null, signal),
+    (signal) => fetchStats(getStartTime(timeRange), undefined, null, signal, { activeOnly: true }),
   );
   const sorted = sortResults(resource.data ?? []);
   const visible = selectedModels.size

@@ -32,7 +32,7 @@ React UI components for the monitoring dashboard (monitoring panels, shared UI p
 - `ThemeToggle.tsx` — dark/light theme toggle in `AppHeader` (`lib/theme.ts` `setTheme`/`useTheme`, `aria-pressed`)
 - `AppShell.tsx`, `Providers.tsx`, `Dialog.tsx`, `DataState.tsx`, `RefreshControls.tsx`, `MonitoringOverview.tsx` — shared shell, state and presentation primitives (see below). `AppShell`'s `<main>` has `pb-24 sm:pb-28` so the page end never sits under the visible chat button (v2.31.1, see `chat/CLAUDE.md`)
 - `LoginForm.tsx` — login + registration (EmailStr) with approval-pending state
-- `ResultsTable.tsx`, `HistoryPanel.tsx` — results table + history cards
+- `ResultsTable.tsx`, `HistoryPanel.tsx` — results table + history cards. `HistoryPanel` reads `/api/results/stats` with `active_only=true` (`fetchStats(..., { activeOnly: true })`, 2026-10-29), so it lists the dashboard's catalog channels only, not channels whose collection stopped but whose rows are still inside a 7d/30d range (`e2e/history-prompts.spec.ts` checks the parameter)
 - `chat/` — `FloatingChat` (hides while scrolling down or sideways, v2.31.1), `ChatModal`, `ChatPanel`, `ChatInput`, `MessageList`, `MessageMarkdown`
 
 ## Shared state and presentation
