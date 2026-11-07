@@ -28,6 +28,7 @@ from routers import analysis as analysis_router
 from routers import parity as parity_router
 from routers import gptbench as gptbench_router
 from routers import features as features_router
+from routers import explorer as explorer_router
 from routers import pricing as pricing_router
 from routers import presence as presence_router
 
@@ -350,6 +351,7 @@ app.include_router(analysis_router.router)
 app.include_router(parity_router.router)
 app.include_router(gptbench_router.router)
 app.include_router(features_router.router)
+app.include_router(explorer_router.router)
 app.include_router(pricing_router.router)
 app.include_router(pricing_router.admin_router)
 app.include_router(presence_router.router)
