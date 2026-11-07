@@ -103,7 +103,7 @@ writeFileSync("../backend/tests/fixtures/explorer_examples_v2390.json", JSON.str
 python3.12 -c "import json; g=json.load(open('backend/tests/fixtures/explorer_examples_v2390.json')); print(len(g['examples']), sum(len(v['en']) for v in g['examples'].values()))"
 ```
 
-Expected: `9 13` (9 ids; 3 + 3 + 1 + 3 + 1 + 1 + 1 + 1 + 1 examples per language), file size about 29 KB.
+Expected: `9 15` (9 ids; 3 + 3 + 1 + 3 + 1 + 1 + 1 + 1 + 1 examples per language), file size about 29 KB.
 - [ ] **Step 4:** Commit:
 
 ```bash
@@ -5226,6 +5226,92 @@ diff --git a/CLAUDE.md b/CLAUDE.md
 index 384a5e0..fc482f3 100644
 --- a/CLAUDE.md
 +++ b/CLAUDE.md
+@@ -12,7 +12,7 @@
+ - **Frontend**: Next.js 16 standalone + React + Tailwind + Recharts + react-markdown + FloatingChat + PWA(iPhone/iPad 홈 화면 설치 — manifest.ts·앱 아이콘·safe-area, v2.21.0)
+ - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
+ - **Edge**: CloudFront VPC Origin → Internal ALB → ECS Fargate × 2 (backend, frontend). VPC Origin → ALB는 현재 VPC 내부 HTTP:80(`edge-stack.ts` `HTTP_ONLY`, 운영 cert 정착 전 임시 — ALB는 internal + private subnet + VPC CIDR SG), ALB에는 HTTPS:443 리스너도 있음
+-- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
++- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) + ExplorerVerify (매일 18:00 UTC, 모델 탐색 코드 예제 실행 검증 — v2.40.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
+ - **AI**: Claude Haiku 5.5 공개 챗봇 (4 tools) + Haiku 5.5 dynamic followups + Haiku 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Haiku 5.5 요청은 temperature를 보내지 않는다(v2.37.0). 인사이트는 확장 추론을 끄고 `INSIGHTS_MAX_TOKENS=16384`로 전체 표·설명을 완성한다. 챗봇도 확장 추론을 끄고 `CHAT_MAX_TOKENS=4096`을 쓰며, 출력 한도에서 끝난 답은 `warning` 이벤트로 알린다(2026-10-25 — 기본 추론이 도구 결과 뒤 1024토큰을 다 써 본문 없이 끝났다). 후속 질문은 기본 설정 그대로다
+ 
+ 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/) (v2.0.0 당시 설계 기록 — 9개 모델, 인사이트 30분 주기 기준이라 현행과 다름).
+@@ -32,11 +32,11 @@ Internal ALB
+                 ├── /chat         — 챗봇 팝업 창 진입점 (Firefox/Safari, FloatingChat이 연다)
+                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
+                 ├── /cost         — 30-day projection + per-model + channel compare (프로브 시각의 단가로 계산, v2.30.0)
+-                ├── /pricing      — 비용 단가 (표 순서 Anthropic → OpenAI → Amazon Nova, 모델 패밀리 × 채널 Standard 입력/출력 단가 + 셀 둘째 줄 프롬프트 캐싱, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트(표시 전용, Haiku 5.5 v2.33.0) + OpenAI 표 첫 열 OpenAI 공식 가격, Nova 표 첫 열 빈칸 + 번호 각주 출처 + CSV/Markdown/JSON 다운로드 + 면책 문구, 12시간 자동 갱신, v2.30.0, 열 이름과 캐시 v2.31.0)
++                ├── /pricing      — 비용 단가 (표 순서 Anthropic → OpenAI → Amazon Nova, 모델 패밀리 × 채널 Standard 입력/출력 단가 + 셀 둘째 줄 프롬프트 캐싱, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트(표시 전용, Haiku 5.5 v2.33.0) + OpenAI 표 첫 열 OpenAI 공식 가격, Nova 표 첫 열 빈칸 + 번호 각주 출처 + CSV/Markdown/JSON 다운로드 + 면책 문구, 12시간 자동 갱신, v2.30.0, 열 이름과 캐시 v2.31.0, 이전 동기화 대비 변경 배너와 셀 배지 v2.40.0)
+                 ├── /reliability  — Family/channel success rate + error buckets
+                 ├── /efficiency   — 0-100 Token Efficiency Score (weighted)
+                 ├── /analysis     — Stop reason 분포 + Output length 분포
+-                ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
++                ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0; 코드 예제는 백엔드 단일 출처, 매일 실행 검증 배지, 이전 런 대비 변경 배너, 검증 실패만 필터 v2.40.0)
+                 ├── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
+                 ├── /gpt-on-aws   — GPT on AWS (GPT 18채널 TTFB/TTFT 벤치 — Mantle 인리전 us-east-1 7 + CRIS 11 — Terra Global 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1, GPT-6 Sol/Luna 6채널 v2.28.0, GPT-6.1 Sol 3채널 v2.32.0, CRIS와 Mantle 두 갈래 병렬 v2.32.0, Mantle 리전별 갈래 분할(cris + mantle-<region>, 네 갈래) v2.32.1, GPT-6.1 Terra 3채널과 Mantle 인리전 us-east-1 일원화(cris, mantle-us-east-1 두 갈래) v2.38.0, GPT 5.4 제외 v2.39.0, 15분 주기)
+                 └── /claude-features — Claude API Features (33 문서 피처 × CP/Mantle/Bedrock(Messages API·InvokeModel·Converse) × 대표 7모델 실행-증거 + 문서 드리프트, v2.23.0; Opus 5.5 편입 v2.28.0, Sonnet 5.5 편입 v2.32.0, Haiku 5.5 편입 v2.33.0)
+@@ -52,7 +52,8 @@ EventBridge Scheduler (rate 5 min)
+   │                              v2.38.0부터 Mantle 인리전이 us-east-1 하나라 갈래도 둘이다(cris 11 = Global 6 + US 5, mantle-us-east-1 8 — 로그 `GPT bench lanes: cris=11 mantle-us-east-1=8`, 사용자 결정 2026-10-27, ADR-033). 리전을 되살리면 코드 수정 없이 그 리전 갈래가 다시 생긴다
+   │                              v2.39.0에서 GPT 5.4(mantle-us-east-1 첫 채널)를 빼 mantle-us-east-1은 7채널이다(로그 `GPT bench lanes: cris=11 mantle-us-east-1=7`, 사이클당 180행, 사용자 결정 2026-10-27, ADR-034)
+   ├── FeaturesVerify Fargate Task → 일 1회(cron 17:30 UTC = 02:30 KST 고정, v2.29.0) Claude API Features 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 대표 7모델 = 1365셀 실행-증거 스윕 (v2.23.0; Opus 5.5 편입 v2.28.0, Sonnet 5.5 편입 v2.32.0, Haiku 5.5 편입 v2.33.0)
+-  └── PricingSync Fargate Task → 12시간 주기(rate(12 hours)) 공식 단가 동기화 — Bedrock agreement offer rate card + AWS Price List + Anthropic pricing.md + OpenAI pricing.md(v2.31.0) → price_history, 활성 49채널 + OpenAI 공식 가격 9채널(`openai-list:<family_key>`, 표시 전용, v2.39.0 — 로그 `58 active channels`)의 입력, 출력, 캐시, 긴 컨텍스트 단가 (어느 필드든 50% 초과 변경은 관리자 승인 대기, 빈 필드 첫 관측은 현재 행 채움 `enriched`, v2.30.0, ADR-030)
++  ├── ExplorerVerify Fargate Task → 일 1회(cron 18:00 UTC = 03:00 KST 고정, v2.40.0) 모델 탐색 코드 예제 85건(활성 49채널)을 예제마다 자식 Python(-I, 허용 목록 env)에서 실행 — explorer_runs/explorer_results, 동시 4, 호출당 90초, 실패 1회 재시도 (ADR-035)
++  └── PricingSync Fargate Task → 12시간 주기(rate(12 hours)) 공식 단가 동기화 — Bedrock agreement offer rate card + AWS Price List + Anthropic pricing.md + OpenAI pricing.md(v2.31.0) → price_history, 활성 49채널 + OpenAI 공식 가격 9채널(`openai-list:<family_key>`, 표시 전용, v2.39.0 — 로그 `58 active channels`)의 입력, 출력, 캐시, 긴 컨텍스트 단가 (어느 필드든 50% 초과 변경은 관리자 승인 대기, 빈 필드 첫 관측은 현재 행 채움 `enriched`, v2.30.0, ADR-030; 런마다 화면 값 스냅샷 `summary.snapshot` → `/api/pricing` `changes`, v2.40.0, ADR-035)
+ 
+ Backend ↔ Bedrock (Seoul region inference profiles us.*, global.* + 서울 in-region 온디맨드 FM bedrock:ap-northeast-2:* (v2.32.0)) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
+                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
+@@ -86,6 +87,7 @@ model-monitoring/
+ │   ├── pricing_sync.py      # 12시간 동기화 — 가져오기, 관측 값 소수 6자리 정규화, 비교(classify_change — 9필드 필드별, CHANGE_THRESHOLD 0.5 경계 포함, 빈 필드 첫 관측은 새 행 없이 현재 행 채움 `enriched`), pending_review, price_sync_runs 기록, 상한 300초. 파서 예외는 종류와 상관없이 그 출처 채널만 skipped:parse_failed(v2.31.0: 문서 표는 찾는 모델 행만 하나씩 정규화해 값이 이상한 추적 모델은 자기 채널만 skipped:parse_failed, 긴 컨텍스트 필드는 `_long_context_gate`(v2.33.0, 구 `_gpt_long_only`)가 OpenAI 채널과 Claude Haiku 5.5 채널만 남김 — offer, 문서, Price List 경로 공통)
+ │   ├── pricing_sync_runner.py # CLI entry: `python -m pricing_sync_runner --once` (PricingSync Fargate task) — create_tables → ensure_price_columns(v2.31.0) → CP/OpenAI 등록 → ensure_seed → run_sync(pg_try_advisory_lock(917350004) — 점유 중이면 즉시 exit 1) → os._exit
+ │   ├── price_history.py     # 유효 단가 조회, 행 단위 비용 서브쿼리(with_row_cost — /api/cost/*, /api/efficiency/score), verification(seed_only/verified/stale)
++│   ├── pricing_changes.py   # 런 대비 단가 변경 (v2.40.0, ADR-035) — build_snapshot(run_sync가 커밋 전에 저장하는 화면 값), compare_snapshots(channel, price, pending, check 항목, 표 순서), select_runs, latest_changes(/api/pricing `changes`)
+ │   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료 — 셀 각주나 메모가 인용한 출처만, 1..N 빈칸 없음, 운영 20개(오퍼 17, v2.39.0 — v2.38.0은 25개, 오퍼 22, v2.33.0은 24개, 오퍼 21), v2.31.1, v2.32.0) + 숫자 직렬화
+ │   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄, 확장 단가 7열), Markdown(머리말 공식 요금 페이지 링크 한 줄 v2.31.1, 제공사별 열 머리글, 셀 안 `<br>` 캐시와 긴 컨텍스트 줄, 고정 안내 9개 — 3번째 GPT US CRIS = In Region v2.31.1), JSON 내보내기 순수 함수
+ │   ├── chat_access.py       # 공개 챗봇의 서명 쿠키·사용자별 actor·Origin 검사·요청 제한 (v2.37.0)
+@@ -103,6 +105,8 @@ model-monitoring/
+ │   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×20 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
+ │   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×5 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
+ │   ├── features_runner.py   # CLI entry: `python -m features_runner --once` (FeaturesVerify Fargate task)
++│   ├── model_explorer/      # 모델 탐색 검증 (v2.40.0, ADR-035): examples.py(코드 예제 단일 출처 — v2.39.0 TS codeExamples와 바이트 일치, 골든 tests/fixtures/explorer_examples_v2390.json), execute.py(플레이스홀더 → os.environ, 자식 `python -I`, 허용 목록 env, 90초, 1회 재시도, 비밀 값 가림), runner.py(모델 × 예제, ThreadPoolExecutor 4, 런 상한 1200초, 60런 보존), diff.py(catalog, example, measured)
++│   ├── explorer_runner.py   # CLI entry: `python -m explorer_runner --once` (ExplorerVerify Fargate task) / `--smoke [--models] [--json]` (DB 없이, venv에서)
+ │   └── routers/
+ │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
+ │       ├── admin.py         # /api/admin/* — reset-monitoring-data, users CRUD (admin only)
+@@ -114,7 +118,8 @@ model-monitoring/
+ │       ├── chat.py          # /api/chat/stream — Haiku 5.5 + 4 tools + dynamic followups (public)
+ │       ├── insights.py      # /api/insights/* — list/latest/stream-regenerate
+ │       ├── cost.py          # /api/cost/* — summary, channel-compare, trend (행 단위 시점 단가, v2.30.0)
+-│       ├── pricing.py       # /api/pricing(60초 캐시), /api/pricing/export(csv|md|json) 공개 + admin_router /api/admin/pricing/pending, approve, reject (v2.30.0)
++│       ├── pricing.py       # /api/pricing(60초 캐시, `changes` v2.40.0), /api/pricing/export(csv|md|json, `changes` 제외) 공개 + admin_router /api/admin/pricing/pending, approve, reject (v2.30.0)
++│       ├── explorer.py      # /api/explorer/latest(예제 KO/EN + 최근 완료 런 결과 + 변경 + DB 기준 running, s-maxage=60), /api/explorer/trigger(JWT) (v2.40.0)
+ │       ├── reliability.py   # /api/reliability/multi-channel — family/channel grouped
+ │       ├── efficiency.py    # /api/efficiency/score — 0-100 weighted score per category
+ │       ├── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0)
+@@ -151,13 +156,13 @@ model-monitoring/
+ │   │   │   ├── ModelStatusGrid.tsx      # family-grouped 49 cards (Bedrock prefix) + 지표 값 등급 색(양호 파랑/경고 호박 ▲/위험 장미 ◆, data-grade, 범례 + 접이식 기준표 — lib/metricGrade.ts, ADR-029, v2.28.0)
+ │   │   │   ├── TrendChart.tsx           # MODEL_COLORS 라벨 (19 Bedrock — Global 8 + US 9(Claude 8 + Nova 1) + 서울 in-region 2 — + 8 Anthropic CP + 22 OpenAI Mantle us-east-1/Global/US 활성; 1P 4개는 휴면, v2.39.0에 Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 색을 지움, Haiku 5.5 따뜻한 계열 3색과 Sonnet 5.5 US 올리브 v2.33.0, GPT 6.1 Terra 보라 3색과 GPT 6 Astra (us-east-1) 세룰리안 v2.38.0, 수집을 멈춘 Mantle us-east-2/us-west-2 라벨은 지난 데이터용으로 색 유지)
+ │   │   │   ├── CostDashboardPanel.tsx   # 방법론 문단이 /pricing으로 연결 (v2.30.0)
+-│   │   │   ├── PricingPanel.tsx         # 비용 단가 표(제공사 섹션 Anthropic → OpenAI → Amazon, PROVIDER_COLUMNS 4열 — OpenAI 첫 열 OpenAI 공식 가격, Nova 첫 열 빈칸, 모르는 제공사는 columnsFor 기본 열, 셀 둘째 줄 캐시, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트, 각주 → #ref-n, 검토 배지 프로모션과 문서 불일치 v2.33.0) + 면책 상자 + 마지막 공식 단가 동기화 + 다운로드 3종 + 참고 자료 (v2.30.0, 열과 캐시 v2.31.0)
++│   │   │   ├── PricingPanel.tsx         # 비용 단가 표(제공사 섹션 Anthropic → OpenAI → Amazon, PROVIDER_COLUMNS 4열 — OpenAI 첫 열 OpenAI 공식 가격, Nova 첫 열 빈칸, 모르는 제공사는 columnsFor 기본 열, 셀 둘째 줄 캐시, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트, 각주 → #ref-n, 검토 배지 프로모션과 문서 불일치 v2.33.0) + 면책 상자 + 마지막 공식 단가 동기화 + 이전 동기화 대비 변경 배너(항목 → 셀 스크롤과 1.5초 강조, 셀 "이전 대비 변경" 배지, v2.40.0) + 다운로드 3종 + 참고 자료 (v2.30.0, 열과 캐시 v2.31.0)
+ │   │   │   ├── ReliabilityPanel.tsx
+ │   │   │   ├── EfficiencyPanel.tsx
+ │   │   │   ├── AnalysisPanel.tsx        # v2.1.0
+ │   │   │   ├── InsightsPanel.tsx        # SSE stream-regenerate
+ │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt (대상 Bedrock 17개 — v2.39.0에 Claude 4.x 네 패밀리 8개를 뺐다)
+-│   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x)
++│   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x) — v2.40.0부터 예제와 검증 결과는 /api/explorer/latest: 머리글 최근 검증 런, 검증 배지, 변경 표지와 배너(항목 → 해당 API 탭 모달), 검증 실패만 필터, 모달 검증 상자
+ │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
+ │   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 헬스 카드(docHealth, 클릭 → Key Findings 드로어) + 모델 칩 + 드리프트/변경(kind) 배너 + 증거 모달 + 수동 트리거 (v2.24.0)
+ │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
+@@ -171,7 +176,8 @@ model-monitoring/
+ │   │       ├── pricing.ts               # formatCost만 (v2.30.0부터 단가 표는 backend /api/pricing — 프런트 미러 없음)
+ │   │       ├── pricingTable.ts          # /pricing 순수 함수 — tierLabel, PROVIDER_COLUMNS, columnsFor, headerParts, formatUnitPrice(소수 2~6자리, 예외 없음 — NaN, ±Infinity, 1e21 이상은 그대로), formatPricePair, cacheItems, longItems, pendingDetail, tierBadges, costFromPrices (정렬과 번호 매기기 없음, v2.30.0, v2.31.0)
+ │   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
+-│   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (lang 파라미터로 KO/EN, v2.16.2)
++│   │       ├── modelExplorer.ts         # 채널/네이티브ID/링크 유도 (lang 파라미터로 KO/EN, v2.16.2; 코드 예제는 v2.40.0부터 백엔드)
++│   │       ├── explorerVerify.ts        # 모델 탐색 검증 순수 로직 — summarizeModel, badgeLabel, 변경 라벨, hasFailure, splitError, reasonText (v2.40.0)
+ │   │       ├── claudeFeatures.ts        # Claude API Features 매트릭스 순수 로직 — 셀 집계·그룹 구성(modelKey, modelOrder)·surfaceSummary/surfaceFindings·labelMaps·지연시간 헬퍼 (v2.24.0)
+ │   │       ├── fabVisibility.ts         # 챗봇 버튼 스크롤 숨김 규칙 nextFabState, isFabVisible (v2.31.1)
+ │   │       ├── metricGrade.ts           # 대시보드 카드 지표 등급 단일 출처 — 카테고리별 TTFT/총 응답시간 임계치, TPS 공통(<40 경고, <15 위험), roundForDisplay, 색·표지 (v2.28.0, ADR-029)
 @@ -331,8 +337,8 @@ Claude Platform on AWS 채널(anthropic:*)도 기본값에서는 매 사이클 
  - **Register**: `username`은 **EmailStr** 검증 강제 (v2.1.0). approved=0 → admin SES → approved=1 → login
  - **Admin email**: `whchoi98@gmail.com` (`backend/auth.py:ADMIN_EMAIL`)
@@ -5237,6 +5323,14 @@ index 384a5e0..fc482f3 100644
  - **Admin only**: `/api/admin/*` (username == "admin") — `/api/admin/pricing/*` 검토 대기 단가 승인/거부 포함 (v2.30.0). admin 비밀번호는 `SEED_ADMIN_PASSWORD` env var (8자 이상)
  - **Public chat** (`POST /api/chat/stream`, v2.37.0): JWT 없이 이용한다. 유효한 로그인은 사용자별 해시 actor, 비회원은 별도 서명 HttpOnly 쿠키의 해시 actor로 대화를 분리한다. `session_id`만 복사해 다른 사용자 대화를 읽을 수 없다. 성공·실패의 `final` 이벤트에 세션 ID를 담고 AgentCore는 필수 `eventTimestamp`, `includePayloads=True`로 대화를 기록·조회한다. 브라우저 Origin은 사이트 별칭만 허용하며 비회원은 백엔드 프로세스당 브라우저 6회/분·전체 30회/분을 초과하면 `429`와 `Retry-After: 60`을 받는다. 수동 프로브·프롬프트·인사이트 재생성의 인증은 그대로다.
  - **Visitor counts**: `GET /api/presence`는 공개 집계 조회와 서명된 HttpOnly 방문자 쿠키 준비, `POST /api/presence`는 JWT 없이 같은 Origin·전용 클라이언트 헤더·유효한 쿠키·빈 JSON 본문을 확인한 접속 신호다. 최근 90초의 브라우저를 접속자로 세고 누적값은 10,000부터 시작한다. `site_visitors`, `site_presence_totals`에 저장해 재배포와 여러 태스크에서 공유한다. IP나 브라우저 지문을 저장하지 않는다.
+@@ -425,6 +431,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** 
+ | `PROBE_WALL_CLOCK_S` | `90` (선택, 미주입) | 프로브 1회(재시도 포함) wall-clock 상한 — 만료 시 그 모델만 `WallClockTimeout` 오류 행, 모델별 사이클 타임아웃은 max(120, 값 + 30)초로 따라감 (v2.28.2) |
+ | `MANTLE_ANTHROPIC_REGION` | `us-east-1` (CDK 주입) | Claude API Features + 패리티 런 `messages_mantle` 공용 Mantle `/anthropic` surface 리전. ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측) → 대표 모델이 서빙되는 us-east-1로 전환(사용자 결정, v2.23.0). env 미주입 시 코드 기본값은 패리티 ap-northeast-1(`parity/runner.py`), Claude API Features us-east-1(`claude_features/catalog.py`) |
+ | `FEATURES_MCP_SERVER_URL` | (선택) | Claude API Features MCP connector 프로브용 공개 MCP 서버 URL (v2.23.0, 장애 시 inconclusive로 격리) |
++| `EXPLORER_CALL_TIMEOUT_S` / `EXPLORER_RUN_DEADLINE_S` | `90` / `1200` (선택, 미주입) | 모델 탐색 검증 런의 예제 1건 실행 상한(초, 넘으면 자식 프로세스를 죽이고 failed "시간 초과") / 런 전체 상한(초, 넘으면 시작하지 못한 예제를 skipped "런 시간 상한") (v2.40.0, ADR-035) |
+ | `OPENAI_API_KEY` | (CDK 주입, SSM `/bedrock-monitor/openai-api-key` secret) | Bedrock bearer 키(`ABSK-…`) — Mantle 인리전·Global·US CRIS·gptbench 공용. 미설정 시 OpenAI Mantle 채널 전체 skip |
+ | `OPENAI_US_EAST_1_BASE_URL` / `OPENAI_US_EAST_2_BASE_URL` / `OPENAI_US_WEST_2_BASE_URL` | `https://bedrock-mantle.<region>.api.aws/openai/v1` (CDK 주입) | Mantle 인리전 엔드포인트 (`prober._OPENAI_REGION_ENV`) — 미주입 리전의 채널은 조용히 skip. v2.38.0부터 us-east-2, us-west-2를 쓰는 채널은 없지만(Mantle 인리전 us-east-1 일원화, ADR-033) 리전을 되살릴 때를 위해 주입은 남긴다 |
+ | `OPENAI_GLOBAL_BASE_URL` | `https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1` (CDK 주입) | OpenAI Global CRIS(`global.openai.*`) 유사 리전 `global` 라우팅 (v2.20.0, ADR-025). 미주입 시 Global 채널 skip |
 ````
 
 ````diff
@@ -5512,108 +5606,14 @@ index 384a5e0..fc482f3 100644
  
  **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
  
-@@ -12,7 +12,7 @@
- - **Frontend**: Next.js 16 standalone + React + Tailwind + Recharts + react-markdown + FloatingChat + PWA(iPhone/iPad 홈 화면 설치 — manifest.ts·앱 아이콘·safe-area, v2.21.0)
- - **Infra**: CDK v2 TypeScript / 8 stacks (Network, Data, Cluster, AgentCore, AppServices, Edge, Scheduler, Observability)
- - **Edge**: CloudFront VPC Origin → Internal ALB → ECS Fargate × 2 (backend, frontend). VPC Origin → ALB는 현재 VPC 내부 HTTP:80(`edge-stack.ts` `HTTP_ONLY`, 운영 cert 정착 전 임시 — ALB는 internal + private subnet + VPC CIDR SG), ALB에는 HTTPS:443 리스너도 있음
--- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
-+- **Scheduling**: EventBridge Scheduler → AutoProber + Insights (`rate(5 minutes)`, Claude Platform on AWS 채널도 매 사이클 — v2.29.1에서 v2.29.0의 10분 주기를 되돌림) + ParityRun (12시간 주기) + GptBench (`rate(15 minutes)`) + FeaturesVerify (매일 17:30 UTC) + PricingSync (`rate(12 hours)`, 공식 단가 동기화 — v2.30.0, OpenAI 공식 문서 출처와 캐시, 긴 컨텍스트 단가 v2.31.0) + ExplorerVerify (매일 18:00 UTC, 모델 탐색 코드 예제 실행 검증 — v2.40.0) Fargate Tasks — `cdk/lib/stacks/scheduler-stack.ts`
- - **AI**: Claude Haiku 5.5 공개 챗봇 (4 tools) + Haiku 5.5 dynamic followups + Haiku 5.5 인사이트 잡 (KO·EN 요약) — 모델 ID는 `backend/agent/bedrock.py` `CHAT_MODEL_ID`/`INSIGHTS_MODEL_ID`, followups는 `backend/routers/chat.py` `_generate_followups`가 source of truth. Haiku 5.5 요청은 temperature를 보내지 않는다(v2.37.0). 인사이트는 확장 추론을 끄고 `INSIGHTS_MAX_TOKENS=16384`로 전체 표·설명을 완성한다. 챗봇도 확장 추론을 끄고 `CHAT_MAX_TOKENS=4096`을 쓰며, 출력 한도에서 끝난 답은 `warning` 이벤트로 알린다(2026-10-25 — 기본 추론이 도구 결과 뒤 1024토큰을 다 써 본문 없이 끝났다). 후속 질문은 기본 설정 그대로다
- 
- 자세한 v2 설계는 [`docs/architecture.md`](./docs/architecture.md) / [`docs/decisions/ADR-*.md`](./docs/decisions/) / [`.kiro/specs/v2-upgrade/`](./.kiro/specs/v2-upgrade/) (v2.0.0 당시 설계 기록 — 9개 모델, 인사이트 30분 주기 기준이라 현행과 다름).
-@@ -32,11 +32,11 @@ Internal ALB
-                 ├── /chat         — 챗봇 팝업 창 진입점 (Firefox/Safari, FloatingChat이 연다)
-                 ├── /prompts      — Prompt CRUD + Bedrock OptimizePrompt (auth)
-                 ├── /cost         — 30-day projection + per-model + channel compare (프로브 시각의 단가로 계산, v2.30.0)
--                ├── /pricing      — 비용 단가 (표 순서 Anthropic → OpenAI → Amazon Nova, 모델 패밀리 × 채널 Standard 입력/출력 단가 + 셀 둘째 줄 프롬프트 캐싱, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트(표시 전용, Haiku 5.5 v2.33.0) + OpenAI 표 첫 열 OpenAI 공식 가격, Nova 표 첫 열 빈칸 + 번호 각주 출처 + CSV/Markdown/JSON 다운로드 + 면책 문구, 12시간 자동 갱신, v2.30.0, 열 이름과 캐시 v2.31.0)
-+                ├── /pricing      — 비용 단가 (표 순서 Anthropic → OpenAI → Amazon Nova, 모델 패밀리 × 채널 Standard 입력/출력 단가 + 셀 둘째 줄 프롬프트 캐싱, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트(표시 전용, Haiku 5.5 v2.33.0) + OpenAI 표 첫 열 OpenAI 공식 가격, Nova 표 첫 열 빈칸 + 번호 각주 출처 + CSV/Markdown/JSON 다운로드 + 면책 문구, 12시간 자동 갱신, v2.30.0, 열 이름과 캐시 v2.31.0, 이전 동기화 대비 변경 배너와 셀 배지 v2.40.0)
-                 ├── /reliability  — Family/channel success rate + error buckets
-                 ├── /efficiency   — 0-100 Token Efficiency Score (weighted)
-                 ├── /analysis     — Stop reason 분포 + Output length 분포
--                ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0)
-+                ├── /models       — Model Explorer (모델 카드 + 코드 예제 + 링크, v2.9.0; 코드 예제는 백엔드 단일 출처, 매일 실행 검증 배지, 이전 런 대비 변경 배너, 검증 실패만 필터 v2.40.0)
-                 ├── /parity       — Parity Run (모델×surface×피처 실행-증거 매트릭스, v2.11.0)
-                 ├── /gpt-on-aws   — GPT on AWS (GPT 18채널 TTFB/TTFT 벤치 — Mantle 인리전 us-east-1 7 + CRIS 11 — Terra Global 포함 v2.20.1, GPT-6 Astra 3채널 v2.25.1, GPT-6 Sol/Luna 6채널 v2.28.0, GPT-6.1 Sol 3채널 v2.32.0, CRIS와 Mantle 두 갈래 병렬 v2.32.0, Mantle 리전별 갈래 분할(cris + mantle-<region>, 네 갈래) v2.32.1, GPT-6.1 Terra 3채널과 Mantle 인리전 us-east-1 일원화(cris, mantle-us-east-1 두 갈래) v2.38.0, GPT 5.4 제외 v2.39.0, 15분 주기)
-                 └── /claude-features — Claude API Features (33 문서 피처 × CP/Mantle/Bedrock(Messages API·InvokeModel·Converse) × 대표 7모델 실행-증거 + 문서 드리프트, v2.23.0; Opus 5.5 편입 v2.28.0, Sonnet 5.5 편입 v2.32.0, Haiku 5.5 편입 v2.33.0)
-@@ -52,7 +52,8 @@ EventBridge Scheduler (rate 5 min)
-   │                              v2.38.0부터 Mantle 인리전이 us-east-1 하나라 갈래도 둘이다(cris 11 = Global 6 + US 5, mantle-us-east-1 8 — 로그 `GPT bench lanes: cris=11 mantle-us-east-1=8`, 사용자 결정 2026-10-27, ADR-033). 리전을 되살리면 코드 수정 없이 그 리전 갈래가 다시 생긴다
-   │                              v2.39.0에서 GPT 5.4(mantle-us-east-1 첫 채널)를 빼 mantle-us-east-1은 7채널이다(로그 `GPT bench lanes: cris=11 mantle-us-east-1=7`, 사이클당 180행, 사용자 결정 2026-10-27, ADR-034)
-   ├── FeaturesVerify Fargate Task → 일 1회(cron 17:30 UTC = 02:30 KST 고정, v2.29.0) Claude API Features 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 대표 7모델 = 1365셀 실행-증거 스윕 (v2.23.0; Opus 5.5 편입 v2.28.0, Sonnet 5.5 편입 v2.32.0, Haiku 5.5 편입 v2.33.0)
--  └── PricingSync Fargate Task → 12시간 주기(rate(12 hours)) 공식 단가 동기화 — Bedrock agreement offer rate card + AWS Price List + Anthropic pricing.md + OpenAI pricing.md(v2.31.0) → price_history, 활성 49채널 + OpenAI 공식 가격 9채널(`openai-list:<family_key>`, 표시 전용, v2.39.0 — 로그 `58 active channels`)의 입력, 출력, 캐시, 긴 컨텍스트 단가 (어느 필드든 50% 초과 변경은 관리자 승인 대기, 빈 필드 첫 관측은 현재 행 채움 `enriched`, v2.30.0, ADR-030)
-+  ├── ExplorerVerify Fargate Task → 일 1회(cron 18:00 UTC = 03:00 KST 고정, v2.40.0) 모델 탐색 코드 예제 85건(활성 49채널)을 예제마다 자식 Python(-I, 허용 목록 env)에서 실행 — explorer_runs/explorer_results, 동시 4, 호출당 90초, 실패 1회 재시도 (ADR-035)
-+  └── PricingSync Fargate Task → 12시간 주기(rate(12 hours)) 공식 단가 동기화 — Bedrock agreement offer rate card + AWS Price List + Anthropic pricing.md + OpenAI pricing.md(v2.31.0) → price_history, 활성 49채널 + OpenAI 공식 가격 9채널(`openai-list:<family_key>`, 표시 전용, v2.39.0 — 로그 `58 active channels`)의 입력, 출력, 캐시, 긴 컨텍스트 단가 (어느 필드든 50% 초과 변경은 관리자 승인 대기, 빈 필드 첫 관측은 현재 행 채움 `enriched`, v2.30.0, ADR-030; 런마다 화면 값 스냅샷 `summary.snapshot` → `/api/pricing` `changes`, v2.40.0, ADR-035)
- 
- Backend ↔ Bedrock (Seoul region inference profiles us.*, global.* + 서울 in-region 온디맨드 FM bedrock:ap-northeast-2:* (v2.32.0)) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
-                                   (aws-external-anthropic.us-east-2.api.aws, workspace-id header)
-@@ -86,6 +87,7 @@ model-monitoring/
- │   ├── pricing_sync.py      # 12시간 동기화 — 가져오기, 관측 값 소수 6자리 정규화, 비교(classify_change — 9필드 필드별, CHANGE_THRESHOLD 0.5 경계 포함, 빈 필드 첫 관측은 새 행 없이 현재 행 채움 `enriched`), pending_review, price_sync_runs 기록, 상한 300초. 파서 예외는 종류와 상관없이 그 출처 채널만 skipped:parse_failed(v2.31.0: 문서 표는 찾는 모델 행만 하나씩 정규화해 값이 이상한 추적 모델은 자기 채널만 skipped:parse_failed, 긴 컨텍스트 필드는 `_long_context_gate`(v2.33.0, 구 `_gpt_long_only`)가 OpenAI 채널과 Claude Haiku 5.5 채널만 남김 — offer, 문서, Price List 경로 공통)
- │   ├── pricing_sync_runner.py # CLI entry: `python -m pricing_sync_runner --once` (PricingSync Fargate task) — create_tables → ensure_price_columns(v2.31.0) → CP/OpenAI 등록 → ensure_seed → run_sync(pg_try_advisory_lock(917350004) — 점유 중이면 즉시 exit 1) → os._exit
- │   ├── price_history.py     # 유효 단가 조회, 행 단위 비용 서브쿼리(with_row_cost — /api/cost/*, /api/efficiency/score), verification(seed_only/verified/stale)
-+│   ├── pricing_changes.py   # 런 대비 단가 변경 (v2.40.0, ADR-035) — build_snapshot(run_sync가 커밋 전에 저장하는 화면 값), compare_snapshots(channel, price, pending, check 항목, 표 순서), select_runs, latest_changes(/api/pricing `changes`)
- │   ├── pricing_payload.py   # /api/pricing 응답 조립(표시 순서, tiers 5키 cp, openai_list, global, us, in_region, 셀 확장 필드 cache_read, cache_write, cache_write_1h, long, 각주 번호, 참고 자료 — 셀 각주나 메모가 인용한 출처만, 1..N 빈칸 없음, 운영 20개(오퍼 17, v2.39.0 — v2.38.0은 25개, 오퍼 22, v2.33.0은 24개, 오퍼 21), v2.31.1, v2.32.0) + 숫자 직렬화
- │   ├── pricing_export.py    # CSV(BOM + 따옴표로 감싼 면책 첫 줄, 확장 단가 7열), Markdown(머리말 공식 요금 페이지 링크 한 줄 v2.31.1, 제공사별 열 머리글, 셀 안 `<br>` 캐시와 긴 컨텍스트 줄, 고정 안내 9개 — 3번째 GPT US CRIS = In Region v2.31.1), JSON 내보내기 순수 함수
- │   ├── chat_access.py       # 공개 챗봇의 서명 쿠키·사용자별 actor·Origin 검사·요청 제한 (v2.37.0)
-@@ -103,6 +105,8 @@ model-monitoring/
- │   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×20 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
- │   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×5 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
- │   ├── features_runner.py   # CLI entry: `python -m features_runner --once` (FeaturesVerify Fargate task)
-+│   ├── model_explorer/      # 모델 탐색 검증 (v2.40.0, ADR-035): examples.py(코드 예제 단일 출처 — v2.39.0 TS codeExamples와 바이트 일치, 골든 tests/fixtures/explorer_examples_v2390.json), execute.py(플레이스홀더 → os.environ, 자식 `python -I`, 허용 목록 env, 90초, 1회 재시도, 비밀 값 가림), runner.py(모델 × 예제, ThreadPoolExecutor 4, 런 상한 1200초, 60런 보존), diff.py(catalog, example, measured)
-+│   ├── explorer_runner.py   # CLI entry: `python -m explorer_runner --once` (ExplorerVerify Fargate task) / `--smoke [--models] [--json]` (DB 없이, venv에서)
- │   └── routers/
- │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)
- │       ├── admin.py         # /api/admin/* — reset-monitoring-data, users CRUD (admin only)
-@@ -114,7 +118,8 @@ model-monitoring/
- │       ├── chat.py          # /api/chat/stream — Haiku 5.5 + 4 tools + dynamic followups (public)
- │       ├── insights.py      # /api/insights/* — list/latest/stream-regenerate
- │       ├── cost.py          # /api/cost/* — summary, channel-compare, trend (행 단위 시점 단가, v2.30.0)
--│       ├── pricing.py       # /api/pricing(60초 캐시), /api/pricing/export(csv|md|json) 공개 + admin_router /api/admin/pricing/pending, approve, reject (v2.30.0)
-+│       ├── pricing.py       # /api/pricing(60초 캐시, `changes` v2.40.0), /api/pricing/export(csv|md|json, `changes` 제외) 공개 + admin_router /api/admin/pricing/pending, approve, reject (v2.30.0)
-+│       ├── explorer.py      # /api/explorer/latest(예제 KO/EN + 최근 완료 런 결과 + 변경 + DB 기준 running, s-maxage=60), /api/explorer/trigger(JWT) (v2.40.0)
- │       ├── reliability.py   # /api/reliability/multi-channel — family/channel grouped
- │       ├── efficiency.py    # /api/efficiency/score — 0-100 weighted score per category
- │       ├── analysis.py      # /api/analysis/* — stop-reasons, output-length (v2.1.0)
-@@ -151,13 +156,13 @@ model-monitoring/
- │   │   │   ├── ModelStatusGrid.tsx      # family-grouped 49 cards (Bedrock prefix) + 지표 값 등급 색(양호 파랑/경고 호박 ▲/위험 장미 ◆, data-grade, 범례 + 접이식 기준표 — lib/metricGrade.ts, ADR-029, v2.28.0)
- │   │   │   ├── TrendChart.tsx           # MODEL_COLORS 라벨 (19 Bedrock — Global 8 + US 9(Claude 8 + Nova 1) + 서울 in-region 2 — + 8 Anthropic CP + 22 OpenAI Mantle us-east-1/Global/US 활성; 1P 4개는 휴면, v2.39.0에 Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 색을 지움, Haiku 5.5 따뜻한 계열 3색과 Sonnet 5.5 US 올리브 v2.33.0, GPT 6.1 Terra 보라 3색과 GPT 6 Astra (us-east-1) 세룰리안 v2.38.0, 수집을 멈춘 Mantle us-east-2/us-west-2 라벨은 지난 데이터용으로 색 유지)
- │   │   │   ├── CostDashboardPanel.tsx   # 방법론 문단이 /pricing으로 연결 (v2.30.0)
--│   │   │   ├── PricingPanel.tsx         # 비용 단가 표(제공사 섹션 Anthropic → OpenAI → Amazon, PROVIDER_COLUMNS 4열 — OpenAI 첫 열 OpenAI 공식 가격, Nova 첫 열 빈칸, 모르는 제공사는 columnsFor 기본 열, 셀 둘째 줄 캐시, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트, 각주 → #ref-n, 검토 배지 프로모션과 문서 불일치 v2.33.0) + 면책 상자 + 마지막 공식 단가 동기화 + 다운로드 3종 + 참고 자료 (v2.30.0, 열과 캐시 v2.31.0)
-+│   │   │   ├── PricingPanel.tsx         # 비용 단가 표(제공사 섹션 Anthropic → OpenAI → Amazon, PROVIDER_COLUMNS 4열 — OpenAI 첫 열 OpenAI 공식 가격, Nova 첫 열 빈칸, 모르는 제공사는 columnsFor 기본 열, 셀 둘째 줄 캐시, GPT와 Claude Haiku 5.5 셋째 줄 긴 컨텍스트, 각주 → #ref-n, 검토 배지 프로모션과 문서 불일치 v2.33.0) + 면책 상자 + 마지막 공식 단가 동기화 + 이전 동기화 대비 변경 배너(항목 → 셀 스크롤과 1.5초 강조, 셀 "이전 대비 변경" 배지, v2.40.0) + 다운로드 3종 + 참고 자료 (v2.30.0, 열과 캐시 v2.31.0)
- │   │   │   ├── ReliabilityPanel.tsx
- │   │   │   ├── EfficiencyPanel.tsx
- │   │   │   ├── AnalysisPanel.tsx        # v2.1.0
- │   │   │   ├── InsightsPanel.tsx        # SSE stream-regenerate
- │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt (대상 Bedrock 17개 — v2.39.0에 Claude 4.x 네 패밀리 8개를 뺐다)
--│   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x)
-+│   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x) — v2.40.0부터 예제와 검증 결과는 /api/explorer/latest: 머리글 최근 검증 런, 검증 배지, 변경 표지와 배너(항목 → 해당 API 탭 모달), 검증 실패만 필터, 모달 검증 상자
- │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
- │   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 헬스 카드(docHealth, 클릭 → Key Findings 드로어) + 모델 칩 + 드리프트/변경(kind) 배너 + 증거 모달 + 수동 트리거 (v2.24.0)
- │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
-@@ -171,7 +176,8 @@ model-monitoring/
- │   │       ├── pricing.ts               # formatCost만 (v2.30.0부터 단가 표는 backend /api/pricing — 프런트 미러 없음)
- │   │       ├── pricingTable.ts          # /pricing 순수 함수 — tierLabel, PROVIDER_COLUMNS, columnsFor, headerParts, formatUnitPrice(소수 2~6자리, 예외 없음 — NaN, ±Infinity, 1e21 이상은 그대로), formatPricePair, cacheItems, longItems, pendingDetail, tierBadges, costFromPrices (정렬과 번호 매기기 없음, v2.30.0, v2.31.0)
- │   │       ├── theme.ts + chartTheme.ts # 다크/화이트 테마 (v2.8.0)
--│   │       ├── modelExplorer.ts         # 채널/네이티브ID/코드예제/링크 유도 (lang 파라미터로 KO/EN, v2.16.2)
-+│   │       ├── modelExplorer.ts         # 채널/네이티브ID/링크 유도 (lang 파라미터로 KO/EN, v2.16.2; 코드 예제는 v2.40.0부터 백엔드)
-+│   │       ├── explorerVerify.ts        # 모델 탐색 검증 순수 로직 — summarizeModel, badgeLabel, 변경 라벨, hasFailure, splitError, reasonText (v2.40.0)
- │   │       ├── claudeFeatures.ts        # Claude API Features 매트릭스 순수 로직 — 셀 집계·그룹 구성(modelKey, modelOrder)·surfaceSummary/surfaceFindings·labelMaps·지연시간 헬퍼 (v2.24.0)
- │   │       ├── fabVisibility.ts         # 챗봇 버튼 스크롤 숨김 규칙 nextFabState, isFabVisible (v2.31.1)
- │   │       ├── metricGrade.ts           # 대시보드 카드 지표 등급 단일 출처 — 카테고리별 TTFT/총 응답시간 임계치, TPS 공통(<40 경고, <15 위험), roundForDisplay, 색·표지 (v2.28.0, ADR-029)
-@@ -425,6 +431,7 @@ Scheduler role의 `ecs:RunTask` Resource는 **task def family `:*` wildcard** 
- | `PROBE_WALL_CLOCK_S` | `90` (선택, 미주입) | 프로브 1회(재시도 포함) wall-clock 상한 — 만료 시 그 모델만 `WallClockTimeout` 오류 행, 모델별 사이클 타임아웃은 max(120, 값 + 30)초로 따라감 (v2.28.2) |
- | `MANTLE_ANTHROPIC_REGION` | `us-east-1` (CDK 주입) | Claude API Features + 패리티 런 `messages_mantle` 공용 Mantle `/anthropic` surface 리전. ap-northeast-1은 Opus 4.8만 서빙(2026-09-05 실측) → 대표 모델이 서빙되는 us-east-1로 전환(사용자 결정, v2.23.0). env 미주입 시 코드 기본값은 패리티 ap-northeast-1(`parity/runner.py`), Claude API Features us-east-1(`claude_features/catalog.py`) |
- | `FEATURES_MCP_SERVER_URL` | (선택) | Claude API Features MCP connector 프로브용 공개 MCP 서버 URL (v2.23.0, 장애 시 inconclusive로 격리) |
-+| `EXPLORER_CALL_TIMEOUT_S` / `EXPLORER_RUN_DEADLINE_S` | `90` / `1200` (선택, 미주입) | 모델 탐색 검증 런의 예제 1건 실행 상한(초, 넘으면 자식 프로세스를 죽이고 failed "시간 초과") / 런 전체 상한(초, 넘으면 시작하지 못한 예제를 skipped "런 시간 상한") (v2.40.0, ADR-035) |
- | `OPENAI_API_KEY` | (CDK 주입, SSM `/bedrock-monitor/openai-api-key` secret) | Bedrock bearer 키(`ABSK-…`) — Mantle 인리전·Global·US CRIS·gptbench 공용. 미설정 시 OpenAI Mantle 채널 전체 skip |
- | `OPENAI_US_EAST_1_BASE_URL` / `OPENAI_US_EAST_2_BASE_URL` / `OPENAI_US_WEST_2_BASE_URL` | `https://bedrock-mantle.<region>.api.aws/openai/v1` (CDK 주입) | Mantle 인리전 엔드포인트 (`prober._OPENAI_REGION_ENV`) — 미주입 리전의 채널은 조용히 skip. v2.38.0부터 us-east-2, us-west-2를 쓰는 채널은 없지만(Mantle 인리전 us-east-1 일원화, ADR-033) 리전을 되살릴 때를 위해 주입은 남긴다 |
- | `OPENAI_GLOBAL_BASE_URL` | `https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1` (CDK 주입) | OpenAI Global CRIS(`global.openai.*`) 유사 리전 `global` 라우팅 (v2.20.0, ADR-025). 미주입 시 Global 채널 skip |
 ````
 - [ ] **Step 3:** Run:
 
 ```bash
-grep -rn "2\.39\.0" frontend/src/lib/version.ts backend/main.py frontend/package.json README.md | grep -v CHANGELOG; grep -c '"version": "2.40.0"' frontend/package-lock.json; make verify
+grep -n "2\.39\.0" frontend/src/lib/version.ts backend/main.py frontend/package.json; grep -c "badge/version-2.40.0" README.md; grep -c '"version": "2.40.0"' frontend/package-lock.json; make verify
 ```
 
-Expected: the first grep prints nothing, the count is `2`, and `make verify` (CDK lint, typecheck, test, synth + backend + frontend unit) passes.
+Expected: the first grep prints nothing (README keeps its "in v2.39.0" history sentences), the counts are `1` and `2`, and `make verify` (CDK lint, typecheck, test, synth + backend + frontend unit) passes. `tests/test_insights_bedrock.py` uses a local fake Bedrock with timeouts scaled to 0.5 s and can flap once under the load of `make verify` (seen 2026-11-07, 5 of 5 reruns passed): rerun it alone before treating it as a failure.
 - [ ] **Step 4:** Commit:
 
 ```bash
