@@ -1,5 +1,6 @@
 import { expect, test, type Page } from "@playwright/test";
 import type { GptBenchLatest, GptBenchTrend } from "../src/lib/api";
+import { explorerLatest } from "./explorerFixtures";
 import { mockApi } from "./fixtures";
 
 const catalog = [
@@ -56,6 +57,7 @@ test.beforeEach(async ({ page }) => {
   await mockApi(page);
   await page.addInitScript(() => localStorage.setItem("lang", "en"));
   await page.route("**/api/models", (route) => route.fulfill({ json: catalog }));
+  await page.route("**/api/explorer/latest", (route) => route.fulfill({ json: explorerLatest(catalog) }));
 });
 
 test("benchmark cards show all 18 channels grouped by generation", async ({ page }) => {
@@ -389,6 +391,7 @@ test("catalog details support keyboard tabs, copy feedback and focus return", as
 test("catalog shows a Seoul In-Region card with its own endpoint and the base model ID in code (v2.32.0)", async ({ page }) => {
   const inRegion = { id: "bedrock:ap-northeast-2:anthropic.claude-opus-5", name: "Bedrock Claude Opus 5 (ap-northeast-2)" };
   await page.route("**/api/models", (route) => route.fulfill({ json: [...catalog, inRegion] }));
+  await page.route("**/api/explorer/latest", (route) => route.fulfill({ json: explorerLatest([...catalog, inRegion]) }));
   await page.goto("/models");
   const card = page.getByRole("button", { name: inRegion.name, exact: true });
   await expect(card).toBeVisible();

@@ -1,4 +1,5 @@
 import type { Page } from "@playwright/test";
+import { explorerLatest } from "./explorerFixtures";
 import type {
   PricingFamily, PricingLongContext, PricingModelPrice, PricingReference, PricingResponse, PricingTier,
 } from "../src/lib/types";
@@ -285,6 +286,7 @@ export async function mockApi(page: Page) {
       "/api/auto-probe/categories": categories,
       "/api/insights/latest": null,
       "/api/pricing": pricingFixture,
+      "/api/explorer/latest": explorerLatest(modelCatalog),
     };
     const body = values[url.pathname];
     await route.fulfill({
