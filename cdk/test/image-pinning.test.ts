@@ -130,13 +130,14 @@ describe("context 이미지 주입 (backendImage/frontendImage)", () => {
     }));
   });
 
-  it("scheduler의 autoprober/insights/parity/gptbench/features/pricingsync task definition도 backend digest URI를 사용한다", () => {
+  it("scheduler의 autoprober/insights/parity/gptbench/features/pricingsync/explorer task definition도 backend digest URI를 사용한다", () => {
     const tds = schedTemplate.findResources("AWS::ECS::TaskDefinition");
     const images = Object.values(tds).map(
       (td) => (td as any).Properties.ContainerDefinitions[0].Image,
     );
     // autoprober + insights + parityrun (v2.11.0) + gptbench (v2.18.0) + featuresverify (v2.23.0) + pricingsync (v2.30.0)
-    expect(images).toHaveLength(6);
+    // + explorerverify (v2.40.0)
+    expect(images).toHaveLength(7);
     for (const img of images) {
       expect(img).toBe(BE_URI);
     }

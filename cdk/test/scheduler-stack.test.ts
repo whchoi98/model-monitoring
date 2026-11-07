@@ -37,8 +37,8 @@ describe("SchedulerStack", () => {
     template = Template.fromStack(scheduler);
   });
 
-  it("Schedule이 6개 생성된다 (AutoProber + Insights + ParityRun + GptBench + FeaturesVerify + PricingSync)", () => {
-    template.resourceCountIs("AWS::Scheduler::Schedule", 6);
+  it("Schedule이 7개 생성된다 (AutoProber + Insights + ParityRun + GptBench + FeaturesVerify + PricingSync + ExplorerVerify)", () => {
+    template.resourceCountIs("AWS::Scheduler::Schedule", 7);
   });
 
   it("AutoProber는 rate(5 minutes) 스케줄을 사용한다", () => {
@@ -76,8 +76,8 @@ describe("SchedulerStack", () => {
     }));
   });
 
-  it("TaskDefinition이 6개 생성된다 (PricingSync 포함, v2.30.0)", () => {
-    template.resourceCountIs("AWS::ECS::TaskDefinition", 6);
+  it("TaskDefinition이 7개 생성된다 (PricingSync v2.30.0, ExplorerVerify v2.40.0 포함)", () => {
+    template.resourceCountIs("AWS::ECS::TaskDefinition", 7);
   });
 
   it("Task는 Fargate, awsvpc, X86_64로 설정된다", () => {
@@ -158,11 +158,12 @@ describe("SchedulerStack", () => {
       ScheduleExpressionTimezone: "Etc/UTC",
       Description: Match.stringLikeRegexp("daily at 17:30 UTC"),
     }));
-    // 일 1회 스케줄은 이 cron 하나뿐 — 이전 rate(1 day)가 남아 하루 두 번 돌지 않는다.
+    // 일 1회 스케줄은 고정 cron 두 개뿐(FeaturesVerify 17:30, ExplorerVerify 18:00 UTC) — 이전 rate(1 day)가 남아 하루 두 번 돌지 않는다.
     const expressions = Object.values(template.findResources("AWS::Scheduler::Schedule"))
       .map((resource) => resource.Properties.ScheduleExpression);
     expect(expressions).not.toContain("rate(1 day)");
-    expect(expressions.filter((expression: string) => expression.startsWith("cron("))).toEqual(["cron(30 17 * * ? *)"]);
+    expect(expressions.filter((expression: string) => expression.startsWith("cron(")).sort())
+      .toEqual(["cron(0 18 * * ? *)", "cron(30 17 * * ? *)"]);
     template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
       ContainerDefinitions: Match.arrayWith([Match.objectLike({
         Command: ["python", "-m", "features_runner", "--once"],
@@ -203,6 +204,56 @@ describe("SchedulerStack", () => {
       ScheduleExpression: "rate(5 minutes)",
       Description: Match.stringLikeRegexp("Bedrock 모니터링"),
     }));
+  });
+
+  describe("ExplorerVerify (v2.40.0, ADR-035)", () => {
+    const EXPLORER_COMMAND = ["python", "-m", "explorer_runner", "--once"];
+    type Container = { Command: string[]; Environment?: { Name: string; Value: string }[]; Secrets?: { Name: string }[] };
+    const taskDefs = () => Object.entries(template.findResources("AWS::ECS::TaskDefinition"));
+    const byCommand = (command: string[]) => {
+      const found = taskDefs().filter(([, r]) => (r.Properties.ContainerDefinitions as Container[])
+        .some((c) => c.Command.join(" ") === command.join(" ")));
+      expect(found).toHaveLength(1);
+      return found[0]!;
+    };
+
+    it("매일 18:00 UTC 고정 cron 스케줄이 explorer_runner --once task def를 실행한다", () => {
+      const [taskDefId] = byCommand(EXPLORER_COMMAND);
+      const targeting = Object.values(template.findResources("AWS::Scheduler::Schedule"))
+        .filter((schedule) => schedule.Properties.Target.EcsParameters.TaskDefinitionArn.Ref === taskDefId);
+      expect(targeting).toHaveLength(1);
+      expect(targeting[0]!.Properties.ScheduleExpression).toBe("cron(0 18 * * ? *)");
+      expect(targeting[0]!.Properties.ScheduleExpressionTimezone).toBe("Etc/UTC");
+      expect(targeting[0]!.Properties.Description).toMatch(/daily at 18:00 UTC/);
+    });
+
+    it("로그 그룹 /ecs/explorer 14일, 0.5 vCPU / 1 GB, autoprober와 같은 task role, env, secret", () => {
+      const [, explorer] = byCommand(EXPLORER_COMMAND);
+      const [, autoProber] = byCommand(["python", "-m", "auto_prober_runner", "--once"]);
+      expect(explorer.Properties.Cpu).toBe("512");
+      expect(explorer.Properties.Memory).toBe("1024");
+      expect(explorer.Properties.TaskRoleArn).toEqual(autoProber.Properties.TaskRoleArn);
+      const container = explorer.Properties.ContainerDefinitions[0] as Container & {
+        LogConfiguration: { Options: { "awslogs-group": { Ref: string } } } };
+      const logGroupId = container.LogConfiguration.Options["awslogs-group"].Ref;
+      expect(template.findResources("AWS::Logs::LogGroup")[logGroupId]?.Properties)
+        .toEqual({ LogGroupName: "/ecs/explorer", RetentionInDays: 14 });
+      const probe = autoProber.Properties.ContainerDefinitions[0] as Container;
+      expect(container.Environment).toEqual(
+        (probe.Environment ?? []).filter((variable) => variable.Name !== "ANTHROPIC_CP_PROBE_INTERVAL_S"));
+      expect((container.Secrets ?? []).map((s) => s.Name).sort()).toEqual((probe.Secrets ?? []).map((s) => s.Name).sort());
+    });
+
+    it("Scheduler 역할의 RunTask family ':*' 목록에 ExplorerVerify가 들어간다 (ADR-011)", () => {
+      const [, explorer] = byCommand(EXPLORER_COMMAND);
+      const statements = Object.entries(template.findResources("AWS::IAM::Policy"))
+        .filter(([logicalId]) => logicalId.startsWith("SchedulerInvokeRoleDefaultPolicy"))
+        .flatMap(([, policy]) => policy.Properties.PolicyDocument.Statement)
+        .filter((statement: { Sid?: string }) => statement.Sid === "RunTaskFamilyWildcard");
+      expect(statements).toHaveLength(1);
+      expect(statements[0].Resource).toContain(
+        `arn:aws:ecs:us-east-1:111111111111:task-definition/${explorer.Properties.Family as string}:*`);
+    });
   });
 
   describe("PricingSync (v2.30.0, ADR-030)", () => {
@@ -308,19 +359,19 @@ describe("SchedulerStack", () => {
 
   it("모든 스케줄 task def에 GPT-6.1 Sol model id가 주입된다 (v2.32.0)", () => {
     const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
-    expect(containers).toHaveLength(6);
+    expect(containers).toHaveLength(7);
     for (const c of containers) expect(c.Environment).toContainEqual({ Name: "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", Value: "openai.gpt-6.1-sol" });
   });
 
   it("모든 스케줄 task def에 GPT-6.1 Terra model id가 주입된다 (v2.38.0)", () => {
     const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
-    expect(containers).toHaveLength(6);
+    expect(containers).toHaveLength(7);
     for (const c of containers) expect(c.Environment).toContainEqual({ Name: "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", Value: "openai.gpt-6.1-terra" });
   });
 
   it("어느 스케줄 task def에도 GPT 5.4 model id가 없다 (v2.39.0 — 모니터링에서 뺐다)", () => {
     const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
-    expect(containers).toHaveLength(6);
+    expect(containers).toHaveLength(7);
     for (const c of containers) {
       const names = c.Environment.map((e: any) => e.Name);
       expect(names).not.toContain("BEDROCK_OPENAI_GPT_54_MODEL_ID");
@@ -328,9 +379,9 @@ describe("SchedulerStack", () => {
     }
   });
 
-  it("all six shared backend tasks retain the visitor origin configuration", () => {
+  it("all seven shared backend tasks retain the visitor origin configuration", () => {
     const tasks = Object.values(template.findResources("AWS::ECS::TaskDefinition"));
-    expect(tasks).toHaveLength(6);
+    expect(tasks).toHaveLength(7);
     for (const task of tasks) {
       expect(task.Properties.ContainerDefinitions[0].Environment).toContainEqual({
         Name: "PRESENCE_ALLOWED_ORIGINS", Value: "https://llm-monitor.whchoi.net",

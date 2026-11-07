@@ -1,4 +1,4 @@
-// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify / PricingSync one-shot TaskDefinitions.
+// SchedulerStack - EventBridge Scheduler + AutoProber / Insights / ParityRun / GptBench / FeaturesVerify / PricingSync / ExplorerVerify one-shot TaskDefinitions.
 //
 // 책임:
 //   - rate(5 minutes) → AutoProber Fargate Task (auto_prober_runner --once)
@@ -11,6 +11,8 @@
 //   - cron(30 17 * * ? *) Etc/UTC → FeaturesVerify Fargate Task (features_runner --once)
 //     (v2.29.0: 매일 17:30 UTC = 02:30 KST 고정 1회. 이전 rate(24 hours)는 스케줄 생성 시각 기준이라 시각이 고정되지 않았다)
 //   - rate(12 hours) → PricingSync Fargate Task (pricing_sync_runner --once)
+//   - cron(0 18 * * ? *) Etc/UTC → ExplorerVerify Fargate Task (explorer_runner --once)
+//     (v2.40.0, ADR-035: 매일 18:00 UTC = 03:00 KST 고정 1회 — FeaturesVerify(17:30 UTC, 약 13분) 뒤라 같은 모델 호출이 겹치지 않는다)
 //     (v2.30.0: 공식 단가 동기화 — Bedrock agreement offers, AWS Price List, Anthropic pricing.md. 모델 호출 권한 없음, ADR-030)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
 //   - 모든 task는 RDS:5432 egress + Bedrock/Mantle 액세스 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
@@ -348,6 +350,17 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/features",
     );
 
+    // Model Explorer 코드 예제 검증 (v2.40.0, ADR-035) — /models가 보여 주는 예제(Converse, InvokeModel, Messages, Responses)를
+    //   모델마다 실제로 실행한다(활성 49모델 → 85건, 동시 4). 예제가 Bedrock(IAM), CP(API 키), Mantle과 CRIS(ABSK 키)를 모두
+    //   부르므로 autoprober role과 기본 env/secret을 그대로 쓴다. 예제 자식 프로세스에는 허용 목록 env만 넘긴다
+    //   (model_explorer/execute.py — DB_*, JWT_SECRET_KEY는 자식에 가지 않는다). 새 env, 새 IAM 정책은 없다.
+    const explorerTaskDef = buildTaskDef(
+      "ExplorerVerifyTaskDef",
+      autoProberTaskRole,
+      ["python", "-m", "explorer_runner", "--once"],
+      "/ecs/explorer",
+    );
+
     // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 61채널(v2.38.0) + OpenAI 공식 가격 10채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
     // price_history에 기록한다(50% 초과 변화는 검토 대기). 같은 env/secret(buildTaskDef 기본값)으로 CP 디스커버리와
     // OpenAI 채널 등록을 AutoProber와 똑같이 해야 활성 채널 집합이 맞는다. extraEnvironment 없음.
@@ -387,6 +400,7 @@ export class SchedulerStack extends cdk.Stack {
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${gptBenchTaskDef.family}:*`,
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${featuresTaskDef.family}:*`,
           `arn:aws:ecs:${this.region}:${this.account}:task-definition/${pricingSyncTaskDef.family}:*`,
+          `arn:aws:ecs:${this.region}:${this.account}:task-definition/${explorerTaskDef.family}:*`,
         ],
       }),
     );
@@ -468,6 +482,21 @@ export class SchedulerStack extends cdk.Stack {
       description: "Claude API Features verification: 39 rows x CP/Mantle/Bedrock(Messages,InvokeModel,Converse) x 7 models, daily at 17:30 UTC",
       target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
         taskDefinition: featuresTaskDef,
+        vpcSubnets: props.appSubnets,
+        securityGroups: [schedulerTaskSg],
+        assignPublicIp: false,
+        platformVersion: ecs.FargatePlatformVersion.LATEST,
+        role: schedulerInvokeRole,
+      }),
+    });
+
+    new scheduler.Schedule(this, "ExplorerVerifySchedule", {
+      // 일 1회 (사용자 요청 2026-11-05 "모델 탐색도 1일 1회 런으로 검증") — 매일 18:00 UTC(= 03:00 KST) 고정 cron.
+      //   FeaturesVerify(17:30 UTC, 약 13분) 뒤로 둔다. rate(24 hours)는 스케줄 생성 시각에 묶이므로 쓰지 않는다.
+      schedule: scheduler.ScheduleExpression.cron({ minute: "0", hour: "18", timeZone: cdk.TimeZone.ETC_UTC }),
+      description: "Model Explorer code example verification: every example of every monitored model, daily at 18:00 UTC",
+      target: new schedulerTargets.EcsRunFargateTask(props.cluster, {
+        taskDefinition: explorerTaskDef,
         vpcSubnets: props.appSubnets,
         securityGroups: [schedulerTaskSg],
         assignPublicIp: false,
