@@ -39,6 +39,7 @@ from pricing_parsers import (
     select_offer_price,
     single_public_offer,
 )
+from pricing_changes import build_snapshot
 from pricing_sources import (
     ANTHROPIC_PRICING_URL,
     ANTHROPIC_SOURCE_ID,
@@ -584,10 +585,14 @@ def run_sync(
                 elif result in ("pending", "no_baseline"):
                     pending += 1
             status = _run_status(channels, sources)
+            finished_at = clock()
+            db.flush()  # SessionLocal has autoflush off: the snapshot queries must see this run's new rows
+            snapshot = build_snapshot(db, active, channels, finished_at)  # what /pricing shows now (v2.40.0)
             run = db.get(PriceSyncRun, run_id)
-            run.finished_at = clock()
+            run.finished_at = finished_at
             run.status = status
-            run.summary = {"sources": sources, "channels": dict(sorted(channels.items())), "errors": errors[:_MAX_ERRORS]}
+            run.summary = {"sources": sources, "channels": dict(sorted(channels.items())), "errors": errors[:_MAX_ERRORS],
+                           "snapshot": snapshot}
             run.changes = changes
             run.pending = pending
             db.commit()
