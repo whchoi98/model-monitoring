@@ -10,6 +10,7 @@ import {
   ChatStreamEvents,
   Insight,
   AutoProbeAnomalies,
+  ExplorerLatest,
   PricingResponse,
 } from "./types";
 import { ApiError, fetchJson } from "./http";
@@ -865,6 +866,17 @@ export async function fetchFeaturesEvidence(q: { run_id: number; feature: string
 
 export async function triggerFeaturesRun(): Promise<{ triggered: boolean; message: string }> {
   return authenticatedJson(`${BASE}/api/features/trigger`, { method: "POST" });
+}
+
+// ── Model Explorer verification (v2.40.0) ───────────────────────────────
+
+/** Code examples of every visible model with the latest daily verification result (backend single source). */
+export async function fetchExplorerLatest(signal?: AbortSignal): Promise<ExplorerLatest> {
+  return fetchJson(`${BASE}/api/explorer/latest`, { signal });
+}
+
+export async function triggerExplorerRun(): Promise<{ triggered: boolean; message: string }> {
+  return authenticatedJson(`${BASE}/api/explorer/trigger`, { method: "POST" });
 }
 
 // ── Unit prices (v2.30.0) ───────────────────────────────────────────────

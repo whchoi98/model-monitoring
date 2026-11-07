@@ -4,7 +4,8 @@
 
 import { parseTimestamp } from "./format";
 import type {
-  PricingDocConflictNote, PricingFamily, PricingModelPrice, PricingNote, PricingPriceFields, PricingPromoNote, PricingTier,
+  PricingChangeItem, PricingDocConflictNote, PricingFamily, PricingField, PricingModelPrice, PricingNote, PricingPriceFields,
+  PricingPromoNote, PricingTier,
 } from "./types";
 
 export type PricingTierKey = "cp" | "openai_list" | "global" | "us" | "in_region";
@@ -187,7 +188,7 @@ export function utcDate(value: string | null | undefined): string | null {
  * touch or keyboard users. `ref` is the reference id whose footnote carries the note's source (promotions only).
  */
 export type PricingBadge = {
-  kind: "unverified" | "pending" | "promo" | "promo_check" | "doc_conflict";
+  kind: "unverified" | "pending" | "promo" | "promo_check" | "doc_conflict" | "changed" | "new_channel";
   label: string;
   detail: string;
   ref?: string;
@@ -288,4 +289,113 @@ export function costFromPrices(
   const price = models[modelId];
   // Missing token counts count as zero, like the backend's COALESCE(tokens, 0) row cost.
   return ((inputTokens ?? 0) * price.input + (outputTokens ?? 0) * price.output) / 1_000_000;
+}
+
+// ── Run-to-run changes (v2.40.0, ADR-035) — the /api/pricing `changes` items as banner lines and cell badges ──
+
+const FIELD_LABELS: Record<PricingField, { ko: string; en: string }> = {
+  input: { ko: "입력", en: "input" },
+  output: { ko: "출력", en: "output" },
+  cache_read: { ko: "캐시 읽기", en: "cache read" },
+  cache_write: { ko: "캐시 쓰기", en: "cache write" },
+  cache_write_1h: { ko: "1시간 캐시 쓰기", en: "1h cache write" },
+  long_input: { ko: "긴 컨텍스트 입력", en: "long-context input" },
+  long_output: { ko: "긴 컨텍스트 출력", en: "long-context output" },
+  long_cache_read: { ko: "긴 컨텍스트 캐시 읽기", en: "long-context cache read" },
+  long_cache_write: { ko: "긴 컨텍스트 캐시 쓰기", en: "long-context cache write" },
+};
+
+// pricing_sync skip reasons (the `skipped:<reason>` channel results).
+const CHECK_REASONS: Record<string, { ko: string; en: string }> = {
+  fetch_failed: { ko: "출처 응답 실패", en: "source unreachable" },
+  parse_failed: { ko: "출처 파싱 실패", en: "source parse failed" },
+  offer_count: { ko: "공개 오퍼 수 이상", en: "unexpected number of public offers" },
+  not_found: { ko: "출처에 모델 없음", en: "model not found at the source" },
+  deadline: { ko: "동기화 시간 상한", en: "sync time limit reached" },
+  unmapped: { ko: "출처 미지정", en: "no source for the channel" },
+};
+
+export type PricingChangeTag = "new_channel" | "left_channel" | "applied" | "pending" | "released" | "check_failed" | "check_recovered";
+
+/** What a change item means for the banner tag. */
+export function changeKindTag(item: PricingChangeItem): PricingChangeTag {
+  if (item.kind === "channel") return item.after === null ? "left_channel" : "new_channel";
+  if (item.kind === "price") return "applied";
+  if (item.kind === "pending") return item.after === null ? "released" : "pending";
+  return item.after === "ok" ? "check_recovered" : "check_failed";
+}
+
+const TAG_LABELS: Record<PricingChangeTag, { ko: string; en: string }> = {
+  new_channel: { ko: "신규 채널", en: "New channel" },
+  left_channel: { ko: "제외 채널", en: "Removed channel" },
+  applied: { ko: "적용", en: "Applied" },
+  pending: { ko: "검토 대기", en: "Pending review" },
+  released: { ko: "검토 해제", en: "Review closed" },
+  check_failed: { ko: "확인 실패", en: "Check failed" },
+  check_recovered: { ko: "확인 복구", en: "Check recovered" },
+};
+
+export function changeTagLabel(tag: PricingChangeTag, lang: "ko" | "en"): string {
+  return TAG_LABELS[tag][lang];
+}
+
+function changeValue(value: number | string | null): string {
+  return typeof value === "number" ? formatUnitPrice(value) : "—";
+}
+
+/** "출처 파싱 실패" for "skipped:parse_failed"; a Claude Platform on AWS or OpenAI official price cell reads a pricing
+ *  page, so its parse failure is "문서 파싱 실패". */
+function checkReason(item: PricingChangeItem, lang: "ko" | "en"): string {
+  const raw = typeof item.after === "string" && item.after.startsWith("skipped:") ? item.after.slice("skipped:".length) : "";
+  if (raw === "parse_failed" && (item.tier === "cp" || item.tier === "openai_list")) {
+    return lang === "en" ? "pricing page parse failed" : "문서 파싱 실패";
+  }
+  return Object.prototype.hasOwnProperty.call(CHECK_REASONS, raw) ? CHECK_REASONS[raw][lang] : raw;
+}
+
+/** The value part of an item: "캐시 읽기 $0.20 → $0.10", "입력 — → $3.30", "문서 파싱 실패", or "" for a channel. */
+function changeDetail(item: PricingChangeItem, lang: "ko" | "en"): string {
+  if ((item.kind === "price" || item.kind === "pending") && item.field) {
+    return `${FIELD_LABELS[item.field][lang]} ${changeValue(item.before)} → ${changeValue(item.after)}`;
+  }
+  if (item.kind === "check" && item.after !== "ok") return checkReason(item, lang);
+  return "";
+}
+
+/** Banner line after the tag: "Claude Sonnet 5.5, AWS Bedrock - Global CRIS, 캐시 읽기 $0.20 → $0.10". An In Region
+ *  channel names its region: "GPT 5.6 Terra, AWS Bedrock - In Region (us-east-1)". */
+export function changeItemText(item: PricingChangeItem, lang: "ko" | "en"): string {
+  const column = `${tierLabel(item.tier, lang)}${item.region ? ` (${item.region})` : ""}`;
+  const detail = changeDetail(item, lang);
+  return [item.family, column, detail].filter(Boolean).join(", ");
+}
+
+/** The id of a price cell, the banner's scroll target: "price-claude-sonnet-5-5-global". */
+export function priceCellId(familyKey: string, tier: string): string {
+  return `price-${familyKey}-${tier}`;
+}
+
+/**
+ * The change badge of one cell: "이전 대비 변경" with the first change of the cell as its detail ("캐시 읽기 $0.20 →
+ * $0.10", "검토 대기: 입력 — → $3.30", "확인 실패: 문서 파싱 실패", then ", 외 N건" for more), or "신규 채널" for a cell
+ * whose only change is a new channel. null when the cell has no change.
+ */
+export function cellChangeBadge(items: PricingChangeItem[], familyKey: string, tier: string, lang: "ko" | "en"): PricingBadge | null {
+  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  const mine = items.filter((item) => item.family_key === familyKey && item.tier === tier);
+  const changes = mine.filter((item) => item.kind !== "channel");
+  if (changes.length === 0) {
+    return mine.some((item) => item.kind === "channel" && item.after !== null)
+      ? { kind: "new_channel", label: L("New channel", "신규 채널"), detail: "" }
+      : null;
+  }
+  const first = changes[0];
+  const tag = changeKindTag(first);
+  const prefix = tag === "applied" ? "" : `${changeTagLabel(tag, lang)}: `;
+  const more = mine.length > 1 ? L(`, +${mine.length - 1} more`, `, 외 ${mine.length - 1}건`) : "";
+  return {
+    kind: "changed",
+    label: L("Changed since last sync", "이전 대비 변경"),
+    detail: `${prefix}${changeDetail(first, lang)}${more}`.trim(),
+  };
 }
