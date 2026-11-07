@@ -546,10 +546,21 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   `openai-list:<family_key>` channel per active OpenAI family (8 in v2.31.0, 9 since v2.32.0 with `openai-list:gpt-6.1-sol`, 10 since
   v2.38.0 with `openai-list:gpt-6.1-terra`, 9 since v2.39.0 without `openai-list:gpt-5.4`): 49 + 9 = 58 in production (v2.39.0;
   61 + 10 = 71 in v2.38.0, 66 + 9 = 75 in v2.33.0, 62 + 9 = 71 in v2.32.0). `families` has 18 entries and `models` 49 since v2.39.0.
+- **`changes` (v2.40.0, ADR-035)** — what changed in the table since the previous price sync. Every finished sync run stores what
+  this endpoint showed at its end (`price_sync_runs.summary.snapshot`: per active channel the nine shown prices, the pending-review
+  fields that differ from them, and the run's channel result). `changes` compares the latest `completed` or `partial` run that has a
+  snapshot with the `completed`/`partial` run before it (`failed` runs are skipped):
+  `{"available": true, "run_id": 141, "finished_at": "…Z", "previous_run_id": 140, "previous_finished_at": "…Z", "items": [...]}`.
+  Each item is `{model_id, family_key, family, provider, tier, region, kind, field, before, after}`: `kind` `channel` (a channel only
+  one run has — `before: null, after: "present"` new, the reverse removed; no field items for it), `price` (a shown value changed —
+  sync, admin approval, or a first-time value with `before: null`), `pending` (a pending-review value started, `null` → value, or
+  ended, value → `null`) or `check` (`"ok"` ↔ `"skipped:<reason>"`, the run's source check). Items are in table order (provider,
+  family, tier `cp`, `openai_list`, `global`, `us`, `in_region`, kind, field). Before two runs with a snapshot exist (right after the
+  v2.40.0 deploy): `{"available": false, "run_id": <latest snapshot run or null>}`. Cached with the rest of the body (60 s).
 
 ### GET /api/pricing/export?format=csv|md|json&lang=ko|en
 Download the same table as a file: `Content-Disposition: attachment; filename="llm-monitor-unit-prices-YYYY-MM-DD.<csv|md|json>"`.
-`lang` defaults to `ko`. `json` is the `/api/pricing` body. `md` starts with the disclaimer as a quote, then the unit, generation
+`lang` defaults to `ko`. `json` is the `/api/pricing` body without `changes` (v2.40.0: the exports keep their v2.39.0 content). `md` starts with the disclaimer as a quote, then the unit, generation
 time and last official price sync lines (`Last official price sync: <finished_at> (<status>)`, KO `마지막 공식 단가 동기화`, with the
 screen's status words "completed", "partial, some sources failed", "failed", "running", KO "완료", "일부 출처 실패", "실패",
 "진행 중"; an unknown status as is), the pending review count when it is above 0, and one line that links the official pricing
@@ -658,6 +669,53 @@ Since v2.24.0 failed cells also carry the last body the transport actually sent 
 Start a manual Claude API Features run in a backend background thread (약 13분 — the duration the router reports in `routers/features.py`, scaled from 약 11분 for the 6 models of
 v2.32.0 by the cell count for the 7 models of v2.33.0; it was 약 9분 with 5 models and 약 7분 with 4 models). Rejects if already running. The daily scheduled run uses a separate Fargate task instead
 (`python -m features_runner --once`).
+
+---
+
+## Model Explorer verification (Public read, trigger = Auth Required) — v2.40.0, ADR-035
+
+### GET /api/explorer/latest
+Every visible model's code examples with the latest daily verification result. The examples come from
+`backend/model_explorer/examples.py` at request time — the same function the ExplorerVerify run executes, so the page shows the code
+that was run (moved byte for byte from the v2.39.0 frontend `codeExamples`). No `lang` parameter: descriptions and code carry `ko` and
+`en`. `Cache-Control: public, max-age=0, s-maxage=60`.
+
+```json
+{
+  "run": {"id": 12, "started_at": "2026-11-05T18:00:01Z", "finished_at": "2026-11-05T18:01:48Z",
+          "totals": {"passed": 83, "failed": 1, "skipped": 1}},
+  "running": false,
+  "previous_run_id": 11,
+  "changes": [{"model_id": "global.anthropic.claude-opus-5", "model_name": "Bedrock Claude Opus 5 (Global)",
+               "api_id": "invoke_model", "api": "InvokeModel API", "before": "passed", "after": "failed", "kind": "measured"}],
+  "models": {
+    "global.anthropic.claude-opus-5": {"examples": [
+      {"api_id": "converse", "api": "Converse API", "label": "Python (boto3)", "language": "python",
+       "description": {"ko": "…", "en": "…"}, "code": {"ko": "…", "en": "…"}, "code_sha": "<sha256 of the EN code>",
+       "result": {"status": "passed", "latency_ms": 1180.2, "attempts": 1, "error_message": null,
+                  "output_excerpt": "Hello! …", "run_id": 12, "verified_at": "2026-11-05T18:01:48Z", "stale_code": false}}
+    ]}
+  }
+}
+```
+
+- `models` = `prober.AVAILABLE_MODELS` without the hidden labels (`visibility`), in catalog order; `api_id` ∈ `converse`,
+  `invoke_model`, `messages`, `responses` (Bedrock Claude 3, Nova 1, Claude Platform on AWS 1, OpenAI 1 — 85 for the 49 active channels).
+- `result` is the same `(model_id, api_id)` cell of the latest **completed** run, `null` before it was verified. `status` ∈ `passed`
+  (exit 0 with output), `failed` (no output — "출력 없음", an exception — the first line of `error_message` is the exception line and
+  the rest the stderr tail, or "시간 초과 90초"), `skipped` (the reason: "자격 증명 미주입: <env>", "알 수 없는 플레이스홀더",
+  "런 시간 상한"). `attempts` 2 = failed once and ran again; the second result decides. `stale_code` = the example changed after this
+  result was measured. `output_excerpt` is the first 300 characters of stdout; secret values are masked (`***`) before storage.
+- `run` = the latest completed run (null before the first). `running` = a `running` row started less than 30 minutes ago (the scheduled
+  run is a separate Fargate task, so the backend reads the DB) or this process's manual run.
+- `changes[]` = cells of the latest run that differ from the previous completed run: `kind` `catalog` (the cell was not in the previous
+  run), `example` (the code changed — `code_sha` differs — whatever the status), `measured` (same code, different status). Cells only
+  the previous run had are ignored; hidden models are left out of `models` and `changes`. Sorted by `(model_id, api_id)`.
+
+### POST /api/explorer/trigger (Auth Required)
+Start a manual run in a backend daemon thread: `{"triggered": true, "message": "모델 탐색 검증 런을 시작했습니다 (약 2분 소요)"}`, or
+`{"triggered": false, "message": "이미 실행 중입니다"}` while this process runs one or the DB has a `running` row younger than 30 minutes.
+The daily run is the ExplorerVerify Fargate task (`python -m explorer_runner --once`, `cron(0 18 * * ? *)` UTC).
 
 ---
 

@@ -109,13 +109,14 @@ BE_ARN=$(aws ecs register-task-definition --region $REGION \
 aws ecs update-service --cluster bedrock-monitor --service backend \
   --task-definition "$BE_ARN" --region $REGION
 
-# 스케줄 태스크 6개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
+# 스케줄 태스크 7개 모두 동일하게 (각각 별도 Fargate Task — backend image 공용). 하나라도 빠지면 그 태스크만 옛 이미지로 돈다.
 # AutoProber:     family BedrockMonitorSchedulerAutoProberTaskDef*,     schedule rate(5 minutes),  CLI auto_prober_runner --once (env ANTHROPIC_CP_PROBE_INTERVAL_S=300 = CP도 매 사이클 — v2.29.1, 600이면 CP만 두 사이클에 한 번)
 # Insights:       family BedrockMonitorSchedulerInsightsTaskDef*,       schedule rate(5 minutes),  CLI insights_runner --window 6h
 # ParityRun:      family BedrockMonitorSchedulerParityRunTaskDef*,      schedule rate(12 hours),   CLI parity_runner --once (v2.11.0)
 # GptBench:       family BedrockMonitorSchedulerGptBenchTaskDef*,       schedule rate(15 minutes), CLI gptbench_runner --once (v2.18.0)
 # FeaturesVerify: family BedrockMonitorSchedulerFeaturesVerifyTaskDef*, schedule cron(30 17 * * ? *) Etc/UTC, CLI features_runner --once (v2.23.0, 고정 cron v2.29.0)
 # PricingSync:    family BedrockMonitorSchedulerPricingSyncTaskDef*,    schedule rate(12 hours),   CLI pricing_sync_runner --once (v2.30.0, 전용 task role — 최초 배포는 CDK로만)
+# ExplorerVerify: family BedrockMonitorSchedulerExplorerVerifyTaskDef*, schedule cron(0 18 * * ? *) Etc/UTC, CLI explorer_runner --once (v2.40.0 — 최초 배포는 CDK로만)
 # 정확한 family 이름: aws ecs list-task-definition-families --family-prefix BedrockMonitorScheduler --status ACTIVE --region $REGION
 AP_FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerAutoProberTaskDef \
   --status ACTIVE --region $REGION --query 'families[0]' --output text)
@@ -124,7 +125,7 @@ aws ecs describe-task-definition --task-definition "$AP_FAM" \
 # ... (위와 동일하게 image 교체 + register) ...
 AP_ARN=...
 # 스케줄 이름 — AutoProber/Insights는 Scheduler 스택 output(AutoProberScheduleName / InsightsScheduleName)에 있다.
-# 6개 전부: aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION --query 'Schedules[].Name'
+# 7개 전부: aws scheduler list-schedules --name-prefix BedrockMonitor-Scheduler- --region $REGION --query 'Schedules[].Name'
 AP_SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \
   --query "Stacks[0].Outputs[?OutputKey=='AutoProberScheduleName'].OutputValue" --output text)
 aws scheduler get-schedule --name "$AP_SCHED" --region $REGION > /tmp/sched.json
@@ -921,6 +922,78 @@ curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pe
 - 시간당 CP 호출은 132회에서 96회(8채널 × 12)가 된다.
 - 롤백 지점은 v2.38.0(`v2d64a44`, digest는 `docs/reviews/2026-10-27-v238-deployment.md`)이다. 절차는 [rollback.md](rollback.md)의
   "v2.39.0에서 v2.38.0으로 되돌릴 때"를 따른다.
+
+### 5-12. v2.40.0 배포 경로와 확인 (비용 단가 런 대비 변경, 모델 탐색 일일 검증 런)
+
+**배포 경로**: CDK 변경이 있다. Scheduler 스택에 `ExplorerVerifyTaskDef`(`python -m explorer_runner --once`, autoprober task role, 기본 env와 secret,
+로그 그룹 `/ecs/explorer` 14일)와 `ExplorerVerifySchedule`(`cron(0 18 * * ? *)` Etc/UTC = 03:00 KST)이 생기고, Scheduler 역할 RunTask family `:*` 목록에
+새 family가 들어간다(ADR-011). 이 태스크는 처음이라 §2-1 이미지-only 경로로는 만들 수 없다 — **digest 고정 CDK로 `BedrockMonitor-AppServices` +
+`BedrockMonitor-Scheduler`**를 배포한다. 새 env, 새 IAM 정책은 없고, 새 테이블 `explorer_runs`, `explorer_results`는 `create_all`이 만든다(러너도
+`create_tables()`를 먼저 부른다). `/api/pricing`은 `changes`를 더 보낸다. 내보내기 내용은 그대로다(ADR-035).
+
+배포 전 로컬 스모크 — `-I`가 사용자 site-packages를 끄므로 venv에서 돌린다(SSM 키는 화면에 찍지 않는다):
+
+```bash
+python3.12 -m venv /tmp/explorer-venv && /tmp/explorer-venv/bin/pip install -q -r backend/requirements.txt
+export ANTHROPIC_API_KEY=$(aws ssm get-parameter --name /bedrock-monitor/anthropic-api-key --with-decryption --query Parameter.Value --output text --region ap-northeast-2)
+export ANTHROPIC_WORKSPACE_ID=$(aws ssm get-parameter --name /bedrock-monitor/anthropic-workspace-id --with-decryption --query Parameter.Value --output text --region ap-northeast-2)
+export OPENAI_API_KEY=$(aws ssm get-parameter --name /bedrock-monitor/openai-api-key --with-decryption --query Parameter.Value --output text --region ap-northeast-2)
+# OpenAI 22채널 등록용 env — cdk/lib/stacks/scheduler-stack.ts buildTaskDef environment와 같은 값
+export OPENAI_US_EAST_1_BASE_URL=https://bedrock-mantle.us-east-1.api.aws/openai/v1
+export OPENAI_GLOBAL_BASE_URL=https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1
+export OPENAI_US_BASE_URL=https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1
+export BEDROCK_OPENAI_GPT_55_MODEL_ID=openai.gpt-5.5 BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID=openai.gpt-5.6-sol \
+  BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID=openai.gpt-5.6-terra BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID=openai.gpt-5.6-luna \
+  BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID=openai.gpt-6-astra BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID=openai.gpt-6-sol \
+  BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID=openai.gpt-6-luna BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID=openai.gpt-6.1-sol \
+  BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID=openai.gpt-6.1-terra
+cd backend && /tmp/explorer-venv/bin/python -m explorer_runner --smoke
+# 기댓값: 85줄(Bedrock Claude 18 × 3 + Nova 1 + CP 8 + OpenAI 22), 전부 passed, exit 0. failed가 있으면 예제 결함인지(같은 API 전체가 실패)
+#   서비스 쪽인지(한 모델만, 재시도 뒤에도) 먼저 가리고 보고한다.
+```
+
+배포 뒤 확인:
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 스케줄 — cron + Etc/UTC, ExplorerVerify task def
+N=$(aws scheduler list-schedules --region $REGION --query 'Schedules[].Name' --output text | tr '\t' '\n' | grep ExplorerVerify)
+aws scheduler get-schedule --name "$N" --region $REGION \
+  --query '{e: ScheduleExpression, tz: ScheduleExpressionTimezone, td: Target.EcsParameters.TaskDefinitionArn}'
+# 기댓값: {"e": "cron(0 18 * * ? *)", "tz": "Etc/UTC", "td": "…:task-definition/BedrockMonitorSchedulerExplorerVerifyTaskDef…:N"}
+#   task def image는 이번 릴리스 digest여야 한다(§3 확인과 같은 방법).
+
+# 2. ExplorerVerify 수동 1회 — 네트워크 설정은 스케줄 타깃에서 복사
+FAM=$(aws ecs list-task-definition-families --family-prefix BedrockMonitorSchedulerExplorerVerifyTaskDef --status ACTIVE \
+  --region $REGION --query 'families[0]' --output text)
+NETCFG=$(aws scheduler get-schedule --name "$N" --region $REGION \
+  --query 'Target.EcsParameters.NetworkConfiguration.awsvpcConfiguration' --output json \
+  | jq -c '{awsvpcConfiguration: {subnets: .Subnets, securityGroups: .SecurityGroups, assignPublicIp: .AssignPublicIp}}')
+aws ecs run-task --cluster bedrock-monitor --task-definition "$FAM" --launch-type FARGATE --region $REGION \
+  --network-configuration "$NETCFG" --query 'tasks[0].taskArn' --output text
+# 약 2~3분 뒤
+aws logs tail /ecs/explorer --since 10m --region $REGION | grep -E 'Explorer run|explorer_runner'
+curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{run: .run, running, prev: .previous_run_id,
+  models: (.models | length), examples: ([.models[].examples[]] | length),
+  failed: [.models | to_entries[] | .key as $m | .value.examples[] | select(.result.status == "failed") | {m: $m, api: .api_id, e: (.result.error_message | split("\n")[0])}]}'
+# 기댓값: run.totals 합 85, models 49, examples 85, prev null(첫 런), failed []
+
+# 3. PricingSync 수동 2회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task). 첫 런이 끝난 뒤(약 1분) 두 번째를 시작한다
+#    (pg_try_advisory_lock — 겹치면 두 번째는 exit 1).
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '.changes | {available, run_id, previous_run_id, n: (.items | length)}'
+# 기댓값: 첫 런 뒤 {"available": false, "run_id": <첫 런>}, 두 번째 런 뒤 {"available": true, …, "n": 0}("변경 없음")
+#   — 60초 프로세스 캐시가 있으므로 각 런 뒤 1분 지나서 확인한다.
+curl -s "https://$CF_DOMAIN/api/pricing/export?format=json" | jq 'has("changes")'
+# 기댓값: false
+```
+
+- 화면 확인(Playwright, KO/EN, 390px): `/models` 머리글 "최근 검증 런 #N", 카드 검증 배지 "✓ 3/3 통과"(Bedrock Claude), 상세 모달의 검증 상자와
+  코드, "검증 실패만" 토글. `/pricing` 마지막 동기화 상자 아래 "이전 동기화(#N, …) 대비 변경 없음." 카드.
+- 첫 스케줄 런은 배포 뒤 첫 18:00 UTC다. 두 번째 런부터 `/models`에 "이전 런(#N) 대비 변경" 배너가 보인다.
+- 토큰 비용은 첫 런의 Bedrock, CP, OpenAI 사용량으로 실측해 ADR-035에 적는다(예상 하루 $1 미만).
+- 롤백 지점은 v2.39.0이다. 되돌리면 ExplorerVerify 스케줄과 task def가 CDK에서 지워지고, `explorer_runs`, `explorer_results` 테이블과
+  `price_sync_runs.summary.snapshot` 키는 남지만 v2.39.0 코드는 읽지 않는다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 
