@@ -60,3 +60,4 @@
   (테스트가 모르는 플레이스홀더를 잡는다).
 - 하루 85건, "Hello!" + `max_tokens` 512라 토큰 비용은 하루 $1 미만으로 예상한다(첫 운영 런에서 실측해 기록한다).
 - 로컬 스모크(`python -m explorer_runner --smoke`)는 `-I`가 사용자 site-packages를 끄므로 anthropic, openai, boto3가 설치된 venv에서 돌린다.
+- 수동 실행(`POST /api/explorer/trigger`)은 1 GiB backend 서비스 태스크 안에서 돌아 예제를 동시에 2건씩 실행하고, 스케줄 태스크는 4건씩 실행한다.

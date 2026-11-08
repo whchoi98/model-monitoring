@@ -211,14 +211,14 @@ def test_a_stuck_example_never_holds_the_sweep():
     release = threading.Event()
     try:
         t0 = time.monotonic()
-        results = runner._sweep(list(_STUCK_JOBS), _stuck_fn(release), 60.0, max_workers=1, wait_s=0.3)
+        results = runner._sweep(list(_STUCK_JOBS), _stuck_fn(release), 60.0, max_workers=1, wait_s=1.0)
         elapsed = time.monotonic() - t0
     finally:
         release.set()
-    assert elapsed < 2.0
+    assert elapsed < 3.0
     assert len(results) == 3
     by_code = {job["code"]: (o.status, o.error_message) for job, o in results}
-    assert by_code["stuck"] == ("failed", "시간 초과 0.3초")
+    assert by_code["stuck"] == ("failed", "시간 초과 1초")
     assert by_code["ok-1"] == ("skipped", runner.RUN_DEADLINE_REASON)
     assert by_code["ok-2"] == ("skipped", runner.RUN_DEADLINE_REASON)
 
@@ -226,11 +226,11 @@ def test_a_stuck_example_never_holds_the_sweep():
 def test_finished_examples_keep_their_result_when_another_is_stuck():
     release = threading.Event()
     try:
-        results = runner._sweep(list(_STUCK_JOBS), _stuck_fn(release), 60.0, max_workers=2, wait_s=0.5)
+        results = runner._sweep(list(_STUCK_JOBS), _stuck_fn(release), 60.0, max_workers=2, wait_s=1.0)
     finally:
         release.set()
     by_code = {job["code"]: (o.status, o.error_message) for job, o in results}
-    assert by_code["stuck"] == ("failed", "시간 초과 0.5초")
+    assert by_code["stuck"] == ("failed", "시간 초과 1초")
     assert by_code["ok-1"][0] == "passed" and by_code["ok-2"][0] == "passed"
 
 

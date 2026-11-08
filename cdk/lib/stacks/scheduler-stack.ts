@@ -11,9 +11,9 @@
 //   - cron(30 17 * * ? *) Etc/UTC → FeaturesVerify Fargate Task (features_runner --once)
 //     (v2.29.0: 매일 17:30 UTC = 02:30 KST 고정 1회. 이전 rate(24 hours)는 스케줄 생성 시각 기준이라 시각이 고정되지 않았다)
 //   - rate(12 hours) → PricingSync Fargate Task (pricing_sync_runner --once)
+//     (v2.30.0: 공식 단가 동기화 — Bedrock agreement offers, AWS Price List, Anthropic pricing.md. 모델 호출 권한 없음, ADR-030)
 //   - cron(0 18 * * ? *) Etc/UTC → ExplorerVerify Fargate Task (explorer_runner --once)
 //     (v2.40.0, ADR-035: 매일 18:00 UTC = 03:00 KST 고정 1회 — FeaturesVerify(17:30 UTC, 약 13분) 뒤라 같은 모델 호출이 겹치지 않는다)
-//     (v2.30.0: 공식 단가 동기화 — Bedrock agreement offers, AWS Price List, Anthropic pricing.md. 모델 호출 권한 없음, ADR-030)
 //   - 각 TaskDefinition은 backend ECR 이미지를 재사용하고 CMD만 override.
 //   - 모든 task는 RDS:5432 egress + Bedrock/Mantle 액세스 필요 → 별도 SG + RDS SG에 ingress(standalone) 추가.
 //     (PricingSync의 Bedrock 액세스는 공식 단가 읽기(agreement offers, Price List)뿐이고 모델 호출 권한은 없다)

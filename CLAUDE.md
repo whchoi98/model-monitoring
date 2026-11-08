@@ -186,7 +186,7 @@ model-monitoring/
 ├── cdk/                                  # lib/stacks/ 8 stacks + lib/constructs/{fargate-service,pinned-image}.ts (TypeScript)
 └── docs/
     ├── architecture.md, api-reference.md
-    ├── decisions/ADR-*.md   # 001~033 중 012, 014, 015, 016은 결번
+    ├── decisions/ADR-*.md   # 001~035 중 012, 014, 015, 016은 결번
     └── runbooks/deploy.md, rollback.md, troubleshooting.md
 ```
 
