@@ -26,6 +26,7 @@ import {
   summarizeChanges, summarizeModel, type ModelGrade,
 } from "@/lib/explorerVerify";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
+import { useRunPolling } from "@/hooks/useRunPolling";
 import { DataEmpty, DataError, DataLoading } from "@/components/DataState";
 import Dialog from "@/components/Dialog";
 import ModelName from "@/components/ModelName";
@@ -305,6 +306,12 @@ export default function ModelExplorer() {
   const pricing = useAsyncResource<PricingResponse>("pricing", fetchPricing);
   const explorerResource = useAsyncResource<ExplorerLatest>("explorer-latest", fetchExplorerLatest);
   const explorer = explorerResource.data;
+  const armRunPolling = useRunPolling({
+    running: !!explorer?.running,
+    runId: explorer?.run?.id ?? null,
+    refresh: explorerResource.refresh,
+    refreshing: explorerResource.refreshing,
+  });
   const prices = pricing.data?.models ?? null;
   const priceOf = (id: string): PricingModelPrice | null =>
     prices && Object.prototype.hasOwnProperty.call(prices, id) ? prices[id] : null;
@@ -349,6 +356,7 @@ export default function ModelExplorer() {
       setTriggerMsg(response.triggered
         ? L("Verification started. Results refresh when it completes (about 2 minutes).", "검증을 시작했습니다. 완료 후 결과가 갱신됩니다(약 2분).")
         : t.monitoring.triggerBusy);
+      if (response.triggered) armRunPolling(explorer?.run?.id ?? null);
       await explorerResource.refresh();
     } catch (error) {
       setTriggerError(true);

@@ -142,3 +142,67 @@ test("Korean copy at 390px without horizontal page scroll", async ({ page }) => 
   await expect(page.getByRole("button", { name: "검증 실패만", exact: true })).toBeVisible();
   expect(await page.evaluate(() => document.documentElement.scrollWidth - document.documentElement.clientWidth)).toBeLessThanOrEqual(0);
 });
+
+// A verification run in progress refreshes /api/explorer/latest every 15 s (fake clock), and a page without a run never polls.
+const RUN_13 = { id: 13, started_at: "2026-11-05T20:00:00Z", finished_at: "2026-11-05T20:02:00Z", totals: { passed: 85, failed: 0, skipped: 0 } };
+
+test("a run in progress refreshes the result without a reload", async ({ page }) => {
+  let finished = false;
+  let calls = 0;
+  await page.route("**/api/models", (route) => route.fulfill({ json: CATALOG }));
+  await page.route("**/api/explorer/latest", (route) => {
+    calls += 1;
+    return route.fulfill({ json: finished ? explorerLatest(CATALOG, { run: RUN_13 }) : explorerLatest(CATALOG, { running: true }) });
+  });
+  await page.clock.install({ time: new Date("2026-11-05T20:00:00Z") });
+  await page.goto("/models");
+  await expect(page.locator("[data-explorer-run]")).toContainText("Last verification run #12");
+  await expect(page.locator("[data-explorer-run]")).toContainText("run in progress");
+  await expect(page.getByRole("button", { name: "Run verification", exact: true })).toBeDisabled();
+  finished = true;
+  await page.clock.runFor(16_000);
+  await expect(page.locator("[data-explorer-run]")).toContainText("Last verification run #13");
+  await expect(page.locator("[data-explorer-run]")).not.toContainText("run in progress");
+  await expect(page.getByRole("button", { name: "Run verification", exact: true })).toBeEnabled();
+  const settled = calls;
+  await page.clock.runFor(60_000);
+  expect(calls).toBe(settled);
+});
+
+test("after a trigger the page polls until a new run shows up", async ({ page }) => {
+  let sinceTrigger = -1;
+  let calls = 0;
+  await page.addInitScript(() => localStorage.setItem("auth_token", "explorer-fixture-token"));
+  await page.route("**/api/auth/me", (route) => route.fulfill({ json: { id: 1, username: "workflow-user" } }));
+  await page.route("**/api/models", (route) => route.fulfill({ json: CATALOG }));
+  await page.route("**/api/explorer/trigger", (route) => { sinceTrigger = 0; return route.fulfill({ json: { triggered: true, message: "started" } }); });
+  await page.route("**/api/explorer/latest", (route) => {
+    calls += 1;
+    if (sinceTrigger >= 0) sinceTrigger += 1;
+    // The refresh right after the trigger still shows run #12 and no run in progress; the next poll shows run #13.
+    return route.fulfill({ json: sinceTrigger > 1 ? explorerLatest(CATALOG, { run: RUN_13 }) : explorerLatest(CATALOG) });
+  });
+  await page.clock.install({ time: new Date("2026-11-05T20:00:00Z") });
+  await page.goto("/models");
+  await expect(page.locator("[data-explorer-run]")).toContainText("Last verification run #12");
+  await page.getByRole("button", { name: "Run verification", exact: true }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Verification started" })).toBeVisible();
+  await expect(page.locator("[data-explorer-run]")).toContainText("#12");
+  await page.clock.runFor(16_000);
+  await expect(page.locator("[data-explorer-run]")).toContainText("Last verification run #13");
+  const settled = calls;
+  await page.clock.runFor(60_000);
+  expect(calls).toBe(settled);
+});
+
+test("a page with no run in progress never polls the verification result", async ({ page }) => {
+  let calls = 0;
+  await page.route("**/api/models", (route) => route.fulfill({ json: CATALOG }));
+  await page.route("**/api/explorer/latest", (route) => { calls += 1; return route.fulfill({ json: explorerLatest(CATALOG) }); });
+  await page.clock.install({ time: new Date("2026-11-05T20:00:00Z") });
+  await page.goto("/models");
+  await expect(page.locator("[data-explorer-run]")).toContainText("#12");
+  const settled = calls;
+  await page.clock.runFor(120_000);
+  expect(calls).toBe(settled);
+});
