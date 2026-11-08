@@ -58,6 +58,7 @@ const CHANNEL_BADGE: Record<ChannelType, string> = {
 const GRADE_BADGE: Record<ModelGrade, string> = {
   passed: "bg-emerald-500/10 border-emerald-500/30 text-emerald-300",
   failed: "bg-rose-500/10 border-rose-500/30 text-rose-300",
+  skipped: "bg-gray-800 border-gray-700 text-gray-400",
   none: "bg-gray-800 border-gray-700 text-gray-400",
 };
 

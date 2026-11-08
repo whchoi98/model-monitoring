@@ -38,6 +38,13 @@ describe("summarizeModel and badgeLabel — card verification badge", () => {
     expect(badgeLabel(summary, "ko")).toBe("✓ 2/3 통과, 1 건너뜀");
     expect(badgeLabel(summary, "en")).toBe("✓ 2/3 passed, 1 skipped");
   });
+  test("a model whose examples were all skipped gets a neutral skipped grade", () => {
+    const summary = summarizeModel([example("skipped")]);
+    expect(summary.grade).toBe("skipped");
+    expect(badgeLabel(summary, "ko")).toBe("1/1 건너뜀");
+    expect(badgeLabel(summary, "en")).toBe("1/1 skipped");
+    expect(summarizeModel([example("skipped"), example(null)]).grade).toBe("skipped");
+  });
   test("no result is not verified", () => {
     const summary = summarizeModel([example(null), example(null)]);
     expect(summary.grade).toBe("none");

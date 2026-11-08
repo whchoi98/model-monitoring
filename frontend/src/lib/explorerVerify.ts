@@ -7,7 +7,7 @@ import type { ExplorerChange, ExplorerExample, ExplorerStatus } from "./types";
 
 type Lang = "ko" | "en";
 
-export type ModelGrade = "passed" | "failed" | "none";
+export type ModelGrade = "passed" | "failed" | "skipped" | "none";
 
 export interface ModelSummary {
   passed: number;
@@ -23,15 +23,16 @@ export function summarizeModel(examples: ExplorerExample[]): ModelSummary {
   const passed = count("passed");
   const failed = count("failed");
   const skipped = count("skipped");
-  const grade: ModelGrade = failed > 0 ? "failed" : passed + skipped > 0 ? "passed" : "none";
+  const grade: ModelGrade = failed > 0 ? "failed" : passed > 0 ? "passed" : skipped > 0 ? "skipped" : "none";
   return { passed, failed, skipped, total: examples.length, grade };
 }
 
-/** Card badge: "✓ 3/3 통과", "✗ 1/3 실패", "검증 전", "✓ 2/3 통과, 1 건너뜀". */
+/** Card badge: "✓ 3/3 통과", "✗ 1/3 실패", "검증 전", "✓ 2/3 통과, 1 건너뜀", "1/1 건너뜀". */
 export function badgeLabel(summary: ModelSummary, lang: Lang): string {
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   if (summary.grade === "none") return L("Not verified", "검증 전");
   if (summary.grade === "failed") return L(`✗ ${summary.failed}/${summary.total} failed`, `✗ ${summary.failed}/${summary.total} 실패`);
+  if (summary.grade === "skipped") return L(`${summary.skipped}/${summary.total} skipped`, `${summary.skipped}/${summary.total} 건너뜀`);
   const skipped = summary.skipped > 0 ? L(`, ${summary.skipped} skipped`, `, ${summary.skipped} 건너뜀`) : "";
   return L(`✓ ${summary.passed}/${summary.total} passed${skipped}`, `✓ ${summary.passed}/${summary.total} 통과${skipped}`);
 }
