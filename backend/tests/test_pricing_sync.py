@@ -948,3 +948,19 @@ def test_a_failed_run_has_no_snapshot(Session, monkeypatch):
     with Session() as db:
         (run,) = db.query(PriceSyncRun).all()
         assert run.status == "failed" and "snapshot" not in run.summary
+
+
+def test_a_snapshot_failure_never_rolls_back_the_prices(Session, monkeypatch):
+    _seed(Session)
+
+    def boom(*_a, **_kw):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(pricing_sync, "build_snapshot", boom)
+    run = _sync(Session, sol=("5.5", "33", "5", "30"))
+    assert run.status == "completed"
+    assert "snapshot" not in run.summary
+    assert any(e.startswith("snapshot: ") for e in run.summary["errors"])
+    assert run.summary["channels"][SOL_E1] == "changed"
+    with Session() as db:
+        assert db.query(PriceHistory).filter(PriceHistory.model_id == SOL_E1, PriceHistory.input_per_mtok == 5.5).count() == 1

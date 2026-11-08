@@ -26,6 +26,7 @@ from typing import Callable, Mapping
 
 import httpx
 from botocore.exceptions import ClientError, ConnectionError as BotoConnectionError, HTTPClientError
+from sqlalchemy.exc import SQLAlchemyError
 
 from models import PriceHistory, PriceSyncRun
 from pricing_parsers import (
@@ -587,12 +588,21 @@ def run_sync(
             status = _run_status(channels, sources)
             finished_at = clock()
             db.flush()  # SessionLocal has autoflush off: the snapshot queries must see this run's new rows
-            snapshot = build_snapshot(db, active, channels, finished_at)  # what /pricing shows now (v2.40.0)
+            try:
+                snapshot = build_snapshot(db, active, channels, finished_at)  # what /pricing shows now (v2.40.0)
+            except SQLAlchemyError:
+                raise  # the transaction is aborted; the run fails as before
+            except Exception as exc:  # noqa: BLE001 — the change banner never costs a price update
+                logger.warning("pricing sync: snapshot skipped, run saved without one: %s", _short(exc))
+                errors.append(f"snapshot: {_short(exc)}")
+                snapshot = None
             run = db.get(PriceSyncRun, run_id)
             run.finished_at = finished_at
             run.status = status
-            run.summary = {"sources": sources, "channels": dict(sorted(channels.items())), "errors": errors[:_MAX_ERRORS],
-                           "snapshot": snapshot}
+            summary = {"sources": sources, "channels": dict(sorted(channels.items())), "errors": errors[:_MAX_ERRORS]}
+            if snapshot is not None:
+                summary["snapshot"] = snapshot
+            run.summary = summary
             run.changes = changes
             run.pending = pending
             db.commit()
