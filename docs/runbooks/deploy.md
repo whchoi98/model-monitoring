@@ -993,7 +993,9 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=json" | jq 'has("changes")
 - 첫 스케줄 런은 배포 뒤 첫 18:00 UTC다. 두 번째 런부터 `/models`에 "이전 런(#N) 대비 변경" 배너가 보인다.
 - 토큰 비용은 첫 런의 Bedrock, CP, OpenAI 사용량으로 실측해 ADR-035에 적는다(예상 하루 $1 미만).
 - 롤백 지점은 v2.39.0이다. 되돌리면 ExplorerVerify 스케줄과 task def가 CDK에서 지워지고, `explorer_runs`, `explorer_results` 테이블과
-  `price_sync_runs.summary.snapshot` 키는 남지만 v2.39.0 코드는 읽지 않는다.
+  `price_sync_runs.summary.snapshot` 키는 남지만 v2.39.0 코드는 읽지 않는다. 로그 그룹 `/ecs/explorer`도 이름이 고정이고 `RemovalPolicy.RETAIN`이라 남는다.
+  되돌린 뒤 다시 배포하거나 첫 Scheduler 배포가 롤백됐다면 재배포가 `… '/ecs/explorer' already exists`로 실패하므로,
+  [rollback.md](./rollback.md)의 `/ecs/pricingsync`와 같은 절차(확인 후 삭제 또는 `--import-existing-resources`)를 `/ecs/explorer`에도 적용한다.
 
 ## 6. 후속 배포 (코드만 변경 시)
 
