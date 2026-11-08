@@ -705,7 +705,7 @@ that was run (moved byte for byte from the v2.39.0 frontend `codeExamples`). No 
   (exit 0 with output), `failed` (no output — "출력 없음", an exception — the first line of `error_message` is the exception line and
   the rest the stderr tail, or "시간 초과 90초"), `skipped` (the reason: "자격 증명 미주입: <env>", "알 수 없는 플레이스홀더",
   "런 시간 상한"). `attempts` 2 = failed once and ran again; the second result decides. `stale_code` = the example changed after this
-  result was measured. `output_excerpt` is the first 300 characters of stdout; secret values are masked (`***`) before storage.
+  result was measured. `output_excerpt` is the first 300 characters of stdout; secret values and the account id of any AWS ARN are masked (`***`) before storage.
 - `run` = the latest completed run (null before the first). `running` = a `running` row started less than 30 minutes ago (the scheduled
   run is a separate Fargate task, so the backend reads the DB) or this process's manual run.
 - `changes[]` = cells of the latest run that differ from the previous completed run: `kind` `catalog` (the cell was not in the previous

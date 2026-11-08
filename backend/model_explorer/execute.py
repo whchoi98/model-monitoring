@@ -92,12 +92,16 @@ def child_env(env: Mapping[str, str]) -> dict[str, str]:
     return {k: v for k, v in env.items() if k.startswith("AWS_") or k in _PASS_ENV}
 
 
+_ARN_ACCOUNT = re.compile(r"(arn:aws[a-z-]*:[a-z0-9-]*:[a-z0-9-]*:)\d{12}(?=:)")
+
+
 def mask(text: str, env: Mapping[str, str]) -> str:
+    """Secret values of 8+ characters and the account id of any AWS ARN (service, region and resource stay readable)."""
     for name in SECRET_ENV:
         value = env.get(name)
         if value and len(value) >= _MIN_SECRET_LEN:
             text = text.replace(value, "***")
-    return text
+    return _ARN_ACCOUNT.sub(r"\1***", text)
 
 
 def _last_line(text: str) -> str:

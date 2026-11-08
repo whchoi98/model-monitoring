@@ -89,6 +89,24 @@ def test_secrets_printed_by_the_example_are_masked_in_stdout_and_stderr():
     assert "session-token-0123456789" not in out.error_message and out.error_message.startswith("***")
 
 
+@pytest.mark.parametrize("text, expected", [
+    ("arn:aws:sts::123456789012:assumed-role/R/s", "arn:aws:sts::***:assumed-role/R/s"),
+    ("arn:aws:bedrock:us-east-1:123456789012:inference-profile/x", "arn:aws:bedrock:us-east-1:***:inference-profile/x"),
+    ("arn:aws:bedrock:us-east-1::foundation-model/x", "arn:aws:bedrock:us-east-1::foundation-model/x"),
+    ("account 123456789012 is not an ARN", "account 123456789012 is not an ARN"),
+])
+def test_mask_hides_the_account_id_of_an_arn_only(text, expected):
+    assert ex.mask(text, _env()) == expected
+
+
+def test_an_arn_in_a_failure_is_stored_without_the_account_id():
+    code = 'import sys\nprint("denied for arn:aws:sts::123456789012:assumed-role/R/s", file=sys.stderr)\nraise SystemExit(2)'
+    out = ex.execute(code, env=_env(), timeout_s=30)
+    assert out.status == "failed"
+    assert "arn:aws:sts::***:assumed-role/R/s" in out.error_message
+    assert "123456789012" not in out.error_message
+
+
 def test_the_temporary_directory_is_removed_and_is_the_cwd(tmp_path, monkeypatch):
     monkeypatch.setattr(ex.tempfile, "tempdir", str(tmp_path))
     out = ex.execute("import os\nprint(os.getcwd())", env=_env(), timeout_s=30)
