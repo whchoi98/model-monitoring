@@ -716,6 +716,7 @@ that was run (moved byte for byte from the v2.39.0 frontend `codeExamples`). No 
 Start a manual run in a backend daemon thread: `{"triggered": true, "message": "모델 탐색 검증 런을 시작했습니다 (약 2분 소요)"}`, or
 `{"triggered": false, "message": "이미 실행 중입니다"}` while this process runs one or the DB has a `running` row younger than 30 minutes.
 The daily run is the ExplorerVerify Fargate task (`python -m explorer_runner --once`, `cron(0 18 * * ? *)` UTC).
+The manual run executes two examples at a time (it runs inside the 1 GiB backend task; the scheduled task runs four).
 
 ---
 

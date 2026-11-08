@@ -1,8 +1,11 @@
 """Model Explorer verification run (v2.40.0, ADR-035) — every visible model × its code examples, executed for real.
 
 - Jobs = visible prober.AVAILABLE_MODELS (labels without a HIDDEN_MODEL_PATTERNS pattern) × examples.code_examples.
-- ThreadPoolExecutor(4) runs execute.execute on the EN code; rows are gathered on the main thread and saved at once
-  (no DB session in a worker, parity/runner.py pattern).
+- A ThreadPoolExecutor runs execute.execute on the EN code, 4 at a time (2 from the backend trigger, which runs inside
+  the 1 GiB service task); rows are gathered on the main thread and saved at once (no DB session in a worker,
+  parity/runner.py pattern). The pool is never a `with` block: results are awaited for sweep_wait_s() and the pool is
+  shut down with wait=False (2026-09-23 rule) — an example with no result by then is failed "시간 초과 N초" if it was
+  running, skipped "런 시간 상한" if it had not started.
 - The `running` row is committed before the sweep and no transaction stays open during it (v2.32.2 rule).
 - A run deadline (EXPLORER_RUN_DEADLINE_S, 1200 s) records the jobs that had not started as skipped.
 - Retention: the latest KEEP_RUNS runs; a prune failure is logged and never turns a completed run into a failed one.
@@ -13,7 +16,8 @@ from __future__ import annotations
 import logging
 import os
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import Future, ThreadPoolExecutor, as_completed
+from concurrent.futures import TimeoutError as FuturesTimeoutError
 from datetime import datetime, timezone
 from typing import Callable, Mapping
 
@@ -24,6 +28,7 @@ logger = logging.getLogger(__name__)
 
 KEEP_RUNS = 60
 MAX_WORKERS = 4
+SWEEP_WAIT_GRACE_S = 30.0
 DEFAULT_RUN_DEADLINE_S = 1200.0
 RUN_DEADLINE_REASON = "런 시간 상한"
 STATUSES = ("passed", "failed", "skipped")
@@ -55,9 +60,25 @@ def build_jobs(models: Mapping[str, str], model_ids: list[str] | None = None) ->
     return jobs
 
 
+def sweep_wait_s(deadline_s: float) -> float:
+    """How long _sweep waits for results: the run deadline, one example started just before it with its retry
+    (2 × execute.call_timeout_s()), and a grace for child start-up — 1,410 s with the defaults."""
+    return deadline_s + 2 * executor.call_timeout_s() + SWEEP_WAIT_GRACE_S
+
+
+def _outcome_of(future: Future) -> executor.Outcome:
+    try:
+        return future.result()
+    except Exception as exc:  # noqa: BLE001 — one broken job never stops the run
+        return executor.Outcome("failed", None, 0, None, f"executor: {type(exc).__name__}: {exc}"[:1500])
+
+
 def _sweep(jobs: list[dict], execute_fn: Callable[[str], executor.Outcome], deadline_s: float,
-           clock: Callable[[], float] = time.monotonic) -> list[tuple[dict, executor.Outcome]]:
+           clock: Callable[[], float] = time.monotonic, *, max_workers: int | None = None,
+           wait_s: float | None = None) -> list[tuple[dict, executor.Outcome]]:
     started = clock()
+    workers = MAX_WORKERS if max_workers is None else max_workers
+    wait_s = sweep_wait_s(deadline_s) if wait_s is None else wait_s
 
     def work(job: dict) -> executor.Outcome:
         if clock() - started > deadline_s:
@@ -65,17 +86,36 @@ def _sweep(jobs: list[dict], execute_fn: Callable[[str], executor.Outcome], dead
         return execute_fn(job["code"])
 
     done: list[tuple[dict, executor.Outcome]] = []
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as pool:
-        futures = {pool.submit(work, job): job for job in jobs}
-        for future in as_completed(futures):
-            job = futures[future]
-            try:
-                outcome = future.result()
-            except Exception as exc:  # noqa: BLE001 — one broken job never stops the run
-                outcome = executor.Outcome("failed", None, 0, None, f"executor: {type(exc).__name__}: {exc}"[:1500])
-            done.append((job, outcome))
+    seen: set[Future] = set()
+    # Not a `with` block: its exit joins every worker, so one stuck example would hold the run — and the backend
+    # trigger thread — forever (2026-09-23 freeze rule). Results are awaited for wait_s, then shutdown(wait=False).
+    pool = ThreadPoolExecutor(max_workers=workers, thread_name_prefix="explorer")
+    futures = {pool.submit(work, job): job for job in jobs}
+    try:
+        for future in as_completed(futures, timeout=wait_s):
+            seen.add(future)
+            done.append((futures[future], _outcome_of(future)))
             if len(done) % 20 == 0:
                 logger.info("explorer: %d/%d done", len(done), len(jobs))
+    except FuturesTimeoutError:
+        pool.shutdown(wait=False, cancel_futures=True)
+        running = not_started = 0
+        for future, job in futures.items():
+            if future in seen:
+                continue
+            if future.cancelled():
+                not_started += 1
+                outcome = executor.Outcome("skipped", None, 0, None, RUN_DEADLINE_REASON)
+            elif future.done():
+                outcome = _outcome_of(future)
+            else:
+                running += 1
+                outcome = executor.Outcome("failed", None, 1, None, f"시간 초과 {wait_s:g}초")
+            done.append((job, outcome))
+        logger.warning("explorer: no result after %gs — %d still running (failed), %d not started (skipped)",
+                       wait_s, running, not_started)
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
     return done
 
 
@@ -89,7 +129,7 @@ def _totals(results: list[tuple[dict, executor.Outcome]]) -> dict[str, int]:
 def run_explorer(model_ids: list[str] | None = None, *, session_factory=None,
                  execute_fn: Callable[[str], executor.Outcome] | None = None,
                  models: Mapping[str, str] | None = None, deadline_s: float | None = None,
-                 now: Callable[[], datetime] | None = None) -> int:
+                 now: Callable[[], datetime] | None = None, max_workers: int | None = None) -> int:
     """One DB-recorded run; returns explorer_runs.id. Re-raises after marking the run failed."""
     from models import ExplorerResult, ExplorerRun
 
@@ -111,8 +151,9 @@ def run_explorer(model_ids: list[str] | None = None, *, session_factory=None,
 
     try:
         jobs = build_jobs(visible_models(models), model_ids)
-        logger.info("Explorer run %d: %d examples", run_id, len(jobs))
-        results = _sweep(jobs, execute_fn, deadline_s)
+        logger.info("Explorer run %d: %d examples, %d at a time", run_id, len(jobs),
+                    MAX_WORKERS if max_workers is None else max_workers)
+        results = _sweep(jobs, execute_fn, deadline_s, max_workers=max_workers)
         totals = _totals(results)
         db = session_factory()
         try:

@@ -160,7 +160,7 @@ def test_trigger_needs_a_login(env):
 def test_trigger_starts_one_run_and_refuses_a_second(env, monkeypatch):
     factory, client = env
     started = []
-    monkeypatch.setattr(runner, "run_explorer", lambda: started.append(True))
+    monkeypatch.setattr(runner, "run_explorer", lambda **kw: started.append(kw))
     headers = {"Authorization": f"Bearer {create_access_token('viewer@example.com')}"}
     explorer_router._running["active"] = True
     assert client.post("/api/explorer/trigger", headers=headers).json() == {
@@ -178,4 +178,5 @@ def test_trigger_starts_one_run_and_refuses_a_second(env, monkeypatch):
             break
         import time
         time.sleep(0.01)
-    assert started == [True] and explorer_router._running["active"] is False
+    assert started == [{"max_workers": 2}] and explorer_router._running["active"] is False
+    assert explorer_router.TRIGGER_MAX_WORKERS == 2

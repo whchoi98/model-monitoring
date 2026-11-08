@@ -175,6 +175,65 @@ def test_examples_run_four_at_a_time(Session):
     assert peak[0] == runner.MAX_WORKERS
 
 
+def test_the_trigger_style_run_uses_two_workers(Session):
+    active, peak, lock = [0], [0], threading.Lock()
+
+    def fake(code):
+        with lock:
+            active[0] += 1
+            peak[0] = max(peak[0], active[0])
+        time.sleep(0.05)
+        with lock:
+            active[0] -= 1
+        return _passing(code)
+
+    runner.run_explorer(session_factory=Session, execute_fn=fake, models=MODELS, max_workers=2)
+    assert peak[0] == 2
+
+
+def test_sweep_wait_covers_the_deadline_and_one_retried_example(monkeypatch):
+    monkeypatch.setenv("EXPLORER_CALL_TIMEOUT_S", "90")
+    assert runner.sweep_wait_s(1200.0) == 1410.0
+
+
+def _stuck_fn(release):
+    def fn(code):
+        if code == "stuck":
+            release.wait(10)
+        return _passing(code)
+    return fn
+
+
+_STUCK_JOBS = [{"code": "stuck"}, {"code": "ok-1"}, {"code": "ok-2"}]
+
+
+def test_a_stuck_example_never_holds_the_sweep():
+    release = threading.Event()
+    try:
+        t0 = time.monotonic()
+        results = runner._sweep(list(_STUCK_JOBS), _stuck_fn(release), 60.0, max_workers=1, wait_s=0.3)
+        elapsed = time.monotonic() - t0
+    finally:
+        release.set()
+    assert elapsed < 2.0
+    assert len(results) == 3
+    by_code = {job["code"]: (o.status, o.error_message) for job, o in results}
+    assert by_code["stuck"] == ("failed", "시간 초과 0.3초")
+    assert by_code["ok-1"] == ("skipped", runner.RUN_DEADLINE_REASON)
+    assert by_code["ok-2"] == ("skipped", runner.RUN_DEADLINE_REASON)
+
+
+def test_finished_examples_keep_their_result_when_another_is_stuck():
+    release = threading.Event()
+    try:
+        results = runner._sweep(list(_STUCK_JOBS), _stuck_fn(release), 60.0, max_workers=2, wait_s=0.5)
+    finally:
+        release.set()
+    by_code = {job["code"]: (o.status, o.error_message) for job, o in results}
+    assert by_code["stuck"] == ("failed", "시간 초과 0.5초")
+    assert by_code["ok-1"][0] == "passed" and by_code["ok-2"][0] == "passed"
+
+
 def test_smoke_runs_without_the_database():
     rows = runner.smoke(execute_fn=_passing, models=MODELS)
     assert [(r["model_id"], r["api_id"], r["status"]) for r in rows][:2] == [

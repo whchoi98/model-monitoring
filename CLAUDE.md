@@ -52,7 +52,7 @@ EventBridge Scheduler (rate 5 min)
   │                              v2.38.0부터 Mantle 인리전이 us-east-1 하나라 갈래도 둘이다(cris 11 = Global 6 + US 5, mantle-us-east-1 8 — 로그 `GPT bench lanes: cris=11 mantle-us-east-1=8`, 사용자 결정 2026-10-27, ADR-033). 리전을 되살리면 코드 수정 없이 그 리전 갈래가 다시 생긴다
   │                              v2.39.0에서 GPT 5.4(mantle-us-east-1 첫 채널)를 빼 mantle-us-east-1은 7채널이다(로그 `GPT bench lanes: cris=11 mantle-us-east-1=7`, 사이클당 180행, 사용자 결정 2026-10-27, ADR-034)
   ├── FeaturesVerify Fargate Task → 일 1회(cron 17:30 UTC = 02:30 KST 고정, v2.29.0) Claude API Features 39행(= 문서 피처 33 + 코어 4 + Models API 1 + strict_tool_use 분할 1) × 5 surface × 대표 7모델 = 1365셀 실행-증거 스윕 (v2.23.0; Opus 5.5 편입 v2.28.0, Sonnet 5.5 편입 v2.32.0, Haiku 5.5 편입 v2.33.0)
-  ├── ExplorerVerify Fargate Task → 일 1회(cron 18:00 UTC = 03:00 KST 고정, v2.40.0) 모델 탐색 코드 예제 85건(활성 49채널)을 예제마다 자식 Python(-I, 허용 목록 env)에서 실행 — explorer_runs/explorer_results, 동시 4, 호출당 90초, 실패 1회 재시도 (ADR-035)
+  ├── ExplorerVerify Fargate Task → 일 1회(cron 18:00 UTC = 03:00 KST 고정, v2.40.0) 모델 탐색 코드 예제 85건(활성 49채널)을 예제마다 자식 Python(-I, 허용 목록 env)에서 실행 — explorer_runs/explorer_results, 동시 4(수동 트리거는 백엔드 태스크 안이라 2), 호출당 90초, 실패 1회 재시도 (ADR-035)
   └── PricingSync Fargate Task → 12시간 주기(rate(12 hours)) 공식 단가 동기화 — Bedrock agreement offer rate card + AWS Price List + Anthropic pricing.md + OpenAI pricing.md(v2.31.0) → price_history, 활성 49채널 + OpenAI 공식 가격 9채널(`openai-list:<family_key>`, 표시 전용, v2.39.0 — 로그 `58 active channels`)의 입력, 출력, 캐시, 긴 컨텍스트 단가 (어느 필드든 50% 초과 변경은 관리자 승인 대기, 빈 필드 첫 관측은 현재 행 채움 `enriched`, v2.30.0, ADR-030; 런마다 화면 값 스냅샷 `summary.snapshot` → `/api/pricing` `changes`, v2.40.0, ADR-035)
 
 Backend ↔ Bedrock (Seoul region inference profiles us.*, global.* + 서울 in-region 온디맨드 FM bedrock:ap-northeast-2:* (v2.32.0)) + Anthropic CP on AWS + OpenAI (Bedrock Mantle + 1P direct api.openai.com)
@@ -105,7 +105,7 @@ model-monitoring/
 │   ├── parity/              # 패리티 런 엔진: catalog.py(6 surface×20 피처), engine.py(판정 순수 로직), probes.py(surface별 실행기+요청 스냅샷), runner.py(오케스트레이터)
 │   ├── claude_features/     # Claude API Features 검증 엔진: catalog.py(39행×5 surface), transports.py(raw httpx/boto3), probes.py, engine.py(판정 순수 로직), runner.py (v2.23.0)
 │   ├── features_runner.py   # CLI entry: `python -m features_runner --once` (FeaturesVerify Fargate task)
-│   ├── model_explorer/      # 모델 탐색 검증 (v2.40.0, ADR-035): examples.py(코드 예제 단일 출처 — v2.39.0 TS codeExamples와 바이트 일치, 골든 tests/fixtures/explorer_examples_v2390.json), execute.py(플레이스홀더 → os.environ, 자식 `python -I`, 허용 목록 env, 90초, 1회 재시도, 비밀 값 가림), runner.py(모델 × 예제, ThreadPoolExecutor 4, 런 상한 1200초, 60런 보존), diff.py(catalog, example, measured)
+│   ├── model_explorer/      # 모델 탐색 검증 (v2.40.0, ADR-035): examples.py(코드 예제 단일 출처 — v2.39.0 TS codeExamples와 바이트 일치, 골든 tests/fixtures/explorer_examples_v2390.json), execute.py(플레이스홀더 → os.environ, 자식 `python -I`, 허용 목록 env, 90초, 1회 재시도, 비밀 값 가림), runner.py(모델 × 예제, ThreadPoolExecutor 4(수동 트리거 2, with 블록 없이 shutdown(wait=False)), 런 상한 1200초, 60런 보존), diff.py(catalog, example, measured)
 │   ├── explorer_runner.py   # CLI entry: `python -m explorer_runner --once` (ExplorerVerify Fargate task) / `--smoke [--models] [--json]` (DB 없이, venv에서)
 │   └── routers/
 │       ├── auth.py          # /api/auth/* — login(공개), register(EmailStr 강제), approve(이메일 토큰), me(인증)

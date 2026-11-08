@@ -35,6 +35,9 @@ router = APIRouter(prefix="/api/explorer", tags=["explorer"])
 RUNNING_WINDOW = timedelta(minutes=30)
 _run_lock = threading.Lock()
 _running = {"active": False}
+# The manual run executes inside the backend service task (0.5 vCPU, 1 GiB — v2.32.1 OOM) and every example is a
+# child Python of about 65 MB with the SDKs loaded, so it runs two at a time; the scheduled task keeps four.
+TRIGGER_MAX_WORKERS = 2
 
 _RESULT_COLUMNS = (ExplorerResult.model_id, ExplorerResult.model_name, ExplorerResult.api_id, ExplorerResult.status,
                    ExplorerResult.latency_ms, ExplorerResult.attempts, ExplorerResult.code_sha,
@@ -113,7 +116,7 @@ def trigger(user: User = Depends(get_current_user), db: Session = Depends(get_db
     def _worker():
         try:
             from model_explorer.runner import run_explorer
-            run_explorer()
+            run_explorer(max_workers=TRIGGER_MAX_WORKERS)
         except Exception:
             logger.exception("Explorer run failed")
         finally:
