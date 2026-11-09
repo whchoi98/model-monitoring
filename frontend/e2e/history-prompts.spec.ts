@@ -359,7 +359,8 @@ test("optimizer failures are accessible and localized while retaining input and 
   await page.getByRole("button", { name: "최적화", exact: true }).click();
   await expect(page.getByRole("alert").filter({ hasText: "프롬프트를 최적화하지 못했습니다." })).toBeVisible();
   await expect(input).toHaveValue("테스트 프롬프트");
-  expect(payload).toEqual({ prompt: "테스트 프롬프트", target_model_id: "global.anthropic.claude-fable-5-1" });
+  // the default target is the first OptimizePrompt target — Fable 5.2 Global since v2.41.0
+  expect(payload).toEqual({ prompt: "테스트 프롬프트", target_model_id: "global.anthropic.claude-fable-5-2" });
 });
 
 test("optimizer results still populate a new prompt set and a copy failure is announced", async ({ page }) => {
