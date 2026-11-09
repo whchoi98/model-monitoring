@@ -99,7 +99,7 @@ include a UTC offset.
   "last_completed_time": "2026-09-22T12:02:00Z",
   "next_run_time": "2026-09-22T12:05:00Z",
   "interval_seconds": 300,
-  "expected_model_count": 49,
+  "expected_model_count": 52,
   "category_count": 6,
   "category_interval_seconds": 1800,
   "channel_intervals": { "anthropic": 300 },
@@ -233,6 +233,7 @@ Returns available model list.
 **Response:**
 ```json
 [
+  { "id": "us.anthropic.claude-fable-5-2", "name": "Bedrock Claude Fable 5.2 (US)" },
   { "id": "us.anthropic.claude-fable-5-1", "name": "Bedrock Claude Fable 5.1 (US)" },
   { "id": "us.anthropic.claude-fable-5", "name": "Bedrock Claude Fable 5 (US)" },
   { "id": "us.anthropic.claude-opus-4-8", "name": "Bedrock Claude Opus 4.8 (US)" }
@@ -412,10 +413,10 @@ Data source for `/pricing` (Unit Prices / 비용 단가), Model Explorer card pr
 cache write, Claude 1-hour cache write) and, on GPT rows and since v2.33.0 on Claude Haiku 5.5 rows, the long-context prices; batch, flex and priority (fast) prices are not
 included. Costs use input and output only: the cache and long-context prices and the OpenAI official price are display-only.
 The PricingSync task (`python -m pricing_sync_runner --once`, every 12 hours) refreshes them from four official sources: the
-Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 18 + OpenAI 22 channels, 17 FMs since v2.39.0 — Claude 26, OpenAI 23 and 22 FMs in v2.38.0, OpenAI 28 and 21 FMs in v2.33.0; the two Seoul
+Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 20 + OpenAI 22 channels, 18 FMs since v2.41.0 — Claude 18 and 17 FMs in v2.39.0, Claude 26, OpenAI 23 and 22 FMs in v2.38.0, OpenAI 28 and 21 FMs in v2.33.0; the two Seoul
 in-region Claude channels read the `APN2_*_standard` dimensions, v2.32.0), the AWS Price
 List API (`GetProducts`, Nova 2.0 Lite), Anthropic's `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude
-Platform on AWS 8 channels since v2.39.0) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 9
+Platform on AWS 9 channels since v2.41.0, 8 in v2.39.0) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 9
 active OpenAI families, stored as the display-only channels `openai-list:<family_key>`, v2.31.0). A change of more than 50% on
 any price field (the boundary itself is applied) is stored as `pending_review` and waits for admin approval (see Admin below); a
 field that was empty and is observed for the first time fills the current row in place (run result `enriched`, no new history
@@ -529,7 +530,8 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   (20 agreement offers: Claude Sonnet 5.5 and GPT-6.1 Sol; the Seoul in-region channels reuse the Opus 5 and Sonnet 5 offers),
   to 24 in v2.33.0 (21 agreement offers: Claude Haiku 5.5 `offer-u3aih6zr7uw5u`; Sonnet 5.5 US reuses the Sonnet 5.5 offer), and to 25
   in v2.38.0 (22 agreement offers: GPT-6.1 Terra `offer-34pzbdgg26ley`), then to 20 in v2.39.0 (17 agreement offers: the Claude Opus 4.7,
-  Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers are no longer cited, ADR-034). Since v2.38.0 every OpenAI `in_region` tier has the
+  Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers are no longer cited, ADR-034), and to 21 in v2.41.0 (18 agreement offers: Claude
+  Fable 5.2 `offer-agsprgw6z3dg6`, ADR-036). Since v2.38.0 every OpenAI `in_region` tier has the
   single region `["us-east-1"]` (Mantle in-region consolidated, ADR-033). The reference numbers are
   exactly the numbers used in cell `footnotes` plus the note references, 1..N without gaps. Fields: `n` (1-based, in order of first
   citation, then the notes whose `source` is `manual_note`), `id` (`offer:<offerId>`, `pricelist:<usagetype>`,
@@ -539,13 +541,13 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title names the family, e.g. "<family> promotion
   (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source; before any sync observes it, the
   source's seed check date from `pricing_seed.SEED_SOURCE_DATES` (2026-09-30 for the v2.32.0 Claude Sonnet 5.5 and GPT-6.1 Sol
-  offers, 2026-10-07 for the v2.33.0 Claude Haiku 5.5 offer, 2026-10-27 for the v2.38.0 GPT-6.1 Terra offer), else the default seed date 2026-09-27; `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
+  offers, 2026-10-07 for the v2.33.0 Claude Haiku 5.5 offer, 2026-10-27 for the v2.38.0 GPT-6.1 Terra offer, 2026-11-09 for the v2.41.0 Claude Fable 5.2 offer), else the default seed date 2026-09-27; `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
   box and the Markdown export header carry them.
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
   last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels, plus one display-only
   `openai-list:<family_key>` channel per active OpenAI family (8 in v2.31.0, 9 since v2.32.0 with `openai-list:gpt-6.1-sol`, 10 since
-  v2.38.0 with `openai-list:gpt-6.1-terra`, 9 since v2.39.0 without `openai-list:gpt-5.4`): 49 + 9 = 58 in production (v2.39.0;
-  61 + 10 = 71 in v2.38.0, 66 + 9 = 75 in v2.33.0, 62 + 9 = 71 in v2.32.0). `families` has 18 entries and `models` 49 since v2.39.0.
+  v2.38.0 with `openai-list:gpt-6.1-terra`, 9 since v2.39.0 without `openai-list:gpt-5.4`): 52 + 9 = 61 in production (v2.41.0;
+  49 + 9 = 58 in v2.39.0, 61 + 10 = 71 in v2.38.0, 66 + 9 = 75 in v2.33.0, 62 + 9 = 71 in v2.32.0). `families` has 19 entries and `models` 52 since v2.41.0 (18 and 49 in v2.39.0).
 - **`changes` (v2.40.0, ADR-035)** — what changed in the table since the previous price sync. Every finished sync run stores what
   this endpoint showed at its end (`price_sync_runs.summary.snapshot`: per active channel the nine shown prices, the pending-review
   fields that differ from them, and the run's channel result). `changes` compares the latest `completed` or `partial` run that has a
@@ -631,18 +633,18 @@ The 12-hour scheduled run uses a separate Fargate task instead (`python -m parit
 ### GET /api/features/catalog
 Feature catalog: `groups` (7 feature groups with `label_ko`/`label_en`), `surfaces` (5 — `cp`, `mantle`, `bedrock_messages`,
 `bedrock_invoke`, `bedrock_converse`; each `{id, label, short, group, region}`, the Mantle region is `MANTLE_ANTHROPIC_REGION`),
-`models` (7 representative models `fable-5-1`, `fable-5`, `opus-5-5`, `opus-5`, `sonnet-5-5`, `sonnet-5`, `haiku-5-5` — Opus 5.5 since
-v2.28.0, Sonnet 5.5 since v2.32.0, Haiku 5.5 since v2.33.0; this order is also the UI order of model chips and per-cell model lists — with per-surface native ids;
+`models` (8 representative models `fable-5-2`, `fable-5-1`, `fable-5`, `opus-5-5`, `opus-5`, `sonnet-5-5`, `sonnet-5`, `haiku-5-5` — Opus 5.5 since
+v2.28.0, Sonnet 5.5 since v2.32.0, Haiku 5.5 since v2.33.0, Fable 5.2 since v2.41.0; this order is also the UI order of model chips and per-cell model lists — with per-surface native ids;
 `mantle: null` plus `mantle_reason` (KO) and, since v2.32.0, `mantle_reason_en` (EN, shown as is by the frontend) when Mantle does
-not serve the model: Fable 5.1 is US GovCloud only, and Mantle us-east-1 returns 404 for `anthropic.claude-sonnet-5-5` and, since v2.33.0, `anthropic.claude-haiku-5-5`) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
+not serve the model: Fable 5.1 is US GovCloud only, and Mantle us-east-1 returns 404 for `anthropic.claude-sonnet-5-5`, since v2.33.0 `anthropic.claude-haiku-5-5` and since v2.41.0 `anthropic.claude-fable-5-2`) and `features` (39 rows = 33 documented "Build with Claude" features + 4 core
 Messages checks + Models API + the strict_tool_use split; each with `label_ko/label_en`, `desc_ko/desc_en`, `doc_url`, per-surface
 `documented` ∈ ga|beta|no|unknown, `verification` ∈ evidence|acceptance|negative|capability, `notes`). Since v2.24.0 the UI takes every
 feature label and surface short name from this payload (`labelMaps`) — it is the single source for banners, modal titles and the drawer.
 
 ### GET /api/features/latest
 Latest completed run: `run` (id, started_at, finished_at, `totals` — the 6 status counts plus `drift`; since v2.28.0 the status
-counts sum to 1,365 cells = 1,079 probed + 286 pre-decided since v2.33.0 (1,170 = 946 + 224 in v2.32.0 to v2.32.2, 975 = 813 + 162 in
-v2.28.0 to v2.31.2), catalog_version `2026-10-07`, running flag),
+counts sum to 1,560 cells = 1,212 probed + 348 pre-decided since v2.41.0 (1,365 = 1,079 + 286 in v2.33.0 to v2.40.0, 1,170 = 946 + 224 in v2.32.0 to v2.32.2, 975 = 813 + 162 in
+v2.28.0 to v2.31.2), catalog_version `2026-11-09` since v2.41.0 (`2026-10-20` in v2.34.0 to v2.40.0), running flag),
 `previous_run_id`, `changes`, `drift`, `results`. `results[]` = one row per (feature, surface, model_key): `model_label`, `model_id`,
 `status` ∈ supported|unsupported|broken|inconclusive|skipped|not_applicable, `documented`, `verdict` ∈ match|drift|undocumented|none,
 `latency_ms` (null for runner pre-decided rows and for probes that failed before a measurement). `drift[]` = the results whose verdict is
@@ -651,7 +653,7 @@ v2.28.0 to v2.31.2), catalog_version `2026-10-07`, running flag),
 **`kind` (v2.24.0)** is `"catalog"` when the cell did not exist before or when either side is a runner pre-decided row
 (`latency_ms IS NULL AND error_message IS NULL` — a catalog rule such as `_NOT_APPLICABLE_BY_DOC`), else `"measured"`. A row with a NULL
 `latency_ms` but an `error_message` is a failed probe (transport-init or executor failure), not a pre-decided row, so it counts as
-`"measured"`. The first run after a representative-model addition (v2.28.0: `opus-5-5`, v2.32.0: `sonnet-5-5`, v2.33.0: `haiku-5-5`) therefore lists every new cell
+`"measured"`. The first run after a representative-model addition (v2.28.0: `opus-5-5`, v2.32.0: `sonnet-5-5`, v2.33.0: `haiku-5-5`, v2.41.0: `fable-5-2`) therefore lists every new cell
 (195 each) as a `catalog` change. `Cache-Control: s-maxage=60`.
 With no completed run: `{"run": null, "previous_run_id": null, "changes": [], "drift": [], "results": [], "running": false}`.
 
@@ -700,7 +702,7 @@ that was run (moved byte for byte from the v2.39.0 frontend `codeExamples`). No 
 ```
 
 - `models` = `prober.AVAILABLE_MODELS` without the hidden labels (`visibility`), in catalog order; `api_id` ∈ `converse`,
-  `invoke_model`, `messages`, `responses` (Bedrock Claude 3, Nova 1, Claude Platform on AWS 1, OpenAI 1 — 85 for the 49 active channels).
+  `invoke_model`, `messages`, `responses` (Bedrock Claude 3, Nova 1, Claude Platform on AWS 1, OpenAI 1 — 92 for the 52 active channels since v2.41.0, 85 for 49 in v2.40.0).
 - `result` is the same `(model_id, api_id)` cell of the latest **completed** run, `null` before it was verified. `status` ∈ `passed`
   (exit 0 with output), `failed` (no output — "출력 없음", an exception — the first line of `error_message` is the exception line and
   the rest the stderr tail, or "시간 초과 90초"), `skipped` (the reason: "자격 증명 미주입: <env>", "알 수 없는 플레이스홀더",
