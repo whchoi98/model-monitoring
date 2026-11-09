@@ -7,6 +7,34 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.41.0 — 2026-11-09
+
+### Added
+- **Claude Fable 5.2 — 3 channels** (user request 2026-11-09, the day it appeared on Bedrock): Bedrock `global.anthropic.claude-fable-5-2` → "Bedrock Claude Fable 5.2 (Global)" and `us.anthropic.claude-fable-5-2` → "Bedrock Claude Fable 5.2 (US)" (each first in its block, right before Fable 5.1), and Claude Platform on AWS `anthropic:claude-fable-5-2` → "Anthropic Claude Fable 5.2 (US)" (CP target `fable-5-2` first, mirrored by `pricing_sources._CP_TARGETS`; CP `/v1/models` lists `claude-fable-5-2` first, and production kept the Fable 5 and 5.1 CP labels before the target existed because `_is_point_release_of` skipped it). The Seoul and us-east-1 plain id is inference-profile only, so there is no in-region channel. Live 2026-11-09: converse_stream 200 (TTFT about 2.1 s Global, 2.6 s US), `temperature` 400 (covered by `"fable-5"` in `_REASONING_MODEL_PATTERNS`), forced `tool_choice` (tool, any) 400 on Bedrock and CP and auto 200, `thinking.type.enabled` 400 and adaptive + effort 200, CountTokens unsupported, Mantle us-east-1 `/anthropic` 404 — the same behaviour as Fable 5.1. Price $8 / $40 Global and CP, $8.80 / $44 US (offer `offer-agsprgw6z3dg6`), cache read $0.20 (US $0.22, 0.025x the input like Fable 5.1), 5-minute write $10 ($11), 1-hour write $16 ($17.60), no long-context price. Active channels 49 → 52 (catalog 53 → 56), Bedrock 19 → 21, CP 8 → 9 (108 CP calls per hour). The existing `provider_data_share` opt-in of Seoul and us-east-1 covers this Covered Model.
+- **Claude Fable 5.2 — 3채널**(2026-11-09 사용자 요청, Bedrock에 나온 날). Bedrock `global.anthropic.claude-fable-5-2` → "Bedrock Claude Fable 5.2 (Global)", `us.anthropic.claude-fable-5-2` → "Bedrock Claude Fable 5.2 (US)"(각 블록 맨 앞, Fable 5.1 바로 앞), Claude Platform on AWS `anthropic:claude-fable-5-2` → "Anthropic Claude Fable 5.2 (US)"(CP 타깃 `fable-5-2`가 첫 항목, `pricing_sources._CP_TARGETS`도 같은 순서. CP `/v1/models`가 `claude-fable-5-2`를 첫 항목으로 돌려주고, 타깃이 생기기 전에도 `_is_point_release_of`가 건너뛰어 운영의 Fable 5, 5.1 CP 라벨은 그대로였다)다. 서울과 us-east-1 평문 id는 추론 프로파일 전용이라 in-region 채널은 없다. 2026-11-09 라이브: converse_stream 200(TTFT Global 약 2.1초, US 2.6초), `temperature` 400(`_REASONING_MODEL_PATTERNS`의 `"fable-5"`가 포함), forced `tool_choice`(tool, any)는 Bedrock과 CP 모두 400이고 auto 200, `thinking.type.enabled` 400과 adaptive + effort 200, CountTokens 미지원, Mantle us-east-1 `/anthropic` 404로 Fable 5.1과 같다. 단가는 Global과 CP $8 / $40, US $8.80 / $44(offer `offer-agsprgw6z3dg6`), 캐시 읽기 $0.20(US $0.22, Fable 5.1처럼 입력의 0.025배), 5분 쓰기 $10($11), 1시간 쓰기 $16($17.60)이고 긴 컨텍스트 단가는 없다. 활성 채널 49 → 52(카탈로그 53 → 56), Bedrock 19 → 21, CP 8 → 9(시간당 CP 호출 108회). 서울과 us-east-1의 기존 `provider_data_share` 옵트인이 이 Covered Model도 덮는다.
+- **Parity — Fable 5.2 runs `tool_use` with auto + instruction**: `_NO_FORCED_TOOL_CHOICE_MARKERS` is `("fable-5-2", "fable-5-1", "opus-5-5", "sonnet-5-5")`; the marker stays the point release so Fable 5 keeps forced `tool_choice`. `_REASONING_MARKERS` already covers it through `"fable-5"`.
+- **패리티 — Fable 5.2는 `tool_use`를 auto + 지시로 돈다**. `_NO_FORCED_TOOL_CHOICE_MARKERS`는 `("fable-5-2", "fable-5-1", "opus-5-5", "sonnet-5-5")`다. 마커는 점 버전 문자열이라 Fable 5는 forced `tool_choice`를 그대로 쓴다. `_REASONING_MARKERS`는 `"fable-5"`로 이미 포함한다.
+- **Claude API Features — Fable 5.2 as the first of 8 representative models.** Mantle is N/A with its own 404 reason (Mantle us-east-1 does not serve `anthropic.claude-fable-5-2`, 2026-11-09), the advisor pairs with itself (`claude-fable-5-2`, like Fable 5.1). One run is now 1560 cells (1212 probes + 348 pre-decided, Fable 5.2 133 + 62) and `CATALOG_VERSION` is `2026-11-09`. A smoke of all 195 Fable 5.2 cells gave exactly the statuses of the production Fable 5.1 cells (run 70: supported 100, unsupported 29, not applicable 63, skipped 3).
+- **Claude API Features — Fable 5.2를 대표 모델 8종의 첫 모델로.** Mantle은 자기 404 사유로 N/A(Mantle us-east-1이 `anthropic.claude-fable-5-2`를 서빙하지 않음, 2026-11-09), advisor는 자기 자신(`claude-fable-5-2`, Fable 5.1과 같다)과 페어링한다. 1런은 1560셀(프로브 1212 + 사전판정 348, Fable 5.2 몫 133 + 62)이고 `CATALOG_VERSION`은 `2026-11-09`다. Fable 5.2 195셀 스모크는 운영 Fable 5.1 셀(런 70: supported 100, unsupported 29, 해당 없음 63, skipped 3)과 상태가 모두 같았다.
+- **Model Explorer — Fable 5.2 examples.** The daily ExplorerVerify run executes 92 examples (85 + Global 3, US 3, CP 1); the seven new examples passed on the first attempt (2.4 to 4.6 s).
+- **모델 탐색 — Fable 5.2 예제.** 매일 ExplorerVerify 런이 예제 92개(85 + Global 3, US 3, CP 1)를 실행한다. 새 예제 7개는 첫 시도에 모두 통과했다(2.4~4.6초).
+- **Prompts — OptimizePrompt targets** "Bedrock Claude Fable 5.2 (Global)" and "(US)" (us-east-1 OptimizePrompt accepts `anthropic.claude-fable-5-2`); 19 Bedrock targets.
+- **프롬프트 — OptimizePrompt 대상** "Bedrock Claude Fable 5.2 (Global)", "(US)"(us-east-1 OptimizePrompt가 `anthropic.claude-fable-5-2`를 받는다). Bedrock 대상 19개.
+
+### Changed
+- `FAMILY_ORDER` has 19 families with "Claude Fable 5.2" first (frontend and backend byte-identical); `/pricing` lists 19 families and 21 references (18 agreement offers), and PricingSync logs `61 active channels` (52 + 9 OpenAI official prices).
+- **Trend chart colours**: Fable 5.2 is a cyan family (Bedrock Global `#245860` solid, US `#aed3e0` dashed, CP `#47def5` dotted). One Lab hue for all three was not possible: a bright solid cyan sits within ΔE 15 of Fable 5 and 5.1, so only the Global line is dark (getColor lightens it on dark cards). `TrendChart.test.ts` pins the three series; the Comparison Lab labels them `bg-cyan-700` and `bg-cyan-600`.
+- `FAMILY_ORDER`은 19개이고 "Claude Fable 5.2"가 첫 항목이다(프런트와 백엔드 바이트 동일). `/pricing`은 패밀리 19개, 참고 자료 21개(약정 오퍼 18)이고, PricingSync 로그는 `61 active channels`(52 + OpenAI 공식 가격 9)다.
+- **추세 차트 색**: Fable 5.2는 청록 계열이다(Bedrock Global `#245860` 실선, US `#aed3e0` 파선, CP `#47def5` 점선). 세 채널을 Lab 한 색조로 묶을 수는 없었다. 밝은 청록 실선은 Fable 5, 5.1과 ΔE 15 안쪽이라 Global만 짙게 두었다(다크 카드에서는 getColor가 밝힌다). `TrendChart.test.ts`가 새 3개 시리즈를 고정하고, Comparison Lab은 `bg-cyan-700`, `bg-cyan-600`으로 표시한다.
+
+### Infra
+- No CDK, environment or IAM change. Deploy the AppServices and Scheduler stacks with digest-pinned images as usual; this release is built on v2.40.0 and ships with it or after it.
+- CDK, 환경 변수, IAM 변경은 없다. 평소처럼 digest를 고정한 이미지로 AppServices와 Scheduler 스택을 배포한다. 이 릴리스는 v2.40.0 위에 만들었으므로 v2.40.0과 함께 또는 그 뒤에 배포한다.
+
+### Docs
+- ADR-036 (Claude Fable 5.2); counts and channels in CLAUDE.md, module notes, README, architecture, API reference and the deploy runbook.
+- ADR-036(Claude Fable 5.2). CLAUDE.md, 모듈 노트, README, architecture, API reference, 배포 런북의 수치와 채널.
+
 ## v2.40.0 — 2026-11-05
 
 ### Added
