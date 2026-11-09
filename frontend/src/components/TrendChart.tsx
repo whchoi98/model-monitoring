@@ -37,6 +37,11 @@ interface Props {
 // 색은 선 패턴(lineDash)과 함께 읽힌다 — 같은 패턴끼리 가까운 색이 되지 않게 고른다(TrendChart.test.ts가 새 채널의 색 차이를 고정).
 // v2.39.0: 모니터링에서 뺀 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4의 색을 지웠다 — 지난 행은 백엔드가 숨긴다.
 export const MODEL_COLORS: Record<string, string> = {
+  // Claude Fable 5.2 (v2.41.0) — 청록 계열(Global 짙은 청록 실선, US 옅은 청록 파선, CP 밝은 청록 점선).
+  // 실선 자리가 가장 붐벼 밝은 청록은 Fable 5, 5.1과 ΔE 15 안쪽이라 Global만 짙게 둔다(다크 테마는 getColor가 밝힌다).
+  // 세 채널을 한 색조(Lab 10° 안)로 묶으면 실선이나 점선 하나가 Fable 5, 5.1과 겹쳐서 색조는 HSL 188~196°로만 맞췄다.
+  "Bedrock Claude Fable 5.2 (Global)": "#245860",
+  "Bedrock Claude Fable 5.2 (US)": "#aed3e0",
   "Bedrock Claude Fable 5.1 (Global)": "#7dd3fc",
   "Bedrock Claude Fable 5.1 (US)": "#0ea5e9",
   "Bedrock Claude Fable 5 (Global)": "#2dd4bf",
@@ -59,6 +64,7 @@ export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Haiku 5.5 (Global)": "#aa5533",
   "Bedrock Claude Haiku 5.5 (US)": "#cc6600",
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
+  "Anthropic Claude Fable 5.2 (US)": "#47def5",
   "Anthropic Claude Fable 5.1 (US)": "#0369a1",
   "Anthropic Claude Fable 5 (US)": "#115e59",
   "Anthropic Claude Opus 5.5 (US)": "#a4161a",
@@ -112,8 +118,9 @@ export const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 5.5 (1P)": "#047857",
 };
 
-// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1"에, "Opus 5"는 "Opus 5.5"에, "Sonnet 5"는 "Sonnet 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
+// ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1", "Fable 5.2"에, "Opus 5"는 "Opus 5.5"에, "Sonnet 5"는 "Sonnet 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
 const FAMILY_FALLBACK: [string, string][] = [
+  ["Fable 5.2", "#245860"],
   ["Fable 5.1", "#0ea5e9"],
   ["Fable 5", "#0d9488"],
   ["Opus 5.5", "#e5383b"],

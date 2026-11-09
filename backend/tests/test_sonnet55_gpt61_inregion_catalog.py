@@ -222,6 +222,7 @@ def test_cp_discovery_with_20260930_model_order_labels_every_id_correctly():
     assert matched["fable-5"] == "claude-fable-5"
     # haiku-5-5는 v2.33.0 타깃 — 2026-09-30 목록에는 아직 없어 None(등록 skip)이 맞다
     assert matched.pop("haiku-5-5") is None
+    assert matched.pop("fable-5-2") is None  # v2.41.0 타깃 — 마찬가지로 아직 없다
     assert None not in matched.values()
     assert len(set(matched.values())) == len(matched)
     # 날짜 서픽스가 붙은 미래 id도 자기 타깃에 매칭된다

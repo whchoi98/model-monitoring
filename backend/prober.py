@@ -102,6 +102,9 @@ class _ProbeDeadline:
 # 모니터링 대상 - Global profile (Seoul 호출) + US profile (us-east-1 호출) + In-Region 온디맨드("bedrock:<aws-region>:<Bedrock FM id>", v2.32.0) + Claude Platform on AWS.
 AVAILABLE_MODELS: dict[str, str] = {
     # Bedrock - Global cross-region inference profile (ap-northeast-2)
+    # Fable 5.2 (v2.41.0, 2026-11-09 실측): global.(Seoul)과 us.(us-east-1) 모두 converse 200, 서울 평문 id는 INFERENCE_PROFILE 전용.
+    # Fable 5.1과 같은 동작 — temperature 400("deprecated", _REASONING_MODEL_PATTERNS의 "fable-5"가 포함), forced tool_choice(tool/any) 400.
+    "global.anthropic.claude-fable-5-2": "Bedrock Claude Fable 5.2 (Global)",
     # Fable 5.1 (v2.22.0, 2026-09-01): Fable 5와 동일한 Covered Model 제약(provider_data_share 리전 opt-in 기존 적용).
     # forced tool_choice(type tool/any)는 400 — 패리티 tool_use 프로브는 auto로 대체 (parity/catalog.py).
     "global.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (Global)",
@@ -120,6 +123,7 @@ AVAILABLE_MODELS: dict[str, str] = {
     "global.anthropic.claude-haiku-5-5": "Bedrock Claude Haiku 5.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
     # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용 — 예외: Seoul Opus 5, Sonnet 5는 2026-09-30부터 ON_DEMAND(아래 In-Region 블록).
+    "us.anthropic.claude-fable-5-2": "Bedrock Claude Fable 5.2 (US)",
     "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
     "us.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (US)",
     "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
@@ -150,7 +154,9 @@ AVAILABLE_MODELS: dict[str, str] = {
 #    _match_anthropic_model()이 더 긴 타깃을 포함하는 id와, 아직 타깃이 없는 점 버전 id
 #    (예: sonnet-5에 대한 claude-sonnet-5-6)를 짧은 타깃 후보에서 제외해 오등록을 막는다 (v2.22.0, v2.27.0).
 #    sonnet-5-5는 v2.32.0부터 자기 타깃이 있다 — CP /v1/models가 2026-09-30 claude-sonnet-5-5를 맨 앞에 반환(가드가 Sonnet 5 오등록을 막음).
+#    fable-5-2도 2026-11-09 /v1/models 첫 항목이었고, 타깃이 생기기 전에도 가드가 Fable 5 오등록을 막았다(운영 라벨 확인, v2.41.0).
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
+    ("fable-5-2", "Anthropic Claude Fable 5.2 (US)"),  # v2.41.0 — CP /v1/models 첫 항목(2026-11-09)
     ("fable-5-1", "Anthropic Claude Fable 5.1 (US)"),  # v2.22.0 — CP 서빙 시 자동 발견
     ("fable-5", "Anthropic Claude Fable 5 (US)"),
     ("opus-5-5", "Anthropic Claude Opus 5.5 (US)"),  # v2.27.0 — CP가 2026-09-22부터 서빙
@@ -304,7 +310,7 @@ def _anthropic_actual_id(model_id: str) -> str:
 
 
 # Reasoning model은 inferenceConfig.temperature를 거부 - 패턴 기반 식별.
-# "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)도, "opus-5"는 opus-5-5(Opus 5.5)도 포함한다
+# "fable-5"는 substring 매칭이라 fable-5-1(Fable 5.1)과 fable-5-2(Fable 5.2, 2026-11-09 temperature 400 실측)도, "opus-5"는 opus-5-5(Opus 5.5)도 포함한다
 # (Opus 5.5 temperature 400은 2026-09-23 converse_stream 실측).
 # "sonnet-5"는 sonnet-5-5(Sonnet 5.5)도, in-region 키 bedrock:ap-northeast-2:anthropic.claude-{opus,sonnet}-5도 포함한다(모두 2026-09-30 temperature 400 실측) — 판정은 키 전체 문자열로 한다.
 # "haiku-5"는 haiku-5-5(Haiku 5.5, 2026-10-07 temperature 400 실측) — haiku-4-5는 해당하지 않는다(v2.33.0).

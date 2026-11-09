@@ -47,7 +47,7 @@ def test_bedrock_haiku55_and_sonnet55_us_channels():
     assert "bedrock:ap-northeast-2:anthropic.claude-haiku-5-5" not in models_  # INFERENCE_PROFILE only
     keys = list(models_)
     # v2.39.0: Haiku 4.5 left monitoring (ADR-034), so Haiku 5.5 ends the Global block and the US Claude block
-    assert keys.index(H_G) + 1 == keys.index("us.anthropic.claude-fable-5-1")
+    assert keys.index(H_G) + 1 == keys.index("us.anthropic.claude-fable-5-2")  # Fable 5.2 opens the US block (v2.41.0)
     assert keys.index(H_US) + 1 == keys.index("bedrock:ap-northeast-2:anthropic.claude-opus-5")
     assert keys.index(S_US) + 1 == keys.index("us.anthropic.claude-sonnet-5")
     assert not [k for k in models_ if "haiku-4-5" in k]
@@ -71,6 +71,7 @@ def test_cp_discovery_with_20261007_model_order_labels_every_id_once():
     """claude-haiku-5-5 comes first; every target still finds its own id and no id gets two labels."""
     matched = {s: prober._match_anthropic_model(s, CP_MODEL_IDS_20261007) for s, _ in prober._ANTHROPIC_TARGETS}
     assert matched["haiku-5-5"] == "claude-haiku-5-5"
+    assert matched.pop("fable-5-2") is None  # v2.41.0 target — not in the 2026-10-07 list yet
     assert None not in matched.values()
     # the list still has the v2.39.0 retired ids; no target registers them
     assert not {"claude-haiku-4-5-20251001", "claude-opus-4-7", "claude-sonnet-4-6"} & set(matched.values())

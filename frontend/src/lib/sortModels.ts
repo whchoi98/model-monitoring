@@ -1,12 +1,13 @@
 // 모델 카드/이력 정렬 공통 유틸.
-// 1차: 모델 family 우선순위 (Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Nova > GPT ...)
-// ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
-// 라벨에도 포함된다 — 더 긴 이름(5.1, 5.5)이 반드시 앞에 와야 함.
+// 1차: 모델 family 우선순위 (Fable 5.2 > Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Nova > GPT ...)
+// ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1", "Claude Fable 5.2" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
+// 라벨에도 포함된다 — 더 긴 이름(5.2, 5.1, 5.5)이 반드시 앞에 와야 함.
 // "Claude Sonnet 5"도 "Claude Sonnet 5.5" 라벨에 포함된다(v2.32.0).
 // 2차: 채널 순서 (Anthropic > Global[Bedrock·OpenAI 공통] > US[Bedrock US·OpenAI US CRIS] > 리전[Bedrock In-Region (ap-northeast-2), OpenAI Mantle 리전])
 // FAMILY 매칭은 substring `includes` 기반이므로 "Bedrock " prefix 유무에 관계없이 동작.
 // 모델명 라벨은 backend에서 "Bedrock " 또는 "Anthropic " prefix가 붙은 형태로 응답.
 export const FAMILY_ORDER = [
+  "Claude Fable 5.2",
   "Claude Fable 5.1",
   "Claude Fable 5",
   "Claude Opus 5.5",

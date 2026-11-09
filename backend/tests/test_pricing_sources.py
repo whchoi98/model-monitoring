@@ -20,7 +20,7 @@ import pricing_sources as ps
 from pricing_parsers import parse_openai_pricing_md, parse_pricelist
 from pricing_sources import PriceIdentity, active_channels, price_identity, region_of, tier_of
 from tests.pricing_catalog import (
-    ACTIVE_MODELS, CP_MODEL_IDS_20261007, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
+    ACTIVE_MODELS, CP_MODEL_IDS_20261109, EXPECTED_IDENTITY, HIDDEN_1P_MODELS, OPENAI_LIST_IDS,
 )
 
 SORT_MODELS_TS = pathlib.Path(__file__).resolve().parents[2] / "frontend" / "src" / "lib" / "sortModels.ts"
@@ -46,7 +46,7 @@ class _FakeAnthropic:
     """_discover_anthropic_models가 부르는 /v1/models만 흉내 낸다(네트워크 없음)."""
 
     def __init__(self, **kwargs):
-        page = SimpleNamespace(data=[SimpleNamespace(id=i) for i in CP_MODEL_IDS_20261007])
+        page = SimpleNamespace(data=[SimpleNamespace(id=i) for i in CP_MODEL_IDS_20261109])
         self.models = SimpleNamespace(list=lambda limit=100: page)
 
 
@@ -78,18 +78,19 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_49_active_channels():
+def test_expected_table_is_the_52_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
     # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널). v2.39.0: Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 제외
-    assert counts == {("anthropic", "global"): 8, ("anthropic", "us"): 8, ("anthropic", "cp"): 8,
+    # v2.41.0: Claude Fable 5.2(Global, US, CP)
+    assert counts == {("anthropic", "global"): 9, ("anthropic", "us"): 9, ("anthropic", "cp"): 9,
                       ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 8, ("openai", "us"): 5,
                       ("openai", "in_region"): 9}
-    assert len(EXPECTED_IDENTITY) == 49
+    assert len(EXPECTED_IDENTITY) == 52
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_49_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_52_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -177,7 +178,7 @@ def test_cp_family_key_does_not_depend_on_target_order(monkeypatch):
 
 
 @pytest.mark.parametrize("actual_id", [
-    *CP_MODEL_IDS_20261007, "claude-haiku-5-6", "claude-haiku-5-5-20261101", "claude-sonnet-5-6", "claude-sonnet-5-5-20261101", "claude-opus-5-6", "claude-fable-5-2",
+    *CP_MODEL_IDS_20261109, "claude-haiku-5-6", "claude-haiku-5-5-20261101", "claude-sonnet-5-6", "claude-sonnet-5-5-20261101", "claude-opus-5-6", "claude-fable-5-3", "claude-fable-5-2-20261201",
     "claude-opus-5-20261015", "claude-fable-5-1-20261015", "claude-haiku-4-5", "claude-sonnet-4-6-20260101",
 ])
 def test_cp_classification_agrees_with_prober_matching(actual_id):
@@ -201,7 +202,8 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 18
+    assert len(ps.FAMILY_ORDER) == 19
+    assert ps.FAMILY_ORDER[:3] == ("Claude Fable 5.2", "Claude Fable 5.1", "Claude Fable 5")  # 점 버전이 먼저(includes 매칭)
     assert not {"Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"} & set(ps.FAMILY_ORDER)
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Terra")
@@ -275,7 +277,8 @@ def test_source_metadata_constants():
         "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
         "https://developers.openai.com/api/docs/pricing", "openai-list:",
     )
-    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 8
+    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 9
+    assert ps.ANTHROPIC_DOC_NAMES["claude-fable-5-2"] == "Claude Fable 5.2"
     assert ps.ANTHROPIC_DOC_NAMES["claude-haiku-5-5"] == "Claude Haiku 5.5"
     assert ps.CLAUDE_LONG_CONTEXT_FAMILIES == frozenset({"claude-haiku-5-5"})
     assert ps.ANTHROPIC_DOC_NAMES["claude-sonnet-5-5"] == "Claude Sonnet 5.5"

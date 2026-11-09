@@ -9,6 +9,8 @@ interface StreamingViewProps {
 }
 
 const MODEL_COLORS: Record<string, string> = {
+  "Claude Fable 5.2": "bg-cyan-700",
+  "Claude Fable 5.2 (Global)": "bg-cyan-600",
   "Claude Fable 5.1": "bg-sky-700",
   "Claude Fable 5.1 (Global)": "bg-sky-600",
   "Claude Fable 5": "bg-teal-700",
@@ -78,7 +80,10 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
   const claudeSuffix = modelId.startsWith("global") ? " (Global)"
     : modelId.startsWith("bedrock:") ? ` (${modelId.split(":")[1]})` : "";
 
-  // "fable-5"는 "fable-5-1"에도 포함 — 5.1 분기가 먼저 와야 함.
+  // "fable-5"는 "fable-5-1", "fable-5-2"에도 포함 — 점 버전 분기가 먼저 와야 함.
+  if (modelId.includes("fable-5-2")) {
+    return `Claude Fable 5.2${claudeSuffix}`;
+  }
   if (modelId.includes("fable-5-1")) {
     return `Claude Fable 5.1${claudeSuffix}`;
   }

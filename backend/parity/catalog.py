@@ -172,17 +172,19 @@ FEATURE_IDS = [f["id"] for f in FEATURES]
 # 6.1 Terra 2026-10-27 Responses와 Chat Completions 각 3회. 6.1 Terra는 effort 기본값에서 12~21을 보고한다).
 # "haiku-5"는 Claude Haiku 5.5(v2.33.0) — Sonnet 5.5처럼 adaptive 전용(thinking.type.enabled 400, 2026-10-07 실측)이라
 # Sonnet 5.5와 같은 판정을 받게 넣는다. haiku-4-5는 걸리지 않는다. forced tool_choice는 200이라 아래 마커에는 넣지 않는다.
-_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "haiku-5", "gpt-5")  # "fable-5"는 fable-5-1도 포함
+_REASONING_MARKERS = ("fable-5", "opus-4-8", "opus-4-7", "sonnet-5", "haiku-5", "gpt-5")  # "fable-5"는 fable-5-1, fable-5-2도 포함
 
 # forced tool_choice(type "tool"/"any")를 400으로 거부하는 모델 — tool_use 프로브는 auto + 프롬프트
 # 지시로 대체한다 (도구 왕복 자체는 검증). Claude Fable 5.1(2026-08-31 출시):
 # 'tool_choice: type "tool" and "any" are not supported for this model.' (v2.22.0)
 # Claude Opus 5.5(2026-09-22 출시)도 같은 400 — converse_stream 실측 2026-09-23 (v2.27.0).
 # Claude Sonnet 5.5(2026-09-30 실측)도 같은 400 — Converse toolChoice tool/any 400, auto 200 (v2.32.0).
+# Claude Fable 5.2(2026-11-09 실측)도 같은 400 — Bedrock Converse(Global, US)와 CP 모두, auto 200 (v2.41.0).
 # 서울 in-region Opus 5 / Sonnet 5는 forced tool/any/auto 모두 200(2026-09-30) — forced 유지.
 # ⚠️ "opus-5-5"는 opus-5를 포함하지 않지만 반대("opus-5")를 넣으면 Opus 5까지 auto로 바뀐다.
+#    Fable도 점 버전마다 넣는다 — "fable-5"를 넣으면 forced를 받는 Fable 5까지 auto로 바뀐다.
 #    "sonnet-5"도 절대 넣지 않는다 — Sonnet 5(Global/US/서울 in-region)까지 auto로 바뀐다.
-_NO_FORCED_TOOL_CHOICE_MARKERS = ("fable-5-1", "opus-5-5", "sonnet-5-5")
+_NO_FORCED_TOOL_CHOICE_MARKERS = ("fable-5-2", "fable-5-1", "opus-5-5", "sonnet-5-5")
 
 
 def supports_forced_tool_choice(model_id: str) -> bool:

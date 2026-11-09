@@ -512,7 +512,9 @@ def _doc():
 
 def test_real_doc_gives_all_eight_claude_platform_on_aws_families():
     prices = _doc()
-    assert sorted(ANTHROPIC_DOC_NAMES.values()) == sorted(CP_EXPECTED)
+    # the fixture predates Claude Fable 5.2 (v2.41.0) — its row is pinned on the 2026-11-09 doc in test_fable52_catalog.py
+    assert sorted(set(ANTHROPIC_DOC_NAMES.values()) - {"Claude Fable 5.2"}) == sorted(CP_EXPECTED)
+    assert "Claude Fable 5.2" not in prices
     assert {name: prices[name] for name in CP_EXPECTED} == CP_EXPECTED
     assert {name: prices[name] for name in CP_RETIRED_V239} == CP_RETIRED_V239
     assert not set(CP_RETIRED_V239) & set(ANTHROPIC_DOC_NAMES.values())

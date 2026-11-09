@@ -23,8 +23,10 @@ import RefreshControls from "./RefreshControls";
 // Bedrock US inference profile로 fallback.
 // Sonnet 5.5 US와 Haiku 5.5(Global, US)는 v2.33.0 — us-east-1 OptimizePrompt가 anthropic.claude-haiku-5-5,
 // anthropic.claude-sonnet-5-5를 받는다(2026-10-07 실측, 백엔드가 프로파일 접두를 떼어 FM id로 보낸다).
+// Fable 5.2(Global, US)는 v2.41.0 — anthropic.claude-fable-5-2도 200(2026-11-09 실측).
 const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   // Bedrock Global Anthropic
+  { id: "global.anthropic.claude-fable-5-2", label: "Bedrock Claude Fable 5.2 (Global)" },
   { id: "global.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (Global)" },
   { id: "global.anthropic.claude-fable-5", label: "Bedrock Claude Fable 5 (Global)" },
   { id: "global.anthropic.claude-opus-5-5", label: "Bedrock Claude Opus 5.5 (Global)" },
@@ -34,6 +36,7 @@ const OPTIMIZE_TARGET_MODELS: { id: string; label: string }[] = [
   { id: "global.anthropic.claude-sonnet-5", label: "Bedrock Claude Sonnet 5 (Global)" },
   { id: "global.anthropic.claude-haiku-5-5", label: "Bedrock Claude Haiku 5.5 (Global)" },
   // Bedrock US Anthropic
+  { id: "us.anthropic.claude-fable-5-2", label: "Bedrock Claude Fable 5.2 (US)" },
   { id: "us.anthropic.claude-fable-5-1", label: "Bedrock Claude Fable 5.1 (US)" },
   { id: "us.anthropic.claude-fable-5", label: "Bedrock Claude Fable 5 (US)" },
   { id: "us.anthropic.claude-opus-5-5", label: "Bedrock Claude Opus 5.5 (US)" },

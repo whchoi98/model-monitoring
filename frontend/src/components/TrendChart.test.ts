@@ -240,4 +240,19 @@ describe("trend chart line encoding", () => {
       }
     }
   });
+  test("v2.41.0 Claude Fable 5.2 channels stay clear of other models with the same pattern and keep the contrast floor", () => {
+    const added = ["Bedrock Claude Fable 5.2 (Global)", "Bedrock Claude Fable 5.2 (US)", "Anthropic Claude Fable 5.2 (US)"];
+    expect(selection).toContain("Anthropic Claude Fable 5.2 (US)");  // the CP line is the family's default series
+    for (const name of added) {
+      expect(CATALOG).toContain(name);
+      const nearest = nearestSamePattern(name, (other) => other.includes("Fable 5.2"));
+      expect(nearest.delta, `${name} vs ${nearest.other} (${nearest.theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+      for (const theme of THEMES) {
+        for (const card of CARD_BACKGROUNDS[theme]) {
+          expect(contrastRatio(getColor(name, theme), card), `${name} on ${card} (${theme})`)
+            .toBeGreaterThanOrEqual(MIN_CONTRAST[theme]);
+        }
+      }
+    }
+  });
 });
