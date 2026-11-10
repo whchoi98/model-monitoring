@@ -9,10 +9,13 @@
  */
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { fetchPricing, pricingExportUrl } from "./api";
-import type { PricingDocConflictNote, PricingModelPrice, PricingPending, PricingPromoNote, PricingTier } from "./types";
+import type {
+  PricingChangeItem, PricingDocConflictNote, PricingModelPrice, PricingPending, PricingPromoNote, PricingTier,
+} from "./types";
 import {
-  PROVIDER_COLUMNS, cacheItems, columnsFor, costFromPrices, formatPricePair, formatUnitPrice, headerParts, longItems,
-  notesForTier, pendingDetail, textRuns, tierBadges, tierLabel, utcDate,
+  PROVIDER_COLUMNS, cacheItems, cellChangeBadge, changeItemText, changeKindTag, changeTagLabel, columnsFor, costFromPrices,
+  formatPricePair, formatUnitPrice, headerParts, longItems, notesForTier, pendingDetail, priceCellId, textRuns, tierBadges,
+  tierLabel, utcDate,
 } from "./pricingTable";
 
 afterEach(() => {
@@ -464,5 +467,63 @@ describe("pricing API client", () => {
     await expect(fetchPricing()).resolves.toMatchObject({ currency: "USD", families: [] });
     expect(fetchMock.mock.calls[0][0]).toBe("/api/pricing");
     expect(new Headers(fetchMock.mock.calls[0][1]?.headers).has("Authorization")).toBe(false);
+  });
+});
+
+describe("run-to-run changes (v2.40.0)", () => {
+  const item = (over: Partial<PricingChangeItem>): PricingChangeItem => ({
+    model_id: "global.anthropic.claude-sonnet-5-5", family_key: "claude-sonnet-5-5", family: "Claude Sonnet 5.5",
+    provider: "anthropic", tier: "global", region: null, kind: "price", field: "cache_read", before: 0.2, after: 0.1, ...over,
+  });
+
+  test("changeKindTag reads the kind and the direction", () => {
+    expect(changeKindTag(item({}))).toBe("applied");
+    expect(changeKindTag(item({ kind: "pending", before: null, after: 3.3 }))).toBe("pending");
+    expect(changeKindTag(item({ kind: "pending", before: 3.3, after: null }))).toBe("released");
+    expect(changeKindTag(item({ kind: "check", field: null, before: "ok", after: "skipped:parse_failed" }))).toBe("check_failed");
+    expect(changeKindTag(item({ kind: "check", field: null, before: "skipped:parse_failed", after: "ok" }))).toBe("check_recovered");
+    expect(changeKindTag(item({ kind: "channel", field: null, before: null, after: "present" }))).toBe("new_channel");
+    expect(changeKindTag(item({ kind: "channel", field: null, before: "present", after: null }))).toBe("left_channel");
+    expect(changeTagLabel("applied", "ko")).toBe("적용");
+    expect(changeTagLabel("pending", "en")).toBe("Pending review");
+  });
+
+  test("changeItemText names the family, the column and the values", () => {
+    expect(changeItemText(item({}), "ko")).toBe("Claude Sonnet 5.5, AWS Bedrock - Global CRIS, 캐시 읽기 $0.20 → $0.10");
+    expect(changeItemText(item({}), "en")).toBe("Claude Sonnet 5.5, AWS Bedrock - Global CRIS, cache read $0.20 → $0.10");
+    expect(changeItemText(item({ family: "GPT 6 Sol", tier: "us", kind: "pending", field: "input", before: null, after: 3.3 }), "ko"))
+      .toBe("GPT 6 Sol, AWS Bedrock - US CRIS, 입력 — → $3.30");
+    expect(changeItemText(item({ family: "Claude Opus 5", tier: "cp", kind: "check", field: null, before: "ok", after: "skipped:parse_failed" }), "ko"))
+      .toBe("Claude Opus 5, Claude Platform on AWS, 문서 파싱 실패");
+    expect(changeItemText(item({ tier: "global", kind: "check", field: null, before: "ok", after: "skipped:fetch_failed" }), "en"))
+      .toBe("Claude Sonnet 5.5, AWS Bedrock - Global CRIS, source unreachable");
+    expect(changeItemText(item({ family: "GPT 6.1 Terra", kind: "channel", field: null, before: null, after: "present" }), "ko"))
+      .toBe("GPT 6.1 Terra, AWS Bedrock - Global CRIS");
+    expect(changeItemText(item({ family: "GPT 5.6 Terra", tier: "in_region", region: "us-east-1", field: "input", before: 2.2, after: 2.5 }), "ko"))
+      .toBe("GPT 5.6 Terra, AWS Bedrock - In Region (us-east-1), 입력 $2.20 → $2.50");
+    expect(changeItemText(item({ kind: "check", field: null, before: "ok", after: "skipped:something_new" }), "ko"))
+      .toBe("Claude Sonnet 5.5, AWS Bedrock - Global CRIS, something_new");
+  });
+
+  test("priceCellId", () => {
+    expect(priceCellId("gpt-5.6-sol", "in_region")).toBe("price-gpt-5.6-sol-in_region");
+  });
+
+  test("cellChangeBadge: the cell's first change, the count of the rest, or a new channel", () => {
+    const items = [
+      item({}),
+      item({ kind: "pending", field: "input", before: null, after: 3 }),
+      item({ tier: "us", model_id: "us.anthropic.claude-sonnet-5-5", kind: "channel", field: null, before: null, after: "present" }),
+    ];
+    expect(cellChangeBadge(items, "claude-sonnet-5-5", "global", "ko"))
+      .toEqual({ kind: "changed", label: "이전 대비 변경", detail: "캐시 읽기 $0.20 → $0.10, 외 1건" });
+    expect(cellChangeBadge(items, "claude-sonnet-5-5", "global", "en"))
+      .toEqual({ kind: "changed", label: "Changed since last sync", detail: "cache read $0.20 → $0.10, +1 more" });
+    expect(cellChangeBadge(items, "claude-sonnet-5-5", "us", "ko")).toEqual({ kind: "new_channel", label: "신규 채널", detail: "" });
+    expect(cellChangeBadge(items, "claude-sonnet-5-5", "cp", "ko")).toBeNull();
+    expect(cellChangeBadge([item({ kind: "pending", field: "input", before: null, after: 3.3 })], "claude-sonnet-5-5", "global", "ko"))
+      .toEqual({ kind: "changed", label: "이전 대비 변경", detail: "검토 대기: 입력 — → $3.30" });
+    expect(cellChangeBadge([item({ kind: "channel", field: null, before: "present", after: null })], "claude-sonnet-5-5", "global", "ko"))
+      .toBeNull();
   });
 });

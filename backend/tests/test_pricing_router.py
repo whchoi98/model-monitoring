@@ -320,8 +320,10 @@ def test_export_headers_and_bodies(env, fmt, content_type, ext):
     elif fmt == "md":
         assert text.startswith("> " + DISCLAIMER["en"] + "\n")
         assert text.rstrip("\n").endswith("> " + DISCLAIMER["en"])
-    else:
-        assert res.json() == client.get("/api/pricing").json()
+    else:  # the JSON export is the page payload without the v2.40.0 run-to-run `changes`
+        page = client.get("/api/pricing").json()
+        assert "changes" in page and "changes" not in res.json()
+        assert res.json() == {key: value for key, value in page.items() if key != "changes"}
 
 
 def test_export_lang_defaults_to_korean(env):
@@ -351,3 +353,32 @@ def test_hidden_model_patterns_drop_classifiable_channels(env, monkeypatch):
     body = client.get("/api/pricing").json()
     assert "openai:us-east-2:openai.gpt-5.5" not in body["models"]
     assert "openai:us-east-1:openai.gpt-5.5" in body["models"]
+
+
+def test_pricing_changes_wait_for_two_snapshot_runs_then_list_the_items(env):
+    """v2.40.0 (ADR-035): `changes` compares the two latest completed/partial runs that carry a snapshot."""
+    factory, client, now = env
+    assert client.get("/api/pricing").json()["changes"] == {"available": False, "run_id": None}
+
+    def snapshot(cache_read):
+        shown = {"input": 4.4, "output": 22, "cache_read": cache_read, "cache_write": 5.5, "cache_write_1h": 8.8,
+                 "long_input": None, "long_output": None, "long_cache_read": None, "long_cache_write": None}
+        return {"version": 1, "channels": {"us.anthropic.claude-opus-5-5": {
+            "family_key": "claude-opus-5-5", "family": "Claude Opus 5.5", "provider": "anthropic", "tier": "us",
+            "region": None, "shown": shown, "pending": None, "result": "unchanged"}}}
+
+    with factory() as db:
+        first = models.PriceSyncRun(started_at=now - timedelta(minutes=50), finished_at=now - timedelta(minutes=49),
+                                    status="completed", summary={"snapshot": snapshot(0.44)})
+        second = models.PriceSyncRun(started_at=now - timedelta(minutes=30), finished_at=now - timedelta(minutes=29),
+                                     status="partial", summary={"snapshot": snapshot(0.22)})
+        db.add_all([first, second])
+        db.commit()
+        first_id, second_id = first.id, second.id
+    pricing_router.invalidate_cache()
+    changes = client.get("/api/pricing").json()["changes"]
+    assert (changes["available"], changes["run_id"], changes["previous_run_id"]) == (True, second_id, first_id)
+    assert changes["items"] == [{
+        "model_id": "us.anthropic.claude-opus-5-5", "family_key": "claude-opus-5-5", "family": "Claude Opus 5.5",
+        "provider": "anthropic", "tier": "us", "region": None, "kind": "price", "field": "cache_read",
+        "before": 0.44, "after": 0.22}]

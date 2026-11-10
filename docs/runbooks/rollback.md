@@ -107,6 +107,20 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
   --import-existing-resources -c backendImage=<v2.30.0 backend URI> -c frontendImage=<v2.30.0 frontend URI>
 ```
 
+**v2.40.0을 되돌린 뒤 다시 배포할 때, 또는 첫 Scheduler 배포가 롤백됐을 때 (ExplorerVerify 로그 그룹)**. v2.40.0도 CDK를 바꾼 릴리스라
+v2.39.0 tag의 `cdk/`로 되돌리면 ExplorerVerify 스케줄, 태스크 정의는 지워지지만 로그 그룹 `/ecs/explorer`는 이름을 고정했고
+`RemovalPolicy.RETAIN`이라 남는다. CloudFormation이 첫 Scheduler 배포를 롤백한 경우도 같다. 이 상태로 v2.40.0 이상을 배포하면
+`Resource of type 'AWS::Logs::LogGroup' with identifier '/ecs/explorer' already exists`로 Scheduler 스택 업데이트가 실패하고,
+위 PricingSync 경우처럼 서비스만 새 이미지로 가는 혼합 상태가 된다. 재배포 전에 둘 중 하나를 한다.
+
+```bash
+# 남아 있는지 확인 — 빈 결과면 아무것도 하지 않아도 된다
+aws logs describe-log-groups --log-group-name-prefix /ecs/explorer --region $REGION --query 'logGroups[].logGroupName'
+# (1) 삭제 후 평소대로 배포 — 로그를 보존해야 하면 먼저 S3로 내보낸다(aws logs create-export-task)
+aws logs delete-log-group --log-group-name /ecs/explorer --region $REGION
+# (2) 또는 남은 로그 그룹을 스택으로 가져오며 배포 (위 PricingSync 절차의 --import-existing-resources 명령과 같고 이미지는 v2.40.0 URI)
+```
+
 **A-3. 빠른 경로 — 서비스만 이전 revision으로** (스케줄 태스크 6개는 되돌아가지 않는다)
 
 CloudFormation은 task def를 교체할 때 자신이 만든 옛 revision을 INACTIVE로 등록 해제하고(수동 등록한 revision은 ACTIVE로
@@ -136,7 +150,8 @@ v2.29.1 이하 image로 바꾸면 PricingSync 태스크가 12시간마다 `No mo
 1. 나머지 스케줄 5개만 위 절차로 직전 image에 맞추고, PricingSync 스케줄은 DISABLED로 바꾼다(아래 명령). v2.30.0 이상으로 다시
    올린 뒤 같은 명령에서 `'DISABLED'` → `'ENABLED'`로 재개한다.
 2. 직전 릴리스 git tag의 `cdk/`로 A-2를 실행한다. 그 CDK에는 PricingSync가 없어 스케줄, 태스크 정의, 역할이 함께 지워진다
-   (로그 그룹 `/ecs/pricingsync`는 남는다. 다시 올릴 때는 A-2의 v2.30.0 재배포 절차를 따른다).
+   (로그 그룹 `/ecs/pricingsync`는 남는다. 다시 올릴 때는 A-2의 v2.30.0 재배포 절차를 따른다. v2.40.0에서 되돌리면 `/ecs/explorer`도 남는다.
+   절차는 A-2의 "v2.40.0을 되돌린 뒤 다시 배포할 때"를 따른다).
 
 ```bash
 SCHED=$(aws cloudformation describe-stacks --stack-name BedrockMonitor-Scheduler --region $REGION \

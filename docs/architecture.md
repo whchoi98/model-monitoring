@@ -47,6 +47,7 @@ flowchart TB
     gpt["GptBench task: 15 min"]
     feat["FeaturesVerify task: daily 17:30 UTC"]
     prc["PricingSync task: 12 h"]
+    exp["ExplorerVerify task: daily 18:00 UTC"]
   end
 
   subgraph storage[Storage Layer]
@@ -80,7 +81,7 @@ flowchart TB
   alb -->|"/*"| fe
   alb -->|"/api/*"| be
   sched --> ap & ins & par & gpt & feat & prc
-  ap & par & feat --> providers
+  ap & par & feat & exp --> providers
   prc --> offers & plist & adoc & odoc
   prc -.->|"CP model list"| cp
   gpt --> br & mantle
@@ -89,7 +90,7 @@ flowchart TB
   be --> opt
   be --> ses
   be --> mem
-  be & ap & ins & par & gpt & feat & prc --> rds
+  be & ap & ins & par & gpt & feat & prc & exp --> rds
   sec -.->|"secrets at task start"| be
   be & fe & ap --> cw
   cw --> sns
@@ -178,7 +179,8 @@ flowchart LR
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | Model × 6 surfaces × 20 features evidence cells |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | 18 GPT channels (Mantle in-region us-east-1 7 + CRIS 11) in parallel lanes, one per host: `cris` (11 Global and US CRIS channels, Bedrock Runtime OpenAI-compatible host, one lane) and one `mantle-<region>` lane per Mantle region (`bedrock-mantle.<region>`), today only `mantle-us-east-1` 7 (v2.39.0 dropped GPT 5.4, its first channel, ADR-034; v2.38.0 had 8 after Mantle in-region was consolidated to us-east-1 and GPT 6.1 Terra added at the end, user decision 2026-10-27; v2.32.1 to v2.37.x ran 21 channels in four lanes, `cris` 9, `mantle-us-east-1` 6, `mantle-us-east-2` 3, `mantle-us-west-2` 3; v2.32.0 had two lanes, `cris` 9 and `mantle` 12, split per region after the 2026-09-30 GPT 5.4 us-east-2 slowdown, user decision). Inside a lane each channel runs sequentially, warm-up 1 + `GPT_BENCH_RUNS` (10) calls, so calls to one host never overlap; per-call watchdog `GPT_BENCH_CALL_TIMEOUT` 90 s; one cycle deadline `GPT_BENCH_DEADLINE` 780 s shared by all lanes (a lane past it skips only its own remaining channels); the main thread commits each finished channel; a lane still running after deadline + call cap + `LANE_JOIN_GRACE_S` 15 s (885 s, best effort) is no longer waited for: queued events are all stored, its in-flight channel keeps its finished runs and is reported as `label (run N+)`, never-started channels as `label` |
 | `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39 rows × 5 surfaces × 7 models (Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5 — v2.33.0) = 1,365 cells (1,079 probed + 286 pre-decided), daily at 17:30 UTC (02:30 KST) |
-| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel (49 since v2.39.0, plus 9 display-only OpenAI official price channels — the runner logs `58 active channels`; the OpenAI official price channels date from v2.31.0), an unchanged observation, empty cache or long-context fields filled on the current row (`enriched`, v2.31.0), a new `verified` price (every field changed by 50% or less) or a `pending_review` row; run cap 300 s; `pg_try_advisory_lock(917350004)` keeps runs from overlapping — a second run exits at once (exit 1, no run row) (v2.30.0, ADR-030) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | One `price_sync_runs` row (`completed`, `partial` or `failed`) and, per active channel (49 since v2.39.0, plus 9 display-only OpenAI official price channels — the runner logs `58 active channels`; the OpenAI official price channels date from v2.31.0), an unchanged observation, empty cache or long-context fields filled on the current row (`enriched`, v2.31.0), a new `verified` price (every field changed by 50% or less) or a `pending_review` row; run cap 300 s; `pg_try_advisory_lock(917350004)` keeps runs from overlapping — a second run exits at once (exit 1, no run row) (v2.30.0, ADR-030); since v2.40.0 each finished run also stores what `/pricing` shows (`summary.snapshot`), and `/api/pricing` `changes` compares the two latest runs that have one (ADR-035) |
+| `ExplorerVerifySchedule` | `cron(0 18 * * ? *)` Etc/UTC | `python -m explorer_runner --once` | Runs every Model Explorer code example (`backend/model_explorer/examples.py`, the same function `/api/explorer/latest` shows) once in a child Python per example: 85 examples for the 49 active channels, 4 at a time, 90 s per call, one retry of a failure, 1,200 s run cap; one `explorer_runs` row and one `explorer_results` row per example (`passed`, `failed`, `skipped`), daily at 18:00 UTC (03:00 KST), after FeaturesVerify (v2.40.0, ADR-035) |
 
 Every scheduled task uses the backend image with a command override, 0.5 vCPU / 1 GB, and a task definition family `:*` wildcard in the scheduler role's `ecs:RunTask` policy (ADR-011). PricingSync runs with its own task role that allows only `bedrock:ListFoundationModelAgreementOffers` and `pricing:GetProducts`, with no model invocation.
 
@@ -314,6 +316,7 @@ flowchart TB
     gpt["GptBench task: 15 min"]
     feat["FeaturesVerify task: daily 17:30 UTC"]
     prc["PricingSync task: 12 h"]
+    exp["ExplorerVerify task: daily 18:00 UTC"]
   end
 
   subgraph storage[Storage Layer]
@@ -347,7 +350,7 @@ flowchart TB
   alb -->|"/*"| fe
   alb -->|"/api/*"| be
   sched --> ap & ins & par & gpt & feat & prc
-  ap & par & feat --> providers
+  ap & par & feat & exp --> providers
   prc --> offers & plist & adoc & odoc
   prc -.->|"CP model list"| cp
   gpt --> br & mantle
@@ -356,7 +359,7 @@ flowchart TB
   be --> opt
   be --> ses
   be --> mem
-  be & ap & ins & par & gpt & feat & prc --> rds
+  be & ap & ins & par & gpt & feat & prc & exp --> rds
   sec -.->|"secrets at task start"| be
   be & fe & ap --> cw
   cw --> sns
@@ -445,7 +448,8 @@ flowchart LR
 | `ParityRunSchedule` | `rate(12 hours)` | `python -m parity_runner --once` | 모델 × surface 6개 × 피처 19개 실행 증거 셀 |
 | `GptBenchSchedule` | `rate(15 minutes)` | `python -m gptbench_runner --once` | GPT 18채널(Mantle 인리전 us-east-1 7 + CRIS 11)을 호스트별 갈래로 동시에 돈다. `cris`(Global, US CRIS 11채널, Bedrock Runtime OpenAI 호환 호스트, 한 갈래)와 Mantle 리전마다 한 갈래인 `mantle-<region>`(`bedrock-mantle.<region>`)이고, 지금은 `mantle-us-east-1` 7 하나다(v2.39.0에 첫 채널 GPT 5.4를 뺐다, ADR-034. v2.38.0은 Mantle 인리전 us-east-1 일원화와 GPT 6.1 Terra 편입으로 8, 사용자 결정 2026-10-27. v2.32.1~v2.37.x는 21채널 네 갈래 `cris` 9, `mantle-us-east-1` 6, `mantle-us-east-2` 3, `mantle-us-west-2` 3, v2.32.0은 `cris` 9, `mantle` 12 두 갈래였고, 2026-09-30 GPT 5.4 us-east-2 저하 뒤 사용자 결정으로 리전별로 나눴다). 갈래 안에서는 채널을 하나씩 순차로 측정하고(워밍업 1 + `GPT_BENCH_RUNS` 10회, 같은 호스트 호출은 겹치지 않는다), 호출당 watchdog은 `GPT_BENCH_CALL_TIMEOUT` 90초, 사이클 데드라인 `GPT_BENCH_DEADLINE` 780초는 모든 갈래가 공유한다(넘긴 갈래는 자기 남은 채널만 skip). 끝난 채널은 메인 스레드가 커밋하고, 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(885초, 최선의 상한)가 지나도 도는 갈래는 기다리지 않는다. 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`, 시작하지 못한 채널은 `라벨`로 보고한다 |
 | `FeaturesVerifySchedule` | `cron(30 17 * * ? *)` Etc/UTC | `python -m features_runner --once` | 39행 × surface 5개 × 모델 7개(Claude Fable 5.1, Fable 5, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5 — v2.33.0) = 1,365셀(프로브 1,079 + 사전판정 286), 매일 17:30 UTC(02:30 KST) |
-| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널(v2.39.0부터 49채널, 표시 전용 OpenAI 공식 가격 9채널 — 러너 로그 `58 active channels`, OpenAI 공식 가격 채널은 v2.31.0부터)마다 변경 없음 관측, 현재 행의 빈 캐시나 긴 컨텍스트 필드 채우기(`enriched`, v2.31.0), 새 `verified` 단가(모든 필드 변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_try_advisory_lock(917350004)`로 런이 겹치지 않게 한다 — 겹치면 두 번째 런은 즉시 exit 1로 끝난다(런 행 없음) (v2.30.0, ADR-030) |
+| `PricingSyncSchedule` | `rate(12 hours)` | `python -m pricing_sync_runner --once` | `price_sync_runs` 1행(`completed`, `partial`, `failed`)과 활성 채널(v2.39.0부터 49채널, 표시 전용 OpenAI 공식 가격 9채널 — 러너 로그 `58 active channels`, OpenAI 공식 가격 채널은 v2.31.0부터)마다 변경 없음 관측, 현재 행의 빈 캐시나 긴 컨텍스트 필드 채우기(`enriched`, v2.31.0), 새 `verified` 단가(모든 필드 변화 50% 이하), `pending_review` 행 중 하나, 런 상한 300초, `pg_try_advisory_lock(917350004)`로 런이 겹치지 않게 한다 — 겹치면 두 번째 런은 즉시 exit 1로 끝난다(런 행 없음) (v2.30.0, ADR-030). v2.40.0부터 끝난 런마다 `/pricing`이 보여 주는 값을 함께 저장하고(`summary.snapshot`), `/api/pricing` `changes`가 스냅샷이 있는 최근 두 런을 비교한다(ADR-035) |
+| `ExplorerVerifySchedule` | `cron(0 18 * * ? *)` Etc/UTC | `python -m explorer_runner --once` | 모델 탐색 코드 예제(`backend/model_explorer/examples.py`, `/api/explorer/latest`가 보여 주는 함수와 같은 함수)를 예제마다 자식 Python에서 한 번씩 실행한다. 활성 49채널 85건, 동시 4(수동 트리거 `POST /api/explorer/trigger`는 백엔드 서비스 태스크 안에서 돌아 2), 호출당 90초, 실패는 1회 재시도, 런 상한 1,200초. `explorer_runs` 1행과 예제마다 `explorer_results` 1행(`passed`, `failed`, `skipped`)을 남긴다. 매일 18:00 UTC(03:00 KST), FeaturesVerify 뒤 (v2.40.0, ADR-035) |
 
 모든 스케줄 태스크는 backend 이미지를 command override로 쓰고 0.5 vCPU / 1 GB이며, 스케줄러 역할의 `ecs:RunTask` 정책은 태스크 정의 family `:*` 와일드카드를 씁니다(ADR-011). PricingSync는 `bedrock:ListFoundationModelAgreementOffers`와 `pricing:GetProducts`만 허용하는 전용 태스크 역할로 돌며 모델 호출 권한이 없습니다.
 

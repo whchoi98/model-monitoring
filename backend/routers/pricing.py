@@ -2,7 +2,8 @@
 
 Public:
   GET /api/pricing                                   - price table payload (pricing_payload.build_pricing_payload)
-  GET /api/pricing/export?format=csv|md|json&lang=ko|en - the same table as a download (attachment)
+                                                       + `changes`, the run-to-run table changes (pricing_changes, v2.40.0)
+  GET /api/pricing/export?format=csv|md|json&lang=ko|en - the same table as a download (attachment), without `changes`
 Admin (JWT, username == "admin"):
   GET  /api/admin/pricing/pending                    - pending_review rows with current value and change ratio
   POST /api/admin/pricing/pending/{row_id}/approve   - status -> verified (effective_from unchanged)
@@ -29,6 +30,7 @@ from auth import get_current_user
 from database import get_db
 from models import PriceHistory, User
 from price_history import as_utc, current_rows
+from pricing_changes import latest_changes
 from pricing_export import export_filename, to_csv, to_json, to_markdown
 from pricing_parsers import PRICE_FIELDS
 from pricing_payload import build_pricing_payload, iso_z, price_number, price_number_or_none
@@ -87,6 +89,7 @@ def _payload(db: Session) -> dict:
         generation = _cache["generation"]
     now = datetime.now(timezone.utc)
     payload = build_pricing_payload(db, _active(db, now), now=now)
+    payload["changes"] = latest_changes(db)
     with _cache_lock:
         if _cache["generation"] == generation:  # an approve/reject during the build may have made it stale
             _cache["payload"] = payload
@@ -107,7 +110,8 @@ def export_pricing_table(
     db: Session = Depends(get_db),
 ):
     """Download the price table as CSV (UTF-8 BOM), Markdown or JSON."""
-    payload = _payload(db)
+    # The run-to-run changes are a page feature (v2.40.0): the exports keep their v2.39.0 content.
+    payload = {key: value for key, value in _payload(db).items() if key != "changes"}
     if fmt == "csv":
         body = to_csv(payload, lang)
     elif fmt == "md":

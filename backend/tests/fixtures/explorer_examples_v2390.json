@@ -1,0 +1,269 @@
+{
+  "source": "frontend/src/lib/modelExplorer.ts codeExamples() at c96a592 (v2.39.0)",
+  "examples": {
+    "global.anthropic.claude-opus-5": {
+      "ko": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock의 통합 대화 API — 모든 Bedrock 모델을 동일한 요청 형식으로 호출하므로 코드 수정 없이 모델을 교체할 수 있습니다. 스트리밍은 converse_stream을 사용합니다. 이 모니터의 prober도 이 API를 사용합니다.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.converse_stream(\n    modelId=\"global.anthropic.claude-opus-5\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        },
+        {
+          "label": "Python (boto3)",
+          "api": "InvokeModel API",
+          "description": "모델 네이티브 페이로드를 그대로 전달하는 저수준 API — 모델 고유 스키마(Claude는 Anthropic Messages 형식)와 세부 파라미터를 직접 제어할 때 사용합니다. 모델을 바꾸면 요청 본문도 함께 바꿔야 합니다.",
+          "language": "python",
+          "code": "import boto3, json\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.invoke_model(\n    modelId=\"global.anthropic.claude-opus-5\",\n    body=json.dumps({\n        \"anthropic_version\": \"bedrock-2023-05-31\",\n        \"max_tokens\": 512,\n        \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\n    }),\n)\nresult = json.loads(response[\"body\"].read())\n# Opus 5, Fable 5는 thinking 블록을 먼저 돌려준다 — text 블록만 출력\nprint(\"\".join(b[\"text\"] for b in result[\"content\"] if b[\"type\"] == \"text\"))"
+        },
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Anthropic 네이티브 API를 Bedrock 위에서 그대로 쓰는 방식 — anthropic SDK의 AnthropicBedrock 클라이언트가 Messages 형식 요청을 SigV4로 서명해 Bedrock으로 전달합니다. Claude 전용 파라미터를 Anthropic 문서 그대로 사용하면서 과금·권한은 AWS 계정으로 관리할 때 사용합니다. 참고: Bedrock Mantle /anthropic 엔드포인트(bearer 토큰, us-east-1 등 일부 리전)로도 동일한 Messages 형식 호출이 가능합니다.",
+          "language": "python",
+          "code": "from anthropic import AnthropicBedrock\n\n# Bedrock 경유 — AWS 자격 증명(SigV4) 사용, Anthropic API 키 불필요\nclient = AnthropicBedrock(aws_region=\"ap-northeast-2\")\n\nwith client.messages.stream(\n    model=\"global.anthropic.claude-opus-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock unified conversation API — every Bedrock model is called with the same request shape, so you can swap models without code changes. Use converse_stream for streaming. This monitor's prober uses this API.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.converse_stream(\n    modelId=\"global.anthropic.claude-opus-5\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        },
+        {
+          "label": "Python (boto3)",
+          "api": "InvokeModel API",
+          "description": "Low-level API that passes the model-native payload as-is — use it to control model-specific schemas (Anthropic Messages format for Claude) and fine-grained parameters. Changing the model means changing the request body too.",
+          "language": "python",
+          "code": "import boto3, json\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.invoke_model(\n    modelId=\"global.anthropic.claude-opus-5\",\n    body=json.dumps({\n        \"anthropic_version\": \"bedrock-2023-05-31\",\n        \"max_tokens\": 512,\n        \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\n    }),\n)\nresult = json.loads(response[\"body\"].read())\n# Opus 5 and Fable 5 return a thinking block first — print only the text blocks\nprint(\"\".join(b[\"text\"] for b in result[\"content\"] if b[\"type\"] == \"text\"))"
+        },
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Use the Anthropic-native API on top of Bedrock — the anthropic SDK AnthropicBedrock client signs Messages-format requests with SigV4 and forwards them to Bedrock (no Anthropic API key; billing and IAM stay in your AWS account). Note: the Bedrock Mantle /anthropic endpoint (bearer token, some regions e.g. us-east-1) also accepts the same Messages format.",
+          "language": "python",
+          "code": "from anthropic import AnthropicBedrock\n\n# Via Bedrock — AWS credentials (SigV4), no Anthropic API key required\nclient = AnthropicBedrock(aws_region=\"ap-northeast-2\")\n\nwith client.messages.stream(\n    model=\"global.anthropic.claude-opus-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ]
+    },
+    "us.anthropic.claude-haiku-5-5": {
+      "ko": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock의 통합 대화 API — 모든 Bedrock 모델을 동일한 요청 형식으로 호출하므로 코드 수정 없이 모델을 교체할 수 있습니다. 스트리밍은 converse_stream을 사용합니다. 이 모니터의 prober도 이 API를 사용합니다.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"us-east-1\")\n\nresponse = client.converse_stream(\n    modelId=\"us.anthropic.claude-haiku-5-5\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        },
+        {
+          "label": "Python (boto3)",
+          "api": "InvokeModel API",
+          "description": "모델 네이티브 페이로드를 그대로 전달하는 저수준 API — 모델 고유 스키마(Claude는 Anthropic Messages 형식)와 세부 파라미터를 직접 제어할 때 사용합니다. 모델을 바꾸면 요청 본문도 함께 바꿔야 합니다.",
+          "language": "python",
+          "code": "import boto3, json\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"us-east-1\")\n\nresponse = client.invoke_model(\n    modelId=\"us.anthropic.claude-haiku-5-5\",\n    body=json.dumps({\n        \"anthropic_version\": \"bedrock-2023-05-31\",\n        \"max_tokens\": 512,\n        \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\n    }),\n)\nresult = json.loads(response[\"body\"].read())\n# Opus 5, Fable 5는 thinking 블록을 먼저 돌려준다 — text 블록만 출력\nprint(\"\".join(b[\"text\"] for b in result[\"content\"] if b[\"type\"] == \"text\"))"
+        },
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Anthropic 네이티브 API를 Bedrock 위에서 그대로 쓰는 방식 — anthropic SDK의 AnthropicBedrock 클라이언트가 Messages 형식 요청을 SigV4로 서명해 Bedrock으로 전달합니다. Claude 전용 파라미터를 Anthropic 문서 그대로 사용하면서 과금·권한은 AWS 계정으로 관리할 때 사용합니다. 참고: Bedrock Mantle /anthropic 엔드포인트(bearer 토큰, us-east-1 등 일부 리전)로도 동일한 Messages 형식 호출이 가능합니다.",
+          "language": "python",
+          "code": "from anthropic import AnthropicBedrock\n\n# Bedrock 경유 — AWS 자격 증명(SigV4) 사용, Anthropic API 키 불필요\nclient = AnthropicBedrock(aws_region=\"us-east-1\")\n\nwith client.messages.stream(\n    model=\"us.anthropic.claude-haiku-5-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock unified conversation API — every Bedrock model is called with the same request shape, so you can swap models without code changes. Use converse_stream for streaming. This monitor's prober uses this API.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"us-east-1\")\n\nresponse = client.converse_stream(\n    modelId=\"us.anthropic.claude-haiku-5-5\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        },
+        {
+          "label": "Python (boto3)",
+          "api": "InvokeModel API",
+          "description": "Low-level API that passes the model-native payload as-is — use it to control model-specific schemas (Anthropic Messages format for Claude) and fine-grained parameters. Changing the model means changing the request body too.",
+          "language": "python",
+          "code": "import boto3, json\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"us-east-1\")\n\nresponse = client.invoke_model(\n    modelId=\"us.anthropic.claude-haiku-5-5\",\n    body=json.dumps({\n        \"anthropic_version\": \"bedrock-2023-05-31\",\n        \"max_tokens\": 512,\n        \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\n    }),\n)\nresult = json.loads(response[\"body\"].read())\n# Opus 5 and Fable 5 return a thinking block first — print only the text blocks\nprint(\"\".join(b[\"text\"] for b in result[\"content\"] if b[\"type\"] == \"text\"))"
+        },
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Use the Anthropic-native API on top of Bedrock — the anthropic SDK AnthropicBedrock client signs Messages-format requests with SigV4 and forwards them to Bedrock (no Anthropic API key; billing and IAM stay in your AWS account). Note: the Bedrock Mantle /anthropic endpoint (bearer token, some regions e.g. us-east-1) also accepts the same Messages format.",
+          "language": "python",
+          "code": "from anthropic import AnthropicBedrock\n\n# Via Bedrock — AWS credentials (SigV4), no Anthropic API key required\nclient = AnthropicBedrock(aws_region=\"us-east-1\")\n\nwith client.messages.stream(\n    model=\"us.anthropic.claude-haiku-5-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ]
+    },
+    "us.amazon.nova-2-lite-v1:0": {
+      "ko": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock의 통합 대화 API — 모든 Bedrock 모델을 동일한 요청 형식으로 호출하므로 코드 수정 없이 모델을 교체할 수 있습니다. 스트리밍은 converse_stream을 사용합니다. 이 모니터의 prober도 이 API를 사용합니다.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"us-east-1\")\n\nresponse = client.converse_stream(\n    modelId=\"us.amazon.nova-2-lite-v1:0\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock unified conversation API — every Bedrock model is called with the same request shape, so you can swap models without code changes. Use converse_stream for streaming. This monitor's prober uses this API.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"us-east-1\")\n\nresponse = client.converse_stream(\n    modelId=\"us.amazon.nova-2-lite-v1:0\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        }
+      ]
+    },
+    "bedrock:ap-northeast-2:anthropic.claude-opus-5": {
+      "ko": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock의 통합 대화 API — 모든 Bedrock 모델을 동일한 요청 형식으로 호출하므로 코드 수정 없이 모델을 교체할 수 있습니다. 스트리밍은 converse_stream을 사용합니다. 이 모니터의 prober도 이 API를 사용합니다.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.converse_stream(\n    modelId=\"anthropic.claude-opus-5\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        },
+        {
+          "label": "Python (boto3)",
+          "api": "InvokeModel API",
+          "description": "모델 네이티브 페이로드를 그대로 전달하는 저수준 API — 모델 고유 스키마(Claude는 Anthropic Messages 형식)와 세부 파라미터를 직접 제어할 때 사용합니다. 모델을 바꾸면 요청 본문도 함께 바꿔야 합니다.",
+          "language": "python",
+          "code": "import boto3, json\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.invoke_model(\n    modelId=\"anthropic.claude-opus-5\",\n    body=json.dumps({\n        \"anthropic_version\": \"bedrock-2023-05-31\",\n        \"max_tokens\": 512,\n        \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\n    }),\n)\nresult = json.loads(response[\"body\"].read())\n# Opus 5, Fable 5는 thinking 블록을 먼저 돌려준다 — text 블록만 출력\nprint(\"\".join(b[\"text\"] for b in result[\"content\"] if b[\"type\"] == \"text\"))"
+        },
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Anthropic 네이티브 API를 Bedrock 위에서 그대로 쓰는 방식 — anthropic SDK의 AnthropicBedrock 클라이언트가 Messages 형식 요청을 SigV4로 서명해 Bedrock으로 전달합니다. Claude 전용 파라미터를 Anthropic 문서 그대로 사용하면서 과금·권한은 AWS 계정으로 관리할 때 사용합니다. 참고: Bedrock Mantle /anthropic 엔드포인트(bearer 토큰, us-east-1 등 일부 리전)로도 동일한 Messages 형식 호출이 가능합니다.",
+          "language": "python",
+          "code": "from anthropic import AnthropicBedrock\n\n# Bedrock 경유 — AWS 자격 증명(SigV4) 사용, Anthropic API 키 불필요\nclient = AnthropicBedrock(aws_region=\"ap-northeast-2\")\n\nwith client.messages.stream(\n    model=\"anthropic.claude-opus-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (boto3)",
+          "api": "Converse API",
+          "description": "Bedrock unified conversation API — every Bedrock model is called with the same request shape, so you can swap models without code changes. Use converse_stream for streaming. This monitor's prober uses this API.",
+          "language": "python",
+          "code": "import boto3\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.converse_stream(\n    modelId=\"anthropic.claude-opus-5\",\n    messages=[{\"role\": \"user\", \"content\": [{\"text\": \"Hello!\"}]}],\n    inferenceConfig={\"maxTokens\": 512},\n)\nfor event in response[\"stream\"]:\n    if \"contentBlockDelta\" in event:\n        print(event[\"contentBlockDelta\"][\"delta\"].get(\"text\", \"\"), end=\"\")"
+        },
+        {
+          "label": "Python (boto3)",
+          "api": "InvokeModel API",
+          "description": "Low-level API that passes the model-native payload as-is — use it to control model-specific schemas (Anthropic Messages format for Claude) and fine-grained parameters. Changing the model means changing the request body too.",
+          "language": "python",
+          "code": "import boto3, json\n\nclient = boto3.client(\"bedrock-runtime\", region_name=\"ap-northeast-2\")\n\nresponse = client.invoke_model(\n    modelId=\"anthropic.claude-opus-5\",\n    body=json.dumps({\n        \"anthropic_version\": \"bedrock-2023-05-31\",\n        \"max_tokens\": 512,\n        \"messages\": [{\"role\": \"user\", \"content\": \"Hello!\"}],\n    }),\n)\nresult = json.loads(response[\"body\"].read())\n# Opus 5 and Fable 5 return a thinking block first — print only the text blocks\nprint(\"\".join(b[\"text\"] for b in result[\"content\"] if b[\"type\"] == \"text\"))"
+        },
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Use the Anthropic-native API on top of Bedrock — the anthropic SDK AnthropicBedrock client signs Messages-format requests with SigV4 and forwards them to Bedrock (no Anthropic API key; billing and IAM stay in your AWS account). Note: the Bedrock Mantle /anthropic endpoint (bearer token, some regions e.g. us-east-1) also accepts the same Messages format.",
+          "language": "python",
+          "code": "from anthropic import AnthropicBedrock\n\n# Via Bedrock — AWS credentials (SigV4), no Anthropic API key required\nclient = AnthropicBedrock(aws_region=\"ap-northeast-2\")\n\nwith client.messages.stream(\n    model=\"anthropic.claude-opus-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ]
+    },
+    "anthropic:claude-sonnet-5-5": {
+      "ko": [
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Anthropic 네이티브 API — Claude 전용 기능(확장 사고, 프롬프트 캐싱 등)을 가장 완전하게 지원합니다. 여기서는 Claude Platform on AWS 엔드포인트와 workspace 헤더로 호출합니다.",
+          "language": "python",
+          "code": "from anthropic import Anthropic\n\n# Claude Platform on AWS — vendor endpoint + workspace 헤더\nclient = Anthropic(\n    api_key=\"<ANTHROPIC_API_KEY>\",\n    base_url=\"https://aws-external-anthropic.us-east-2.api.aws\",\n    default_headers={\"anthropic-workspace-id\": \"<ANTHROPIC_WORKSPACE_ID>\"},\n)\n\nwith client.messages.stream(\n    model=\"claude-sonnet-5-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (anthropic SDK)",
+          "api": "Messages API",
+          "description": "Anthropic-native API — the most complete support for Claude-specific features (extended thinking, prompt caching, ...). Called here via the Claude Platform on AWS endpoint with a workspace header.",
+          "language": "python",
+          "code": "from anthropic import Anthropic\n\n# Claude Platform on AWS — vendor endpoint + workspace header\nclient = Anthropic(\n    api_key=\"<ANTHROPIC_API_KEY>\",\n    base_url=\"https://aws-external-anthropic.us-east-2.api.aws\",\n    default_headers={\"anthropic-workspace-id\": \"<ANTHROPIC_WORKSPACE_ID>\"},\n)\n\nwith client.messages.stream(\n    model=\"claude-sonnet-5-5\",\n    max_tokens=512,\n    messages=[{\"role\": \"user\", \"content\": \"Hello!\"}],\n) as stream:\n    for text in stream.text_stream:\n        print(text, end=\"\")"
+        }
+      ]
+    },
+    "openai:us-east-1:openai.gpt-6-sol": {
+      "ko": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. Bedrock Mantle은 OpenAI 호환 엔드포인트라 동일한 형식으로 호출하되, 키는 Bedrock bearer(ABSK-…)를 사용합니다.",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# Bedrock Mantle — OpenAI 호환 엔드포인트 + Bedrock bearer 키(ABSK-…)\nclient = OpenAI(\n    api_key=\"<ABSK-...>\",  # Bedrock long-term API key\n    base_url=\"https://bedrock-mantle.us-east-1.api.aws/openai/v1\",\n)\n\nstream = client.responses.create(\n    model=\"openai.gpt-6-sol\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Bedrock Mantle is an OpenAI-compatible endpoint, so the call shape is identical but the key is a Bedrock bearer (ABSK-...).",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# Bedrock Mantle — OpenAI-compatible endpoint + Bedrock bearer key (ABSK-...)\nclient = OpenAI(\n    api_key=\"<ABSK-...>\",  # Bedrock long-term API key\n    base_url=\"https://bedrock-mantle.us-east-1.api.aws/openai/v1\",\n)\n\nstream = client.responses.create(\n    model=\"openai.gpt-6-sol\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ]
+    },
+    "openai:global:global.openai.gpt-6.1-sol": {
+      "ko": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. cross-region 프로파일(global.*, us.*)은 bedrock-runtime OpenAI 호환 엔드포인트로 호출합니다(bedrock-mantle 호스트 미지원). 호출 형식은 동일하며 키는 Bedrock bearer(ABSK-…)를 사용합니다.",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# Bedrock CRIS(cross-region 프로파일) — bedrock-runtime OpenAI 호환 엔드포인트 + Bedrock bearer 키(ABSK-…)\nclient = OpenAI(\n    api_key=\"<ABSK-...>\",  # Bedrock long-term API key\n    base_url=\"https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1\",\n)\n\nstream = client.responses.create(\n    model=\"global.openai.gpt-6.1-sol\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Cross-region profiles (global.* and us.*) are served by the bedrock-runtime OpenAI-compatible endpoint (not the bedrock-mantle host); the call shape is identical and the key is a Bedrock bearer (ABSK-...).",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# Bedrock CRIS (cross-region profile) — bedrock-runtime OpenAI-compatible endpoint + Bedrock bearer key (ABSK-...)\nclient = OpenAI(\n    api_key=\"<ABSK-...>\",  # Bedrock long-term API key\n    base_url=\"https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1\",\n)\n\nstream = client.responses.create(\n    model=\"global.openai.gpt-6.1-sol\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ]
+    },
+    "openai:us:us.openai.gpt-6-astra": {
+      "ko": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. cross-region 프로파일(global.*, us.*)은 bedrock-runtime OpenAI 호환 엔드포인트로 호출합니다(bedrock-mantle 호스트 미지원). 호출 형식은 동일하며 키는 Bedrock bearer(ABSK-…)를 사용합니다.",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# Bedrock CRIS(cross-region 프로파일) — bedrock-runtime OpenAI 호환 엔드포인트 + Bedrock bearer 키(ABSK-…)\nclient = OpenAI(\n    api_key=\"<ABSK-...>\",  # Bedrock long-term API key\n    base_url=\"https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1\",\n)\n\nstream = client.responses.create(\n    model=\"us.openai.gpt-6-astra\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Cross-region profiles (global.* and us.*) are served by the bedrock-runtime OpenAI-compatible endpoint (not the bedrock-mantle host); the call shape is identical and the key is a Bedrock bearer (ABSK-...).",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# Bedrock CRIS (cross-region profile) — bedrock-runtime OpenAI-compatible endpoint + Bedrock bearer key (ABSK-...)\nclient = OpenAI(\n    api_key=\"<ABSK-...>\",  # Bedrock long-term API key\n    base_url=\"https://bedrock-runtime.us-east-1.amazonaws.com/openai/v1\",\n)\n\nstream = client.responses.create(\n    model=\"us.openai.gpt-6-astra\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ]
+    },
+    "openai:1p:gpt-5.5": {
+      "ko": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI의 통합 응답 API(Chat Completions의 후속) — 이벤트 스트리밍 기반 출력. api.openai.com 직접 호출이며 OpenAI platform 키(sk-proj-…)가 필요합니다.",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# OpenAI 1P direct — platform 키(sk-proj-…), Mantle bearer와 호환 불가\nclient = OpenAI(api_key=\"<OPENAI_API_KEY>\")\n\nstream = client.responses.create(\n    model=\"gpt-5.5\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ],
+      "en": [
+        {
+          "label": "Python (openai SDK)",
+          "api": "Responses API",
+          "description": "OpenAI unified Responses API (successor to Chat Completions) — event-stream based output. Calls api.openai.com directly and requires an OpenAI platform key (sk-proj-...).",
+          "language": "python",
+          "code": "from openai import OpenAI\n\n# OpenAI 1P direct — platform key (sk-proj-...), not interchangeable with Mantle bearer\nclient = OpenAI(api_key=\"<OPENAI_API_KEY>\")\n\nstream = client.responses.create(\n    model=\"gpt-5.5\",\n    input=\"Hello!\",\n    stream=True,\n)\nfor event in stream:\n    if event.type == \"response.output_text.delta\":\n        print(event.delta, end=\"\")"
+        }
+      ]
+    }
+  }
+}

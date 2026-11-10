@@ -265,6 +265,39 @@ export interface PricingModelPrice {
   verification: PriceVerification;
 }
 
+/** The nine price fields of a channel, in backend PRICE_FIELDS order. */
+export type PricingField =
+  | "input" | "output" | "cache_read" | "cache_write" | "cache_write_1h"
+  | "long_input" | "long_output" | "long_cache_read" | "long_cache_write";
+
+/** One run-to-run change of the price table (v2.40.0, backend pricing_changes.compare_snapshots). */
+export interface PricingChangeItem {
+  model_id: string;
+  family_key: string;
+  family: string;
+  provider: string;
+  tier: "cp" | "openai_list" | "global" | "us" | "in_region";
+  /** The AWS region of an In Region channel, else null. */
+  region: string | null;
+  /** channel: a new or left channel; price: a shown value; pending: a pending-review value; check: the source check. */
+  kind: "channel" | "price" | "pending" | "check";
+  field: PricingField | null;
+  /** price/pending: number or null; channel: "present" or null; check: "ok" or "skipped:<reason>". */
+  before: number | string | null;
+  after: number | string | null;
+}
+
+export type PricingChanges =
+  | { available: false; run_id: number | null }
+  | {
+      available: true;
+      run_id: number;
+      finished_at: string | null;
+      previous_run_id: number;
+      previous_finished_at: string | null;
+      items: PricingChangeItem[];
+    };
+
 export interface PricingResponse {
   currency: "USD";
   unit: "per_1m_tokens";
@@ -275,4 +308,52 @@ export interface PricingResponse {
   models: Record<string, PricingModelPrice>;
   references: PricingReference[];
   disclaimer: { en: string; ko: string };
+  /** Run-to-run table changes (v2.40.0); absent from an older backend. */
+  changes?: PricingChanges;
+}
+
+// ── Model Explorer verification (v2.40.0, GET /api/explorer/latest) ───────────
+
+export type ExplorerStatus = "passed" | "failed" | "skipped";
+
+export interface ExplorerResult {
+  status: ExplorerStatus;
+  latency_ms: number | null;
+  attempts: number;
+  /** failed: the exception line, then the stderr tail after the first newline; skipped: the reason. */
+  error_message: string | null;
+  output_excerpt: string | null;
+  run_id: number;
+  verified_at: string | null;
+  /** The example changed after this result was measured. */
+  stale_code: boolean;
+}
+
+export interface ExplorerExample {
+  api_id: "converse" | "invoke_model" | "messages" | "responses";
+  api: string;
+  label: string;
+  language: string;
+  description: { ko: string; en: string };
+  code: { ko: string; en: string };
+  code_sha: string;
+  result: ExplorerResult | null;
+}
+
+export interface ExplorerChange {
+  model_id: string;
+  model_name: string;
+  api_id: string;
+  api: string;
+  before: ExplorerStatus | null;
+  after: ExplorerStatus;
+  kind: "catalog" | "example" | "measured";
+}
+
+export interface ExplorerLatest {
+  run: { id: number; started_at: string | null; finished_at: string | null; totals: Record<ExplorerStatus, number> | null } | null;
+  running: boolean;
+  previous_run_id: number | null;
+  changes: ExplorerChange[];
+  models: Record<string, { examples: ExplorerExample[] }>;
 }

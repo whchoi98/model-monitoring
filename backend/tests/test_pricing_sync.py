@@ -444,7 +444,7 @@ def test_the_run_row_is_committed_as_running_before_the_first_fetch(Session):
     run = _sync(Session, on_call=inspect)
     assert seen == [[("running", None, T0)]]
     assert run.status == "completed" and run.finished_at is not None
-    assert set(run.summary) == {"sources", "channels", "errors"} and sorted(run.summary["channels"]) == sorted(ALL)
+    assert set(run.summary) == {"sources", "channels", "errors", "snapshot"} and sorted(run.summary["channels"]) == sorted(ALL)
 
 
 def test_an_internal_error_marks_the_run_failed_and_reraises(Session, monkeypatch):
@@ -876,3 +876,91 @@ def test_seoul_in_region_shares_one_offer_call_with_the_cris_channels(Session):
     assert calls.count("offers:anthropic.claude-opus-5") == 1
     assert run.summary["channels"] == {m: "unchanged" for m in sorted(opus)}
     assert run.summary["sources"]["offers"] == {"calls": 1, "ok": 1, "failed": 0}
+
+
+# ── v2.40.0 run snapshot: what /pricing shows when the run ends (pricing_changes.build_snapshot, ADR-035) ──
+
+from price_history import current_rows  # noqa: E402
+from pricing_changes import latest_changes  # noqa: E402
+from pricing_payload import price_number_or_none  # noqa: E402
+
+
+def test_the_run_snapshot_is_what_the_page_shows_when_the_run_ends(Session):
+    _seed(Session)
+    run = _sync(Session, sol=("5.5", "33", "5", "30"))  # both Sol channels change within 50 %
+    snapshot = run.summary["snapshot"]
+    assert snapshot["version"] == 1 and sorted(snapshot["channels"]) == sorted(ALL)
+    with Session() as db:
+        current = current_rows(db, ALL, now=run.finished_at)
+    for model_id in ALL:
+        channel = snapshot["channels"][model_id]
+        assert channel["shown"] == {f: price_number_or_none(getattr(current[model_id], f"{f}_per_mtok"))
+                                    for f in PRICE_FIELDS}
+        assert channel["result"] == run.summary["channels"][model_id]
+    sol = snapshot["channels"][SOL_E1]
+    assert (sol["shown"]["input"], sol["shown"]["output"], sol["pending"]) == (5.5, 33, None)
+    assert (sol["family_key"], sol["family"], sol["provider"], sol["tier"], sol["region"]) == (
+        "gpt-5.6-sol", "GPT 5.6 Sol", "openai", "in_region", "us-east-1")
+    assert (snapshot["channels"][OPUS_G]["tier"], snapshot["channels"][OPUS_G]["region"]) == ("global", None)
+
+
+def test_a_pending_snapshot_field_is_only_what_differs_from_the_shown_value(Session):
+    _seed(Session)
+    run = _sync(Session, sol=("5.5", "33.01", "4", "20"))
+    sol = run.summary["snapshot"]["channels"][SOL_E1]
+    assert (sol["shown"]["input"], sol["pending"], sol["result"]) == (4.4, {"input": 5.5, "output": 33.01}, "pending")
+    assert run.summary["snapshot"]["channels"][SOL_G]["pending"] is None
+
+
+def test_a_no_baseline_channel_shows_nothing_and_pends_every_set_field(Session):
+    _seed(Session, {k: v for k, v in BASELINE.items() if k != SOL_E1})
+    sol = _sync(Session).summary["snapshot"]["channels"][SOL_E1]
+    assert (sol["shown"], sol["pending"], sol["result"]) == (None, {"input": 4.4, "output": 22}, "no_baseline")
+
+
+def test_two_unchanged_runs_compare_with_no_change(Session):
+    _seed(Session)
+    _sync(Session, at=T0)
+    _sync(Session, at=T1)
+    with Session() as db:
+        block = latest_changes(db)
+    assert block["available"] is True and block["items"] == []
+
+
+def test_a_change_between_two_runs_is_one_price_item_per_field(Session):
+    _seed(Session)
+    first = _sync(Session, at=T0)
+    second = _sync(Session, at=T1, sol=("5.5", "33", "5", "30"))
+    with Session() as db:
+        block = latest_changes(db)
+    assert (block["run_id"], block["previous_run_id"]) == (second.id, first.id)
+    assert [(i["model_id"], i["kind"], i["field"], i["before"], i["after"]) for i in block["items"]] == [
+        (SOL_G, "price", "input", 4, 5), (SOL_G, "price", "output", 20, 30),
+        (SOL_E1, "price", "input", 4.4, 5.5), (SOL_E1, "price", "output", 22, 33),
+    ]
+
+
+def test_a_failed_run_has_no_snapshot(Session, monkeypatch):
+    _seed(Session)
+    monkeypatch.setattr(pricing_sync, "_apply", lambda *_a: (_ for _ in ()).throw(RuntimeError("db")))
+    with pytest.raises(RuntimeError):
+        run_sync(Session, _active(*ALL), _fetchers(), now=lambda: T0)
+    with Session() as db:
+        (run,) = db.query(PriceSyncRun).all()
+        assert run.status == "failed" and "snapshot" not in run.summary
+
+
+def test_a_snapshot_failure_never_rolls_back_the_prices(Session, monkeypatch):
+    _seed(Session)
+
+    def boom(*_a, **_kw):
+        raise ValueError("boom")
+
+    monkeypatch.setattr(pricing_sync, "build_snapshot", boom)
+    run = _sync(Session, sol=("5.5", "33", "5", "30"))
+    assert run.status == "completed"
+    assert "snapshot" not in run.summary
+    assert any(e.startswith("snapshot: ") for e in run.summary["errors"])
+    assert run.summary["channels"][SOL_E1] == "changed"
+    with Session() as db:
+        assert db.query(PriceHistory).filter(PriceHistory.model_id == SOL_E1, PriceHistory.input_per_mtok == 5.5).count() == 1

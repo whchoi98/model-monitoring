@@ -16,17 +16,20 @@ import { useT as usePageCopy } from "@/lib/i18n-context";
 // 모델 ID는 "모델 ID 보기" 토글로 보여 준다. 폰에서는 표만 가로로 스크롤되므로 표 위 안내와 오른쪽 가장자리 흐림으로 알린다.
 // 한글 문장은 break-keep(어절 단위 줄바꿈), 리전 id, 날짜, 가격 쌍, 캐시 항목, 두 조각 열 이름의 조각, 배지, 각주는 토큰
 // 중간에서 줄이 바뀌지 않는다. " - "가 없는 열 이름(Claude Platform on AWS, OpenAI 공식 가격)은 단어 사이에서 줄이 바뀐다.
+// 이전 동기화 대비 변경(v2.40.0, ADR-035): 마지막 동기화 상자 아래 배너가 `changes` 항목을 보여 주고, 항목을 누르면
+// 그 단가 셀(id="price-<family_key>-<tier>")로 스크롤해 1.5초 강조한다. 바뀐 셀에는 "이전 대비 변경" 배지가 붙는다.
 
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { fetchPricing, pricingExportUrl } from "@/lib/api";
 import { formatDateTime } from "@/lib/format";
 import { useLang } from "@/lib/i18n-context";
 import {
-  cacheItems, columnsFor, formatPricePair, headerParts, longItems, notesForTier, textRuns, tierBadges, tierLabel,
-  type PriceItem, type PricingBadge, type PricingTierKey,
+  cacheItems, cellChangeBadge, changeItemText, changeKindTag, changeTagLabel, columnsFor, formatPricePair, headerParts,
+  longItems, notesForTier, priceCellId, textRuns, tierBadges, tierLabel,
+  type PriceItem, type PricingBadge, type PricingChangeTag, type PricingTierKey,
 } from "@/lib/pricingTable";
 import type {
-  PricingFamily, PricingInRegionTier, PricingReference, PricingResponse, PricingTier,
+  PricingChangeItem, PricingChanges, PricingFamily, PricingInRegionTier, PricingReference, PricingResponse, PricingTier,
 } from "@/lib/types";
 import { useAsyncResource } from "@/hooks/useAsyncResource";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
@@ -112,6 +115,8 @@ const BADGE_CLASS: Record<PricingBadge["kind"], string> = {
   promo: "border-purple-500/40 bg-purple-500/10 text-purple-300",
   promo_check: "border-rose-500/40 bg-rose-500/10 text-rose-300",
   doc_conflict: "border-orange-500/40 bg-orange-500/10 text-orange-300",
+  changed: "border-amber-500/40 bg-amber-500/10 text-amber-300",
+  new_channel: "border-emerald-500/40 bg-emerald-500/10 text-emerald-300",
 };
 // Short labels never wrap. Promotion labels are longer than a phone-width column in English, so they wrap only between
 // words (their date stays whole).
@@ -121,6 +126,17 @@ const BADGE_WRAP: Record<PricingBadge["kind"], string> = {
   promo: "break-keep",
   promo_check: "break-keep",
   doc_conflict: "whitespace-nowrap",
+  changed: "whitespace-nowrap",
+  new_channel: "whitespace-nowrap",
+};
+const CHANGE_TAG_CLASS: Record<PricingChangeTag, string> = {
+  applied: "bg-amber-500/10 text-amber-300",
+  pending: "bg-sky-500/10 text-sky-300",
+  released: "bg-gray-800 text-gray-400",
+  check_failed: "bg-rose-500/10 text-rose-300",
+  check_recovered: "bg-emerald-500/10 text-emerald-300",
+  new_channel: "bg-emerald-500/10 text-emerald-300",
+  left_channel: "bg-gray-800 text-gray-400",
 };
 
 /** Text whose price pairs and hyphenated tokens never wrap inside; `tail` (a footnote, "↗") stays with the last word. */
@@ -341,7 +357,7 @@ function HeaderLabel({ text }: { text: string }) {
   );
 }
 
-function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFootnote }: {
+function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFootnote, changes, highlighted }: {
   family: PricingFamily;
   tierKey: PricingTierKey;
   lang: Lang;
@@ -349,22 +365,32 @@ function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFo
   refNumbers: ReadonlyMap<string, number>;
   showModelIds: boolean;
   onFootnote: (n: number) => void;
+  changes: PricingChangeItem[];
+  highlighted: boolean;
 }) {
   const single = tierKey === "in_region" ? null : family.tiers[tierKey];
   const entries: (PricingTier | PricingInRegionTier)[] = tierKey === "in_region"
     ? family.tiers.in_region
     : single ? [single] : [];
+  const changeBadge = cellChangeBadge(changes, family.family_key, tierKey, lang);
+  const cellProps = {  // data-tier stays the first attribute (PricingPanel.test reads the markup)
+    "data-tier": tierKey,
+    id: priceCellId(family.family_key, tierKey),
+    "data-highlighted": highlighted ? "true" : "false",
+    className: `${CELL} scroll-mt-36 transition-colors ${highlighted ? "bg-blue-500/15 ring-1 ring-inset ring-blue-500/40" : ""}`,
+  };
   if (entries.length === 0) {
     return (
-      <td data-tier={tierKey} className={CELL}>
+      <td {...cellProps}>
         <span aria-hidden="true" className="text-gray-600">—</span>
         <span className="sr-only">{lang === "en" ? "No price" : "단가 없음"}</span>
+        {changeBadge && <Badges badges={[changeBadge]} lang={lang} refNumbers={refNumbers} onFootnote={onFootnote} />}
       </td>
     );
   }
   const notes = notesForTier(family.notes, tierKey);
   return (
-    <td data-tier={tierKey} className={CELL}>
+    <td {...cellProps}>
       <div className="space-y-2">
         {entries.map((entry) => (
           <div key={entry.model_ids.join(" ")} data-price-line>
@@ -379,8 +405,78 @@ function TierCell({ family, tierKey, lang, today, refNumbers, showModelIds, onFo
             <Badges badges={tierBadges(entry, notes, lang, today)} lang={lang} refNumbers={refNumbers} onFootnote={onFootnote} />
           </div>
         ))}
+        {changeBadge && <Badges badges={[changeBadge]} lang={lang} refNumbers={refNumbers} onFootnote={onFootnote} />}
       </div>
     </td>
+  );
+}
+
+/**
+ * The run-to-run change banner under the last sync line (v2.40.0): a gray note before two runs with a snapshot exist,
+ * "변경 없음" when nothing changed, otherwise an amber list (10 items, then "외 N건"). An item whose cell is on the page
+ * is a button that scrolls to the cell; a removed channel has no cell and stays text.
+ */
+function ChangesBanner({ changes, families, lang, onJump }: {
+  changes: PricingChanges | undefined;
+  families: PricingFamily[];
+  lang: Lang;
+  onJump: (cellId: string) => void;
+}) {
+  const L = (en: string, ko: string) => (lang === "en" ? en : ko);
+  if (!changes) return null;
+  if (!changes.available) {
+    return (
+      <p data-price-changes="unavailable" className="ui-panel px-3 py-2 text-xs text-gray-500">
+        {L("Changes are shown from the next price sync.", "변경 비교는 다음 동기화부터 표시됩니다.")}
+      </p>
+    );
+  }
+  const since = L(
+    `the previous sync (#${changes.previous_run_id}, ${formatDateTime(changes.previous_finished_at, lang)})`,
+    `이전 동기화(#${changes.previous_run_id}, ${formatDateTime(changes.previous_finished_at, lang)})`,
+  );
+  if (changes.items.length === 0) {
+    return (
+      <p data-price-changes="none" className="ui-panel px-3 py-2 text-xs text-gray-500">
+        {L(`No changes since ${since}.`, `${since} 대비 변경 없음.`)}
+      </p>
+    );
+  }
+  const onPage = (item: PricingChangeItem) => {
+    if (item.kind === "channel" && item.after === null) return false;
+    const family = families.find((f) => f.family_key === item.family_key);
+    return !!family && columnsFor(family.provider).includes(item.tier);
+  };
+  return (
+    <details data-price-changes="list" className={`rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-xs text-gray-300 ${PROSE}`}>
+      <summary className="mb-1 cursor-pointer text-sm font-semibold text-amber-300">
+        {L(`Changes since ${since}: ${changes.items.length}`, `${since} 대비 변경 ${changes.items.length}건`)}
+      </summary>
+      <ul className="space-y-1">
+        {changes.items.slice(0, 10).map((item) => {
+          const tag = changeKindTag(item);
+          const text = changeItemText(item, lang);
+          return (
+            <li key={`${item.model_id}|${item.kind}|${item.field ?? ""}`} className="flex flex-wrap items-baseline gap-2">
+              <span data-change-tag={tag} className={`whitespace-nowrap rounded px-1.5 py-px text-[11px] ${CHANGE_TAG_CLASS[tag]}`}>
+                {changeTagLabel(tag, lang)}
+              </span>
+              {onPage(item) ? (
+                <button type="button" onClick={() => onJump(priceCellId(item.family_key, item.tier))}
+                        className="text-left text-amber-200 hover:underline">
+                  <Runs text={text} />
+                </button>
+              ) : (
+                <span className="text-gray-400"><Runs text={text} /></span>
+              )}
+            </li>
+          );
+        })}
+        {changes.items.length > 10 && (
+          <li className="text-gray-500">{L(`+${changes.items.length - 10} more`, `외 ${changes.items.length - 10}건`)}</li>
+        )}
+      </ul>
+    </details>
   );
 }
 
@@ -416,18 +512,21 @@ function ReferenceItem({ reference, lang, highlighted }: { reference: PricingRef
  * Everything below the page heading once /api/pricing has answered. No fetching, so vitest renders it statically
  * (the model-ID toggle starts off and the scroll cue starts hidden until the browser measures the table).
  */
-export function PricingContent({ data, lang, today, highlight, onFootnote }: {
+export function PricingContent({ data, lang, today, highlight, onFootnote, highlightCell = null, onCellJump = () => {} }: {
   data: PricingResponse;
   lang: Lang;
   today: Date;
   highlight: number | null;
   onFootnote: (n: number) => void;
+  highlightCell?: string | null;
+  onCellJump?: (cellId: string) => void;
 }) {
   const L = (en: string, ko: string) => (lang === "en" ? en : ko);
   const sync = data.last_sync;
   const syncStatus = sync ? SYNC_STATUS[sync.status] ?? { en: sync.status, ko: sync.status } : null;
   const [showModelIds, setShowModelIds] = useState(false);
   const refNumbers = useMemo(() => new Map(data.references.map((reference) => [reference.id, reference.n])), [data.references]);
+  const changeItems = data.changes?.available ? data.changes.items : [];
   return (
     <>
       <div
@@ -493,6 +592,8 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
         </div>
       </div>
 
+      <ChangesBanner changes={data.changes} families={data.families} lang={lang} onJump={onCellJump} />
+
       {data.families.length === 0 && (
         <DataEmpty
           title={L("No unit prices yet.", "표시할 단가가 없습니다.")}
@@ -548,6 +649,7 @@ export function PricingContent({ data, lang, today, highlight, onFootnote }: {
                         <TierCell
                           key={key} family={family} tierKey={key} lang={lang} today={today}
                           refNumbers={refNumbers} showModelIds={showModelIds} onFootnote={onFootnote}
+                          changes={changeItems} highlighted={highlightCell === priceCellId(family.family_key, key)}
                         />
                       )))}
                     </tr>
@@ -596,6 +698,16 @@ export default function PricingPanel() {
     highlightTimer.current = window.setTimeout(() => setHighlight(null), HIGHLIGHT_MS);
   }, []);
   useEffect(() => () => window.clearTimeout(highlightTimer.current), []);
+  // A change banner item scrolls to its price cell and highlights it for 1.5 s, like a footnote does for a reference.
+  const [highlightCell, setHighlightCell] = useState<string | null>(null);
+  const cellTimer = useRef<number | undefined>(undefined);
+  const onCellJump = useCallback((cellId: string) => {
+    document.getElementById(cellId)?.scrollIntoView({ block: "center", behavior: "smooth" });
+    window.clearTimeout(cellTimer.current);
+    setHighlightCell(cellId);
+    cellTimer.current = window.setTimeout(() => setHighlightCell(null), HIGHLIGHT_MS);
+  }, []);
+  useEffect(() => () => window.clearTimeout(cellTimer.current), []);
 
   return (
     <div className="page-stack">
@@ -615,7 +727,8 @@ export default function PricingPanel() {
       <DataError error={resource.error} resource={L("unit prices", "비용 단가")} onRetry={() => void resource.refresh()} hasData={resource.data !== null} />
       {resource.loading && <DataLoading />}
       {resource.data && (
-        <PricingContent data={resource.data} lang={lang} today={new Date()} highlight={highlight} onFootnote={onFootnote} />
+        <PricingContent data={resource.data} lang={lang} today={new Date()} highlight={highlight} onFootnote={onFootnote}
+                        highlightCell={highlightCell} onCellJump={onCellJump} />
       )}
     </div>
   );

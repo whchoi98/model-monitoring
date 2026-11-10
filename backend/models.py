@@ -215,6 +215,40 @@ class FeatureResult(Base):
     error_message = Column(Text, nullable=True)
 
 
+class ExplorerRun(Base):
+    """Model Explorer 코드 예제 검증 런 1회 (v2.40.0, ADR-035) — ExplorerVerify 태스크가 매일 18:00 UTC에 기록."""
+
+    __tablename__ = "explorer_runs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    started_at = Column(DateTime(timezone=True), nullable=False)
+    finished_at = Column(DateTime(timezone=True), nullable=True)
+    status = Column(Text, nullable=False)  # running | completed | failed
+    totals = Column(JSON, nullable=True)   # {passed, failed, skipped}
+    error_message = Column(Text, nullable=True)
+
+
+class ExplorerResult(Base):
+    """예제 1건(모델 × API)의 실행 결과 (v2.40.0). code_sha = 실행한 EN 예제 원문(치환 전)의 SHA-256."""
+
+    __tablename__ = "explorer_results"
+    __table_args__ = (
+        Index("ix_explorer_results_run_id", "run_id"),
+    )
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    run_id = Column(Integer, ForeignKey("explorer_runs.id"), nullable=False)
+    model_id = Column(Text, nullable=False)
+    model_name = Column(Text, nullable=False)
+    api_id = Column(Text, nullable=False)       # converse | invoke_model | messages | responses
+    status = Column(Text, nullable=False)       # passed | failed | skipped
+    latency_ms = Column(Float, nullable=True)
+    attempts = Column(Integer, nullable=False, default=0)
+    code_sha = Column(Text, nullable=False)
+    output_excerpt = Column(Text, nullable=True)
+    error_message = Column(Text, nullable=True)
+
+
 class GptBenchResult(Base):
     """GPT on AWS 벤치 호출 1건 (v2.18.0) — gptbench.run_cycle()이 15분마다 채널당 10건 기록.
 

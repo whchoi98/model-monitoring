@@ -1,9 +1,10 @@
 /**
- * Model Explorer (v2.9.0) — 모델 ID에서 호출 채널·네이티브 ID·코드 예제·링크를 유도하는
+ * Model Explorer (v2.9.0) — 모델 ID에서 호출 채널·네이티브 ID·링크를 유도하는
  * 순수 로직 테스트. 7개 provider path의 키 스킴(ADR-019/020/027/031)을 고정한다.
+ * 코드 예제는 v2.40.0부터 백엔드가 만든다 — backend/tests/test_explorer_examples.py가 v2.39.0 출력과의 바이트 일치를 고정한다.
  */
 import { describe, expect, test } from "vitest";
-import { channelOf, nativeId, codeExamples, modelLinks } from "./modelExplorer";
+import { channelOf, nativeId, modelLinks } from "./modelExplorer";
 
 describe("channelOf — 7개 provider path 판별", () => {
   test("Bedrock Global 프로파일", () => {
@@ -98,97 +99,6 @@ describe("nativeId — 실제 호출에 쓰는 모델 ID", () => {
   });
 });
 
-describe("codeExamples — 채널에 맞는 SDK 예제 + API 종류 표기", () => {
-  test("Bedrock(Claude) → Converse + InvokeModel + Messages 세 탭, 각각 설명 포함", () => {
-    const ex = codeExamples("us.anthropic.claude-haiku-4-5-20251001-v1:0");
-    expect(ex.map((e) => e.api)).toEqual(["Converse API", "InvokeModel API", "Messages API"]);
-    expect(ex[0].code).toContain("converse_stream");
-    expect(ex[0].code).toContain("us.anthropic.claude-haiku-4-5-20251001-v1:0");
-    expect(ex[0].description.length).toBeGreaterThan(10); // API 의미 설명
-    expect(ex[1].code).toContain("invoke_model");
-    expect(ex[1].description).toContain("네이티브");
-    // Opus 5, Fable 5는 서명만 있는 thinking 블록이 content[0] — content[0]["text"]는 KeyError (2026-10-19 실측)
-    expect(ex[1].code).toContain('if b["type"] == "text"');
-    expect(ex[1].code).not.toContain('["content"][0]["text"]');
-    // Messages API — anthropic SDK의 AnthropicBedrock 클라이언트 (SigV4로 Bedrock 호출)
-    expect(ex[2].code).toContain("AnthropicBedrock");
-    expect(ex[2].code).toContain("us.anthropic.claude-haiku-4-5-20251001-v1:0");
-    expect(ex[2].description).toContain("Anthropic");
-    // Bedrock Mantle /anthropic 엔드포인트 병기 (bearer 토큰, 일부 리전) — 2026-07-11 실측 병기
-    expect(ex[2].description).toContain("Mantle");
-  });
-  test("Bedrock(Nova) → Converse API 단일 탭", () => {
-    const ex = codeExamples("us.amazon.nova-2-lite-v1:0");
-    expect(ex.map((e) => e.api)).toEqual(["Converse API"]);
-  });
-  test("Anthropic CP → Messages API 표기 + 설명", () => {
-    const ex = codeExamples("anthropic:claude-fable-5");
-    expect(ex[0].api).toBe("Messages API");
-    expect(ex[0].description).toContain("Anthropic");
-    expect(ex[0].code).toContain("aws-external-anthropic");
-    // CP는 anthropic-workspace-id 헤더만 받는다 — "anthropic-workspace"는 400 "Missing 'anthropic-workspace-id' header."
-    // (prober._anthropic_default_headers와 같은 이름, 2026-10-19 실측)
-    expect(ex[0].code).toContain('default_headers={"anthropic-workspace-id": "<ANTHROPIC_WORKSPACE_ID>"}');
-    expect(ex[0].code).toContain('"claude-fable-5"');
-  });
-  test("OpenAI Mantle → Responses API 표기", () => {
-    const ex = codeExamples("openai:us-east-2:openai.gpt-5.5");
-    expect(ex[0].api).toBe("Responses API");
-    expect(ex[0].description.length).toBeGreaterThan(10);
-    expect(ex[0].code).toContain("bedrock-mantle.us-east-2");
-    expect(ex[0].code).toContain("ABSK");
-  });
-  test("OpenAI 1P → Responses API 표기", () => {
-    const ex = codeExamples("openai:1p:gpt-5.5");
-    expect(ex[0].api).toBe("Responses API");
-    expect(ex[0].code).toContain("responses");
-    expect(ex[0].code).toContain('"gpt-5.5"');
-  });
-  test("OpenAI Global CRIS → Responses API + Seoul bedrock-runtime base_url", () => {
-    const ex = codeExamples("openai:global:global.openai.gpt-5.6-luna");
-    expect(ex[0].api).toBe("Responses API");
-    expect(ex[0].code).toContain("bedrock-runtime.ap-northeast-2");
-    expect(ex[0].code).not.toContain("bedrock-mantle.global"); // 존재하지 않는 호스트 회귀 방지
-    expect(ex[0].code).toContain("global.openai.gpt-5.6-luna");
-  });
-  test("OpenAI US CRIS → Responses API + us-east-1 bedrock-runtime base_url", () => {
-    const ex = codeExamples("openai:us:us.openai.gpt-6-astra");
-    expect(ex.map((e) => e.api)).toEqual(["Responses API"]);
-    expect(ex[0].code).toContain("bedrock-runtime.us-east-1");
-    expect(ex[0].code).not.toContain("bedrock-mantle."); // 존재하지 않는 호스트 회귀 방지
-    expect(ex[0].code).toContain('"us.openai.gpt-6-astra"');
-    expect(ex[0].code).toContain("ABSK");
-    expect(ex[0].description).toContain("cross-region");
-  });
-  test("Bedrock In-Region → 세 탭 모두 기본 모델 ID와 그 리전, 키 접두는 노출하지 않는다", () => {
-    const ex = codeExamples("bedrock:ap-northeast-2:anthropic.claude-sonnet-5");
-    expect(ex.map((e) => e.api)).toEqual(["Converse API", "InvokeModel API", "Messages API"]);
-    for (const e of ex) {
-      expect(e.code).toContain('"anthropic.claude-sonnet-5"');
-      expect(e.code).not.toContain("bedrock:");
-    }
-    expect(ex[0].code).toContain('region_name="ap-northeast-2"');
-    expect(ex[1].code).toContain('region_name="ap-northeast-2"');
-    expect(ex[2].code).toContain('AnthropicBedrock(aws_region="ap-northeast-2")');
-  });
-  // 프로파일은 prober _REGION_MAP과 같은 리전에서 호출한다 — us.* 를 ap-northeast-2에서 부르면
-  // "The provided model identifier is invalid" (Converse, InvokeModel, AnthropicBedrock 모두, 2026-10-19 실측)
-  test.each([
-    ["global.anthropic.claude-haiku-5-5", "ap-northeast-2"],
-    ["us.anthropic.claude-haiku-5-5", "us-east-1"],
-    ["us.anthropic.claude-opus-5", "us-east-1"],
-  ])("프로파일 %s의 세 탭은 %s에서 호출한다", (id, region) => {
-    const ex = codeExamples(id);
-    expect(ex[0].code).toContain(`region_name="${region}"`);
-    expect(ex[1].code).toContain(`region_name="${region}"`);
-    expect(ex[2].code).toContain(`AnthropicBedrock(aws_region="${region}")`);
-    expect(channelOf(id).endpoint).toBe(`https://bedrock-runtime.${region}.amazonaws.com`);
-  });
-  test("Nova US 프로파일도 us-east-1에서 호출한다", () => {
-    expect(codeExamples("us.amazon.nova-2-lite-v1:0")[0].code).toContain('region_name="us-east-1"');
-  });
-});
-
 describe("modelLinks — 문서·대시보드 링크", () => {
   test("Bedrock 모델은 AWS 문서·콘솔 링크 포함", () => {
     const links = modelLinks("global.anthropic.claude-fable-5", "Bedrock Claude Fable 5 (Global)");
@@ -225,17 +135,12 @@ describe("modelLinks — 문서·대시보드 링크", () => {
 });
 
 describe("i18n — lang 파라미터 (v2.16.2)", () => {
-  test("EN 선택 시 설명·링크 라벨·코드 주석이 영어로 출력된다", () => {
-    const ex = codeExamples("us.anthropic.claude-haiku-4-5-20251001-v1:0", "en");
-    expect(ex[0].description).toContain("unified");           // Converse 설명 영어
-    expect(ex[0].description).not.toContain("모니터");
-    expect(ex[2].code).toContain("no Anthropic API key");     // 코드 주석 영어
+  test("EN 선택 시 링크 라벨이 영어로 출력된다", () => {
     const links = modelLinks("global.anthropic.claude-fable-5", "Bedrock Claude Fable 5 (Global)", "en");
     expect(links[0].label).toContain("trend");
     expect(links.some((l) => l.label.includes("documentation") || l.label.includes("docs") || l.label.includes("Docs"))).toBe(true);
   });
   test("기본값(ko)은 기존 한국어 출력 유지", () => {
-    const ex = codeExamples("anthropic:claude-fable-5");
-    expect(ex[0].description).toContain("Anthropic 네이티브");
+    expect(modelLinks("anthropic:claude-fable-5", "Anthropic Claude Fable 5 (US)")[0].label).toBe("📈 이 모델 트렌드 보기");
   });
 });
