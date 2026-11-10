@@ -64,6 +64,11 @@ Fable 5.2는 Fable 5, 5.1과 같은 Covered Model이다. 서울과 us-east-1의 
 
 - 시간당 CP 호출 96 → 108회(9채널 × 12), FeaturesVerify 1런 195셀 증가, ExplorerVerify 1런 7건 증가.
 - 새 env, IAM, CDK 변경 없음. 이미지 + AppServices, Scheduler 스택 배포. v2.40.0 브랜치 위에서 만들었으므로 v2.40.0과 함께 또는 그 뒤에 배포한다.
-- 배포 뒤 첫 PricingSync는 Fable 5.2 세 채널을 seed 값 그대로 확인하고(변경 없음), 같은 런에서 CP Sonnet 5.5 캐시 읽기 0.2 → 0.1(정확히 50%,
-  자동 적용)을 관측해 `doc_conflict` 메모가 빠질 것으로 보인다.
+- 배포 뒤 첫 PricingSync(2026-11-10 run 96)는 Fable 5.2 세 채널을 seed 값 그대로 확인했다(61채널 모두 변경 없음). CP Sonnet 5.5 캐시 읽기는
+  그 전 동기화에서 이미 0.1이었고 `doc_conflict` 메모도 빠져 있었다.
+- **Bedrock Fable 5.2의 기본 추론(배포 뒤 관찰, 사용자 결정 2026-11-10 "그대로 둔다")**: Bedrock Converse에서 Fable 5.x는 기본으로 adaptive
+  thinking을 하고(`reasoningContent`, 요약 텍스트 비어 있음), 프로버는 `text` delta만 TTFT와 본문으로 센다. Fable 5.2는 추론(512)과 코드 생성(400)
+  워크로드에서 한도를 추론에 다 써 본문 없이 끝나 TTFT, TPS가 빈 `success` 행이 된다(Fable 5.1도 추론 워크로드는 전부터 같다, CP는 기본 추론이 없어
+  정상). `thinking.type.disabled`는 400이고 `output_config.effort: low`면 본문이 약 2초에 나오지만, 모든 모델에 같은 요청 규칙을 유지하기로 했다 —
+  빈 칸은 Bedrock 기본 동작 그대로다. 바꾸려면 프로버의 Bedrock 요청에 effort를 넣고 Fable 5, 5.1 추세의 단절을 함께 받아들인다.
 - 다음 점 버전(예: fable-5-3)도 같은 절차다 — 타깃을 선등록하지 않아도 점 버전 가드가 기존 라벨을 지킨다.
