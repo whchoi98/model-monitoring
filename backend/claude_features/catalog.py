@@ -167,8 +167,8 @@ FEATURES: list[dict] = [
        "AWS 문서가 Claude의 두 메커니즘(JSON 스키마 출력, strict 도구)을 bedrock-runtime과 bedrock-mantle 공통으로 설명한다 — "
        "2026-10-20 기대치 갱신(이전: Bedrock 3열 미지원, Mantle 미확정)"),
     _f("extended_thinking", "model", "확장 추론(budget)", "Extended thinking (budget_tokens)",
-       "대표 모델은 전부 adaptive-only(Opus 5.5, Sonnet 5.5, Haiku 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
-       "All representative models are adaptive-only (incl. Opus 5.5, Sonnet 5.5, Haiku 5.5) → documented 400; exact rejection → not_applicable",
+       "대표 모델은 전부 adaptive-only(Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
+       "All representative models are adaptive-only (incl. Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5) → documented 400; exact rejection → not_applicable",
        _DOC + "build-with-claude/thinking", ALL, "negative"),
     # --- server-side tools ---
     _f("advisor_tool", "server_tools", "Advisor 도구", "Advisor tool", "advisor_20260301 → server_tool_use + advisor result",

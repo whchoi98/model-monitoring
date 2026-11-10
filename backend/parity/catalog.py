@@ -70,9 +70,9 @@ FEATURES: list[dict] = [
     {
         "id": "adaptive_thinking",
         "label_ko": "적응형 추론",
-        "desc_ko": "thinking type: adaptive — 모델이 추론 예산을 스스로 조절, thinking 블록 존재 검증 (Fable 5·5.1 전용)",
+        "desc_ko": "thinking type: adaptive — 모델이 추론 예산을 스스로 조절, thinking 블록 존재 검증 (Fable 5, 5.1, 5.2 전용)",
         "label_en": "Adaptive thinking",
-        "desc_en": "thinking type: adaptive — the model budgets its own reasoning; verifies a thinking block (Fable 5 / 5.1 only)",
+        "desc_en": "thinking type: adaptive — the model budgets its own reasoning; verifies a thinking block (Fable 5 / 5.1 / 5.2 only)",
     },
     {
         "id": "count_tokens",
