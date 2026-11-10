@@ -99,7 +99,8 @@ def test_env_override_reexposes(session_factory, client, monkeypatch):
 
 def test_hidden_patterns_parsing(monkeypatch):
     assert visibility.hidden_patterns() == [
-        "(1P)", "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"]
+        "(1P)", "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4",
+        "Claude Fable 5 ("]  # v2.42.0 — 괄호까지 넣어 Fable 5.1, 5.2 라벨은 걸리지 않는다
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", " (1P) , Opus 4.5 ")
     assert visibility.hidden_patterns() == ["(1P)", "Opus 4.5"]
 

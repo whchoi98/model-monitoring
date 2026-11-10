@@ -204,7 +204,7 @@ class FeatureResult(Base):
     run_id = Column(Integer, ForeignKey("feature_runs.id"), nullable=False)
     feature = Column(Text, nullable=False)      # claude_features.catalog.FEATURE_IDS
     surface = Column(Text, nullable=False)      # cp | mantle | bedrock_messages | bedrock_invoke | bedrock_converse
-    model_key = Column(Text, nullable=False)    # fable-5-2 | fable-5-1 | fable-5 | opus-5-5 | opus-5 | sonnet-5
+    model_key = Column(Text, nullable=False)    # fable-5-2 | fable-5-1 | opus-5-5 | opus-5 | sonnet-5
     model_label = Column(Text, nullable=False)
     model_id = Column(Text, nullable=True)      # surface별 실제 id (not_applicable이면 None)
     status = Column(Text, nullable=False)       # supported | unsupported | broken | inconclusive | skipped | not_applicable

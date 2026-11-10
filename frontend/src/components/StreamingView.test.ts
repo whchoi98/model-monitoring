@@ -29,7 +29,7 @@ describe("extractModelName", () => {
     expect(name("us.anthropic.claude-fable-5-2:1")).toBe("Claude Fable 5.2");
     expect(name("anthropic:claude-fable-5-2:2")).toBe("Claude Fable 5.2");
     expect(name("global.anthropic.claude-fable-5-1:1")).toBe("Claude Fable 5.1 (Global)");
-    expect(name("us.anthropic.claude-fable-5:1")).toBe("Claude Fable 5");
+    expect(name("us.anthropic.claude-fable-5:1")).not.toContain("Fable");  // Fable 5 left monitoring in v2.42.0
   });
   test("GPT 6.1 Sol 3채널과 GPT 6 Sol은 서로 구분된다", () => {
     expect(name("openai:global:global.openai.gpt-6.1-sol:1")).toBe("GPT 6.1 Sol (Global)");

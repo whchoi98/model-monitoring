@@ -3,11 +3,11 @@ import { mockApi } from "./fixtures";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-// 운영 규모 카탈로그(v2.39.0, 활성 49채널 = Claude 26 + Nova 1 + OpenAI 22).
+// 운영 규모 카탈로그(v2.42.0, 활성 49채널 = Claude 26 + Nova 1 + OpenAI 22).
 // 서울 In-Region(ap-northeast-2)은 Opus 5와 Sonnet 5만. Haiku 5.5와 Sonnet 5.5 US는 v2.33.0.
 // GPT 6.1 Terra와 OpenAI Mantle 인리전 us-east-1 일원화는 v2.38.0. Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와
-// GPT 5.4는 v2.39.0에 모니터링에서 뺐다(ADR-034).
-const claudeFamilies = ["Fable 5.1", "Fable 5", "Opus 5.5", "Opus 5", "Opus 4.8", "Sonnet 5.5", "Sonnet 5", "Haiku 5.5"];
+// GPT 5.4는 v2.39.0에 모니터링에서 뺐다(ADR-034). Fable 5.2는 v2.41.0에 더했고(ADR-036) Fable 5는 v2.42.0에 뺐다(ADR-037).
+const claudeFamilies = ["Fable 5.2", "Fable 5.1", "Opus 5.5", "Opus 5", "Opus 4.8", "Sonnet 5.5", "Sonnet 5", "Haiku 5.5"];
 const modelNames = [
   ...claudeFamilies.flatMap((family) => [
     `Bedrock Claude ${family} (Global)`,

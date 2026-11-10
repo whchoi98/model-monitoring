@@ -1,14 +1,21 @@
 import { describe, expect, it } from "vitest";
 import { FAMILY_ORDER, channelRank, familyRank, groupByFamily, hasAwsRegionSuffix, isExcludedModel, sortByFamily, sortResults } from "./sortModels";
 
-// Fable 5.1 (v2.22.0) — includes 매칭에서 "Claude Fable 5"가 "Claude Fable 5.1"에 포함되는 접두 충돌 회귀 방지.
-describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
-  it("ranks Fable 5.1 above Fable 5 and keeps them in separate families", () => {
-    const r51 = familyRank("Bedrock Claude Fable 5.1 (Global)");
-    const r5 = familyRank("Bedrock Claude Fable 5 (Global)");
-    expect(r51).toBe(1); // Fable 5.2 is rank 0 since v2.41.0
-    expect(r5).toBe(2);
-    expect(r51).toBeLessThan(r5);
+// Fable 5.1 (v2.22.0), Fable 5.2 (v2.41.0) — includes 매칭에서 "Claude Fable 5"가 점 버전 라벨에 포함되는 접두 충돌 회귀 방지.
+// Fable 5는 v2.42.0(사용자 결정 2026-11-10, ADR-037)에 모니터링에서 뺐다.
+describe("sortModels — Fable 5.x family ranking", () => {
+  it("ranks Fable 5.2 then Fable 5.1 first, and Fable 5 is out of the order and excluded (v2.42.0)", () => {
+    expect(familyRank("Bedrock Claude Fable 5.1 (Global)")).toBe(1); // Fable 5.2 is rank 0 since v2.41.0
+    expect(familyRank("Bedrock Claude Fable 5 (Global)")).toBe(FAMILY_ORDER.length);
+    expect(FAMILY_ORDER).not.toContain("Claude Fable 5");
+    for (const label of ["Bedrock Claude Fable 5 (Global)", "Bedrock Claude Fable 5 (US)", "Anthropic Claude Fable 5 (US)"]) {
+      expect(isExcludedModel(label), label).toBe(true);
+    }
+    // the exclusion carries the parenthesis, so the point releases stay visible
+    for (const label of ["Bedrock Claude Fable 5.1 (Global)", "Anthropic Claude Fable 5.1 (US)", "Bedrock Claude Fable 5.2 (US)",
+      "Anthropic Claude Fable 5.2 (US)"]) {
+      expect(isExcludedModel(label), label).toBe(false);
+    }
   });
 
   it("ranks Fable 5.2 first, above Fable 5.1, and keeps its three channels together (v2.41.0)", () => {
@@ -18,7 +25,7 @@ describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
     const rows = [
       { model_name: "Bedrock Claude Fable 5.1 (Global)" },
       { model_name: "Bedrock Claude Fable 5.2 (US)" },
-      { model_name: "Bedrock Claude Fable 5 (Global)" },
+      { model_name: "Bedrock Claude Opus 5.5 (Global)" },
       { model_name: "Anthropic Claude Fable 5.2 (US)" },
       { model_name: "Bedrock Claude Fable 5.2 (Global)" },
     ];
@@ -27,14 +34,14 @@ describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
       "Bedrock Claude Fable 5.2 (Global)",
       "Bedrock Claude Fable 5.2 (US)",
       "Bedrock Claude Fable 5.1 (Global)",
-      "Bedrock Claude Fable 5 (Global)",
+      "Bedrock Claude Opus 5.5 (Global)",
     ]);
     expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 1, 1]);
   });
 
   it("groups the three Fable 5.1 channels together, Anthropic first", () => {
     const rows = [
-      { model_name: "Bedrock Claude Fable 5 (US)" },
+      { model_name: "Bedrock Claude Opus 5.5 (US)" },
       { model_name: "Bedrock Claude Fable 5.1 (US)" },
       { model_name: "Anthropic Claude Fable 5.1 (US)" },
       { model_name: "Bedrock Claude Fable 5.1 (Global)" },
@@ -45,7 +52,7 @@ describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
       "Anthropic Claude Fable 5.1 (US)",
       "Bedrock Claude Fable 5.1 (Global)",
       "Bedrock Claude Fable 5.1 (US)",
-      "Bedrock Claude Fable 5 (US)",
+      "Bedrock Claude Opus 5.5 (US)",
       "Bedrock Claude Opus 5 (Global)",
     ]);
     const groups = groupByFamily(rows);
@@ -114,9 +121,9 @@ describe("sortModels — GPT 6 Astra", () => {
 
 // Opus 5.5 (v2.27.0) — includes 매칭에서 "Claude Opus 5"가 "Claude Opus 5.5"에 포함되는 접두 충돌 회귀 방지.
 describe("sortModels — Opus 5.5 vs Opus 5 family ranking", () => {
-  it("ranks Opus 5.5 between Fable 5 and Opus 5, as separate families", () => {
+  it("ranks Opus 5.5 between Fable 5.1 and Opus 5, as separate families", () => {
     const r55 = familyRank("Bedrock Claude Opus 5.5 (Global)");
-    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Fable 5 (Global)"));
+    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Fable 5.1 (Global)"));
     expect(r55).toBeLessThan(familyRank("Bedrock Claude Opus 5 (Global)"));
     expect(familyRank("Anthropic Claude Opus 5.5 (US)")).toBe(r55);
   });
@@ -303,13 +310,13 @@ describe("sortModels — GPT 6.1 Terra", () => {
 
 // 신뢰성 페이지(v2.32.0) — backend가 family를 알파벳순으로 보내 "Claude Sonnet 5"가 "Claude Sonnet 5.5"보다 먼저 왔다.
 describe("sortByFamily — reliability family order", () => {
-  it("orders family groups like the dashboard, 5.5 before 5 and 5.1 before 5", () => {
+  it("orders family groups like the dashboard, 5.5 before 5 and 5.2 before 5.1", () => {
     const alphabetical = [
-      "Claude Fable 5", "Claude Fable 5.1", "Claude Haiku 5.5", "Claude Opus 5", "Claude Opus 5.5",
+      "Claude Fable 5.1", "Claude Fable 5.2", "Claude Haiku 5.5", "Claude Opus 5", "Claude Opus 5.5",
       "Claude Sonnet 5", "Claude Sonnet 5.5", "GPT 6 Sol", "GPT 6.1 Sol", "Nova 2.0 Lite",
     ].map((family) => ({ family }));
     expect(sortByFamily(alphabetical).map((group) => group.family)).toEqual([
-      "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5",
+      "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5",
       "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6 Sol",
     ]);
   });
@@ -347,9 +354,9 @@ describe("isExcludedModel — families left out of monitoring", () => {
   });
 
   it("keeps every family still monitored", () => {
-    expect(FAMILY_ORDER).toHaveLength(19);
+    expect(FAMILY_ORDER).toHaveLength(18);
     for (const family of FAMILY_ORDER) expect(isExcludedModel(family), family).toBe(false);
-    for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"]) {
+    for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4", "Claude Fable 5"]) {
       expect(FAMILY_ORDER).not.toContain(family);
     }
   });

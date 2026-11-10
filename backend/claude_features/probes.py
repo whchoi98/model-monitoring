@@ -496,7 +496,7 @@ def _server_tool_evidence(n: NormalizedResponse, tool_name: str, result_type: st
 # (테스트 test_advisor_pairing_covers_every_catalog_model이 지킨다). Opus 5.5는 자기 자신과 페어링(CP 실측 supported, 2026-09-23).
 # Sonnet 5.5 → Opus 5.5 (sonnet-5 → opus-5 관례, V4 — CP 실측 supported, advisor_redacted_result, 2026-09-30).
 # Haiku 5.5 → Opus 5.5 (2026-10-07 CP 실측 — Opus 5.5, Sonnet 5.5, Haiku 5.5 모두 advisor_redacted_result, 같은 세대 최상위를 쓴다).
-_ADVISOR_FOR = {"fable-5-2": "claude-fable-5-2", "fable-5-1": "claude-fable-5-1", "fable-5": "claude-fable-5", "opus-5-5": "claude-opus-5-5",
+_ADVISOR_FOR = {"fable-5-2": "claude-fable-5-2", "fable-5-1": "claude-fable-5-1", "opus-5-5": "claude-opus-5-5",
                 "opus-5": "claude-opus-5", "sonnet-5-5": "claude-opus-5-5", "sonnet-5": "claude-opus-5",
                 "haiku-5-5": "claude-opus-5-5"}
 

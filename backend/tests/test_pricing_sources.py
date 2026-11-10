@@ -78,19 +78,19 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_52_active_channels():
+def test_expected_table_is_the_49_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
     # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널). v2.39.0: Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 제외
-    # v2.41.0: Claude Fable 5.2(Global, US, CP)
-    assert counts == {("anthropic", "global"): 9, ("anthropic", "us"): 9, ("anthropic", "cp"): 9,
+    # v2.41.0: Claude Fable 5.2(Global, US, CP) 추가, v2.42.0: Claude Fable 5(Global, US, CP) 제외
+    assert counts == {("anthropic", "global"): 8, ("anthropic", "us"): 8, ("anthropic", "cp"): 8,
                       ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 8, ("openai", "us"): 5,
                       ("openai", "in_region"): 9}
-    assert len(EXPECTED_IDENTITY) == 52
+    assert len(EXPECTED_IDENTITY) == 49
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_52_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_49_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -154,7 +154,7 @@ def test_cp_point_release_safety():
         "claude-sonnet-5-5-20261101", "claude-sonnet-5-6", "claude-opus-5-6")}
     assert {m: (i.family_key if i else None) for m, i in fk.items()} == {
         "claude-opus-5": "claude-opus-5", "claude-opus-5-5": "claude-opus-5-5",
-        "claude-fable-5": "claude-fable-5", "claude-fable-5-1": "claude-fable-5-1",
+        "claude-fable-5": None, "claude-fable-5-1": "claude-fable-5-1",  # Fable 5는 v2.42.0 제외 — 5.1로 오분류되지 않는다
         "claude-opus-4-8-20260101": "claude-opus-4-8",  # 8자리 날짜 접미사는 점 버전이 아니다
         "claude-haiku-4-5-20251001": None, "claude-opus-4-7": None, "claude-sonnet-4-6": None,  # v2.39.0 제외
         "claude-opus-5-20261015": "claude-opus-5", "claude-fable-5-1-20261015": "claude-fable-5-1",
@@ -202,8 +202,9 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 19
-    assert ps.FAMILY_ORDER[:3] == ("Claude Fable 5.2", "Claude Fable 5.1", "Claude Fable 5")  # 점 버전이 먼저(includes 매칭)
+    assert len(ps.FAMILY_ORDER) == 18
+    assert ps.FAMILY_ORDER[:3] == ("Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5")  # Fable 5는 v2.42.0 제외
+    assert "Claude Fable 5" not in ps.FAMILY_ORDER
     assert not {"Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"} & set(ps.FAMILY_ORDER)
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Terra")
@@ -277,7 +278,8 @@ def test_source_metadata_constants():
         "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
         "https://developers.openai.com/api/docs/pricing", "openai-list:",
     )
-    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 9
+    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 8
+    assert "claude-fable-5" not in ps.ANTHROPIC_DOC_NAMES  # v2.42.0
     assert ps.ANTHROPIC_DOC_NAMES["claude-fable-5-2"] == "Claude Fable 5.2"
     assert ps.ANTHROPIC_DOC_NAMES["claude-haiku-5-5"] == "Claude Haiku 5.5"
     assert ps.CLAUDE_LONG_CONTEXT_FAMILIES == frozenset({"claude-haiku-5-5"})

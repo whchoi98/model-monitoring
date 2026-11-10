@@ -2,13 +2,12 @@
 (Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5 + v2.33.0 Claude Haiku 5.5
 (Global, US, CP), Claude Sonnet 5.5 US + v2.38.0 GPT 6.1 Terra (Global, US, us-east-1), OpenAI Mantle 인리전 us-east-1 일원화
 (us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1) − v2.39.0 Claude Opus 4.7, Opus 4.6, Sonnet 4.6,
-Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 + v2.41.0 Claude Fable 5.2(Global, US, CP) = 활성 52채널. 수집 대상 아님."""
+Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 + v2.41.0 Claude Fable 5.2(Global, US, CP) − v2.42.0 Claude Fable 5(Global, US, CP) = 활성 49채널. 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
     ("anthropic.claude-fable-5-2", "claude-fable-5-2", "Claude Fable 5.2", _GU),  # v2.41.0
     ("anthropic.claude-fable-5-1", "claude-fable-5-1", "Claude Fable 5.1", _GU),
-    ("anthropic.claude-fable-5", "claude-fable-5", "Claude Fable 5", _GU),
     ("anthropic.claude-opus-5-5", "claude-opus-5-5", "Claude Opus 5.5", _GU),
     ("anthropic.claude-opus-5", "claude-opus-5", "Claude Opus 5", (*_GU, "ap-northeast-2")),
     ("anthropic.claude-opus-4-8", "claude-opus-4-8", "Claude Opus 4.8", _GU),
@@ -19,7 +18,7 @@ _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS
 # CP 디스커버리 id
 _CP_IDS = {
     "claude-fable-5-2": "claude-fable-5-2",
-    "claude-fable-5-1": "claude-fable-5-1", "claude-fable-5": "claude-fable-5",
+    "claude-fable-5-1": "claude-fable-5-1",
     "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5", "claude-opus-4-8": "claude-opus-4-8",
     "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-haiku-5-5",
 }

@@ -16,7 +16,7 @@ from sqlalchemy.orm import Session
 
 from auth import get_current_user
 from claude_features import catalog
-from claude_features.engine import annotate_change_kinds, diff_runs
+from claude_features.engine import STATUSES, annotate_change_kinds, diff_runs
 from database import get_db
 from models import FeatureResult, FeatureRun
 
@@ -76,7 +76,10 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
     cols = (FeatureResult.feature, FeatureResult.surface, FeatureResult.model_key, FeatureResult.model_label,
             FeatureResult.model_id, FeatureResult.status, FeatureResult.documented, FeatureResult.verdict,
             FeatureResult.latency_ms, FeatureResult.error_message)
-    rows = db.query(*cols).filter(FeatureResult.run_id == run.id).all()
+    stored = db.query(*cols).filter(FeatureResult.run_id == run.id).all()
+    # 런 뒤에 대표 모델에서 빠진 모델(v2.42.0 Fable 5)의 셀은 다음 런을 기다리지 않고 바로 숨긴다 — 합계도 남은 셀로 다시 센다.
+    keys = set(catalog.MODEL_KEYS)
+    rows = [r for r in stored if r.model_key in keys]
     prev_run = (db.query(FeatureRun).filter(FeatureRun.status == "completed", FeatureRun.id < run.id)
                 .order_by(desc(FeatureRun.id)).first())
     prev_rows = None
@@ -84,7 +87,19 @@ def get_latest(response: Response, db: Session = Depends(get_db)):
         prev_rows = (db.query(FeatureResult.feature, FeatureResult.surface, FeatureResult.model_key, FeatureResult.status,
                               FeatureResult.latency_ms, FeatureResult.error_message)
                      .filter(FeatureResult.run_id == prev_run.id).all())
-    return build_latest_payload(run, rows, prev_rows, prev_run.id if prev_run else None, _running["active"])
+    payload = build_latest_payload(run, rows, prev_rows, prev_run.id if prev_run else None, _running["active"])
+    if len(rows) != len(stored):
+        payload["run"]["totals"] = _totals(payload["results"])
+    return payload
+
+
+def _totals(results: list[dict]) -> dict[str, int]:
+    """run.totals와 같은 모양 — 6 status 개수 + drift(verdict 개수)."""
+    counts = {s: 0 for s in STATUSES}
+    for r in results:
+        counts[r["status"]] = counts.get(r["status"], 0) + 1
+    counts["drift"] = sum(1 for r in results if r["verdict"] == "drift")
+    return counts
 
 
 @router.get("/evidence")

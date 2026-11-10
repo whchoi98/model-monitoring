@@ -239,12 +239,12 @@ def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 52 active channels plus the 9 OpenAI official prices (v2.41.0)."""
+    """build_pricing_payload on the real seeds of the 49 active channels plus the 9 OpenAI official prices (v2.42.0)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 61
-    assert pricing_seed.ensure_seed(engine, active) == 61
+    assert len(active) == 58
+    assert pricing_seed.ensure_seed(engine, active) == 58
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -267,17 +267,18 @@ def test_production_references_list_only_cited_sources():
     _assert_every_reference_is_cited(payload)
     kinds = [r["kind"] for r in payload["references"]]
     # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0) = 25,
-    # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0), + the Claude Fable 5.2 offer (v2.41.0)
-    assert len(kinds) == 21
+    # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0), + the Claude Fable 5.2 offer (v2.41.0),
+    # - the Claude Fable 5 offer (v2.42.0)
+    assert len(kinds) == 20
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 18, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 17, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.5", "prior_price": {}}
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(22, "note:gpt-5.5", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(21, "note:gpt-5.5", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
@@ -338,10 +339,10 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
            if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS
            and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra", "claude-fable-5-2")}
     # v2.39.0 catalog: the retired Mantle us-east-2/us-west-2 channels (v2.38.0) and the five families left out in
-    # v2.39.0 are not active at all
-    assert len(old) == 42
+    # v2.39.0 are not active at all, and neither is Claude Fable 5 (v2.42.0) — it has no seed any more
+    assert len(old) == 39
     try:
-        assert pricing_seed.ensure_seed(engine, old) == 42
+        assert pricing_seed.ensure_seed(engine, old) == 39
         synced = datetime(2026, 9, 29, 3, 0, tzinfo=timezone.utc)  # the last v2.31.2 sync
         with Session() as s:
             s.add(models.PriceSyncRun(started_at=synced, finished_at=synced + timedelta(seconds=31), status="completed"))
@@ -357,7 +358,7 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 21
+    assert len(as_of) == 20
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
     assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol

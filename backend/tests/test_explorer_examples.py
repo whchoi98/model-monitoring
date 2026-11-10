@@ -64,10 +64,10 @@ def test_api_ids_per_channel_type(model_id, api_ids):
     assert all(e["api"] == API_NAMES[e["api_id"]] and e["api_id"] in API_IDS for e in examples)
 
 
-def test_every_active_model_has_an_example_and_92_in_all():
+def test_every_active_model_has_an_example_and_85_in_all():
     counts = {model_id: len(code_examples(model_id)) for model_id in ACTIVE_MODELS}
     assert min(counts.values()) >= 1
-    assert sum(counts.values()) == 92  # v2.41.0: + Fable 5.2 Global 3, US 3, CP 1
+    assert sum(counts.values()) == 85  # v2.41.0: + Fable 5.2 Global 3, US 3, CP 1; v2.42.0: − Fable 5 the same 7
 
 
 def test_every_placeholder_in_every_example_is_in_the_substitution_table():

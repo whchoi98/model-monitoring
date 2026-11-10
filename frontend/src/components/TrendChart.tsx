@@ -38,14 +38,12 @@ interface Props {
 // v2.39.0: 모니터링에서 뺀 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4의 색을 지웠다 — 지난 행은 백엔드가 숨긴다.
 export const MODEL_COLORS: Record<string, string> = {
   // Claude Fable 5.2 (v2.41.0) — 청록 계열(Global 짙은 청록 실선, US 옅은 청록 파선, CP 밝은 청록 점선).
-  // 실선 자리가 가장 붐벼 밝은 청록은 Fable 5, 5.1과 ΔE 15 안쪽이라 Global만 짙게 둔다(다크 테마는 getColor가 밝힌다).
-  // 세 채널을 한 색조(Lab 10° 안)로 묶으면 실선이나 점선 하나가 Fable 5, 5.1과 겹쳐서 색조는 HSL 188~196°로만 맞췄다.
+  // 실선 자리가 가장 붐벼 밝은 청록은 Fable 5(v2.42.0에 제외), 5.1과 ΔE 15 안쪽이라 Global만 짙게 둔다(다크 테마는 getColor가 밝힌다).
+  // 세 채널을 한 색조(Lab 10° 안)로 묶으면 실선이나 점선 하나가 그때의 Fable 5, 5.1과 겹쳐서 색조는 HSL 188~196°로만 맞췄다.
   "Bedrock Claude Fable 5.2 (Global)": "#245860",
   "Bedrock Claude Fable 5.2 (US)": "#aed3e0",
   "Bedrock Claude Fable 5.1 (Global)": "#7dd3fc",
   "Bedrock Claude Fable 5.1 (US)": "#0ea5e9",
-  "Bedrock Claude Fable 5 (Global)": "#2dd4bf",
-  "Bedrock Claude Fable 5 (US)": "#0d9488",
   "Bedrock Claude Opus 5.5 (Global)": "#ff8fab",
   "Bedrock Claude Opus 5.5 (US)": "#e5383b",
   "Bedrock Claude Opus 5 (Global)": "#f43f5e",
@@ -66,7 +64,6 @@ export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Nova 2.0 Lite (US)": "#84cc16",
   "Anthropic Claude Fable 5.2 (US)": "#47def5",
   "Anthropic Claude Fable 5.1 (US)": "#0369a1",
-  "Anthropic Claude Fable 5 (US)": "#115e59",
   "Anthropic Claude Opus 5.5 (US)": "#a4161a",
   "Anthropic Claude Opus 5 (US)": "#881337",
   "Anthropic Claude Opus 4.8 (US)": "#9f1239",
@@ -122,7 +119,6 @@ export const MODEL_COLORS: Record<string, string> = {
 const FAMILY_FALLBACK: [string, string][] = [
   ["Fable 5.2", "#245860"],
   ["Fable 5.1", "#0ea5e9"],
-  ["Fable 5", "#0d9488"],
   ["Opus 5.5", "#e5383b"],
   ["Opus 5", "#f43f5e"],
   ["Opus 4.8", "#e11d48"],
