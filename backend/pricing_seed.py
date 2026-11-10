@@ -20,6 +20,8 @@ v2.38.0: 2026-10-27 오퍼와 문서로 GPT 6.1 Terra 3채널(Global, US, us-eas
 v2.39.0: 같은 날 사용자 결정으로 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1,
 openai-list:gpt-5.4)를 모니터링에서 뺐다(ADR-034). 활성 49채널, offer FM 17개, openai-list 9개, 합계 58채널.
 그 채널의 price_history 행도 그대로 둔다(조회는 visibility.py가 숨긴다).
+v2.41.0: 2026-11-09 오퍼(offer-agsprgw6z3dg6)와 문서로 Claude Fable 5.2 3채널(Global, US, CP)을 더했다 — Global과 CP 8 / 40,
+US 8.8 / 44, 캐시 읽기는 Fable 5.1처럼 입력의 0.025배(0.2, US 0.22). 활성 52채널, offer FM 18개, openai-list 9개, 합계 61채널.
 """
 
 import logging
@@ -45,6 +47,7 @@ SEED_SOURCE_DATES: dict[str, date] = {
     offer_source_id("offer-wbhj4kycntgkk"): date(2026, 9, 30),  # GPT 6.1 Sol
     offer_source_id("offer-u3aih6zr7uw5u"): date(2026, 10, 7),  # Claude Haiku 5.5 (v2.33.0)
     offer_source_id("offer-34pzbdgg26ley"): date(2026, 10, 27),  # GPT 6.1 Terra (v2.38.0)
+    offer_source_id("offer-agsprgw6z3dg6"): date(2026, 11, 9),  # Claude Fable 5.2 (v2.41.0)
 }
 # backend 태스크 기동과 PricingSync 러너가 겹쳐도 같은 model_id를 두 번 seed하지 않는다(트랜잭션 잠금).
 # 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
@@ -57,6 +60,7 @@ _EXTRA_COLUMN: dict[str, str] = {f: f"{f}_per_mtok" for f in EXTRA_FIELDS}
 # Global = APN2_*_global_standard, US = USE1_*_standard, 서울 in-region = APN2_*_standard(US와 같은 값, v2.32.0).
 # 채널: "global" → global.<FM>, "us" → us.<FM>, AWS 리전 → bedrock:<region>:<FM>(in-region 온디맨드).
 _CLAUDE: dict[str, tuple[str, float, float, float, float, tuple[str, ...]]] = {
+    "anthropic.claude-fable-5-2": ("offer-agsprgw6z3dg6", 8.0, 40.0, 8.8, 44.0, ("global", "us")),  # v2.41.0
     "anthropic.claude-fable-5-1": ("offer-icq4574v6gz3i", 10.0, 50.0, 11.0, 55.0, ("global", "us")),
     "anthropic.claude-fable-5": ("offer-vk3fuman5qwzy", 10.0, 50.0, 11.0, 55.0, ("global", "us")),
     "anthropic.claude-opus-5-5": ("offer-7sp77cpl4rveu", 4.0, 20.0, 4.4, 22.0, ("global", "us")),
@@ -107,7 +111,8 @@ SEED: dict[str, tuple[float, float, str]] = {
 CP_SEED: dict[str, tuple[float, float, str]] = {
     fk: (i, o, ANTHROPIC_SOURCE_ID)
     for fk, i, o in (
-        ("claude-fable-5-1", 10.0, 50.0), ("claude-fable-5", 10.0, 50.0), ("claude-opus-5-5", 4.0, 20.0),
+        ("claude-fable-5-2", 8.0, 40.0), ("claude-fable-5-1", 10.0, 50.0), ("claude-fable-5", 10.0, 50.0),
+        ("claude-opus-5-5", 4.0, 20.0),
         ("claude-opus-5", 5.0, 25.0), ("claude-opus-4-8", 5.0, 25.0),
         ("claude-sonnet-5-5", 2.0, 10.0), ("claude-sonnet-5", 2.0, 10.0),
         ("claude-haiku-5-5", 0.1, 0.5),
@@ -136,6 +141,7 @@ _GPT_FIELDS = ("cache_read", "cache_write", "long_input", "long_output", "long_c
 # Global = APN2_*_global_standard(레거시 APN2_*_Global), US = USE1_*_standard(레거시 USE1_*),
 # 서울 in-region = APN2_*_standard(US와 같은 값, v2.32.0). 채널은 _CLAUDE의 채널 튜플을 따른다.
 _CLAUDE_CACHE: dict[str, tuple[tuple[float, float, float], tuple[float, float, float]]] = {
+    "anthropic.claude-fable-5-2": ((0.2, 10.0, 16.0), (0.22, 11.0, 17.6)),  # v2.41.0
     "anthropic.claude-fable-5-1": ((0.25, 12.5, 20.0), (0.275, 13.75, 22.0)),
     "anthropic.claude-fable-5": ((1.0, 12.5, 20.0), (1.1, 13.75, 22.0)),
     "anthropic.claude-opus-5-5": ((0.2, 5.0, 8.0), (0.22, 5.5, 8.8)),
@@ -154,6 +160,7 @@ _CLAUDE_LONG: dict[str, tuple[tuple[float, float, float, float], tuple[float, fl
 }
 # Claude Platform on AWS — Anthropic 문서 "Cache hits and refreshes", "5m cache writes", "1h cache writes" 열
 _CP_CACHE: dict[str, tuple[float, float, float]] = {
+    "claude-fable-5-2": (0.2, 10.0, 16.0),
     "claude-fable-5-1": (0.25, 12.5, 20.0), "claude-fable-5": (1.0, 12.5, 20.0), "claude-opus-5-5": (0.2, 5.0, 8.0),
     "claude-opus-5": (0.5, 6.25, 10.0), "claude-opus-4-8": (0.5, 6.25, 10.0),
     "claude-sonnet-5-5": (0.2, 2.5, 4.0), "claude-sonnet-5": (0.2, 2.5, 4.0),

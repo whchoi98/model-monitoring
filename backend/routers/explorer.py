@@ -122,5 +122,10 @@ def trigger(user: User = Depends(get_current_user), db: Session = Depends(get_db
         finally:
             _running["active"] = False
 
-    threading.Thread(target=_worker, daemon=True, name="explorer-run").start()
+    try:
+        threading.Thread(target=_worker, daemon=True, name="explorer-run").start()
+    except RuntimeError:  # "can't start new thread" — release the flag, or every later trigger says busy until restart
+        _running["active"] = False
+        logger.exception("Explorer run thread did not start")
+        return {"triggered": False, "message": "검증 런을 시작하지 못했습니다"}
     return {"triggered": True, "message": "모델 탐색 검증 런을 시작했습니다 (약 2분 소요)"}

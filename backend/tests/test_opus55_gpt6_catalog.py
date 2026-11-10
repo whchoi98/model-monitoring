@@ -52,6 +52,7 @@ def test_cp_discovery_with_live_model_order_labels_every_id_correctly():
     """운영 실사고 재현 — 5.5가 먼저 와도 Opus 5 라벨은 claude-opus-5에 붙어야 한다."""
     matched = {s: prober._match_anthropic_model(s, _CP_MODEL_IDS_20260923) for s, _ in prober._ANTHROPIC_TARGETS}
     assert matched == {
+        "fable-5-2": None,  # v2.41.0 타깃 — 2026-09-23 목록에는 아직 없다
         "fable-5-1": "claude-fable-5-1",
         "fable-5": "claude-fable-5",
         "opus-5-5": "claude-opus-5-5",

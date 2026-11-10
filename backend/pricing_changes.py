@@ -92,7 +92,7 @@ def compare_snapshots(before: Mapping, after: Mapping) -> list[dict]:
     items: list[dict] = []
     for mid in set(prev) | set(cur):
         if mid not in prev or mid not in cur:
-            ch = cur.get(mid) or prev[mid]
+            ch = cur[mid] if mid in cur else prev[mid]
             items.append({**_meta(mid, ch), "kind": "channel", "field": None,
                           "before": None if mid not in prev else "present",
                           "after": None if mid not in cur else "present"})

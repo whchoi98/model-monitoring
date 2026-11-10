@@ -77,7 +77,7 @@ _STRICT_SCHEMA = {"type": "object", "properties": {"text": {"type": "string"}, "
                   "required": ["text", "count"], "additionalProperties": False}
 # integer 인자에 문자열을 요구한다 — strict가 무시되면 문자열이 들어가 타입 검사에서 걸린다(engine.check_strict_tool_input)
 _STRICT_TOOL_PROMPT = f"echo 도구를 호출하세요. text 인자는 '{CANARY}', count 인자는 문자열 \"three\"로 넣으세요."
-# forced tool_choice를 못 쓰는 auto 모델(Fable 5.1, Opus 5.5, Sonnet 5.5)용 정상 지시. 타입 충돌 지시를 받으면 thinking으로
+# forced tool_choice를 못 쓰는 auto 모델(Fable 5.2, Fable 5.1, Opus 5.5, Sonnet 5.5)용 정상 지시. 타입 충돌 지시를 받으면 thinking으로
 # 고민하다 256토큰에서 잘리거나(입력 {"text"}만) Fable 5.1은 호출을 거절하고 확인을 요청했다(1024토큰에서도, 2026-10-20).
 # 정상 지시는 76토큰에 바로 호출한다 — 이 모델들은 키와 타입만 검사하고, strict 무시 판별은 forced 모델이 맡는다.
 _STRICT_TOOL_PROMPT_AUTO = f"echo 도구를 호출하세요. text 인자는 '{CANARY}', count 인자는 3으로 넣으세요."
@@ -188,7 +188,7 @@ def probe_converse(client, model_id: str, feature: str) -> ProbeOutcome:
             toolConfig={
                 "tools": [{"toolSpec": {"name": "echo", "description": _ECHO_TOOL_DESC,
                                         "inputSchema": {"json": {"type": "object", "properties": {"text": {"type": "string"}}, "required": ["text"]}}}}],
-                # Fable 5.1은 forced tool_choice를 400으로 거부 → auto + 프롬프트 지시 (catalog.supports_forced_tool_choice)
+                # Fable 5.2, 5.1은 forced tool_choice를 400으로 거부 → auto + 프롬프트 지시 (catalog.supports_forced_tool_choice)
                 "toolChoice": {"tool": {"name": "echo"}} if supports_forced_tool_choice(model_id) else {"auto": {}},
             },
             inferenceConfig={"maxTokens": _MAX_TOKENS},

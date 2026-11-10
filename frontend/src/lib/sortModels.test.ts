@@ -6,9 +6,30 @@ describe("sortModels — Fable 5.1 vs Fable 5 family ranking", () => {
   it("ranks Fable 5.1 above Fable 5 and keeps them in separate families", () => {
     const r51 = familyRank("Bedrock Claude Fable 5.1 (Global)");
     const r5 = familyRank("Bedrock Claude Fable 5 (Global)");
-    expect(r51).toBe(0);
-    expect(r5).toBe(1);
+    expect(r51).toBe(1); // Fable 5.2 is rank 0 since v2.41.0
+    expect(r5).toBe(2);
     expect(r51).toBeLessThan(r5);
+  });
+
+  it("ranks Fable 5.2 first, above Fable 5.1, and keeps its three channels together (v2.41.0)", () => {
+    // includes matching: "Claude Fable 5" is a substring of "Claude Fable 5.2", so the point release must come first
+    expect(familyRank("Bedrock Claude Fable 5.2 (Global)")).toBe(0);
+    expect(familyRank("Anthropic Claude Fable 5.2 (US)")).toBe(0);
+    const rows = [
+      { model_name: "Bedrock Claude Fable 5.1 (Global)" },
+      { model_name: "Bedrock Claude Fable 5.2 (US)" },
+      { model_name: "Bedrock Claude Fable 5 (Global)" },
+      { model_name: "Anthropic Claude Fable 5.2 (US)" },
+      { model_name: "Bedrock Claude Fable 5.2 (Global)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "Anthropic Claude Fable 5.2 (US)",
+      "Bedrock Claude Fable 5.2 (Global)",
+      "Bedrock Claude Fable 5.2 (US)",
+      "Bedrock Claude Fable 5.1 (Global)",
+      "Bedrock Claude Fable 5 (Global)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 1, 1]);
   });
 
   it("groups the three Fable 5.1 channels together, Anthropic first", () => {
@@ -326,7 +347,7 @@ describe("isExcludedModel — families left out of monitoring", () => {
   });
 
   it("keeps every family still monitored", () => {
-    expect(FAMILY_ORDER).toHaveLength(18);
+    expect(FAMILY_ORDER).toHaveLength(19);
     for (const family of FAMILY_ORDER) expect(isExcludedModel(family), family).toBe(false);
     for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"]) {
       expect(FAMILY_ORDER).not.toContain(family);

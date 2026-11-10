@@ -22,14 +22,14 @@ N = None
 
 # Interface Contract C8 — pricing_seed의 표와 따로 적는다(표를 옮겨 적다 틀리면 여기서 잡힌다).
 CLAUDE_GLOBAL = {  # 캐시 읽기, 5분 쓰기, 1시간 쓰기 — Bedrock Global = Claude Platform on AWS(Anthropic 문서), 예외는 CLAUDE_CP
-    "claude-fable-5-1": (0.25, 12.5, 20), "claude-fable-5": (1, 12.5, 20), "claude-opus-5-5": (0.2, 5, 8),
+    "claude-fable-5-2": (0.2, 10, 16), "claude-fable-5-1": (0.25, 12.5, 20), "claude-fable-5": (1, 12.5, 20), "claude-opus-5-5": (0.2, 5, 8),
     "claude-opus-5": (0.5, 6.25, 10), "claude-opus-4-8": (0.5, 6.25, 10), "claude-sonnet-5-5": (0.1, 2.5, 4),
     "claude-sonnet-5": (0.2, 2.5, 4), "claude-haiku-5-5": (0.01, 0.125, 0.2),
 }
 # CP가 Bedrock Global과 다른 패밀리 — Sonnet 5.5 캐시 읽기는 2026-10-07 offer가 0.1로 내렸지만 Anthropic 문서 표는 0.2(v2.33.0)
 CLAUDE_CP = {**CLAUDE_GLOBAL, "claude-sonnet-5-5": (0.2, 2.5, 4)}
 CLAUDE_US = {  # US CRIS와 서울 in-region(APN2_*_standard, v2.32.0) — 같은 값
-    "claude-fable-5-1": (0.275, 13.75, 22), "claude-fable-5": (1.1, 13.75, 22), "claude-opus-5-5": (0.22, 5.5, 8.8),
+    "claude-fable-5-2": (0.22, 11, 17.6), "claude-fable-5-1": (0.275, 13.75, 22), "claude-fable-5": (1.1, 13.75, 22), "claude-opus-5-5": (0.22, 5.5, 8.8),
     "claude-opus-5": (0.55, 6.875, 11), "claude-opus-4-8": (0.55, 6.875, 11), "claude-sonnet-5-5": (0.11, 2.75, 4.4),
     "claude-sonnet-5": (0.22, 2.75, 4.4), "claude-haiku-5-5": (0.011, 0.1375, 0.22),
 }
@@ -108,8 +108,8 @@ def _add(eng, model_id, inp, out, status="seed", **extras):
         s.commit()
 
 
-def test_the_active_set_has_49_channels_plus_nine_openai_list_channels():
-    assert len(ACTIVE) == 58
+def test_the_active_set_has_52_channels_plus_nine_openai_list_channels():
+    assert len(ACTIVE) == 61
     assert sorted(i.family_key for i in ACTIVE.values() if i.channel == "openai_list") == sorted(OPENAI_LIST)
 
 
@@ -135,7 +135,7 @@ def test_seed_extra_returns_a_copy():
 
 def test_new_seed_rows_carry_the_extras_and_a_rerun_changes_nothing(engine, caplog):
     with caplog.at_level(logging.INFO, logger="pricing_seed"):
-        assert ensure_seed(engine, ACTIVE) == 58
+        assert ensure_seed(engine, ACTIVE) == 61
     rows = _rows(engine)
     assert set(rows) == set(ACTIVE)
     for model_id, row in rows.items():
@@ -156,7 +156,7 @@ def test_v230_seed_rows_get_only_their_null_extras_filled(engine, caplog):
     _add(engine, OPUS48_US, 5.0, 25.0)                           # not the seed value (5.5 / 27.5): left alone
     _add(engine, SOL_G, 4.0, 20.0, status="verified")            # only status='seed' rows are filled
     with caplog.at_level(logging.INFO, logger="pricing_seed"):
-        assert ensure_seed(engine, ACTIVE) == 58 - 7              # the return value still counts inserted rows only
+        assert ensure_seed(engine, ACTIVE) == 61 - 7              # the return value still counts inserted rows only
     assert "Price seed filled cache/long-context fields on 5 rows" in caplog.messages
     rows = _rows(engine)
     for model_id in (OPUS_G, GPT55_E1, NOVA_ID, CP_OPUS48):
@@ -186,7 +186,7 @@ def test_a_value_committed_between_the_snapshot_and_the_update_is_kept(engine):
             raced.append(statement)
             cursor.execute("UPDATE price_history SET cache_read_per_mtok = 0.3 WHERE model_id = ?", (OPUS_G,))
 
-    assert ensure_seed(engine, ACTIVE) == 58 - 1
+    assert ensure_seed(engine, ACTIVE) == 61 - 1
     event.remove(engine, "before_cursor_execute", concurrent_sync)
     assert raced, "the fill UPDATE never ran"
     row = _rows(engine)[OPUS_G]

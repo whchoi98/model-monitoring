@@ -239,12 +239,12 @@ def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 49 active channels plus the 9 OpenAI official prices (v2.39.0)."""
+    """build_pricing_payload on the real seeds of the 52 active channels plus the 9 OpenAI official prices (v2.41.0)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 58
-    assert pricing_seed.ensure_seed(engine, active) == 58
+    assert len(active) == 61
+    assert pricing_seed.ensure_seed(engine, active) == 61
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -267,17 +267,17 @@ def test_production_references_list_only_cited_sources():
     _assert_every_reference_is_cited(payload)
     kinds = [r["kind"] for r in payload["references"]]
     # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0) = 25,
-    # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0)
-    assert len(kinds) == 20
+    # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0), + the Claude Fable 5.2 offer (v2.41.0)
+    assert len(kinds) == 21
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 17, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 18, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.5", "prior_price": {}}
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(21, "note:gpt-5.5", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(22, "note:gpt-5.5", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
@@ -335,7 +335,8 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
     Session = sessionmaker(bind=engine)
     active = active_channels(ACTIVE_MODELS, [])
     old = {m: i for m, i in active.items()
-           if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra")}
+           if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS
+           and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra", "claude-fable-5-2")}
     # v2.39.0 catalog: the retired Mantle us-east-2/us-west-2 channels (v2.38.0) and the five families left out in
     # v2.39.0 are not active at all
     assert len(old) == 42
@@ -347,8 +348,8 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
             for row in s.query(models.PriceHistory):
                 row.observed_at = synced
             s.commit()
-        # the upgrade: backend lifespan seeds the new rows (8 + 4 v2.33.0 + 4 v2.38.0 GPT 6.1 Terra)
-        assert pricing_seed.ensure_seed(engine, active) == 16
+        # the upgrade: backend lifespan seeds the new rows (8 + 4 v2.33.0 + 4 v2.38.0 GPT 6.1 Terra + 3 v2.41.0 Fable 5.2)
+        assert pricing_seed.ensure_seed(engine, active) == 19
         with Session() as s:
             payload = build_pricing_payload(s, active, now=datetime(2026, 9, 30, 13, 0, tzinfo=timezone.utc))
     finally:
@@ -356,11 +357,12 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 20
+    assert len(as_of) == 21
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
     assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol
     assert as_of.pop("offer:offer-34pzbdgg26ley") == "2026-10-27"  # GPT 6.1 Terra (v2.38.0)
+    assert as_of.pop("offer:offer-agsprgw6z3dg6") == "2026-11-09"  # Claude Fable 5.2 (v2.41.0)
     assert set(as_of.values()) == {"2026-09-29"}  # incl. the offers and docs the other new rows cite
     s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
     assert (s55["global"]["verification"], s55["global"]["observed_at"]) == ("seed_only", None)

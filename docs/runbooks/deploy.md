@@ -997,6 +997,81 @@ curl -s "https://$CF_DOMAIN/api/pricing/export?format=json" | jq 'has("changes")
   되돌린 뒤 다시 배포하거나 첫 Scheduler 배포가 롤백됐다면 재배포가 `… '/ecs/explorer' already exists`로 실패하므로,
   [rollback.md](./rollback.md)의 `/ecs/pricingsync`와 같은 절차(확인 후 삭제 또는 `--import-existing-resources`)를 `/ecs/explorer`에도 적용한다.
 
+### 5-13. v2.41.0 배포 경로와 확인 (Claude Fable 5.2)
+
+**배포 경로**: 새 env, IAM, CDK 변경이 없다. v2.40.0 브랜치 위에서 만들었으므로 v2.40.0과 함께(한 번의 배포) 또는 v2.40.0 뒤에 배포한다.
+v2.40.0을 함께 배포하면 §5-12의 CDK 경로(**digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**)를 그대로 쓰고,
+§5-12의 기댓값 중 85건, 49채널은 92건, 52채널로 읽는다(로컬 스모크도 92줄 — Bedrock Claude 20 × 3 + Nova 1 + CP 9 + OpenAI 22).
+v2.40.0이 이미 운영에 있으면 §6 이미지-only 경로도 가능하지만, 작업 정의를 코드와 맞추려고 같은 CDK 경로를 권한다. backend 기동 seed가 Fable 5.2
+3채널의 단가 행을 넣는다. Fable 5.2는 Covered Model이고 서울과 us-east-1의 기존 `provider_data_share` 옵트인이 덮는다(2026-11-09 converse 200).
+자세히는 ADR-036.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 카탈로그 — /status 52, /api/models 52
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count, channel_intervals}'
+curl -s "https://$CF_DOMAIN/api/models" | jq 'length'
+# 기댓값: expected_model_count 52, channel_intervals {"anthropic": 300}, 52
+
+# 2. 새 3채널 — 첫 새 AutoProber 회차(5분) 뒤 /latest에 라벨이 맞게 있는지
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | test("fable")) | {model_id, model_name, status}]'
+# 기댓값: 6행, status "success"
+#   global.anthropic.claude-fable-5-2   "Bedrock Claude Fable 5.2 (Global)"
+#   us.anthropic.claude-fable-5-2       "Bedrock Claude Fable 5.2 (US)"
+#   anthropic:claude-fable-5-2          "Anthropic Claude Fable 5.2 (US)"   (CP /v1/models 첫 항목)
+#   Fable 5.1, Fable 5의 Global, US, CP 행은 각자 자기 라벨이다(5.2 id가 Fable 5나 5.1 라벨로 오등록되면 안 된다)
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq 'group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end) | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add'
+# 기댓값: {"anthropic": 9, "bedrock": 21, "openai": 22} (bedrock = Global 9 + US 10 + 서울 in-region 2)
+
+# 3. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task). v2.40.0과 함께 배포했으면 §5-12의 3번(2회)으로 대신한다
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:'
+# 기댓값: "pricing_sync_runner: 61 active channels"(52 + OpenAI 공식 가격 9), "ensure_seed inserted 0 rows"(기동 seed가 먼저 넣었다),
+#   런 요약 pending=0, errors=0. Fable 5.2 세 채널은 seed 값 그대로 관측된다(변경 없음).
+#   예상 관측: 2026-11-09 Anthropic 문서 표가 Sonnet 5.5 캐시 히트를 $0.10으로 고쳤다. 운영 CP Sonnet 5.5 캐시 읽기가 아직 0.2이면
+#   이번 런이 0.2 → 0.1(정확히 50%, 관리자 승인 없이 자동 적용)을 기록하고 `doc_conflict` 메모가 빠진다. 이미 0.1이면 변경 없음이다.
+
+# 4. /api/pricing — families 19, models 52, references 21, Fable 5.2 단가, Sonnet 5.5 메모
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{last_sync: .last_sync.status, pending_review,
+  families: (.families | length), models: (.models | length), references: (.references | length),
+  kinds: ([.references[].kind] | group_by(.) | map({(.[0]): length}) | add), first: .families[0].family,
+  fable52: (.families[] | select(.family_key == "claude-fable-5-2") | {cp: (.tiers.cp | {input, output, cache_read}),
+    global: (.tiers.global | {input, output, cache_read, cache_write, cache_write_1h, long}), us: (.tiers.us | {input, output, cache_read})}),
+  sonnet55: (.families[] | select(.family_key == "claude-sonnet-5-5") | {cp_cache_read: .tiers.cp.cache_read, notes: [.notes[] | .kind]}),
+  changes: (.changes | {available, n: (.items | length)})}'
+# 기댓값: last_sync "completed", pending_review 0, families 19, models 52, references 21,
+#   kinds {"agreement_offer": 18, "anthropic_doc": 1, "openai_doc": 1, "price_list": 1}, first "Claude Fable 5.2",
+#   fable52 cp {8, 40, 0.2}, global {8, 40, 0.2, 10, 16, long null}, us {8.8, 44, 0.22},
+#   sonnet55 cp_cache_read 0.1, notes [] (3번에서 0.1을 관측한 뒤 — 아직이면 0.2, ["doc_conflict"]),
+#   changes — v2.40.0이 먼저 배포돼 스냅샷이 있었다면 이 배포 뒤 첫 비교에 Fable 5.2 새 채널 3건(과 위 Sonnet 5.5 캐시 변경)이 나온다.
+#     v2.40.0과 함께 배포했으면 첫 스냅샷부터 Fable 5.2가 있어 새 채널 항목은 없다.
+
+# 5. FeaturesVerify — 다음 스케줄 런(17:30 UTC) 또는 §5-1과 같은 run-task 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version, n: (.results | length),
+  fable52: ([.results[] | select(.model_key == "fable-5-2")] | length),
+  fable52_mantle: ([.results[] | select(.model_key == "fable-5-2" and .surface == "mantle") | .status] | unique),
+  fable52_broken: ([.results[] | select(.model_key == "fable-5-2" and .status == "broken")] | length),
+  catalog_changes: ([.changes[] | select(.kind == "catalog")] | length)}'
+# 기댓값: cv "2026-11-09", n 1560(totals 6상태 합도 1560 = 프로브 1212 + 사전판정 348), fable52 195,
+#   fable52_mantle ["not_applicable"], fable52_broken 0, catalog_changes 195(직전 런에 없던 fable-5-2 셀 — 정상, 한 번만).
+#   2026-11-09 스모크는 Fable 5.2 195셀이 운영 Fable 5.1(런 70)과 셀마다 같았다(supported 100, unsupported 29, 해당 없음 63, skipped 3).
+
+# 6. ExplorerVerify — 다음 스케줄 런(18:00 UTC) 또는 §5-12의 2번 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | length), examples: ([.models[].examples[]] | length),
+  fable52: [.models | to_entries[] | select(.key | test("fable-5-2")) | {m: .key, r: [.value.examples[] | .result.status]}]}'
+# 기댓값: models 52, examples 92, fable52 세 채널 — Global, US ["passed","passed","passed"], CP ["passed"]
+```
+
+- 화면 확인(Playwright, KO/EN, 390px): 대시보드 카드 52장(Claude Fable 5.2 행이 맨 위, Fable 5.1 앞), 추세 차트의 Fable 5.2 청록 3색(Global
+  `#245860` 실선, US `#aed3e0` 파선, CP `#47def5` 점선), `/pricing` Claude 표 첫 행 Claude Fable 5.2(캐시 읽기 $0.20, 1시간 쓰기 $16),
+  `/claude-features` 모델 칩 첫 항목 Fable 5.2와 Mantle 열 참조 블록의 404 사유, `/models` Fable 5.2 카드 세 장, `/prompts` 대상
+  "Bedrock Claude Fable 5.2 (Global)", "(US)"(Bedrock 19개).
+- 시간당 CP 호출은 96회에서 108회(9채널 × 12)가 된다. 월간 사용량 상한이 다시 걸리면 `ANTHROPIC_CP_PROBE_INTERVAL_S=600`이 레버다(§5-2).
+- 오등록 확인(선택): `SELECT DISTINCT model_id, model_name FROM probe_results WHERE model_id LIKE 'anthropic:claude-fable%'` — 세 id가 각자
+  자기 라벨이면 정상이다.
+- 롤백 지점은 v2.40.0이 먼저 배포됐으면 v2.40.0, 함께 배포했으면 v2.39.0이다(§5-12 롤백 주의 포함). 되돌리면 Fable 5.2 채널은 등록되지 않고,
+  저장 행과 `price_history` 행은 남는다. CP `claude-fable-5-2`는 점 버전 가드가 계속 건너뛴다.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)에는 이미지-only

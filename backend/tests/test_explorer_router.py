@@ -152,6 +152,25 @@ def test_hidden_models_are_left_out_of_models_and_changes(env):
     assert HIDDEN not in body["models"] and body["changes"] == []
 
 
+def test_a_thread_that_does_not_start_releases_the_run_flag(env, monkeypatch):
+    """Thread.start() can raise RuntimeError (no thread left); the in-process flag must not stay set (PR #76 review)."""
+    _, client = env
+    headers = {"Authorization": f"Bearer {create_access_token('viewer@example.com')}"}
+
+    class _NoThread:
+        def __init__(self, **kwargs):
+            pass
+
+        def start(self):
+            raise RuntimeError("can't start new thread")
+
+    monkeypatch.setattr(explorer_router, "threading", type("T", (), {"Thread": _NoThread}))
+    assert client.post("/api/explorer/trigger", headers=headers).json() == {
+        "triggered": False, "message": "검증 런을 시작하지 못했습니다"}
+    assert explorer_router._running["active"] is False
+    assert client.get("/api/explorer/latest").json()["running"] is False
+
+
 def test_trigger_needs_a_login(env):
     _, client = env
     assert client.post("/api/explorer/trigger").status_code == 401

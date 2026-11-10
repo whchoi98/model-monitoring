@@ -36,10 +36,14 @@ def region_for(surface: str) -> str:
     return os.environ.get(meta["region_env"], meta["default_region"])
 
 
-# 대표 모델 7종 (2026-09-05 4종 + 2026-09-23 Opus 5.5 + 2026-09-30 Sonnet 5.5 + 2026-10-07 Haiku 5.5). mantle=None → 측정 불가
-# (Fable 5.1은 US GovCloud 전용, Sonnet 5.5와 Haiku 5.5는 Mantle us-east-1 미서빙 — V3). 사유는 mantle_reason(KO)과
+# 대표 모델 8종 (2026-09-05 4종 + 2026-09-23 Opus 5.5 + 2026-09-30 Sonnet 5.5 + 2026-10-07 Haiku 5.5 + 2026-11-09 Fable 5.2).
+# mantle=None → 측정 불가 (Fable 5.1은 US GovCloud 전용, Fable 5.2, Sonnet 5.5와 Haiku 5.5는 Mantle us-east-1 미서빙 — V3). 사유는 mantle_reason(KO)과
 # mantle_reason_en(EN), 프런트가 그대로 표시한다. Haiku는 2026-09-05 대표에서 빠졌지만 Haiku 5.5는 2026-10-07 사용자 결정으로 넣는다.
 MODELS: list[dict] = [
+    {"key": "fable-5-2", "label": "Claude Fable 5.2", "cp": "claude-fable-5-2", "mantle": None,
+     "bedrock": "global.anthropic.claude-fable-5-2",
+     "mantle_reason": "측정 불가 — Mantle us-east-1이 anthropic.claude-fable-5-2를 서빙하지 않음 (404 not_found_error, 2026-11-09 실측)",
+     "mantle_reason_en": "Not measurable — Mantle us-east-1 does not serve anthropic.claude-fable-5-2 (404 not_found_error, measured 2026-11-09)"},
     {"key": "fable-5-1", "label": "Claude Fable 5.1", "cp": "claude-fable-5-1", "mantle": None,
      "bedrock": "global.anthropic.claude-fable-5-1",
      "mantle_reason": "측정 불가 — Mantle의 Fable 5.1은 US GovCloud(us-gov-west-1) 리전 전용 (상용 리전 미서빙)",
@@ -115,8 +119,8 @@ FEATURES: list[dict] = [
        "SSE/EventStream — 2+ content deltas", _DOC + "build-with-claude/streaming", ALL, "evidence"),
     _f("system_prompt", "core", "시스템 프롬프트", "System prompt", "system 카나리 강제 → 응답 반영",
        "Canary forced via system → appears in reply", _DOC + "build-with-claude/prompt-engineering/system-prompts", ALL, "evidence"),
-    _f("tool_use", "core", "도구 호출", "Tool use", "echo 도구 카나리 왕복 (Fable 5.1, Opus 5.5, Sonnet 5.5는 auto + 지시)",
-       "Echo tool canary round-trip (Fable 5.1, Opus 5.5, Sonnet 5.5: auto + instruction)", _DOC + "agents-and-tools/tool-use/overview", ALL, "evidence"),
+    _f("tool_use", "core", "도구 호출", "Tool use", "echo 도구 카나리 왕복 (Fable 5.2, Fable 5.1, Opus 5.5, Sonnet 5.5는 auto + 지시)",
+       "Echo tool canary round-trip (Fable 5.2, Fable 5.1, Opus 5.5, Sonnet 5.5: auto + instruction)", _DOC + "agents-and-tools/tool-use/overview", ALL, "evidence"),
     # --- model capabilities ---
     _f("context_window_1m", "model", "1M 컨텍스트", "Context window (1M)", "Models API max_input_tokens == 1,000,000 (CP만 검증 경로 있음)",
        "Models API max_input_tokens == 1,000,000 (only CP has a capability endpoint)",
@@ -163,8 +167,8 @@ FEATURES: list[dict] = [
        "AWS 문서가 Claude의 두 메커니즘(JSON 스키마 출력, strict 도구)을 bedrock-runtime과 bedrock-mantle 공통으로 설명한다 — "
        "2026-10-20 기대치 갱신(이전: Bedrock 3열 미지원, Mantle 미확정)"),
     _f("extended_thinking", "model", "확장 추론(budget)", "Extended thinking (budget_tokens)",
-       "대표 모델은 전부 adaptive-only(Opus 5.5, Sonnet 5.5, Haiku 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
-       "All representative models are adaptive-only (incl. Opus 5.5, Sonnet 5.5, Haiku 5.5) → documented 400; exact rejection → not_applicable",
+       "대표 모델은 전부 adaptive-only(Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5 포함) → 문서상 400이 정상; 정확한 거부 문구면 not_applicable",
+       "All representative models are adaptive-only (incl. Fable 5.2, Opus 5.5, Sonnet 5.5, Haiku 5.5) → documented 400; exact rejection → not_applicable",
        _DOC + "build-with-claude/thinking", ALL, "negative"),
     # --- server-side tools ---
     _f("advisor_tool", "server_tools", "Advisor 도구", "Advisor tool", "advisor_20260301 → server_tool_use + advisor result",
