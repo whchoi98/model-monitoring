@@ -1132,6 +1132,75 @@ curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | lengt
   (숨김 패턴이 v2.41.0 기본값으로 돌아간다). 다시 노출하려면 카탈로그(`prober`, `pricing_sources`, `pricing_seed`, `claude_features.catalog`)를 되살리고
   `Claude Fable 5 (` 패턴과 프런트 `EXCLUDED_FAMILIES` 항목을 지운다(ADR-037).
 
+### 5-15. v2.43.0 배포 경로와 확인 (Claude Opus 4.8, GPT 5.5, GPT 5.6 모니터링 제외)
+
+**배포 경로**: CDK 변경이 있다(사용자 결정 2026-11-10, ADR-038). AppServices `backendEnv`와 Scheduler `buildTaskDef`에서 모델 id env 8개
+(`BEDROCK_OPENAI_GPT_55_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`, 휴면 `OPENAI_1P_GPT_55_MODEL_ID`,
+`OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`)를 뺐으므로 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다 —
+§6 이미지-only 경로로는 작업 정의에 옛 env가 남는다. 새 IAM은 없다. 저장 행(`probe_results`, `gpt_bench_results`, `parity_results`,
+`explorer_results`, `price_history`)은 지우지 않는다 — 기본 숨김 패턴 `Claude Opus 4.8`, `GPT 5.6`, `GPT 5.5`가 조회에서 가린다.
+`HIDDEN_MODEL_PATTERNS`를 주입하고 있다면 이 패턴들도 함께 적어야 한다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 0. 작업 정의 — 뺀 env가 없는지(backend와 스케줄 7개)
+for td in $(aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION --query 'services[0].taskDefinition' --output text) \
+  $(for n in $(aws scheduler list-schedules --region $REGION --query 'Schedules[?starts_with(Name, `BedrockMonitor`)].Name' --output text); do
+      aws scheduler get-schedule --name $n --region $REGION --query 'Target.EcsParameters.TaskDefinitionArn' --output text; done); do
+  aws ecs describe-task-definition --task-definition $td --region $REGION \
+    --query 'length(taskDefinition.containerDefinitions[0].environment[?contains(name, `GPT_55`) || contains(name, `GPT_56`)])' --output text
+done
+# 기댓값: 줄마다 0
+
+# 1. 카탈로그 — 39채널, 뺀 id 없음
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count}'
+curl -s "https://$CF_DOMAIN/api/models" | jq '[length, ([.[] | select(.id | test("opus-4-8|gpt-5\\.[56]"))] | length)]'
+# 기댓값: expected_model_count 39, [39, 0]
+
+# 2. 첫 새 AutoProber 회차(5분) 뒤 — 39행, 뺀 계열 라벨 없음
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '{n: length,
+  retired: [.[] | select(.model_name | test("Opus 4\\.8|GPT 5\\.[56]")) | .model_name],
+  groups: (group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end)
+           | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add)}'
+# 기댓값: n 39, retired [], groups {"anthropic": 7, "bedrock": 17, "openai": 15}
+
+# 3. GptBench — 다음 15분 회차 뒤
+aws logs tail /ecs/gptbench --since 20m --region $REGION | grep -E 'GPT bench lanes|cycle done'
+curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), families: ([.channels[].family] | unique)}'
+# 기댓값: "GPT bench lanes: cris=10 mantle-us-east-1=5", "cycle done: rows=150 errors=0", n 15,
+#   families ["GPT 6 Astra", "GPT 6 Luna", "GPT 6 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra"]. 직전 회차가 아직 완료 전이면 latest는 그 전 회차(18채널)다 —
+#   단, 숨김 패턴이 GPT 5.5, 5.6 Terra 행을 거르므로 15채널로 보인다.
+
+# 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:'
+# 기댓값: "pricing_sync_runner: 44 active channels"(39 + OpenAI 공식 가격 5), "ensure_seed inserted 0 rows", pending=0, errors=0
+
+# 5. /api/pricing — families 13, models 39, references 15, 변경 목록의 채널 제외 14건(한 번만)
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{families: (.families | length), models: (.models | length),
+  references: (.references | length), kinds: ([.references[].kind] | group_by(.) | map({(.[0]): length}) | add),
+  last: .families[-1].family, retired: [.families[] | select(.family | test("Opus 4\\.8|GPT 5\\.[56]"))] | length,
+  promo: [.families[].notes[]? | select(.kind == "promo")] | length,
+  removed: ([.changes.items[]? | select(.kind == "channel" and .after == null)] | length)}'
+# 기댓값: families 13, models 39, references 15, kinds {"agreement_offer": 12, "anthropic_doc": 1, "openai_doc": 1, "price_list": 1},
+#   last "Nova 2.0 Lite"(제공사 순서 Anthropic → OpenAI → Amazon), retired 0, promo 0(GPT-5.6 Sol 프로모션 메모 삭제),
+#   removed — 배포 뒤 첫 동기화가 이 채널들이 있던 스냅샷과 비교하므로 14건(10채널 + openai-list:gpt-5.6-sol, -terra, -luna, openai-list:gpt-5.5)이
+#   한 번 나오고, 그다음 동기화부터는 없다. 60초 캐시가 있으니 런 뒤 1분 지나 확인한다.
+
+# 6. ExplorerVerify — 다음 스케줄 런(18:00 UTC) 또는 §5-12의 2번 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | length), examples: ([.models[].examples[]] | length),
+  retired: [.models | keys[] | select(test("opus-4-8|gpt-5\\.[56]"))]}'
+# 기댓값: models 39, examples 71, retired []
+```
+
+- 화면 확인(Playwright, KO/EN, 390px): 대시보드 카드 39장(Opus 4.8, GPT 5.5, GPT 5.6 그룹 없음), 추세 차트 범례에 그 계열 없음, `/pricing` 패밀리 13개와
+  변경 배너의 채널 제외 14건, GPT-5.6 Sol 프로모션 배지 없음, 긴 컨텍스트 안내에 "(GPT 5.5는 272K)" 없음, `/gpt-on-aws` 15채널과 GPT 6.x 세대 묶음 하나(GPT 5.x 묶음 없음),
+  `/models` 카드 39장, `/parity`, `/reliability`(7일), `/cost`(30일)에 그 계열 없음, `/prompts` Bedrock 대상 15개.
+- 시간당 CP 호출은 96회에서 84회(7채널 × 12)가 된다. Claude API Features는 그대로다(1365셀, 대표 모델이 아니다).
+- 롤백 지점은 v2.42.0 이미지 `vd626eb9`(backend `:97`, frontend `:102`)이다. 되돌리면 10채널과 모델 id env가 다시 생기고 저장 행도 다시 보인다
+  (숨김 패턴이 v2.42.0 기본값으로 돌아간다). 다시 노출하려면 카탈로그(`prober`, `gptbench`, `pricing_sources`, `pricing_seed`)와 CDK env를 되살리고
+  세 패턴과 프런트 `EXCLUDED_FAMILIES` 항목을 지운다(ADR-038). 1P를 다시 노출할 때는 새 모델의 1P 스펙부터 만든다 — 남은 1P 스펙이 없다.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)에는 이미지-only
