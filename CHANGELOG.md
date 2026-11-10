@@ -7,6 +7,26 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.42.0 — 2026-11-10
+
+### Removed
+- **Claude Fable 5 is no longer monitored**, by user decision on 2026-11-10 ("Fable 5.0 는 deprecate 시킵니다"), and every page drops it: Bedrock `global.anthropic.claude-fable-5` (Global), `us.anthropic.claude-fable-5` (US) and Claude Platform on AWS `anthropic:claude-fable-5` leave the catalog (the CP target `fable-5` is gone, so the `claude-fable-5` id CP still serves is simply not registered), the price seeds and sources, the Claude API Features representative models, the trend colours, the Comparison Lab labels and the `/prompts` OptimizePrompt targets (ADR-037). AWS still lists `anthropic.claude-fable-5` as ACTIVE; this is a monitoring decision. Fable 5.1 and 5.2 stay, and so does the `provider_data_share` opt-in they need.
+- 사용자 결정(2026-11-10, "Fable 5.0 는 deprecate 시킵니다")으로 Claude Fable 5를 더 이상 모니터링하지 않고 모든 화면에서 뺐다. Bedrock `global.anthropic.claude-fable-5`(Global), `us.anthropic.claude-fable-5`(US)와 Claude Platform on AWS `anthropic:claude-fable-5`를 카탈로그(CP 타깃 `fable-5`를 지워, CP가 아직 서빙하는 `claude-fable-5` id는 등록되지 않는다), 단가 seed와 출처, Claude API Features 대표 모델, 추세 색, Comparison Lab 라벨, `/prompts` OptimizePrompt 대상에서 지웠다(ADR-037). AWS는 `anthropic.claude-fable-5`를 아직 ACTIVE로 표시한다. 모니터링 결정이다. Fable 5.1, 5.2와 두 모델에 필요한 `provider_data_share` 옵트인은 그대로다.
+
+### Changed
+- The catalog has 49 active channels, down from 52: Bedrock 19 (Global 8, US 9, Seoul in-region 2), Claude Platform on AWS 8 (96 CP calls per hour), OpenAI 22. `FAMILY_ORDER` has 18 families starting with Claude Fable 5.2 and Fable 5.1; `/pricing` lists 20 references (17 agreement offers) and PricingSync logs `58 active channels`; `/prompts` has 17 Bedrock targets; the daily ExplorerVerify run executes 85 examples.
+- Stored rows are kept and hidden: the default `HIDDEN_MODEL_PATTERNS` adds `Claude Fable 5 (` — with the parenthesis, because the match is a substring and `Claude Fable 5` alone would also hide the `Claude Fable 5.1 (…)` and `Claude Fable 5.2 (…)` labels. The frontend `EXCLUDED_FAMILIES` has the same entry. An injected `HIDDEN_MODEL_PATTERNS` replaces the whole default and must carry it too.
+- Claude API Features runs 7 representative models (Fable 5.2, Fable 5.1, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5), 1,365 cells per run (1,042 probes + 323 pre-decided), `CATALOG_VERSION` `2026-11-10`. Fable 5 was the only Fable model Mantle us-east-1 served, so the Mantle column now measures Opus 5.5, Opus 5 and Sonnet 5. `GET /api/features/latest` leaves out the cells of a model no longer in the catalog and recounts `run.totals` from the cells it returns, so Fable 5 leaves `/claude-features` at deploy instead of at the next daily run; a run whose cells all belong to catalog models keeps its stored totals.
+- The first PricingSync after the deploy compares against a snapshot that still had Fable 5, so the `/pricing` change list shows three removed-channel items for Fable 5 once. Its `price_history` rows stay.
+- 활성 채널은 52개에서 49개로 줄었다. Bedrock 19(Global 8, US 9, 서울 in-region 2), Claude Platform on AWS 8(시간당 CP 호출 96회), OpenAI 22다. `FAMILY_ORDER`는 Claude Fable 5.2, Fable 5.1로 시작하는 18개이고, `/pricing` 참고 자료는 20개(약정 오퍼 17), PricingSync 로그는 `58 active channels`, `/prompts` Bedrock 대상은 17개, 매일 ExplorerVerify 런은 예제 85개를 실행한다.
+- 저장 행은 지우지 않고 숨긴다. 기본 `HIDDEN_MODEL_PATTERNS`에 `Claude Fable 5 (`를 더했다. 부분일치라 `Claude Fable 5`만 쓰면 `Claude Fable 5.1 (…)`, `Claude Fable 5.2 (…)` 라벨까지 숨기므로 괄호까지 넣는다. 프런트 `EXCLUDED_FAMILIES`에도 같은 항목을 더했다. `HIDDEN_MODEL_PATTERNS`를 주입하면 기본값 전체를 대신하므로 이 패턴도 함께 적는다.
+- Claude API Features는 대표 모델 7종(Fable 5.2, Fable 5.1, Opus 5.5, Opus 5, Sonnet 5.5, Sonnet 5, Haiku 5.5)으로 런당 1,365셀(프로브 1,042 + 사전판정 323)이고 `CATALOG_VERSION`은 `2026-11-10`이다. Mantle us-east-1이 서빙하던 Fable은 Fable 5뿐이라 Mantle 열은 이제 Opus 5.5, Opus 5, Sonnet 5를 잰다. `GET /api/features/latest`는 카탈로그에 없는 모델의 셀을 빼고, 그때는 `run.totals`를 내보내는 셀로 다시 센다. 그래서 Fable 5가 다음 일일 런이 아니라 배포 시점에 `/claude-features`에서 사라진다. 모든 셀이 카탈로그 모델이면 저장된 합계를 그대로 보낸다.
+- 배포 뒤 첫 PricingSync는 Fable 5가 있던 스냅샷과 비교하므로 `/pricing` 변경 목록에 Fable 5의 채널 제외 항목 3건이 한 번 나온다. `price_history` 행은 그대로 둔다.
+
+### Docs
+- ADR-037 (Claude Fable 5 leaves monitoring); counts and channels in CLAUDE.md, module notes, README, architecture, API reference and the deploy runbook (§5-14).
+- ADR-037(Claude Fable 5 모니터링 제외). CLAUDE.md, 모듈 노트, README, architecture, API reference, 배포 런북(§5-14)의 수치와 채널.
+
 ## v2.41.0 — 2026-11-09
 
 ### Added
