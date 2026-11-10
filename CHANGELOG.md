@@ -27,6 +27,10 @@
 - `FAMILY_ORDER`은 19개이고 "Claude Fable 5.2"가 첫 항목이다(프런트와 백엔드 바이트 동일). `/pricing`은 패밀리 19개, 참고 자료 21개(약정 오퍼 18)이고, PricingSync 로그는 `61 active channels`(52 + OpenAI 공식 가격 9)다.
 - **추세 차트 색**: Fable 5.2는 청록 계열이다(Bedrock Global `#245860` 실선, US `#aed3e0` 파선, CP `#47def5` 점선). 세 채널을 Lab 한 색조로 묶을 수는 없었다. 밝은 청록 실선은 Fable 5, 5.1과 ΔE 15 안쪽이라 Global만 짙게 두었다(다크 카드에서는 getColor가 밝힌다). `TrendChart.test.ts`가 새 3개 시리즈를 고정하고, Comparison Lab은 `bg-cyan-700`, `bg-cyan-600`으로 표시한다.
 
+### Fixed
+- Model Explorer manual trigger (v2.40.0): if the run thread cannot start (`RuntimeError`), the in-process run flag is released and the call answers `triggered: false`; before, every later trigger said "already running" until the backend restarted (PR #76 review). The pricing change list picks a removed or new channel's metadata by membership instead of truthiness.
+- 모델 탐색 수동 트리거(v2.40.0): 실행 스레드를 시작하지 못하면(`RuntimeError`) 프로세스 안의 실행 중 표시를 풀고 `triggered: false`로 답한다. 전에는 백엔드를 재시작할 때까지 이후 트리거가 모두 "이미 실행 중입니다"였다(PR #76 리뷰). 단가 변경 목록은 추가되거나 빠진 채널의 메타를 참거짓이 아니라 키 존재로 고른다.
+
 ### Infra
 - No CDK, environment or IAM change. Deploy the AppServices and Scheduler stacks with digest-pinned images as usual; this release is built on v2.40.0 and ships with it or after it.
 - CDK, 환경 변수, IAM 변경은 없다. 평소처럼 digest를 고정한 이미지로 AppServices와 Scheduler 스택을 배포한다. 이 릴리스는 v2.40.0 위에 만들었으므로 v2.40.0과 함께 또는 그 뒤에 배포한다.
