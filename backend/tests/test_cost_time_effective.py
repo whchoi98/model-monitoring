@@ -71,7 +71,10 @@ RETIRED_V239 = {
     "anthropic:claude-opus-4-7", "anthropic:claude-sonnet-4-6", "anthropic:claude-haiku-4-5-20251001",
     "openai:us-east-1:openai.gpt-5.4",
 }
-UNCLASSIFIED = RETIRED_V239 | {"openai:us-east-2:openai.gpt-5.4", "openai:us-west-2:openai.gpt-5.4"}  # GPT 5.4 family gone
+# v2.42.0 (2026-11-10 user decision, ADR-037): Claude Fable 5 left monitoring — Fable 5 US was one of the 11 corrected
+# channels, so 10 corrected channels minus the v2.39.0 ones are still active
+RETIRED_V242 = {"global.anthropic.claude-fable-5", "us.anthropic.claude-fable-5", "anthropic:claude-fable-5"}
+UNCLASSIFIED = RETIRED_V239 | RETIRED_V242 | {"openai:us-east-2:openai.gpt-5.4", "openai:us-west-2:openai.gpt-5.4"}  # GPT 5.4 family gone
 CORRECTED = {
     "us.anthropic.claude-fable-5-1": (11.0, 55.0),
     "us.anthropic.claude-fable-5": (11.0, 55.0),
@@ -213,11 +216,12 @@ def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected
     identities = {mid: price_identity(mid) for mid in ACTIVE_IDS}
     assert {m for m, i in identities.items() if i is None} == UNCLASSIFIED
     active = {m: i for m, i in identities.items() if i is not None}
-    assert len(ACTIVE_IDS) == 55 and len(active) == 55 - 14
+    assert len(ACTIVE_IDS) == 55 and len(active) == 55 - 14 - 3
     assert len(UNCHANGED) == 44 and len(CORRECTED) == 11
     assert len(RETIRED_V238) == 9 and RETIRED_V238 <= set(UNCHANGED)
     assert len(RETIRED_V239) == 12 and len(RETIRED_V239 & set(CORRECTED)) == 4
-    assert not (RETIRED_V238 | RETIRED_V239) & set(pricing_seed.SEED)
+    assert len(RETIRED_V242) == 3 and RETIRED_V242 & set(CORRECTED) == {"us.anthropic.claude-fable-5"}
+    assert not (RETIRED_V238 | RETIRED_V239 | RETIRED_V242) & set(pricing_seed.SEED)
     pricing_seed.ensure_seed(engine, active)
     in_tok, out_tok = 12_345, 6_789
     for mid in ACTIVE_IDS:
@@ -226,13 +230,13 @@ def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected
     rows = {r["model_id"]: r["cost_usd"] for r in client.get("/api/cost/summary?window=24h").json()["rows"]}
     assert set(rows) == set(ACTIVE_IDS)
     for mid in UNCHANGED:
-        if mid in RETIRED_V238 | RETIRED_V239:
+        if mid in RETIRED_V238 | RETIRED_V239 | RETIRED_V242:
             assert rows[mid] is None, mid  # no seed for a retired channel in a fresh database
             continue
         assert type(rows[mid]) is float, mid
         assert rows[mid] == pytest.approx(legacy.estimate_cost_usd(mid, in_tok, out_tok), rel=1e-12), mid
     for mid, (inp, out) in CORRECTED.items():
-        if mid in RETIRED_V239:
+        if mid in RETIRED_V239 | RETIRED_V242:
             assert rows[mid] is None, mid
             continue
         assert rows[mid] == pytest.approx((in_tok * inp + out_tok * out) / 1_000_000.0, rel=1e-12), mid

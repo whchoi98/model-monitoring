@@ -22,9 +22,9 @@ EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)  # seed, no_baseline 행의 ef
 PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 표 순서 (v2.31.0)
 # frontend/src/lib/sortModels.ts FAMILY_ORDER와 바이트 단위로 같아야 한다(tests가 파일을 읽어 고정).
 # v2.39.0: Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4를 뺐다(사용자 결정 2026-10-27, ADR-034).
-# v2.41.0: Claude Fable 5.2를 맨 앞에 더했다(2026-11-09, ADR-036).
+# v2.41.0: Claude Fable 5.2를 맨 앞에 더했다(2026-11-09, ADR-036). v2.42.0: Claude Fable 5를 뺐다(2026-11-10, ADR-037).
 FAMILY_ORDER: tuple[str, ...] = (
-    "Claude Fable 5.2", "Claude Fable 5.1", "Claude Fable 5", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
+    "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
     "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra",
     "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5",
 )
@@ -44,7 +44,6 @@ class PriceIdentity:
 _BEDROCK_CLAUDE_FM: dict[str, tuple[str, str]] = {
     "anthropic.claude-fable-5-2": ("claude-fable-5-2", "Claude Fable 5.2"),  # v2.41.0
     "anthropic.claude-fable-5-1": ("claude-fable-5-1", "Claude Fable 5.1"),
-    "anthropic.claude-fable-5": ("claude-fable-5", "Claude Fable 5"),
     "anthropic.claude-opus-5-5": ("claude-opus-5-5", "Claude Opus 5.5"),
     "anthropic.claude-opus-5": ("claude-opus-5", "Claude Opus 5"),
     "anthropic.claude-opus-4-8": ("claude-opus-4-8", "Claude Opus 4.8"),
@@ -54,7 +53,7 @@ _BEDROCK_CLAUDE_FM: dict[str, tuple[str, str]] = {
 }
 _CLAUDE_FAMILY_NAMES = {fk: fam for fk, fam in _BEDROCK_CLAUDE_FM.values()}
 # CP — prober._ANTHROPIC_TARGETS와 같은 substring, 같은 순서(tests가 고정). family_key = "claude-" + substring.
-_CP_TARGETS = ("fable-5-2", "fable-5-1", "fable-5", "opus-5-5", "opus-5", "opus-4-8", "sonnet-5-5", "sonnet-5", "haiku-5-5")
+_CP_TARGETS = ("fable-5-2", "fable-5-1", "opus-5-5", "opus-5", "opus-4-8", "sonnet-5-5", "sonnet-5", "haiku-5-5")
 # Anthropic 문서 표의 모델 이름 = family 이름. Haiku 5.5 행은 "(for prompts up to/over 100,000 tokens)" 두 줄이고
 # 파서가 괄호를 지운 같은 이름으로 합친다(100K 이하 = 표준, 초과 = 긴 컨텍스트, v2.33.0).
 ANTHROPIC_DOC_NAMES: dict[str, str] = {f"claude-{s}": _CLAUDE_FAMILY_NAMES[f"claude-{s}"] for s in _CP_TARGETS}

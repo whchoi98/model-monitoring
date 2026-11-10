@@ -12,13 +12,14 @@ from routers.reliability import _LABEL_RE
 def test_bedrock_channels_registered():
     assert prober.AVAILABLE_MODELS["global.anthropic.claude-fable-5-1"] == "Bedrock Claude Fable 5.1 (Global)"
     assert prober.AVAILABLE_MODELS["us.anthropic.claude-fable-5-1"] == "Bedrock Claude Fable 5.1 (US)"
-    # 기존 Fable 5는 그대로 유지
-    assert prober.AVAILABLE_MODELS["global.anthropic.claude-fable-5"] == "Bedrock Claude Fable 5 (Global)"
+    # Fable 5는 v2.42.0에 모니터링에서 뺐다(사용자 결정 2026-11-10, ADR-037) — 5.1 채널만 남는다
+    assert "global.anthropic.claude-fable-5" not in prober.AVAILABLE_MODELS
+    assert "us.anthropic.claude-fable-5" not in prober.AVAILABLE_MODELS
 
 
-def test_cp_target_registered_before_fable5():
+def test_cp_target_registered_and_fable5_target_gone():
     substrings = [s for s, _ in prober._ANTHROPIC_TARGETS]
-    assert "fable-5-1" in substrings and "fable-5" in substrings
+    assert "fable-5-1" in substrings and "fable-5" not in substrings  # "fable-5" 타깃은 v2.42.0에 뺐다
     labels = dict(prober._ANTHROPIC_TARGETS)
     assert labels["fable-5-1"] == "Anthropic Claude Fable 5.1 (US)"
 
@@ -41,8 +42,9 @@ def test_pricing_all_three_channels():
     assert pricing_seed.SEED["global.anthropic.claude-fable-5-1"][:2] == pytest.approx((10.0, 50.0))
     assert pricing_seed.SEED["us.anthropic.claude-fable-5-1"][:2] == pytest.approx((11.0, 55.0))
     assert pricing_seed.CP_SEED["claude-fable-5-1"] == (10.0, 50.0, ANTHROPIC_SOURCE_ID)
-    # substring prefix collision (fable-5 ⊂ fable-5-1) must not reach the price identity either
-    assert price_identity("anthropic:claude-fable-5").family_key == "claude-fable-5"
+    # substring prefix collision (fable-5 ⊂ fable-5-1) must not reach the price identity either — since v2.42.0 the
+    # retired claude-fable-5 is not classified at all (and never as Fable 5.1)
+    assert price_identity("anthropic:claude-fable-5") is None
 
 
 def test_reasoning_and_parity_flags():

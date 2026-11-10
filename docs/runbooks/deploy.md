@@ -1072,6 +1072,66 @@ curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | lengt
 - 롤백 지점은 v2.40.0이 먼저 배포됐으면 v2.40.0, 함께 배포했으면 v2.39.0이다(§5-12 롤백 주의 포함). 되돌리면 Fable 5.2 채널은 등록되지 않고,
   저장 행과 `price_history` 행은 남는다. CP `claude-fable-5-2`는 점 버전 가드가 계속 건너뛴다.
 
+### 5-14. v2.42.0 배포 경로와 확인 (Claude Fable 5 모니터링 제외)
+
+**배포 경로**: 새 env, IAM, CDK 변경이 없다(사용자 결정 2026-11-10, ADR-037). 이미지만 바뀌므로 §6 이미지-only 경로도 가능하지만, 작업 정의를 코드와
+맞추려고 평소처럼 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다. 저장 행(`probe_results`, `parity_results`,
+`feature_results`, `explorer_results`, `price_history`)은 지우지 않는다 — 기본 숨김 패턴 `Claude Fable 5 (`가 조회에서 가린다(괄호까지가 패턴이다.
+`Claude Fable 5`만 쓰면 Fable 5.1, 5.2 라벨까지 숨는다). `HIDDEN_MODEL_PATTERNS`를 주입하고 있다면 이 패턴도 함께 적어야 한다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 1. 카탈로그 — 49채널, fable-5 id 없음(5.1, 5.2는 그대로)
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count}'
+curl -s "https://$CF_DOMAIN/api/models" | jq '[length, ([.[] | select(.id | test("fable-5$"))] | length), ([.[] | select(.id | test("fable-5-[12]$"))] | length)]'
+# 기댓값: expected_model_count 49, [49, 0, 6]
+
+# 2. 첫 새 AutoProber 회차(5분) 뒤 — 49행, Fable 5 라벨 없음, Fable 5.1, 5.2 라벨은 그대로
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '{n: length,
+  fable: [.[] | select(.model_id | test("fable")) | .model_name] | sort,
+  groups: (group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end)
+           | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add)}'
+# 기댓값: n 49, fable 6개(Anthropic, Bedrock Global, Bedrock US × Fable 5.1, 5.2 — "Claude Fable 5 ("로 시작하는 라벨 없음),
+#   groups {"anthropic": 8, "bedrock": 19, "openai": 22}. 배포 직전 회차의 Fable 5 행이 15분 창에 남아 있어도 숨김 패턴이 거른다.
+
+# 3. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:'
+# 기댓값: "pricing_sync_runner: 58 active channels"(49 + OpenAI 공식 가격 9), "ensure_seed inserted 0 rows", pending=0, errors=0
+
+# 4. /api/pricing — families 18, models 49, references 20, 변경 목록의 채널 제외 3건(한 번만)
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{families: (.families | length), models: (.models | length),
+  references: (.references | length), first: [.families[0:3][] | .family],
+  fable5: [.families[] | select(.family_key == "claude-fable-5")] | length,
+  removed: [.changes.items[]? | select(.kind == "channel" and .after == null) | .model_id]}'
+# 기댓값: families 18, models 49, references 20(약정 오퍼 17 — offer-vk3fuman5qwzy가 빠졌다),
+#   first ["Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5"], fable5 0,
+#   removed — 배포 뒤 첫 동기화가 Fable 5가 있던 스냅샷과 비교하므로 3건(global., us.anthropic.claude-fable-5, anthropic:claude-fable-5)이
+#   한 번 나오고, 그다음 동기화부터는 없다. 60초 캐시가 있으니 런 뒤 1분 지나 확인한다.
+
+# 5. /api/features/latest — 배포 직후(다음 17:30 UTC 런 전)에도 fable-5 셀 없음, 합계 = 보이는 셀
+curl -s "https://$CF_DOMAIN/api/features/latest" | jq '{cv: .run.catalog_version, n: (.results | length),
+  fable5: ([.results[] | select(.model_key == "fable-5")] | length),
+  totals_sum: ([.run.totals | to_entries[] | select(.key != "drift") | .value] | add),
+  models: ([.results[].model_key] | unique)}'
+# 기댓값: fable5 0, totals_sum == n(지난 런이 Fable 5를 담고 있으면 라우터가 남은 셀로 다시 센 값),
+#   models 7종(fable-5-2, fable-5-1, haiku-5-5, opus-5, opus-5-5, sonnet-5, sonnet-5-5 — v2.41.0 첫 런 전이면 fable-5-2 없이 6종),
+#   다음 정기 런 뒤 cv "2026-11-10", n 1365(프로브 1042 + 사전판정 323).
+
+# 6. ExplorerVerify — 다음 스케줄 런(18:00 UTC) 또는 §5-12의 2번 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | length), examples: ([.models[].examples[]] | length),
+  fable5: [.models | keys[] | select(test("fable-5$"))]}'
+# 기댓값: models 49, examples 85, fable5 [] (지난 런의 Fable 5 결과는 visible_models 밖이라 보이지 않는다)
+```
+
+- 화면 확인(Playwright, KO/EN, 390px): 대시보드 카드 49장(Claude Fable 5 그룹 없음, Fable 5.2와 5.1 그룹은 그대로), 추세 차트 범례에 Fable 5 없음,
+  `/pricing` Claude 표에 Fable 5 행 없음과 변경 배너의 채널 제외 3건, `/claude-features` 모델 칩 7개(Fable 5 없음, Mantle 열 참조 블록에 Fable 5.2,
+  Fable 5.1, Sonnet 5.5, Haiku 5.5 사유), `/models` 카드 49장, `/reliability`(7일)와 `/cost`(30일)에 Fable 5 계열 없음, `/prompts` Bedrock 대상 17개.
+- 시간당 CP 호출은 108회에서 96회(8채널 × 12)가 된다.
+- 롤백 지점은 v2.41.0 이미지 `vd6dc431`(backend `:96`, frontend `:101`)이다. 되돌리면 Fable 5 3채널이 다시 등록되고 저장 행도 다시 보인다
+  (숨김 패턴이 v2.41.0 기본값으로 돌아간다). 다시 노출하려면 카탈로그(`prober`, `pricing_sources`, `pricing_seed`, `claude_features.catalog`)를 되살리고
+  `Claude Fable 5 (` 패턴과 프런트 `EXCLUDED_FAMILIES` 항목을 지운다(ADR-037).
+
 ## 6. 후속 배포 (코드만 변경 시)
 
 ⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)에는 이미지-only

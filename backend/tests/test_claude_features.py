@@ -10,7 +10,8 @@ from claude_features import catalog, engine, probes as P, transports as T, runne
 def test_surfaces_and_models():
     assert catalog.SURFACES == ["cp", "mantle", "bedrock_messages", "bedrock_invoke", "bedrock_converse"]
     keys = [m["key"] for m in catalog.MODELS]
-    assert keys == ["fable-5-2", "fable-5-1", "fable-5", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5", "haiku-5-5"]
+    # Fable 5 left the representative models in v2.42.0 (user decision 2026-11-10, ADR-037)
+    assert keys == ["fable-5-2", "fable-5-1", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5", "haiku-5-5"]
     assert catalog.MODEL_KEYS == keys
     assert catalog.model_id_for("cp", "fable-5-1") == "claude-fable-5-1"
     assert catalog.model_id_for("mantle", "fable-5-1") is None  # US GovCloud only
@@ -58,7 +59,7 @@ def test_feature_catalog_shape():
 def test_is_applicable_rules():
     ok, reason = catalog.is_applicable("messages_basic", "mantle", "fable-5-1")
     assert (ok, reason) == (False, "not_applicable")  # GovCloud-only
-    assert catalog.is_applicable("messages_basic", "mantle", "fable-5") == (True, None)
+    assert catalog.is_applicable("messages_basic", "mantle", "opus-5") == (True, None)  # Mantle-served (Fable 5 until v2.41.x)
     # Converse cannot express Anthropic-defined tools / top-level cache_control
     assert catalog.is_applicable("bash_tool", "bedrock_converse", "opus-5") == (False, "not_applicable")
     assert catalog.is_applicable("automatic_prompt_caching", "bedrock_converse", "opus-5") == (False, "not_applicable")
@@ -67,7 +68,7 @@ def test_is_applicable_rules():
     assert catalog.is_applicable("context_window_1m", "mantle", "opus-5") == (False, "skipped")
     assert catalog.is_applicable("context_window_1m", "bedrock_messages", "opus-5") == (False, "skipped")
     # extended thinking: adaptive-only models → probe still runs (negative check)
-    assert catalog.is_applicable("extended_thinking", "cp", "fable-5") == (True, None)
+    assert catalog.is_applicable("extended_thinking", "cp", "fable-5-1") == (True, None)
 
 
 def test_sonnet_55_mantle_is_not_applicable_with_its_own_reason():
@@ -106,10 +107,11 @@ def test_catalog_endpoint_exposes_mantle_reason_en():
     assert list(models) == catalog.MODEL_KEYS
 
 
-def test_catalog_version_bumped_for_fable52():
+def test_catalog_version_bumped_for_fable5_retirement():
     # documented 기대치와 MODELS 변경은 CATALOG_VERSION 범프 대상 (CLAUDE.md 규칙) — Haiku 5.5 편입 2026-10-07,
-    # structured_outputs, strict_tool_use 기대치 갱신 2026-10-20(AWS 문서 2026-10-19), Fable 5.2 편입 2026-11-09
-    assert R.CATALOG_VERSION == "2026-11-09"
+    # structured_outputs, strict_tool_use 기대치 갱신 2026-10-20(AWS 문서 2026-10-19), Fable 5.2 편입 2026-11-09,
+    # Fable 5 제외 2026-11-10(v2.42.0)
+    assert R.CATALOG_VERSION == "2026-11-10"
 
 
 def test_documented_defaults_from_overview():
@@ -750,12 +752,12 @@ def test_build_jobs_partitions_applicable_and_predecided():
 def test_default_job_count_matches_spec_estimate():
     jobs, decided = R.build_jobs(None, None, None)
     total = len(jobs) + len(decided)
-    assert total == 39 * 5 * 8  # feature × surface × model (1560, v2.41.0~ — Fable 5.2 추가 전 1365, Haiku 5.5 추가 전 1170)
-    # pre-decided 348 = Mantle Fable 5.2 + Mantle Fable 5.1 + Mantle Sonnet 5.5 + Mantle Haiku 5.5 (39 × 4 = 156)
-    #                 + Converse-inexpressible 17 features × 8 models (136)
-    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 8 − 4 overlap = 28)
-    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 8 − 4 overlap = 28)
-    assert (len(jobs), len(decided)) == (1212, 348)
+    assert total == 39 * 5 * 7  # feature × surface × model (1365, v2.42.0~ — Fable 5 제외 전 1560, Fable 5.2 추가 전 1365)
+    # pre-decided 323 = Mantle Fable 5.2 + Mantle Fable 5.1 + Mantle Sonnet 5.5 + Mantle Haiku 5.5 (39 × 4 = 156)
+    #                 + Converse-inexpressible 17 features × 7 models (119)
+    #                 + context_window_1m skipped on mantle/messages/invoke/converse (4 × 7 − 4 overlap = 24)
+    #                 + data_residency not_applicable by doc on mantle/messages/invoke/converse (4 × 7 − 4 overlap = 24)
+    assert (len(jobs), len(decided)) == (1042, 323)
     # Sonnet 5.5 몫 = 39 × 5 = 195셀 (프로브 133 + 사전판정 62) — Mantle 미서빙이라 Mantle 열 39셀은 전부 사전판정
     s_jobs = [j for j in jobs if j["model_key"] == "sonnet-5-5"]
     s_dec = [d for d in decided if d["model_key"] == "sonnet-5-5"]

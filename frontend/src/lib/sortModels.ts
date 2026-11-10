@@ -1,5 +1,5 @@
 // 모델 카드/이력 정렬 공통 유틸.
-// 1차: 모델 family 우선순위 (Fable 5.2 > Fable 5.1 > Fable 5 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Nova > GPT ...)
+// 1차: 모델 family 우선순위 (Fable 5.2 > Fable 5.1 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Nova > GPT ...)
 // ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1", "Claude Fable 5.2" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
 // 라벨에도 포함된다 — 더 긴 이름(5.2, 5.1, 5.5)이 반드시 앞에 와야 함.
 // "Claude Sonnet 5"도 "Claude Sonnet 5.5" 라벨에 포함된다(v2.32.0).
@@ -9,7 +9,6 @@
 export const FAMILY_ORDER = [
   "Claude Fable 5.2",
   "Claude Fable 5.1",
-  "Claude Fable 5",
   "Claude Opus 5.5",
   "Claude Opus 5",
   "Claude Opus 4.8",
@@ -36,6 +35,8 @@ export const FAMILY_ORDER = [
 const EXCLUDED_FAMILIES = [
   "Opus 4.5", "Sonnet 4.5", "(1P)",
   "Opus 4.7", "Opus 4.6", "Sonnet 4.6", "Haiku 4.5", "GPT 5.4",
+  // v2.42.0 (사용자 결정 2026-11-10, ADR-037): Fable 5 — includes 매칭이라 괄호까지 넣는다("Claude Fable 5"만 쓰면 5.1, 5.2 라벨도 걸린다).
+  "Claude Fable 5 (",
 ];
 
 export function isExcludedModel(modelName: string): boolean {

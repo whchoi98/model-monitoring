@@ -108,7 +108,8 @@ AVAILABLE_MODELS: dict[str, str] = {
     # Fable 5.1 (v2.22.0, 2026-09-01): Fable 5와 동일한 Covered Model 제약(provider_data_share 리전 opt-in 기존 적용).
     # forced tool_choice(type tool/any)는 400 — 패리티 tool_use 프로브는 auto로 대체 (parity/catalog.py).
     "global.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (Global)",
-    "global.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (Global)",
+    # Fable 5는 사용자 결정(2026-11-10)으로 모니터링에서 뺐다(v2.42.0, ADR-037) — Global, US, CP 3채널. 저장 행은 남기고
+    # visibility.py가 "Claude Fable 5 (" 패턴으로 숨긴다("Claude Fable 5"만 쓰면 5.1, 5.2 라벨까지 걸린다).
     # Opus 5.5 (v2.27.0, 2026-09-22 출시): Seoul은 Global CRIS만 제공(Geo 없음), us.는 us-east-1.
     # temperature 400(추론 전용) · forced tool_choice(type tool/any) 400 — 패리티는 auto로 대체 (parity/catalog.py).
     "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
@@ -122,10 +123,9 @@ AVAILABLE_MODELS: dict[str, str] = {
     # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "haiku-5". forced tool_choice(any)는 200.
     "global.anthropic.claude-haiku-5-5": "Bedrock Claude Haiku 5.5 (Global)",
     # Bedrock - US cross-region inference profile (us-east-1)
-    # Fable 5 (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용 — 예외: Seoul Opus 5, Sonnet 5는 2026-09-30부터 ON_DEMAND(아래 In-Region 블록).
+    # Fable 5.x (Covered Model): provider_data_share data-retention 필요 — us. 는 us-east-1, global. 는 ap-northeast-2 리전 opt-in (2026-06-10). plain anthropic.* FM ID는 on-demand 미지원이라 inference profile(us./global.) 사용 — 예외: Seoul Opus 5, Sonnet 5는 2026-09-30부터 ON_DEMAND(아래 In-Region 블록).
     "us.anthropic.claude-fable-5-2": "Bedrock Claude Fable 5.2 (US)",
     "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
-    "us.anthropic.claude-fable-5": "Bedrock Claude Fable 5 (US)",
     "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
     "us.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (US)",
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
@@ -158,7 +158,7 @@ AVAILABLE_MODELS: dict[str, str] = {
 _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     ("fable-5-2", "Anthropic Claude Fable 5.2 (US)"),  # v2.41.0 — CP /v1/models 첫 항목(2026-11-09)
     ("fable-5-1", "Anthropic Claude Fable 5.1 (US)"),  # v2.22.0 — CP 서빙 시 자동 발견
-    ("fable-5", "Anthropic Claude Fable 5 (US)"),
+    # ("fable-5", …)는 v2.42.0에 뺐다 — claude-fable-5는 어느 타깃에도 걸리지 않아 등록되지 않는다(점 버전 가드와 무관).
     ("opus-5-5", "Anthropic Claude Opus 5.5 (US)"),  # v2.27.0 — CP가 2026-09-22부터 서빙
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
     ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),

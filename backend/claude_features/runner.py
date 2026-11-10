@@ -24,7 +24,8 @@ logger = logging.getLogger(__name__)
 # 2026-10-07: 대표 모델에 Haiku 5.5 추가(Mantle 미서빙 → N/A) → 런 형태 1170 → 1365셀 (프로브 1079 + 사전판정 286)
 # 2026-10-20: structured_outputs, strict_tool_use 문서 기대치를 5 surface 전부 ga로(AWS 문서 2026-10-19) — 런 형태는 그대로
 # 2026-11-09: 대표 모델에 Fable 5.2 추가(Mantle 미서빙 → N/A) → 런 형태 1365 → 1560셀 (프로브 1212 + 사전판정 348)
-CATALOG_VERSION = "2026-11-09"
+# 2026-11-10: 대표 모델에서 Fable 5 제외(사용자 결정, ADR-037) → 런 형태 1560 → 1365셀 (프로브 1042 + 사전판정 323)
+CATALOG_VERSION = "2026-11-10"
 KEEP_RUNS = 60
 _MAX_WORKERS = 4
 

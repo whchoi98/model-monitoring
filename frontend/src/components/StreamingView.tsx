@@ -13,8 +13,6 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Fable 5.2 (Global)": "bg-cyan-600",
   "Claude Fable 5.1": "bg-sky-700",
   "Claude Fable 5.1 (Global)": "bg-sky-600",
-  "Claude Fable 5": "bg-teal-700",
-  "Claude Fable 5 (Global)": "bg-teal-600",
   "Claude Opus 5.5": "bg-red-800",
   "Claude Opus 5.5 (Global)": "bg-red-700",
   "Claude Opus 5": "bg-rose-800",
@@ -80,15 +78,12 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
   const claudeSuffix = modelId.startsWith("global") ? " (Global)"
     : modelId.startsWith("bedrock:") ? ` (${modelId.split(":")[1]})` : "";
 
-  // "fable-5"는 "fable-5-1", "fable-5-2"에도 포함 — 점 버전 분기가 먼저 와야 함.
+  // Fable 5(fable-5)는 v2.42.0에 모니터링에서 뺐다 — 점 버전만 남는다.
   if (modelId.includes("fable-5-2")) {
     return `Claude Fable 5.2${claudeSuffix}`;
   }
   if (modelId.includes("fable-5-1")) {
     return `Claude Fable 5.1${claudeSuffix}`;
-  }
-  if (modelId.includes("fable-5")) {
-    return `Claude Fable 5${claudeSuffix}`;
   }
   // "opus-5"는 "opus-5-5"에도 포함 — 5.5 분기가 먼저 와야 함.
   if (modelId.includes("opus-5-5")) {

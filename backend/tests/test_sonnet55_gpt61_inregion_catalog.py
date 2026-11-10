@@ -219,7 +219,8 @@ def test_cp_discovery_with_20260930_model_order_labels_every_id_correctly():
     assert matched["sonnet-5"] == "claude-sonnet-5"
     assert matched["opus-5"] == "claude-opus-5"
     assert matched["opus-5-5"] == "claude-opus-5-5"
-    assert matched["fable-5"] == "claude-fable-5"
+    assert "fable-5" not in matched  # fable-5 타깃은 v2.42.0에 뺐다(ADR-037) — claude-fable-5는 등록하지 않는다
+    assert matched["fable-5-1"] == "claude-fable-5-1"
     # haiku-5-5는 v2.33.0 타깃 — 2026-09-30 목록에는 아직 없어 None(등록 skip)이 맞다
     assert matched.pop("haiku-5-5") is None
     assert matched.pop("fable-5-2") is None  # v2.41.0 타깃 — 마찬가지로 아직 없다

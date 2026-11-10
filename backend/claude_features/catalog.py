@@ -36,7 +36,8 @@ def region_for(surface: str) -> str:
     return os.environ.get(meta["region_env"], meta["default_region"])
 
 
-# 대표 모델 8종 (2026-09-05 4종 + 2026-09-23 Opus 5.5 + 2026-09-30 Sonnet 5.5 + 2026-10-07 Haiku 5.5 + 2026-11-09 Fable 5.2).
+# 대표 모델 7종 (2026-09-05 4종 + 2026-09-23 Opus 5.5 + 2026-09-30 Sonnet 5.5 + 2026-10-07 Haiku 5.5 + 2026-11-09 Fable 5.2
+# − 2026-11-10 Fable 5, 사용자 결정으로 모니터링에서 뺐다 — ADR-037).
 # mantle=None → 측정 불가 (Fable 5.1은 US GovCloud 전용, Fable 5.2, Sonnet 5.5와 Haiku 5.5는 Mantle us-east-1 미서빙 — V3). 사유는 mantle_reason(KO)과
 # mantle_reason_en(EN), 프런트가 그대로 표시한다. Haiku는 2026-09-05 대표에서 빠졌지만 Haiku 5.5는 2026-10-07 사용자 결정으로 넣는다.
 MODELS: list[dict] = [
@@ -48,8 +49,6 @@ MODELS: list[dict] = [
      "bedrock": "global.anthropic.claude-fable-5-1",
      "mantle_reason": "측정 불가 — Mantle의 Fable 5.1은 US GovCloud(us-gov-west-1) 리전 전용 (상용 리전 미서빙)",
      "mantle_reason_en": "Not measurable — Mantle serves Fable 5.1 only in US GovCloud (us-gov-west-1), not in commercial regions"},
-    {"key": "fable-5", "label": "Claude Fable 5", "cp": "claude-fable-5", "mantle": "anthropic.claude-fable-5",
-     "bedrock": "global.anthropic.claude-fable-5"},
     {"key": "opus-5-5", "label": "Claude Opus 5.5", "cp": "claude-opus-5-5", "mantle": "anthropic.claude-opus-5-5",
      "bedrock": "global.anthropic.claude-opus-5-5"},
     {"key": "opus-5", "label": "Claude Opus 5", "cp": "claude-opus-5", "mantle": "anthropic.claude-opus-5",

@@ -89,7 +89,8 @@ def test_gpt61_terra_seed_per_channel():
 
 def test_existing_claude_seed_unbroken():
     # Bedrock US is Global x1.1 since v2.30.0 (the old table collapsed us. onto global.).
-    assert _seed("us.anthropic.claude-fable-5") == (11.0, 55.0)
+    assert _seed("us.anthropic.claude-fable-5-1") == (11.0, 55.0)
+    assert "us.anthropic.claude-fable-5" not in pricing_seed.SEED  # Fable 5 left monitoring in v2.42.0 (ADR-037)
     assert _seed("global.anthropic.claude-opus-5") == (5.0, 25.0)
     # Opus 4.8 is $5/$25 (2026-07-24 official check; $15/$75 was the Opus 4.1 price).
     assert pricing_seed.CP_SEED["claude-opus-4-8"][:2] == pytest.approx((5.0, 25.0))

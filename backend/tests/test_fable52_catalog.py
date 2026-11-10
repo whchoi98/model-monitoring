@@ -55,9 +55,9 @@ def test_bedrock_fable52_channels_open_the_global_and_us_blocks():
     keys = list(models_)
     assert keys[0] == F_G and keys.index(F_G) + 1 == keys.index("global.anthropic.claude-fable-5-1")
     assert keys.index(F_US) + 1 == keys.index("us.anthropic.claude-fable-5-1")
-    # Fable 5 and 5.1 stay as they were
+    # Fable 5.1 stays as it was; Fable 5 left monitoring in v2.42.0 (user decision 2026-11-10, ADR-037)
     assert models_["global.anthropic.claude-fable-5-1"] == "Bedrock Claude Fable 5.1 (Global)"
-    assert models_["us.anthropic.claude-fable-5"] == "Bedrock Claude Fable 5 (US)"
+    assert "us.anthropic.claude-fable-5" not in models_
 
 
 def test_temperature_is_suppressed_for_every_fable52_channel():
@@ -67,16 +67,17 @@ def test_temperature_is_suppressed_for_every_fable52_channel():
 
 def test_cp_target_fable52_comes_first_and_is_mirrored_by_pricing():
     substrings = [s for s, _ in prober._ANTHROPIC_TARGETS]
-    assert substrings[:3] == ["fable-5-2", "fable-5-1", "fable-5"]
+    assert substrings[:3] == ["fable-5-2", "fable-5-1", "opus-5-5"]  # the "fable-5" target is gone since v2.42.0
     assert dict(prober._ANTHROPIC_TARGETS)["fable-5-2"] == "Anthropic Claude Fable 5.2 (US)"
     assert tuple(substrings) == pricing_sources._CP_TARGETS
 
 
 def test_cp_discovery_with_20261109_model_order_labels_every_id_once():
-    """claude-fable-5-2 comes first; Fable 5 and 5.1 still find their own ids and no id gets two labels."""
+    """claude-fable-5-2 comes first; Fable 5.1 still finds its own id and no id gets two labels. Since v2.42.0 no target
+    takes claude-fable-5 (CP still serves it), so it stays unregistered."""
     matched = {s: prober._match_anthropic_model(s, CP_MODEL_IDS_20261109) for s, _ in prober._ANTHROPIC_TARGETS}
-    assert (matched["fable-5-2"], matched["fable-5-1"], matched["fable-5"]) == (
-        "claude-fable-5-2", "claude-fable-5-1", "claude-fable-5")
+    assert (matched["fable-5-2"], matched["fable-5-1"]) == ("claude-fable-5-2", "claude-fable-5-1")
+    assert "claude-fable-5" in CP_MODEL_IDS_20261109 and "claude-fable-5" not in matched.values()
     assert None not in matched.values()
     assert len(set(matched.values())) == len(matched)
     # without its own target the 5.2 id never fell to Fable 5 or 5.1 (what production did before v2.41.0)
@@ -100,7 +101,8 @@ def test_parity_fable52_uses_auto_tool_choice_and_is_reasoning_capable():
     for mid in (F_G, F_US, F_CP):
         assert not supports_forced_tool_choice(mid), mid  # forced tool/any 400 (2026-11-09)
         assert is_reasoning_capable(mid), mid             # adaptive-only like Fable 5.1
-    # the marker is the point release only — Fable 5 keeps forced tool_choice
+    # the marker is the point release only — a Fable 5 id would keep forced tool_choice (Fable 5 itself left monitoring
+    # in v2.42.0, the marker rule stays)
     assert supports_forced_tool_choice("global.anthropic.claude-fable-5")
     assert supports_forced_tool_choice("anthropic:claude-fable-5")
 
@@ -116,7 +118,7 @@ def test_features_fable52_is_the_first_model_without_mantle():
     f_dec = [d for d in decided if d["model_key"] == "fable-5-2"]
     assert (len(f_jobs), len(f_dec)) == (133, 62)  # same shape as Fable 5.1: the whole Mantle column is decided
     assert sum(1 for d in f_dec if d["surface"] == "mantle") == 39
-    assert frunner.CATALOG_VERSION == "2026-11-09"
+    assert frunner.CATALOG_VERSION >= "2026-11-09"  # 2026-11-10: Fable 5 left (v2.42.0)
 
 
 def test_explorer_builds_the_same_three_bedrock_examples_and_one_cp_example():
