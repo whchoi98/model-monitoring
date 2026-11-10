@@ -56,13 +56,14 @@ def test_cp_discovery_with_live_model_order_labels_every_id_correctly():
         "fable-5-1": "claude-fable-5-1",
         "opus-5-5": "claude-opus-5-5",
         "opus-5": "claude-opus-5",
-        "opus-4-8": "claude-opus-4-8",
         "sonnet-5-5": None,  # v2.32.0 타깃 — 2026-09-23 목록에는 아직 없다
         "sonnet-5": "claude-sonnet-5",
         "haiku-5-5": None,  # v2.33.0 타깃 — 2026-09-23 목록에는 아직 없다
-    }  # opus-4-7, sonnet-4-6, haiku-4-5 타깃은 v2.39.0에 뺐다(ADR-034), fable-5 타깃은 v2.42.0에 뺐다(ADR-037)
+    }  # opus-4-7, sonnet-4-6, haiku-4-5 타깃은 v2.39.0에 뺐다(ADR-034), fable-5 타깃은 v2.42.0에 뺐다(ADR-037),
+    #   opus-4-8 타깃은 v2.43.0에 뺐다(ADR-038)
     #   — 목록에 있어도 등록하지 않는다
     assert "claude-fable-5" in _CP_MODEL_IDS_20260923 and "claude-fable-5" not in matched.values()
+    assert "claude-opus-4-8" in _CP_MODEL_IDS_20260923 and "claude-opus-4-8" not in matched.values()
     # 한 id가 두 라벨로 등록되는 일이 없어야 한다
     found = [v for v in matched.values() if v is not None]
     assert len(set(found)) == len(found)

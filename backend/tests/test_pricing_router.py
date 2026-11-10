@@ -382,3 +382,12 @@ def test_pricing_changes_wait_for_two_snapshot_runs_then_list_the_items(env):
         "model_id": "us.anthropic.claude-opus-5-5", "family_key": "claude-opus-5-5", "family": "Claude Opus 5.5",
         "provider": "anthropic", "tier": "us", "region": None, "kind": "price", "field": "cache_read",
         "before": 0.44, "after": 0.22}]
+
+
+@pytest.fixture(autouse=True)
+def _v242_sample_families(monkeypatch):
+    """GPT 5.6 Sol, Terra, Luna, GPT 5.5 and Claude Opus 4.8 stay sample channels in this module after they left the
+    catalog in v2.43.0 (tests/_legacy_families.py) — the fixtures and goldens were built on them."""
+    from tests import _legacy_families
+
+    _legacy_families.register(monkeypatch)

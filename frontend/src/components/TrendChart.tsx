@@ -36,6 +36,8 @@ interface Props {
 // 매칭 안 되면 family substring 기반 fallback.
 // 색은 선 패턴(lineDash)과 함께 읽힌다 — 같은 패턴끼리 가까운 색이 되지 않게 고른다(TrendChart.test.ts가 새 채널의 색 차이를 고정).
 // v2.39.0: 모니터링에서 뺀 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4의 색을 지웠다 — 지난 행은 백엔드가 숨긴다.
+// v2.42.0에 Claude Fable 5, v2.43.0에 Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna, GPT 5.5의 색을 같은 이유로 지웠다
+// (GPT 5.x의 수집을 멈춘 us-east-2, us-west-2, 1P 라벨 색도 함께).
 export const MODEL_COLORS: Record<string, string> = {
   // Claude Fable 5.2 (v2.41.0) — 청록 계열(Global 짙은 청록 실선, US 옅은 청록 파선, CP 밝은 청록 점선).
   // 실선 자리가 가장 붐벼 밝은 청록은 Fable 5(v2.42.0에 제외), 5.1과 ΔE 15 안쪽이라 Global만 짙게 둔다(다크 테마는 getColor가 밝힌다).
@@ -49,8 +51,6 @@ export const MODEL_COLORS: Record<string, string> = {
   "Bedrock Claude Opus 5 (Global)": "#f43f5e",
   "Bedrock Claude Opus 5 (US)": "#be123c",
   "Bedrock Claude Opus 5 (ap-northeast-2)": "#fda4af",
-  "Bedrock Claude Opus 4.8 (Global)": "#fb7185",
-  "Bedrock Claude Opus 4.8 (US)": "#e11d48",
   // Claude Sonnet 5.5 (v2.32.0) — Bedrock Global + CP, US는 2026-10-07에 us. 프로파일이 생겨 v2.33.0에 더했다.
   // US 파선은 보라, 남색이 Sonnet 5 US 파선과 ΔE 15 안쪽이거나 다크 카드 대비 4.5:1 아래라 계열 밖 올리브(같은 패턴 최근접 ΔE 18.7).
   "Bedrock Claude Sonnet 5.5 (Global)": "#818cf8",
@@ -66,7 +66,6 @@ export const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Fable 5.1 (US)": "#0369a1",
   "Anthropic Claude Opus 5.5 (US)": "#a4161a",
   "Anthropic Claude Opus 5 (US)": "#881337",
-  "Anthropic Claude Opus 4.8 (US)": "#9f1239",
   // CP Sonnet 5.5는 CP Sonnet 5(#4338ca)와 같은 점선이라 Sonnet 계열에서 떨어진 밝은 자홍 (v2.32.0).
   // 짙은 보라(#3b0764)는 다크 카드에서 3.05:1로 묻혔다 — 이 색은 다크 8.7:1, 라이트(보정 #8b5e81) 5.1:1.
   "Anthropic Claude Sonnet 5.5 (US)": "#e098d0",
@@ -96,23 +95,6 @@ export const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 6 Luna (Global)": "#96f2d7",
   "OpenAI GPT 6 Luna (US)": "#63e6be",
   "OpenAI GPT 6 Luna (us-east-1)": "#38d9a9",
-  "OpenAI GPT 5.6 Sol (Global)": "#00fa9a",
-  "OpenAI GPT 5.6 Sol (us-east-1)": "#22c55e",
-  "OpenAI GPT 5.6 Sol (us-east-2)": "#16a34a",
-  "OpenAI GPT 5.6 Sol (1P)": "#15803d",
-  "OpenAI GPT 5.6 Terra (Global)": "#bef264",
-  "OpenAI GPT 5.6 Terra (us-east-1)": "#a3e635",
-  "OpenAI GPT 5.6 Terra (us-east-2)": "#65a30d",
-  "OpenAI GPT 5.6 Terra (us-west-2)": "#4d7c0f",
-  "OpenAI GPT 5.6 Terra (1P)": "#3f6212",
-  "OpenAI GPT 5.6 Luna (Global)": "#5eead4",
-  "OpenAI GPT 5.6 Luna (us-east-1)": "#4ade80",
-  "OpenAI GPT 5.6 Luna (us-east-2)": "#14b8a6",
-  "OpenAI GPT 5.6 Luna (us-west-2)": "#86efac",
-  "OpenAI GPT 5.6 Luna (1P)": "#0f766e",
-  "OpenAI GPT 5.5 (us-east-1)": "#10a37f",
-  "OpenAI GPT 5.5 (us-east-2)": "#0d8a6a",
-  "OpenAI GPT 5.5 (1P)": "#047857",
 };
 
 // ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1", "Fable 5.2"에, "Opus 5"는 "Opus 5.5"에, "Sonnet 5"는 "Sonnet 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
@@ -121,7 +103,6 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Fable 5.1", "#0ea5e9"],
   ["Opus 5.5", "#e5383b"],
   ["Opus 5", "#f43f5e"],
-  ["Opus 4.8", "#e11d48"],
   ["Sonnet 5.5", "#818cf8"],
   ["Sonnet 5", "#4f46e5"],
   ["Haiku 5.5", "#aa5533"],
@@ -131,10 +112,6 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["GPT 6 Astra", "#2e8b57"],
   ["GPT 6 Sol", "#12b886"],
   ["GPT 6 Luna", "#63e6be"],
-  ["GPT 5.6 Sol", "#22c55e"],
-  ["GPT 5.6 Terra", "#a3e635"],
-  ["GPT 5.6 Luna", "#4ade80"],
-  ["GPT 5.5", "#10a37f"],
 ];
 
 export function getColor(modelName: string, theme: "dark" | "light"): string {

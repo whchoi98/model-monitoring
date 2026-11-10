@@ -486,12 +486,11 @@ def test_price_list_fields_that_are_not_objects_raise_price_parse_error(path):
 
 # ---------------------------------------------------------------- Anthropic pricing markdown
 
-CP_EXPECTED = {  # the Claude Platform on AWS families of the fixture that are still monitored (v2.42.0): input, output,
+CP_EXPECTED = {  # the Claude Platform on AWS families of the fixture that are still monitored (v2.43.0): input, output,
     # cache read, 5m write, 1h write
     "Claude Fable 5.1": U(10, 50, cache_read="0.25", cache_write="12.5", cache_write_1h=20),
     "Claude Opus 5.5": U(4, 20, cache_read="0.2", cache_write=5, cache_write_1h=8),
     "Claude Opus 5": U(5, 25, cache_read="0.5", cache_write="6.25", cache_write_1h=10),
-    "Claude Opus 4.8": U(5, 25, cache_read="0.5", cache_write="6.25", cache_write_1h=10),
     "Claude Sonnet 5.5": U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4),
     "Claude Sonnet 5": U(2, 10, cache_read="0.2", cache_write="2.5", cache_write_1h=4),
     "Claude Haiku 5.5": U("0.10", "0.50", cache_read="0.01", cache_write="0.125", cache_write_1h="0.20",
@@ -508,6 +507,10 @@ CP_RETIRED_V239 = {
 CP_RETIRED_V242 = {
     "Claude Fable 5": U(10, 50, cache_read=1, cache_write="12.5", cache_write_1h=20),
 }
+# Claude Opus 4.8 left monitoring in v2.43.0 (ADR-038): the same
+CP_RETIRED_V243 = {
+    "Claude Opus 4.8": U(5, 25, cache_read="0.5", cache_write="6.25", cache_write_1h=10),
+}
 
 
 def _doc():
@@ -523,6 +526,8 @@ def test_real_doc_gives_every_monitored_claude_platform_on_aws_family():
     assert {name: prices[name] for name in CP_RETIRED_V239} == CP_RETIRED_V239
     assert not set(CP_RETIRED_V239) & set(ANTHROPIC_DOC_NAMES.values())
     assert {name: prices[name] for name in CP_RETIRED_V242} == CP_RETIRED_V242
+    assert {name: prices[name] for name in CP_RETIRED_V243} == CP_RETIRED_V243
+    assert not set(CP_RETIRED_V243) & set(ANTHROPIC_DOC_NAMES.values())
     assert not set(CP_RETIRED_V242) & set(ANTHROPIC_DOC_NAMES.values())
     # Sonnet 5 value cells are "$2 / MTok<sup>3</sup>" / "$10 / MTok<sup>3</sup>", the Fable 5.1 and Opus 5.5 cache
     # hits cells carry <sup>1</sup> / <sup>2</sup>; the batch table later in the fixture (Opus 5 $2.50 / $12.50) is

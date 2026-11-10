@@ -23,16 +23,17 @@ PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 
 # frontend/src/lib/sortModels.ts FAMILY_ORDER와 바이트 단위로 같아야 한다(tests가 파일을 읽어 고정).
 # v2.39.0: Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4를 뺐다(사용자 결정 2026-10-27, ADR-034).
 # v2.41.0: Claude Fable 5.2를 맨 앞에 더했다(2026-11-09, ADR-036). v2.42.0: Claude Fable 5를 뺐다(2026-11-10, ADR-037).
+# v2.43.0: Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna와 GPT 5.5를 뺐다(2026-11-10, ADR-038).
 FAMILY_ORDER: tuple[str, ...] = (
-    "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
+    "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5",
     "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra",
-    "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5",
+    "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna",
 )
 
 
 @dataclass(frozen=True)
 class PriceIdentity:
-    family_key: str   # claude-opus-4-8 | claude-haiku-5-5 | nova-2-lite | gpt-6-astra | gpt-5.6-sol | gpt-5.5 ...
+    family_key: str   # claude-opus-5 | claude-haiku-5-5 | nova-2-lite | gpt-6-astra | gpt-6.1-sol ...
     family: str       # FAMILY_ORDER 문자열
     provider: str     # anthropic | amazon | openai
     channel: str      # cp | openai_list | global | us | inregion:<aws-region>
@@ -46,14 +47,13 @@ _BEDROCK_CLAUDE_FM: dict[str, tuple[str, str]] = {
     "anthropic.claude-fable-5-1": ("claude-fable-5-1", "Claude Fable 5.1"),
     "anthropic.claude-opus-5-5": ("claude-opus-5-5", "Claude Opus 5.5"),
     "anthropic.claude-opus-5": ("claude-opus-5", "Claude Opus 5"),
-    "anthropic.claude-opus-4-8": ("claude-opus-4-8", "Claude Opus 4.8"),
     "anthropic.claude-sonnet-5-5": ("claude-sonnet-5-5", "Claude Sonnet 5.5"),
     "anthropic.claude-sonnet-5": ("claude-sonnet-5", "Claude Sonnet 5"),
     "anthropic.claude-haiku-5-5": ("claude-haiku-5-5", "Claude Haiku 5.5"),
 }
 _CLAUDE_FAMILY_NAMES = {fk: fam for fk, fam in _BEDROCK_CLAUDE_FM.values()}
 # CP — prober._ANTHROPIC_TARGETS와 같은 substring, 같은 순서(tests가 고정). family_key = "claude-" + substring.
-_CP_TARGETS = ("fable-5-2", "fable-5-1", "opus-5-5", "opus-5", "opus-4-8", "sonnet-5-5", "sonnet-5", "haiku-5-5")
+_CP_TARGETS = ("fable-5-2", "fable-5-1", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5", "haiku-5-5")
 # Anthropic 문서 표의 모델 이름 = family 이름. Haiku 5.5 행은 "(for prompts up to/over 100,000 tokens)" 두 줄이고
 # 파서가 괄호를 지운 같은 이름으로 합친다(100K 이하 = 표준, 초과 = 긴 컨텍스트, v2.33.0).
 ANTHROPIC_DOC_NAMES: dict[str, str] = {f"claude-{s}": _CLAUDE_FAMILY_NAMES[f"claude-{s}"] for s in _CP_TARGETS}
@@ -72,9 +72,8 @@ _PRICELIST_MODEL_IDS = {"us.amazon.nova-2-lite-v1:0": ("nova-2-lite", "Nova 2.0 
 _OPENAI_FM: dict[str, tuple[str, str]] = {
     "openai.gpt-6.1-sol": ("gpt-6.1-sol", "GPT 6.1 Sol"), "openai.gpt-6.1-terra": ("gpt-6.1-terra", "GPT 6.1 Terra"),
     "openai.gpt-6-astra": ("gpt-6-astra", "GPT 6 Astra"), "openai.gpt-6-sol": ("gpt-6-sol", "GPT 6 Sol"),
-    "openai.gpt-6-luna": ("gpt-6-luna", "GPT 6 Luna"), "openai.gpt-5.6-sol": ("gpt-5.6-sol", "GPT 5.6 Sol"),
-    "openai.gpt-5.6-terra": ("gpt-5.6-terra", "GPT 5.6 Terra"), "openai.gpt-5.6-luna": ("gpt-5.6-luna", "GPT 5.6 Luna"),
-    "openai.gpt-5.5": ("gpt-5.5", "GPT 5.5"),
+    "openai.gpt-6-luna": ("gpt-6-luna", "GPT 6 Luna"),
+    # GPT 5.6 Sol, Terra, Luna와 GPT 5.5는 v2.43.0에 뺐다(ADR-038) — price_identity가 None이라 단가와 비용에 잡히지 않는다.
 }
 # OpenAI 공식 가격(openai_list, v2.31.0) — 문서 "### Standard pricing data" 표의 모델 이름 = family_key(정확 일치)
 _OPENAI_LIST_FAMILIES: dict[str, str] = {fk: fam for fk, fam in _OPENAI_FM.values()}
@@ -236,23 +235,11 @@ OFFICIAL_LINKS: list[dict] = [
     {"title_en": "OpenAI pricing", "title_ko": "OpenAI 요금", "url": "https://developers.openai.com/api/docs/pricing"},
 ]
 
-# 패밀리 메모 — GPT-5.6 Sol 프로모션은 OpenAI 공식 요금 문서가 출처다(v2.31.0, source_id = OPENAI_SOURCE_ID):
-# "GPT-5.6 Sol's promotional pricing is available at least through November 21, 2026".
-# 동기화는 표 단가만 읽고 이 문장은 확인하지 않는다. 각주의 확인일은 단가 확인일이므로 문구에 문장을 확인한 날짜(2026-09-27)를 넣는다.
-# prior_price는 프로모션 이전 단가(tier 키별) — 동기화가 이 값을 관측하면 pricing_payload가 메모를 뺀다.
+# 패밀리 메모. 종류 promo(프로모션, prior_price — 동기화가 이 값을 관측하면 pricing_payload가 메모를 뺀다)와
+# doc_conflict(문서 불일치, expected — 관측하면 뺀다)를 지원한다. GPT-5.6 Sol 프로모션 메모(v2.31.0, OpenAI 문서 출처)는
+# v2.43.0에 그 패밀리를 모니터링에서 빼며 지웠다(ADR-038).
 # source "manual_note" 메모도 계속 지원한다: basis_ko/basis_en(참고 자료 제목)이 필요하고 source_id는 note_source_id(family_key).
 PRICE_NOTES: list[dict] = [{
-    "family_key": "gpt-5.6-sol",
-    "kind": "promo",
-    "min_until": "2026-11-21",
-    "prior_price": {"openai_list": {"input": 5, "output": 30}, "global": {"input": 5, "output": 30},
-                    "in_region": {"input": 5.5, "output": 33}},
-    "text_ko": "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다.",
-    "text_en": "Promotional price. As of 2026-09-27, the OpenAI pricing page states that it applies at least through "
-               "2026-11-21.",
-    "source": "openai_doc",
-    "source_id": OPENAI_SOURCE_ID,
-}, {
     # 문서 불일치 메모(v2.33.0) — 2026-10-07 Haiku 5.5 발표가 Sonnet 5.5 캐시 읽기를 $0.20 → $0.10으로 내렸고 Anthropic
     # 요금 문서 본문("a cache hit costs 5% … $0.10 USD on Claude Sonnet 5.5")도 그렇게 적었지만, 동기화가 읽는 표 행은
     # 아직 $0.20이다(사용자 결정: 표를 따르고 메모). expected 값을 동기화가 관측하면 pricing_payload가 메모를 뺀다.

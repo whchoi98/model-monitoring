@@ -363,7 +363,7 @@ function changeDetail(item: PricingChangeItem, lang: "ko" | "en"): string {
 }
 
 /** Banner line after the tag: "Claude Sonnet 5.5, AWS Bedrock - Global CRIS, 캐시 읽기 $0.20 → $0.10". An In Region
- *  channel names its region: "GPT 5.6 Terra, AWS Bedrock - In Region (us-east-1)". */
+ *  channel names its region: "GPT 6.1 Terra, AWS Bedrock - In Region (us-east-1)". */
 export function changeItemText(item: PricingChangeItem, lang: "ko" | "en"): string {
   const column = `${tierLabel(item.tier, lang)}${item.region ? ` (${item.region})` : ""}`;
   const detail = changeDetail(item, lang);

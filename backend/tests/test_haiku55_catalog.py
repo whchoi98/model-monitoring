@@ -116,7 +116,7 @@ def test_price_identity_of_the_new_channels():
         "Nova 2.0 Lite")  # Claude Haiku 4.5 sat in between until v2.38.x
     assert pricing_sources.keeps_long_context(price_identity(H_CP))
     assert not pricing_sources.keeps_long_context(price_identity(S_G))
-    assert not pricing_sources.keeps_long_context(price_identity("us.anthropic.claude-opus-4-8"))
+    assert not pricing_sources.keeps_long_context(price_identity("us.anthropic.claude-opus-5"))  # Opus 4.8 until v2.42.x
     assert price_identity("us.anthropic.claude-haiku-4-5-20251001-v1:0") is None  # v2.39.0
 
 

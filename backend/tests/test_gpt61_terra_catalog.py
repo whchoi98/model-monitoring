@@ -43,6 +43,7 @@ _MODEL_ENV = {
     "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID": "openai.gpt-6-astra",
     "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID": "openai.gpt-6-sol",
     "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID": "openai.gpt-6-luna",
+    # v2.43.0: no spec reads the GPT 5.6 and 5.5 ids any more (ADR-038) — injected anyway, they must add no channel
     "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID": "openai.gpt-5.6-sol",
     "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID": "openai.gpt-5.6-terra",
     "BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID": "openai.gpt-5.6-luna",
@@ -139,9 +140,12 @@ def test_openai_doc_of_20261027_lists_gpt61_terra():
 def test_every_mantle_in_region_channel_is_us_east_1(monkeypatch):
     openai = _register(monkeypatch, _MODEL_ENV)
     in_region = sorted(k for k in openai if k.split(":")[1] not in prober._OPENAI_PSEUDO_REGIONS)
-    assert in_region == sorted(f"openai:us-east-1:{fm}" for fm in _MODEL_ENV.values())  # 모델마다 정확히 하나
+    monitored = {env for env, _, _ in prober._OPENAI_MODEL_SPECS}
+    assert in_region == sorted(f"openai:us-east-1:{fm}" for env, fm in _MODEL_ENV.items() if env in monitored)  # 모델마다 하나
     assert not [k for k in openai if k.startswith(("openai:us-east-2:", "openai:us-west-2:"))]
-    assert len(openai) == 22  # Mantle us-east-1 9 + Global CRIS 8 + US CRIS 5 (v2.39.0 — GPT 5.4 left; 23 in v2.38.0)
+    assert not [k for k in openai if "gpt-5." in k]  # v2.43.0 — GPT 5.6 and 5.5 left
+    # Mantle us-east-1 5 + Global CRIS 5 + US CRIS 5 (v2.43.0; 22 in v2.39.0 — GPT 5.4 left; 23 in v2.38.0)
+    assert len(openai) == 15
 
 
 def test_gpt6_astra_in_region_channel_moved_to_us_east_1(monkeypatch):
@@ -161,7 +165,8 @@ def test_bench_keeps_one_mantle_lane_and_appends_gpt61_terra(monkeypatch):
         "openai:global:global.openai.gpt-6.1-terra", "openai:us:us.openai.gpt-6.1-terra",
         "openai:us-east-1:openai.gpt-6.1-terra"]
     lanes = gptbench.bench_lanes(chans)
-    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 11, "mantle-us-east-1": 7}  # 8 in v2.38.0
+    # v2.43.0 (GPT 5.5 and GPT 5.6 Terra left); cris 11, mantle-us-east-1 7 in v2.39.0, mantle-us-east-1 8 in v2.38.0
+    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 10, "mantle-us-east-1": 5}
 
 
 @pytest.mark.parametrize("region", ["us-east-2", "us-west-2"])

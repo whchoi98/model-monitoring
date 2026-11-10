@@ -15,11 +15,11 @@ const MODELS = [
   "Anthropic Claude Fable 5.1 (US)",
   "Bedrock Claude Fable 5.1 (Global)",
   "Bedrock Claude Fable 5.1 (US)",
-  "Bedrock Claude Opus 4.8 (Global)",
-  "Bedrock Claude Opus 4.8 (US)",
+  "Bedrock Claude Opus 5 (Global)",
+  "Bedrock Claude Opus 5 (US)",
   "Bedrock Nova 2.0 Lite (US)",
-  "OpenAI GPT 5.5 (us-east-1)",
-  "OpenAI GPT 5.5 (1P)",
+  "OpenAI GPT 6 Luna (us-east-1)",
+  "OpenAI GPT 6 Luna (Global)",
 ];
 
 describe("defaultTrendSelection", () => {
@@ -28,10 +28,10 @@ describe("defaultTrendSelection", () => {
     // Fable 5.1: Anthropic이 채널 rank 0 → 대표
     expect(sel.has("Anthropic Claude Fable 5.1 (US)")).toBe(true);
     expect(sel.has("Bedrock Claude Fable 5.1 (Global)")).toBe(false);
-    // Opus 4.8: Anthropic 채널 없음 → Global이 대표
-    expect(sel.has("Bedrock Claude Opus 4.8 (Global)")).toBe(true);
-    expect(sel.has("Bedrock Claude Opus 4.8 (US)")).toBe(false);
-    // 패밀리 수만큼만: Fable 5.1, Opus 4.8, Nova, GPT 5.5 → 4개
+    // Opus 5: Anthropic 채널 없음 → Global이 대표
+    expect(sel.has("Bedrock Claude Opus 5 (Global)")).toBe(true);
+    expect(sel.has("Bedrock Claude Opus 5 (US)")).toBe(false);
+    // 패밀리 수만큼만: Fable 5.1, Opus 5, Nova, GPT 6 Luna → 4개
     expect(sel.size).toBe(4);
   });
 

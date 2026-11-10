@@ -20,10 +20,10 @@ from pricing_sources import FAMILY_ORDER
 from tests.pricing_catalog import ACTIVE_MODELS, RETIRED_V239_MODELS
 
 VISIBLE = [
-    ("OpenAI GPT 5.5 (us-east-1)", "openai:us-east-1:openai.gpt-5.5"),
+    ("OpenAI GPT 6 Sol (us-east-1)", "openai:us-east-1:openai.gpt-6-sol"),  # GPT 5.5 until v2.42.x
     ("Bedrock Claude Haiku 5.5 (Global)", "global.anthropic.claude-haiku-5-5"),
 ]
-HIDDEN_1P = [("OpenAI GPT 5.5 (1P)", "openai:1p:gpt-5.5")]
+HIDDEN_1P = [("OpenAI GPT 6 Sol (1P)", "openai:1p:gpt-6-sol")]  # "(1P)" alone hides it
 RETIRED = [  # v2.39.0 — 다섯 패밀리마다 한 채널 이상
     ("OpenAI GPT 5.4 (us-east-1)", "openai:us-east-1:openai.gpt-5.4"),
     ("OpenAI GPT 5.4 (1P)", "openai:1p:gpt-5.4"),
@@ -31,6 +31,11 @@ RETIRED = [  # v2.39.0 — 다섯 패밀리마다 한 채널 이상
     ("Anthropic Claude Sonnet 4.6 (US)", "anthropic:claude-sonnet-4-6"),
     ("Bedrock Claude Opus 4.7 (US)", "us.anthropic.claude-opus-4-7"),
     ("Bedrock Claude Opus 4.6 (Global)", "global.anthropic.claude-opus-4-6-v1"),
+    # v2.42.0 Fable 5, v2.43.0 Claude Opus 4.8, GPT 5.6, GPT 5.5
+    ("Anthropic Claude Fable 5 (US)", "anthropic:claude-fable-5"),
+    ("Bedrock Claude Opus 4.8 (US)", "us.anthropic.claude-opus-4-8"),
+    ("OpenAI GPT 5.6 Terra (Global)", "openai:global:global.openai.gpt-5.6-terra"),
+    ("OpenAI GPT 5.5 (us-east-1)", "openai:us-east-1:openai.gpt-5.5"),
 ]
 
 
@@ -100,7 +105,8 @@ def test_env_override_reexposes(session_factory, client, monkeypatch):
 def test_hidden_patterns_parsing(monkeypatch):
     assert visibility.hidden_patterns() == [
         "(1P)", "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4",
-        "Claude Fable 5 ("]  # v2.42.0 — 괄호까지 넣어 Fable 5.1, 5.2 라벨은 걸리지 않는다
+        "Claude Fable 5 (",  # v2.42.0 — 괄호까지 넣어 Fable 5.1, 5.2 라벨은 걸리지 않는다
+        "Claude Opus 4.8", "GPT 5.6", "GPT 5.5"]  # v2.43.0
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", " (1P) , Opus 4.5 ")
     assert visibility.hidden_patterns() == ["(1P)", "Opus 4.5"]
 
@@ -111,7 +117,7 @@ def _hidden(label: str) -> bool:
 
 def test_no_active_label_or_family_matches_a_default_pattern():
     """숨김 패턴이 남은 채널을 가리지 않는다 — 예를 들어 "GPT 5.4"가 미래의 "GPT 5.45"를, "Claude Opus 4.6"이
-    다른 Opus를 잡지 않는지. 운영 카탈로그 49채널(tests/pricing_catalog.py)과 FAMILY_ORDER 18개로 확인한다."""
+    다른 Opus를 잡지 않는지. 운영 카탈로그 39채널(tests/pricing_catalog.py, v2.43.0)과 FAMILY_ORDER 13개로 확인한다."""
     assert [label for label in ACTIVE_MODELS.values() if _hidden(label)] == []
     assert [family for family in FAMILY_ORDER if _hidden(family)] == []
     assert len(RETIRED_V239_MODELS) == 12 and all(_hidden(label) for label in RETIRED_V239_MODELS.values())
@@ -138,8 +144,9 @@ def test_gptbench_latest_and_trend_hide_retired_rows(session_factory):
 
     cycle = datetime.now(timezone.utc) - timedelta(minutes=20)  # 14분이 지나 완료된 사이클
     s = session_factory()
-    for name, mid, family in (("OpenAI GPT 5.5 (us-east-1)", "openai:us-east-1:openai.gpt-5.5", "GPT 5.5"),
-                              ("OpenAI GPT 5.4 (us-east-1)", "openai:us-east-1:openai.gpt-5.4", "GPT 5.4")):
+    for name, mid, family in (("OpenAI GPT 6 Sol (us-east-1)", "openai:us-east-1:openai.gpt-6-sol", "GPT 6 Sol"),
+                              ("OpenAI GPT 5.4 (us-east-1)", "openai:us-east-1:openai.gpt-5.4", "GPT 5.4"),
+                              ("OpenAI GPT 5.5 (us-east-1)", "openai:us-east-1:openai.gpt-5.5", "GPT 5.5")):  # v2.43.0
         s.add(models.GptBenchResult(cycle_ts=cycle, timestamp=cycle, model_id=mid, model_name=name, family=family,
                                     region="us-east-1", run_no=1, status="success", ttfb_ms=500.0, ttft_ms=900.0,
                                     gap_ms=400.0, cached_tokens=100))
@@ -147,9 +154,9 @@ def test_gptbench_latest_and_trend_hide_retired_rows(session_factory):
     s.close()
     client = _client(session_factory, gptbench_router.router)
     latest = client.get("/api/gptbench/latest").json()
-    assert [c["model_name"] for c in latest["channels"]] == ["OpenAI GPT 5.5 (us-east-1)"]
+    assert [c["model_name"] for c in latest["channels"]] == ["OpenAI GPT 6 Sol (us-east-1)"]
     trend = client.get("/api/gptbench/trend?hours=1").json()
-    assert [series["model_name"] for series in trend["series"]] == ["OpenAI GPT 5.5 (us-east-1)"]
+    assert [series["model_name"] for series in trend["series"]] == ["OpenAI GPT 6 Sol (us-east-1)"]
 
 
 def test_parity_latest_hides_retired_rows_and_their_diff(session_factory):

@@ -18,10 +18,10 @@ import models
 
 ACTIVE = [  # Bedrock은 정적 카탈로그, OpenAI Mantle은 기동 때 등록하는 채널(테스트에서 setitem)
     ("Bedrock Claude Haiku 5.5 (Global)", "global.anthropic.claude-haiku-5-5"),
-    ("OpenAI GPT 5.5 (us-east-1)", "openai:us-east-1:openai.gpt-5.5"),
+    ("OpenAI GPT 6 Sol (us-east-1)", "openai:us-east-1:openai.gpt-6-sol"),  # GPT 5.5 until v2.42.x (hidden since v2.43.0)
 ]
 STOPPED = [  # v2.38.0 — 행은 남았지만 카탈로그에 없다
-    ("OpenAI GPT 5.5 (us-east-2)", "openai:us-east-2:openai.gpt-5.5"),
+    ("OpenAI GPT 6 Luna (us-west-2)", "openai:us-west-2:openai.gpt-6-luna"),  # a visible label whose channel is not in the catalog
     ("OpenAI GPT 6 Astra (us-west-2)", "openai:us-west-2:openai.gpt-6-astra"),
 ]
 

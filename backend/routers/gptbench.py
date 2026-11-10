@@ -131,9 +131,9 @@ def latest(db: Session = Depends(get_db)):
             median_reasoning_tokens=_median([r.reasoning_tokens for r in ok]),
             last_error=(errs[-1].error_message if errs else None),
         ))
-    # 정렬: family(최신 순, GPT 6.1 → GPT 6 세대 → 5.x) → region. 누락된 family는 rank 9로 맨 뒤.
-    fam_rank = {"GPT 6.1 Sol": 0, "GPT 6.1 Terra": 1, "GPT 6 Astra": 2, "GPT 6 Sol": 3, "GPT 6 Luna": 4,
-                "GPT 5.6 Terra": 5, "GPT 5.5": 6}
+    # 정렬: family(최신 순, GPT 6.1 → GPT 6 세대) → region. 누락된 family는 rank 9로 맨 뒤.
+    # GPT 5.6 Terra, GPT 5.5는 v2.43.0에 벤치에서 뺐다(지난 사이클 행은 visible_only가 숨긴다).
+    fam_rank = {"GPT 6.1 Sol": 0, "GPT 6.1 Terra": 1, "GPT 6 Astra": 2, "GPT 6 Sol": 3, "GPT 6 Luna": 4}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
