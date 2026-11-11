@@ -18,8 +18,6 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Opus 5": "bg-rose-800",
   "Claude Opus 5 (Global)": "bg-rose-700",
   "Claude Opus 5 (ap-northeast-2)": "bg-rose-900",
-  "Claude Opus 4.8": "bg-fuchsia-700",
-  "Claude Opus 4.8 (Global)": "bg-fuchsia-600",
   "Claude Sonnet 5.5": "bg-violet-700",
   "Claude Sonnet 5.5 (Global)": "bg-violet-600",
   "Claude Sonnet 5": "bg-indigo-600",
@@ -28,23 +26,6 @@ const MODEL_COLORS: Record<string, string> = {
   "Claude Haiku 5.5": "bg-orange-700",
   "Claude Haiku 5.5 (Global)": "bg-orange-600",
   "Nova 2.0 Lite": "bg-amber-600",
-  "GPT 5.5 (us-east-1)": "bg-emerald-600",
-  "GPT 5.5 (us-east-2)": "bg-emerald-700",
-  "GPT 5.5 (1P)": "bg-emerald-800",
-  "GPT 5.6 Sol (Global)": "bg-lime-400",
-  "GPT 5.6 Sol (us-east-1)": "bg-lime-600",
-  "GPT 5.6 Sol (us-east-2)": "bg-lime-700",
-  "GPT 5.6 Sol (1P)": "bg-lime-800",
-  "GPT 5.6 Terra (Global)": "bg-emerald-300",
-  "GPT 5.6 Terra (us-east-1)": "bg-emerald-500",
-  "GPT 5.6 Terra (us-east-2)": "bg-emerald-400",
-  "GPT 5.6 Terra (us-west-2)": "bg-teal-500",
-  "GPT 5.6 Terra (1P)": "bg-teal-400",
-  "GPT 5.6 Luna (Global)": "bg-teal-800",
-  "GPT 5.6 Luna (us-east-1)": "bg-green-400",
-  "GPT 5.6 Luna (us-east-2)": "bg-green-300",
-  "GPT 5.6 Luna (us-west-2)": "bg-teal-300",
-  "GPT 5.6 Luna (1P)": "bg-lime-500",
   // GPT 6 Astra (v2.25.0) — Global CRIS / US CRIS / 인리전 (배지 텍스트는 흰색). 인리전은 v2.38.0부터 us-east-1(그 전 us-west-2).
   "GPT 6 Astra (Global)": "bg-lime-900",
   "GPT 6 Astra (US)": "bg-emerald-900",
@@ -92,9 +73,6 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
   if (modelId.includes("opus-5")) {
     return `Claude Opus 5${claudeSuffix}`;
   }
-  if (modelId.includes("opus-4-8")) {
-    return `Claude Opus 4.8${claudeSuffix}`;
-  }
   // "sonnet-5"는 "sonnet-5-5"에도 포함 — 5.5 분기가 먼저 와야 함.
   if (modelId.includes("sonnet-5-5")) return `Claude Sonnet 5.5${claudeSuffix}`;
   if (modelId.includes("sonnet-5")) {
@@ -116,11 +94,8 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
       : modelId.includes("gpt-6.1-terra") ? "GPT 6.1 Terra"
       : modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
       : modelId.includes("gpt-6-sol") ? "GPT 6 Sol"
-      : modelId.includes("gpt-6-luna") ? "GPT 6 Luna"
-      : modelId.includes("gpt-5.6-sol") ? "GPT 5.6 Sol"
-      : modelId.includes("gpt-5.6-terra") ? "GPT 5.6 Terra"
-      : modelId.includes("gpt-5.6-luna") ? "GPT 5.6 Luna"
-      : modelId.includes("gpt-5.5") ? "GPT 5.5" : "GPT";
+      // GPT 5.6 Sol, Terra, Luna와 GPT 5.5는 v2.43.0에 모니터링에서 뺐다(ADR-038).
+      : modelId.includes("gpt-6-luna") ? "GPT 6 Luna" : "GPT";
     return `${fam} (${region})`;
   }
   return modelId;

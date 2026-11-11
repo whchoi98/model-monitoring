@@ -17,17 +17,20 @@ def _seed(model_id):
 
 
 def test_openai_channels_classify_per_channel():
-    assert price_identity("openai:us-east-1:openai.gpt-5.5").channel == "inregion:us-east-1"
+    assert price_identity("openai:us-east-1:openai.gpt-6-sol").channel == "inregion:us-east-1"
     assert price_identity("openai:us-east-1:openai.gpt-5.4") is None  # GPT 5.4 left monitoring in v2.39.0 (ADR-034)
-    assert price_identity("openai:us-east-2:openai.gpt-5.5").channel == "inregion:us-east-2"
-    assert price_identity("openai:global:global.openai.gpt-5.6-sol").channel == "global"
+    for mid in ("openai:us-east-1:openai.gpt-5.5", "openai:global:global.openai.gpt-5.6-sol",
+                "openai:us-east-1:openai.gpt-5.6-terra"):
+        assert price_identity(mid) is None, mid  # GPT 5.5 and 5.6 left monitoring in v2.43.0 (ADR-038)
+    assert price_identity("openai:us-east-2:openai.gpt-6-sol").channel == "inregion:us-east-2"
+    assert price_identity("openai:global:global.openai.gpt-6-sol").channel == "global"
     assert price_identity("openai:us:us.openai.gpt-6-astra").channel == "us"
     assert price_identity("openai:us-west-2:openai.gpt-6-astra").channel == "inregion:us-west-2"
     # Global/US CRIS and in-region share one family (one table row), never a "-global" key.
     assert {price_identity(m).family_key for m in (
-        "openai:global:global.openai.gpt-5.6-sol", "openai:us-east-1:openai.gpt-5.6-sol",
-    )} == {"gpt-5.6-sol"}
-    assert price_identity("openai:global:global.openai.gpt-5.6-sol").source_ref == "openai.gpt-5.6-sol"
+        "openai:global:global.openai.gpt-6-sol", "openai:us-east-1:openai.gpt-6-sol",
+    )} == {"gpt-6-sol"}
+    assert price_identity("openai:global:global.openai.gpt-6-sol").source_ref == "openai.gpt-6-sol"
 
 
 def test_dormant_1p_channel_is_not_priced():
@@ -53,20 +56,18 @@ def test_gpt6_sol_luna_seed_per_channel():
             assert mid in pricing_seed.SEED, mid
 
 
-def test_seed_openai_gpt55_and_no_gpt54():
-    assert _seed("openai:us-east-1:openai.gpt-5.5") == (5.5, 33.0)
-    assert not [m for m in pricing_seed.SEED if "gpt-5.4" in m]  # v2.39.0: no GPT 5.4 channel or seed
-    assert "gpt-5.4" not in pricing_seed.OPENAI_LIST_SEED
+def test_no_gpt5_seed_left():
+    """v2.39.0 removed GPT 5.4, v2.43.0 GPT 5.5 and 5.6 Sol, Terra, Luna — no channel seed, no OpenAI list seed."""
+    assert not [m for m in pricing_seed.SEED if "gpt-5." in m]
+    assert not [fk for fk in pricing_seed.OPENAI_LIST_SEED if fk.startswith("gpt-5.")]
 
 
-def test_seed_gpt56_global_vs_in_region():
-    # Global CRIS is cheaper than in-region; GPT-5.6 Sol carries the promotional price (v2.28.1).
-    assert _seed("openai:global:global.openai.gpt-5.6-sol") == (4.0, 20.0)
-    assert _seed("openai:us-east-1:openai.gpt-5.6-sol") == (4.4, 22.0)
-    assert _seed("openai:global:global.openai.gpt-5.6-terra") == (2.0, 12.0)
-    assert _seed("openai:us-east-1:openai.gpt-5.6-terra") == (2.2, 13.2)
-    assert _seed("openai:global:global.openai.gpt-5.6-luna") == (0.2, 1.2)
-    assert _seed("openai:us-east-1:openai.gpt-5.6-luna") == (0.22, 1.32)
+def test_seed_gpt6_global_vs_in_region():
+    # Global CRIS is the OpenAI list price; US CRIS and in-region add 10%.
+    assert _seed("openai:global:global.openai.gpt-6-sol") == (2.0, 10.0)
+    assert _seed("openai:us-east-1:openai.gpt-6-sol") == (2.2, 11.0)
+    assert _seed("openai:global:global.openai.gpt-6-luna") == (0.1, 0.5)
+    assert _seed("openai:us-east-1:openai.gpt-6-luna") == (0.11, 0.55)
 
 
 def test_openai_seed_has_only_us_east_1_mantle_channels():
@@ -92,9 +93,11 @@ def test_existing_claude_seed_unbroken():
     assert _seed("us.anthropic.claude-fable-5-1") == (11.0, 55.0)
     assert "us.anthropic.claude-fable-5" not in pricing_seed.SEED  # Fable 5 left monitoring in v2.42.0 (ADR-037)
     assert _seed("global.anthropic.claude-opus-5") == (5.0, 25.0)
-    # Opus 4.8 is $5/$25 (2026-07-24 official check; $15/$75 was the Opus 4.1 price).
-    assert pricing_seed.CP_SEED["claude-opus-4-8"][:2] == pytest.approx((5.0, 25.0))
-    assert price_identity("anthropic:claude-opus-4-8").family_key == "claude-opus-4-8"
+    # Opus 4.8 left monitoring in v2.43.0 (ADR-038) — no seed and no identity for any of its channels
+    assert "claude-opus-4-8" not in pricing_seed.CP_SEED
+    for mid in ("anthropic:claude-opus-4-8", "global.anthropic.claude-opus-4-8", "us.anthropic.claude-opus-4-8"):
+        assert price_identity(mid) is None, mid
+    assert pricing_seed.CP_SEED["claude-opus-5"][:2] == pytest.approx((5.0, 25.0))
 
 
 def test_channel_openai():

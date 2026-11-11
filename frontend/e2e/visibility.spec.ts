@@ -3,11 +3,12 @@ import { mockApi } from "./fixtures";
 import { mkdir } from "node:fs/promises";
 import path from "node:path";
 
-// 운영 규모 카탈로그(v2.42.0, 활성 49채널 = Claude 26 + Nova 1 + OpenAI 22).
+// 운영 규모 카탈로그(v2.43.0, 활성 39채널 = Claude 23 + Nova 1 + OpenAI 15).
 // 서울 In-Region(ap-northeast-2)은 Opus 5와 Sonnet 5만. Haiku 5.5와 Sonnet 5.5 US는 v2.33.0.
 // GPT 6.1 Terra와 OpenAI Mantle 인리전 us-east-1 일원화는 v2.38.0. Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와
 // GPT 5.4는 v2.39.0에 모니터링에서 뺐다(ADR-034). Fable 5.2는 v2.41.0에 더했고(ADR-036) Fable 5는 v2.42.0에 뺐다(ADR-037).
-const claudeFamilies = ["Fable 5.2", "Fable 5.1", "Opus 5.5", "Opus 5", "Opus 4.8", "Sonnet 5.5", "Sonnet 5", "Haiku 5.5"];
+// Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna와 GPT 5.5는 v2.43.0에 뺐다(ADR-038).
+const claudeFamilies = ["Fable 5.2", "Fable 5.1", "Opus 5.5", "Opus 5", "Sonnet 5.5", "Sonnet 5", "Haiku 5.5"];
 const modelNames = [
   ...claudeFamilies.flatMap((family) => [
     `Bedrock Claude ${family} (Global)`,
@@ -22,15 +23,11 @@ const modelNames = [
     ["6 Astra", ["Global", "US", "us-east-1"]],
     ["6 Sol", ["Global", "US", "us-east-1"]],
     ["6 Luna", ["Global", "US", "us-east-1"]],
-    ["5.6 Sol", ["Global", "us-east-1"]],
-    ["5.6 Terra", ["Global", "us-east-1"]],
-    ["5.6 Luna", ["Global", "us-east-1"]],
-    ["5.5", ["us-east-1"]],
   ] as const).flatMap(([family, regions]) => regions.map((region) => `OpenAI GPT ${family} (${region})`)),
 ];
 
 for (const [width, lang, theme] of [[1440, "ko", "dark"], [1440, "en", "light"], [390, "ko", "dark"], [390, "en", "light"]] as const) {
-  test(`49-channel dashboard is usable at ${width}px in ${lang}/${theme}`, async ({ page }, testInfo) => {
+  test(`39-channel dashboard is usable at ${width}px in ${lang}/${theme}`, async ({ page }, testInfo) => {
     await page.setViewportSize({ width, height: width < 768 ? 844 : 1100 });
     await page.addInitScript(({ lang, theme }) => {
       localStorage.setItem("lang", lang);
@@ -57,8 +54,8 @@ for (const [width, lang, theme] of [[1440, "ko", "dark"], [1440, "en", "light"],
     page.on("pageerror", (error) => errors.push(error.message));
     await page.goto("/");
     const region = page.getByRole("region", { name: lang === "ko" ? "모델별 최신 상태" : "Latest Model Status" });
-    expect(modelNames).toHaveLength(49);
-    await expect(region.getByRole("article")).toHaveCount(49);
+    expect(modelNames).toHaveLength(39);
+    await expect(region.getByRole("article")).toHaveCount(39);
     await expect(page.locator(".recharts-wrapper")).toHaveCount(3);
     if (width < 768) {
       const attention = await page.getByRole("button", { name: lang === "ko" ? "확인 필요 4" : "Needs attention 4", exact: true }).boundingBox();

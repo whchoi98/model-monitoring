@@ -964,3 +964,12 @@ def test_a_snapshot_failure_never_rolls_back_the_prices(Session, monkeypatch):
     assert run.summary["channels"][SOL_E1] == "changed"
     with Session() as db:
         assert db.query(PriceHistory).filter(PriceHistory.model_id == SOL_E1, PriceHistory.input_per_mtok == 5.5).count() == 1
+
+
+@pytest.fixture(autouse=True)
+def _v242_sample_families(monkeypatch):
+    """GPT 5.6 Sol, Terra, Luna, GPT 5.5 and Claude Opus 4.8 stay sample channels in this module after they left the
+    catalog in v2.43.0 (tests/_legacy_families.py) — the fixtures and goldens were built on them."""
+    from tests import _legacy_families
+
+    _legacy_families.register(monkeypatch)

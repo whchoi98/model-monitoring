@@ -120,7 +120,7 @@ test("unit prices render the backend table, badges and both disclaimers", async 
     "AWS Bedrock - Global CRIS 단가는 같은 모델의 US CRIS, In Region 단가와 다를 수 있다",
     "GPT의 AWS Bedrock - US CRIS와 In Region 단가는 같다. AWS가 두 채널 모두 OpenAI 공식 가격에 10%를 더하고, Global CRIS는 OpenAI 공식 가격과 같다",
     "캐시 쓰기는 Claude의 5분 캐시, OpenAI 공식 문서의 cache writes, Nova의 캐시 쓰기 단가이고, 1시간 쓰기는 Claude의 1시간 캐시 단가다",
-    "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도(GPT 5.5는 272K)를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
+    "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다",
     "OpenAI 공식 가격은 OpenAI 직접 API 단가이며 비용 계산에 쓰지 않는다",
     "캐시와 긴 컨텍스트 단가는 표시만 하며, 비용 화면은 입력과 출력 단가로 계산한다",
     "batch, flex, priority(fast) 단가는 포함하지 않는다",

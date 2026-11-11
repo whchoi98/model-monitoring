@@ -218,4 +218,16 @@ describe("AppServicesStack", () => {
     expect(names).not.toContain("BEDROCK_OPENAI_GPT_54_MODEL_ID");
     expect(names).not.toContain("OPENAI_1P_GPT_54_MODEL_ID");
   });
+
+  it("backend env에 GPT 5.5, GPT 5.6 model id가 없다 (v2.43.0 — 모니터링에서 뺐다)", () => {
+    const backend = Object.values(template.findResources("AWS::ECS::TaskDefinition"))
+      .flatMap((r: any) => r.Properties.ContainerDefinitions).filter((c: any) => c.Name === "backend");
+    expect(backend).toHaveLength(1);
+    const names = backend[0].Environment.map((e: any) => e.Name);
+    for (const retired of ["BEDROCK_OPENAI_GPT_55_MODEL_ID", "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID",
+      "OPENAI_1P_GPT_55_MODEL_ID", "OPENAI_1P_GPT_56_SOL_MODEL_ID", "OPENAI_1P_GPT_56_TERRA_MODEL_ID", "OPENAI_1P_GPT_56_LUNA_MODEL_ID"]) {
+      expect(names).not.toContain(retired);
+    }
+    expect(names.filter((n: string) => n.startsWith("OPENAI_1P_GPT_"))).toEqual([]);
+  });
 });

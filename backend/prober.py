@@ -114,7 +114,8 @@ AVAILABLE_MODELS: dict[str, str] = {
     # temperature 400(추론 전용) · forced tool_choice(type tool/any) 400 — 패리티는 auto로 대체 (parity/catalog.py).
     "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
     "global.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (Global)",
-    "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
+    # Opus 4.8은 사용자 결정(2026-11-10)으로 모니터링에서 뺐다(v2.43.0, ADR-038) — Global, US, CP 3채널.
+    # 저장 행은 남기고 visibility.py가 "Claude Opus 4.8" 패턴으로 숨긴다.
     # Sonnet 5.5 (v2.32.0, 2026-09-30 실측): Global CRIS(Seoul 호출) 200, us. 프로파일 없음("model identifier is invalid").
     # temperature 400("temperature is deprecated for this model") — _REASONING_MODEL_PATTERNS의 "sonnet-5"가 substring으로 포함.
     "global.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (Global)",
@@ -128,7 +129,6 @@ AVAILABLE_MODELS: dict[str, str] = {
     "us.anthropic.claude-fable-5-1": "Bedrock Claude Fable 5.1 (US)",
     "us.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (US)",
     "us.anthropic.claude-opus-5": "Bedrock Claude Opus 5 (US)",
-    "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     # Sonnet 5.5 US (v2.33.0): 2026-09-30에는 us. 프로파일이 없었고 2026-10-07 us-east-1/us-east-2/us-west-2에 생겼다(us-east-1 converse 200).
     "us.anthropic.claude-sonnet-5-5": "Bedrock Claude Sonnet 5.5 (US)",
     "us.anthropic.claude-sonnet-5": "Bedrock Claude Sonnet 5 (US)",
@@ -161,7 +161,7 @@ _ANTHROPIC_TARGETS: list[tuple[str, str]] = [
     # ("fable-5", …)는 v2.42.0에 뺐다 — claude-fable-5는 어느 타깃에도 걸리지 않아 등록되지 않는다(점 버전 가드와 무관).
     ("opus-5-5", "Anthropic Claude Opus 5.5 (US)"),  # v2.27.0 — CP가 2026-09-22부터 서빙
     ("opus-5", "Anthropic Claude Opus 5 (US)"),  # v2.19.0 — 조직 복구 시 자동 발견
-    ("opus-4-8", "Anthropic Claude Opus 4.8 (US)"),
+    # ("opus-4-8", …)는 v2.43.0에 뺐다 — claude-opus-4-8은 어느 타깃에도 걸리지 않아 등록되지 않는다.
     ("sonnet-5-5", "Anthropic Claude Sonnet 5.5 (US)"),  # v2.32.0 — CP /v1/models 첫 항목(2026-09-30)
     ("sonnet-5", "Anthropic Claude Sonnet 5 (US)"),
     ("haiku-5-5", "Anthropic Claude Haiku 5.5 (US)"),  # v2.33.0 — CP /v1/models 첫 항목(2026-10-07)
@@ -324,10 +324,10 @@ def _is_reasoning_model(model_id: str) -> bool:
 
 # =====================================================================
 # OpenAI GPT via Bedrock Mantle (OpenAI-compatible /openai/v1) — Path 4.
-# model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-5.5).
+# model_id 키 스킴: "openai:<region>:<actual_model_id>" (예: openai:us-east-1:openai.gpt-6.1-sol).
 # region이 채널 식별자 (같은 model_id를 두 리전에 호출). bearer 토큰 인증.
 # pseudo-region "global" (v2.20.0): Bedrock global cross-region 프로파일 —
-# "openai:global:global.openai.gpt-5.6-sol" 형태 (actual_id 자체에 global. 접두사 포함).
+# "openai:global:global.openai.gpt-6.1-sol" 형태 (actual_id 자체에 global. 접두사 포함).
 # pseudo-region "us" (v2.25.0): Bedrock US cross-region 프로파일 —
 # "openai:us:us.openai.gpt-6-astra" 형태 (actual_id 자체에 us. 접두사 포함).
 # =====================================================================
@@ -358,6 +358,7 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
 # GPT 5.4는 사용자 결정(2026-10-27)으로 모니터링에서 뺐다 (v2.39.0, ADR-034 — Mantle과 휴면 1P 스펙 모두, 저장 행은 visibility.py가 숨긴다).
+# GPT 5.6 Sol, Terra, Luna와 GPT 5.5도 사용자 결정(2026-11-10)으로 뺐다 (v2.43.0, ADR-038 — 같은 방식). 남은 OpenAI는 GPT 6 세대뿐이다.
 # Mantle 인리전은 모든 모델이 us-east-1 하나다 (v2.38.0, 2026-10-27 사용자 결정 "gpt mantle은 모두 us-east-1으로 변경").
 # 같은 날 us-east-1 Mantle이 10개 모델 모두 200 — GPT 6 Astra도 서빙한다(2026-09-09·09-23에는 404라 us-west-2였다).
 # 그 전에는 모델마다 리전이 달랐다: 5.4 us-east-1/us-east-2/us-west-2, 5.5와 5.6 Sol us-east-1/us-east-2,
@@ -372,10 +373,6 @@ _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", "GPT 6 Luna", ("global", "us", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1")),
-    ("BEDROCK_OPENAI_GPT_55_MODEL_ID", "GPT 5.5", ("us-east-1",)),
 ]
 
 # =====================================================================
@@ -387,12 +384,9 @@ _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
 _OPENAI_1P_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 
 # (model-id env var, display family) — 리전 없음 (글로벌 라우팅).
-_OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = [
-    ("OPENAI_1P_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol"),
-    ("OPENAI_1P_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra"),
-    ("OPENAI_1P_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna"),
-    ("OPENAI_1P_GPT_55_MODEL_ID", "GPT 5.5"),
-]
+# v2.43.0부터 남은 스펙이 없다 — 휴면 1P 스펙은 GPT 5.5와 5.6 세대뿐이었고 그 계열을 모니터링에서 뺐다(ADR-038).
+# 1P 경로(키, base_url, 등록 루프)는 그대로 둔다. 다시 쓰려면 여기에 (env, family)를 더하고 CDK에 그 env를 주입한다.
+_OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = []
 
 # OpenAI Responses API의 incomplete reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).
 # gpt-5.x는 /chat/completions 미지원 → /responses 사용. finish_reason 대신 status/incomplete_details.

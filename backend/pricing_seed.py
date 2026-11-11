@@ -24,6 +24,9 @@ v2.41.0: 2026-11-09 오퍼(offer-agsprgw6z3dg6)와 문서로 Claude Fable 5.2 3�
 US 8.8 / 44, 캐시 읽기는 Fable 5.1처럼 입력의 0.025배(0.2, US 0.22). 활성 52채널, offer FM 18개, openai-list 9개, 합계 61채널.
 v2.42.0: 사용자 결정(2026-11-10)으로 Claude Fable 5(Global, US, CP)를 뺐다(ADR-037). 활성 49채널, offer FM 17개, openai-list 9개,
 합계 58채널. 그 채널의 price_history 행은 그대로 둔다.
+v2.43.0: 같은 날 사용자 결정으로 Claude Opus 4.8(Global, US, CP), GPT 5.6 Sol, Terra, Luna(Global, us-east-1)와 GPT 5.5(us-east-1)를
+뺐다(ADR-038). openai-list:gpt-5.6-*, openai-list:gpt-5.5도 빠진다. 활성 39채널, offer FM 12개, openai-list 5개, 합계 44채널.
+그 채널의 price_history 행도 그대로 둔다.
 """
 
 import logging
@@ -66,7 +69,6 @@ _CLAUDE: dict[str, tuple[str, float, float, float, float, tuple[str, ...]]] = {
     "anthropic.claude-fable-5-1": ("offer-icq4574v6gz3i", 10.0, 50.0, 11.0, 55.0, ("global", "us")),
     "anthropic.claude-opus-5-5": ("offer-7sp77cpl4rveu", 4.0, 20.0, 4.4, 22.0, ("global", "us")),
     "anthropic.claude-opus-5": ("offer-f3u6lgbrem3zs", 5.0, 25.0, 5.5, 27.5, ("global", "us", "ap-northeast-2")),
-    "anthropic.claude-opus-4-8": ("offer-wdkl4yk6s7uu4", 5.0, 25.0, 5.5, 27.5, ("global", "us")),
     # Sonnet 5.5: v2.32.0은 Global만(us. 프로파일 없음, 2026-09-30), v2.33.0에 US(USE1_*_standard 2.2 / 11, 2026-10-07)
     "anthropic.claude-sonnet-5-5": ("offer-5fu2rhus3byrs", 2.0, 10.0, 2.2, 11.0, ("global", "us")),
     "anthropic.claude-sonnet-5": ("offer-2ykemehpsyf7g", 2.0, 10.0, 2.2, 11.0, ("global", "us", "ap-northeast-2")),
@@ -80,10 +82,6 @@ _OPENAI: dict[str, tuple[str, float, float, float | None, float | None, tuple[st
     "openai.gpt-6-astra": ("offer-7epta7rbw5aws", 11.0, 55.0, 10.0, 50.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-sol": ("offer-pycji3sz5gpcc", 2.2, 11.0, 2.0, 10.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-luna": ("offer-gmo53nkzc5or6", 0.11, 0.55, 0.1, 0.5, ("global", "us", "us-east-1")),
-    "openai.gpt-5.6-sol": ("offer-gnqokrqqvdbgw", 4.4, 22.0, 4.0, 20.0, ("global", "us-east-1")),
-    "openai.gpt-5.6-terra": ("offer-3dvyrx3okd4lq", 2.2, 13.2, 2.0, 12.0, ("global", "us-east-1")),
-    "openai.gpt-5.6-luna": ("offer-bklbyf2ewuawu", 0.22, 1.32, 0.2, 1.2, ("global", "us-east-1")),
-    "openai.gpt-5.5": ("offer-rtwlbb46hcxpw", 5.5, 33.0, None, None, ("us-east-1",)),
 }
 
 
@@ -114,7 +112,7 @@ CP_SEED: dict[str, tuple[float, float, str]] = {
     for fk, i, o in (
         ("claude-fable-5-2", 8.0, 40.0), ("claude-fable-5-1", 10.0, 50.0),
         ("claude-opus-5-5", 4.0, 20.0),
-        ("claude-opus-5", 5.0, 25.0), ("claude-opus-4-8", 5.0, 25.0),
+        ("claude-opus-5", 5.0, 25.0),
         ("claude-sonnet-5-5", 2.0, 10.0), ("claude-sonnet-5", 2.0, 10.0),
         ("claude-haiku-5-5", 0.1, 0.5),
     )
@@ -127,8 +125,6 @@ OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
     for fk, i, o in (
         ("gpt-6.1-sol", 2.0, 10.0), ("gpt-6.1-terra", 1.0, 5.0), ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0),
         ("gpt-6-luna", 0.1, 0.5),
-        ("gpt-5.6-sol", 4.0, 20.0), ("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2),
-        ("gpt-5.5", 5.0, 30.0),
     )
 }
 
@@ -146,7 +142,6 @@ _CLAUDE_CACHE: dict[str, tuple[tuple[float, float, float], tuple[float, float, f
     "anthropic.claude-fable-5-1": ((0.25, 12.5, 20.0), (0.275, 13.75, 22.0)),
     "anthropic.claude-opus-5-5": ((0.2, 5.0, 8.0), (0.22, 5.5, 8.8)),
     "anthropic.claude-opus-5": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
-    "anthropic.claude-opus-4-8": ((0.5, 6.25, 10.0), (0.55, 6.875, 11.0)),
     # Sonnet 5.5 캐시 읽기는 2026-10-07 인하(0.2 → 0.1, US 0.22 → 0.11 — offer-5fu2rhus3byrs, v2.33.0)
     "anthropic.claude-sonnet-5-5": ((0.1, 2.5, 4.0), (0.11, 2.75, 4.4)),
     "anthropic.claude-sonnet-5": ((0.2, 2.5, 4.0), (0.22, 2.75, 4.4)),
@@ -162,14 +157,14 @@ _CLAUDE_LONG: dict[str, tuple[tuple[float, float, float, float], tuple[float, fl
 _CP_CACHE: dict[str, tuple[float, float, float]] = {
     "claude-fable-5-2": (0.2, 10.0, 16.0),
     "claude-fable-5-1": (0.25, 12.5, 20.0), "claude-opus-5-5": (0.2, 5.0, 8.0),
-    "claude-opus-5": (0.5, 6.25, 10.0), "claude-opus-4-8": (0.5, 6.25, 10.0),
+    "claude-opus-5": (0.5, 6.25, 10.0),
     "claude-sonnet-5-5": (0.2, 2.5, 4.0), "claude-sonnet-5": (0.2, 2.5, 4.0),
     "claude-haiku-5-5": (0.01, 0.125, 0.2),
 }
 # Claude Platform on AWS 긴 컨텍스트 — Anthropic 문서 "(for prompts over 100,000 tokens)" 행, _LONG_FIELDS 순서(v2.33.0)
 _CP_LONG: dict[str, tuple[float, float, float, float]] = {"claude-haiku-5-5": (0.5, 2.5, 0.05, 0.625)}
 # OpenAI FM id → (standard = US CRIS와 모든 in-region, global = Global CRIS), 각각 _GPT_FIELDS 순서.
-# 캐시 쓰기 = offer cache_write_tokens_30m, 1시간 캐시 쓰기 없음. GPT 5.5는 캐시 쓰기와 Global 채널이 없다.
+# 캐시 쓰기 = offer cache_write_tokens_30m, 1시간 캐시 쓰기 없음. global이 None인 패밀리는 Global 채널이 없다(v2.42.0까지 GPT 5.5).
 _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
     # GPT 6.1 Sol: 2026-09-30 오퍼의 긴 컨텍스트 출력(2.2 / 2)이 짧은 컨텍스트 출력보다 낮다 — 동기화가 긴 컨텍스트
     # 단가를 버리므로(pricing_sync._plausible_long) seed도 None으로 둔다(None은 동기화가 채울 수 있다)
@@ -179,10 +174,6 @@ _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
     "openai.gpt-6-astra": ((1.1, 13.75, 22.0, 82.5, 2.2, 27.5), (1.0, 12.5, 20.0, 75.0, 2.0, 25.0)),
     "openai.gpt-6-sol": ((0.22, 2.75, 4.4, 16.5, 0.44, 5.5), (0.2, 2.5, 4.0, 15.0, 0.4, 5.0)),
     "openai.gpt-6-luna": ((0.011, 0.1375, 0.22, 0.825, 0.022, 0.275), (0.01, 0.125, 0.2, 0.75, 0.02, 0.25)),
-    "openai.gpt-5.6-sol": ((0.44, 5.5, 8.8, 33.0, 0.88, 11.0), (0.4, 5.0, 8.0, 30.0, 0.8, 10.0)),
-    "openai.gpt-5.6-terra": ((0.22, 2.75, 4.4, 19.8, 0.44, 5.5), (0.2, 2.5, 4.0, 18.0, 0.4, 5.0)),
-    "openai.gpt-5.6-luna": ((0.022, 0.275, 0.44, 1.98, 0.044, 0.55), (0.02, 0.25, 0.4, 1.8, 0.04, 0.5)),
-    "openai.gpt-5.5": ((0.55, None, 11.0, 49.5, 1.1, None), None),
 }
 # OpenAI 공식 가격(openai-list:<family_key>) — OpenAI 문서 "### Standard pricing data" 첫 표, _GPT_FIELDS 순서
 _OPENAI_LIST_EXTRA: dict[str, tuple] = {
@@ -191,10 +182,6 @@ _OPENAI_LIST_EXTRA: dict[str, tuple] = {
     "gpt-6-astra": (1.0, 12.5, 20.0, 75.0, 2.0, 25.0),
     "gpt-6-sol": (0.2, 2.5, 4.0, 15.0, 0.4, 5.0),
     "gpt-6-luna": (0.01, 0.125, 0.2, 0.75, 0.02, 0.25),
-    "gpt-5.6-sol": (0.4, 5.0, 8.0, 30.0, 0.8, 10.0),
-    "gpt-5.6-terra": (0.2, 2.5, 4.0, 18.0, 0.4, 5.0),
-    "gpt-5.6-luna": (0.02, 0.25, 0.4, 1.8, 0.04, 0.5),
-    "gpt-5.5": (0.5, None, 10.0, 45.0, 1.0, None),
 }
 # Nova 2.0 Lite — Price List USE1 cache read / cache write usagetype(1K tokens × 1000), 공식 캐시 쓰기는 $0
 _NOVA_CACHE: dict[str, tuple[float, float]] = {"us.amazon.nova-2-lite-v1:0": (0.0825, 0.0)}

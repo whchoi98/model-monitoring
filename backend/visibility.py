@@ -11,6 +11,8 @@
 2026-11-10 사용자 결정(v2.42.0, ADR-037): Claude Fable 5를 같은 방식으로 뺀다. 패턴은 "Claude Fable 5 ("다 —
 부분일치라 "Claude Fable 5"만 쓰면 "Claude Fable 5.1 (…)", "Claude Fable 5.2 (…)" 라벨까지 숨긴다.
 
+2026-11-10 사용자 결정(v2.43.0, ADR-038): Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna)도 뺀다. 세 패턴은 남은 라벨과 겹치지 않는다.
+
 재노출 방법: env HIDDEN_MODEL_PATTERNS=""(빈 값) 주입 + CDK ENABLE_OPENAI_1P=true
 (+ 유효 키를 SSM /bedrock-monitor/openai-1p-api-key 에 저장). env를 주면 기본값 전체를 대신하므로
 1P만 다시 보이려면 나머지 패턴은 그대로 적는다.
@@ -19,8 +21,9 @@
 import os
 
 # model_name 라벨 부분일치 패턴 (쉼표 구분). 기본: OpenAI 1P direct 채널, v2.39.0에 모니터링에서 뺀 다섯 패밀리,
-# v2.42.0에 뺀 Claude Fable 5(괄호까지 — 점 버전 라벨을 피한다).
-_DEFAULT_HIDDEN = "(1P),Claude Opus 4.7,Claude Opus 4.6,Claude Sonnet 4.6,Claude Haiku 4.5,GPT 5.4,Claude Fable 5 ("
+# v2.42.0에 뺀 Claude Fable 5(괄호까지 — 점 버전 라벨을 피한다), v2.43.0에 뺀 Claude Opus 4.8, GPT 5.6, GPT 5.5.
+_DEFAULT_HIDDEN = ("(1P),Claude Opus 4.7,Claude Opus 4.6,Claude Sonnet 4.6,Claude Haiku 4.5,GPT 5.4,Claude Fable 5 (,"
+                   "Claude Opus 4.8,GPT 5.6,GPT 5.5")
 
 
 def hidden_patterns() -> list[str]:

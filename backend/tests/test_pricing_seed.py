@@ -28,31 +28,28 @@ SEED_CALL = "ensure_seed(engine, active)"
 PRICE_SCHEMA_CALL = "    _ensure_price_schema()\n"  # the lifespan call (the def line has no bare newline after "()")
 ACTIVE = {mid: price_identity(mid) for mid in ACTIVE_MODELS}
 
-# v2.29.1 값이 처음부터 틀린 11채널(US는 Global 값, Nova는 1세대 Nova Lite 값) 중 v2.42.0에도 활성인 6채널 —
+# v2.29.1 값이 처음부터 틀린 11채널(US는 Global 값, Nova는 1세대 Nova Lite 값) 중 v2.43.0에도 활성인 5채널 —
 # Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5의 US 채널(각 5.5 / 27.5, 3.3 / 16.5, 1.1 / 5.5)은 모니터링에서 빠졌고(ADR-034),
-# Fable 5 US(11 / 55)도 v2.42.0에 빠졌다(ADR-037).
+# Fable 5 US(11 / 55)도 v2.42.0에(ADR-037), Opus 4.8 US(5.5 / 27.5)도 v2.43.0에 빠졌다(ADR-038).
 CORRECTED = {
     "us.anthropic.claude-fable-5-1": (11.0, 55.0),
     "us.anthropic.claude-opus-5-5": (4.4, 22.0), "us.anthropic.claude-opus-5": (5.5, 27.5),
-    "us.anthropic.claude-opus-4-8": (5.5, 27.5), "us.anthropic.claude-sonnet-5": (2.2, 11.0),
+    "us.anthropic.claude-sonnet-5": (2.2, 11.0),
     "us.amazon.nova-2-lite-v1:0": (0.33, 2.75),
 }
 STANDARD = {  # Anthropic 표준 단가 = Bedrock Global = CP (family_key 기준)
     "claude-fable-5-2": (8.0, 40.0), "claude-fable-5-1": (10.0, 50.0), "claude-opus-5-5": (4.0, 20.0),
-    "claude-opus-5": (5.0, 25.0), "claude-opus-4-8": (5.0, 25.0), "claude-sonnet-5-5": (2.0, 10.0),
+    "claude-opus-5": (5.0, 25.0), "claude-sonnet-5-5": (2.0, 10.0),
     "claude-sonnet-5": (2.0, 10.0), "claude-haiku-5-5": (0.1, 0.5),
 }
 OPENAI = {  # family_key → (US CRIS와 in-region, Global CRIS)
     "gpt-6.1-sol": ((2.2, 11.0), (2.0, 10.0)), "gpt-6.1-terra": ((1.1, 5.5), (1.0, 5.0)),  # 6.1 Terra v2.38.0
     "gpt-6-astra": ((11.0, 55.0), (10.0, 50.0)), "gpt-6-sol": ((2.2, 11.0), (2.0, 10.0)),
-    "gpt-6-luna": ((0.11, 0.55), (0.1, 0.5)), "gpt-5.6-sol": ((4.4, 22.0), (4.0, 20.0)),
-    "gpt-5.6-terra": ((2.2, 13.2), (2.0, 12.0)), "gpt-5.6-luna": ((0.22, 1.32), (0.2, 1.2)),
-    "gpt-5.5": ((5.5, 33.0), None),
+    "gpt-6-luna": ((0.11, 0.55), (0.1, 0.5)),  # GPT 5.6 Sol, Terra, Luna and GPT 5.5 left in v2.43.0 (ADR-038)
 }
 OPENAI_LIST = {  # OpenAI 공식 가격(Standard, 짧은 컨텍스트) — OpenAI pricing.md 2026-09-27(6.1 Terra 2026-10-27)
     "gpt-6.1-sol": (2.0, 10.0), "gpt-6.1-terra": (1.0, 5.0),
-    "gpt-6-astra": (10.0, 50.0), "gpt-6-sol": (2.0, 10.0), "gpt-6-luna": (0.1, 0.5), "gpt-5.6-sol": (4.0, 20.0),
-    "gpt-5.6-terra": (2.0, 12.0), "gpt-5.6-luna": (0.2, 1.2), "gpt-5.5": (5.0, 30.0),
+    "gpt-6-astra": (10.0, 50.0), "gpt-6-sol": (2.0, 10.0), "gpt-6-luna": (0.1, 0.5),
 }
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "pricing"
 
@@ -80,13 +77,13 @@ def _add(eng, **row):
 
 
 def test_seed_covers_every_active_channel():
-    assert len(SEED) == 41  # v2.39.0: -8 Bedrock Claude 4.x (Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5), -1 GPT 5.4; v2.41.0: +2 Fable 5.2;
-    #                         v2.42.0: -2 Fable 5
+    assert len(SEED) == 32  # v2.39.0: -8 Bedrock Claude 4.x (Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5), -1 GPT 5.4; v2.41.0: +2 Fable 5.2;
+    #                         v2.42.0: -2 Fable 5; v2.43.0: -2 Opus 4.8, -6 GPT 5.6, -1 GPT 5.5
     assert set(SEED) == {m for m, i in ACTIVE.items() if i.channel != "cp"}
     assert set(CP_SEED) == {i.family_key for i in ACTIVE.values() if i.channel == "cp"}
     rows = seed_rows(ACTIVE)
     assert set(rows) == set(ACTIVE)
-    assert rows["anthropic:claude-opus-4-8"] == (5.0, 25.0, ANTHROPIC_SOURCE_ID)  # CP id → family_key 표
+    assert rows["anthropic:claude-opus-5"] == (5.0, 25.0, ANTHROPIC_SOURCE_ID)  # CP id → family_key 표
     assert SEED_SOURCE_DATE.isoformat() == "2026-09-27"
     assert set(OPENAI_LIST_SEED) == {i.family_key for i in ACTIVE.values() if i.provider == "openai"}
 
@@ -122,8 +119,8 @@ def test_gpt_us_cris_seed_equals_in_region_on_every_price():
 def test_seed_rows_resolve_openai_list_channels_by_family_key():
     active = active_channels({**ACTIVE_MODELS, **HIDDEN_1P_MODELS}, ["(1P)"])
     rows = seed_rows(active)
-    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS) and len(rows) == 58
-    assert rows["openai-list:gpt-5.6-sol"] == (4.0, 20.0, OPENAI_SOURCE_ID)
+    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS) and len(rows) == 44
+    assert rows["openai-list:gpt-6-sol"] == (2.0, 10.0, OPENAI_SOURCE_ID)
     assert not any(m in SEED for m in OPENAI_LIST_IDS)  # family_key 표(CP와 같은 방식), model_id 표에는 없다
 
 
@@ -156,12 +153,13 @@ def test_seed_source_ids_follow_the_price_identity():
             by_fm.setdefault(ident.source_ref, set()).add(src)
         else:
             assert src == pricelist_source_id(NOVA_USAGETYPES[ident.source_ref][0])
-    assert len(by_fm) == 17 and all(len(v) == 1 for v in by_fm.values())  # FM당 오퍼 1개를 모든 채널이 인용
-    assert len(set().union(*by_fm.values())) == 17
+    assert len(by_fm) == 12 and all(len(v) == 1 for v in by_fm.values())  # FM당 오퍼 1개를 모든 채널이 인용
+    assert len(set().union(*by_fm.values())) == 12
     assert "anthropic.claude-fable-5" not in by_fm  # v2.42.0 (ADR-037)
     assert by_fm["anthropic.claude-fable-5-2"] == {"offer:offer-agsprgw6z3dg6"}  # v2.41.0
     assert by_fm["anthropic.claude-opus-5-5"] == {"offer:offer-7sp77cpl4rveu"}
-    assert by_fm["openai.gpt-5.5"] == {"offer:offer-rtwlbb46hcxpw"}
+    assert by_fm["openai.gpt-6-sol"] == {"offer:offer-pycji3sz5gpcc"}
+    assert "offer:offer-rtwlbb46hcxpw" not in set().union(*by_fm.values())  # GPT 5.5 offer, no longer cited (v2.43.0)
     assert by_fm["openai.gpt-6-astra"] == {"offer:offer-7epta7rbw5aws"}
     assert by_fm["anthropic.claude-sonnet-5-5"] == {"offer:offer-5fu2rhus3byrs"}
     assert by_fm["openai.gpt-6.1-sol"] == {"offer:offer-wbhj4kycntgkk"}
@@ -181,7 +179,7 @@ def test_seed_rows_skip_active_ids_without_seed(caplog):
 def test_ensure_seed_inserts_every_active_channel_then_is_idempotent(engine):
     statements: list[str] = []
     event.listen(engine, "before_cursor_execute", lambda *a: statements.append(a[2]))
-    assert ensure_seed(engine, ACTIVE) == 49
+    assert ensure_seed(engine, ACTIVE) == 39
     assert not any("pg_advisory" in s for s in statements)  # SQLite는 잠금 생략
     rows = _rows(engine)
     assert set(rows) == set(ACTIVE)
@@ -191,17 +189,17 @@ def test_ensure_seed_inserts_every_active_channel_then_is_idempotent(engine):
         assert (row.status, row.observed_at, row.run_id) == ("seed", None, None)
         assert _utc(row.effective_from) == EPOCH and row.created_at is not None
     assert ensure_seed(engine, ACTIVE) == 0
-    assert len(_rows(engine)) == 49
+    assert len(_rows(engine)) == 39
 
 
 def test_existing_row_blocks_seeding_only_that_model_id(engine):
     _add(engine, model_id="us.amazon.nova-2-lite-v1:0", family_key="nova-2-lite", channel="us",
          input_per_mtok=0.06, output_per_mtok=0.24, effective_from=EPOCH, status="rejected",
          source_id="pricelist:USE1-Nova2.0Lite-input-tokens", observed_at=datetime(2026, 9, 26, 3, tzinfo=timezone.utc))
-    assert ensure_seed(engine, ACTIVE) == 48
+    assert ensure_seed(engine, ACTIVE) == 38
     rows = _rows(engine)
     assert (rows["us.amazon.nova-2-lite-v1:0"].status, rows["us.amazon.nova-2-lite-v1:0"].input_per_mtok) == ("rejected", 0.06)
-    assert sum(r.status == "seed" for r in rows.values()) == 48
+    assert sum(r.status == "seed" for r in rows.values()) == 38
 
 
 def test_sync_first_then_seed_still_fills_the_rest(engine):
@@ -214,9 +212,9 @@ def test_sync_first_then_seed_still_fills_the_rest(engine):
     _add(engine, model_id="us.anthropic.claude-opus-5-5", family_key="claude-opus-5-5", channel="us",
          input_per_mtok=4.4, output_per_mtok=22.0, effective_from=started, status="verified",
          source_id="offer:offer-7sp77cpl4rveu", observed_at=started, run_id=run_id)
-    assert ensure_seed(engine, active_channels({**ACTIVE_MODELS, **HIDDEN_1P_MODELS}, ["(1P)"])) == 57
+    assert ensure_seed(engine, active_channels({**ACTIVE_MODELS, **HIDDEN_1P_MODELS}, ["(1P)"])) == 43
     rows = _rows(engine)
-    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS)  # 49 - 1 already priced + 9 OpenAI official prices
+    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS)  # 39 - 1 already priced + 5 OpenAI official prices
     listed = rows["openai-list:gpt-6-astra"]
     assert (listed.family_key, listed.channel, listed.source_id, listed.status) == (
         "gpt-6-astra", "openai_list", OPENAI_SOURCE_ID, "seed")

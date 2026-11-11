@@ -182,9 +182,9 @@ describe("sortModels — GPT 6 Sol / Luna", () => {
 // Sonnet 5.5 (v2.32.0) — includes 매칭에서 "Claude Sonnet 5"가 "Claude Sonnet 5.5"에 포함되는 접두 충돌 회귀 방지.
 // Sonnet 5.5는 us. 프로파일이 없어 Bedrock Global + CP 2채널이다.
 describe("sortModels — Sonnet 5.5 vs Sonnet 5 family ranking", () => {
-  it("ranks Sonnet 5.5 between Opus 4.8 and Sonnet 5, as separate families", () => {
+  it("ranks Sonnet 5.5 between Opus 5 and Sonnet 5, as separate families", () => {
     const r55 = familyRank("Bedrock Claude Sonnet 5.5 (Global)");
-    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Opus 4.8 (Global)"));
+    expect(r55).toBeGreaterThan(familyRank("Bedrock Claude Opus 5 (Global)"));  // Opus 4.8 sat in between until v2.42.x
     expect(r55).toBeLessThan(familyRank("Bedrock Claude Sonnet 5 (Global)"));
     expect(familyRank("Anthropic Claude Sonnet 5.5 (US)")).toBe(r55);
   });
@@ -322,8 +322,8 @@ describe("sortByFamily — reliability family order", () => {
   });
 
   it("puts unknown families after the known ones, alphabetically, without mutating the input", () => {
-    const groups = [{ family: "Zeta 1" }, { family: "GPT 5.5" }, { family: "Alpha 2" }, { family: "Claude Opus 4.8" }];
-    expect(sortByFamily(groups).map((group) => group.family)).toEqual(["Claude Opus 4.8", "GPT 5.5", "Alpha 2", "Zeta 1"]);
+    const groups = [{ family: "Zeta 1" }, { family: "GPT 6 Luna" }, { family: "Alpha 2" }, { family: "Claude Opus 5" }];
+    expect(sortByFamily(groups).map((group) => group.family)).toEqual(["Claude Opus 5", "GPT 6 Luna", "Alpha 2", "Zeta 1"]);
     expect(groups[0].family).toBe("Zeta 1");
   });
 });
@@ -354,9 +354,10 @@ describe("isExcludedModel — families left out of monitoring", () => {
   });
 
   it("keeps every family still monitored", () => {
-    expect(FAMILY_ORDER).toHaveLength(18);
+    expect(FAMILY_ORDER).toHaveLength(13);  // v2.43.0: Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 left (18 in v2.42.0)
     for (const family of FAMILY_ORDER) expect(isExcludedModel(family), family).toBe(false);
-    for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4", "Claude Fable 5"]) {
+    for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4", "Claude Fable 5",
+      "Claude Opus 4.8", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5"]) {
       expect(FAMILY_ORDER).not.toContain(family);
     }
   });

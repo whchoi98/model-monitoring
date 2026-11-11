@@ -11,7 +11,6 @@ export const FAMILY_ORDER = [
   "Claude Fable 5.1",
   "Claude Opus 5.5",
   "Claude Opus 5",
-  "Claude Opus 4.8",
   "Claude Sonnet 5.5",
   "Claude Sonnet 5",
   "Claude Haiku 5.5",
@@ -21,10 +20,6 @@ export const FAMILY_ORDER = [
   "GPT 6 Astra",
   "GPT 6 Sol",
   "GPT 6 Luna",
-  "GPT 5.6 Sol",
-  "GPT 5.6 Terra",
-  "GPT 5.6 Luna",
-  "GPT 5.5",
 ];
 
 // 모니터링 catalogue에서 제외된 모델 (ADR-017). backend silent bug 대비 frontend hard-filter.
@@ -37,6 +32,8 @@ const EXCLUDED_FAMILIES = [
   "Opus 4.7", "Opus 4.6", "Sonnet 4.6", "Haiku 4.5", "GPT 5.4",
   // v2.42.0 (사용자 결정 2026-11-10, ADR-037): Fable 5 — includes 매칭이라 괄호까지 넣는다("Claude Fable 5"만 쓰면 5.1, 5.2 라벨도 걸린다).
   "Claude Fable 5 (",
+  // v2.43.0 (사용자 결정 2026-11-10, ADR-038): Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna). 남은 라벨과 겹치지 않는다.
+  "Opus 4.8", "GPT 5.6", "GPT 5.5",
 ];
 
 export function isExcludedModel(modelName: string): boolean {

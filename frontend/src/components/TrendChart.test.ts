@@ -135,7 +135,7 @@ describe("trend chart line encoding", () => {
   const selection = [...defaultTrendSelection(CATALOG)];
 
   test("no two default-selected series share both colour and pattern, in either theme", () => {
-    expect(selection.length).toBeGreaterThan(15);
+    expect(selection.length).toBeGreaterThanOrEqual(13);  // one series per family — 13 families since v2.43.0 (18 in v2.42.0)
     for (const theme of THEMES) {
       const encodings = selection.map((name) => `${getColor(name, theme)}|${lineDash(name) ?? "solid"}`);
       expect(new Set(encodings).size).toBe(selection.length);

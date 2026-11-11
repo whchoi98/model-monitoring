@@ -2,7 +2,8 @@
 (Global, CP), GPT 6.1 Sol (Global, US, us-east-1), 서울 in-region Claude Opus 5, Sonnet 5 + v2.33.0 Claude Haiku 5.5
 (Global, US, CP), Claude Sonnet 5.5 US + v2.38.0 GPT 6.1 Terra (Global, US, us-east-1), OpenAI Mantle 인리전 us-east-1 일원화
 (us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1) − v2.39.0 Claude Opus 4.7, Opus 4.6, Sonnet 4.6,
-Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 + v2.41.0 Claude Fable 5.2(Global, US, CP) − v2.42.0 Claude Fable 5(Global, US, CP) = 활성 49채널. 수집 대상 아님."""
+Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 + v2.41.0 Claude Fable 5.2(Global, US, CP) − v2.42.0 Claude Fable 5(Global, US, CP) − v2.43.0 Claude Opus 4.8(Global, US, CP),
+GPT 5.6 Sol, Terra, Luna(Global, us-east-1)와 GPT 5.5(us-east-1) 10채널 = 활성 39채널. 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
@@ -10,7 +11,6 @@ _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS
     ("anthropic.claude-fable-5-1", "claude-fable-5-1", "Claude Fable 5.1", _GU),
     ("anthropic.claude-opus-5-5", "claude-opus-5-5", "Claude Opus 5.5", _GU),
     ("anthropic.claude-opus-5", "claude-opus-5", "Claude Opus 5", (*_GU, "ap-northeast-2")),
-    ("anthropic.claude-opus-4-8", "claude-opus-4-8", "Claude Opus 4.8", _GU),
     ("anthropic.claude-sonnet-5-5", "claude-sonnet-5-5", "Claude Sonnet 5.5", _GU),  # us.는 2026-10-07부터(v2.33.0)
     ("anthropic.claude-sonnet-5", "claude-sonnet-5", "Claude Sonnet 5", (*_GU, "ap-northeast-2")),
     ("anthropic.claude-haiku-5-5", "claude-haiku-5-5", "Claude Haiku 5.5", _GU),
@@ -19,7 +19,7 @@ _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS
 _CP_IDS = {
     "claude-fable-5-2": "claude-fable-5-2",
     "claude-fable-5-1": "claude-fable-5-1",
-    "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5", "claude-opus-4-8": "claude-opus-4-8",
+    "claude-opus-5-5": "claude-opus-5-5", "claude-opus-5": "claude-opus-5",
     "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-haiku-5-5",
 }
 _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전(Mantle 인리전 us-east-1만, v2.38.0)
@@ -28,10 +28,6 @@ _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SP
     ("openai.gpt-6-astra", "gpt-6-astra", "GPT 6 Astra", ("global", "us", "us-east-1")),
     ("openai.gpt-6-sol", "gpt-6-sol", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("openai.gpt-6-luna", "gpt-6-luna", "GPT 6 Luna", ("global", "us", "us-east-1")),
-    ("openai.gpt-5.6-sol", "gpt-5.6-sol", "GPT 5.6 Sol", ("global", "us-east-1")),
-    ("openai.gpt-5.6-terra", "gpt-5.6-terra", "GPT 5.6 Terra", ("global", "us-east-1")),
-    ("openai.gpt-5.6-luna", "gpt-5.6-luna", "GPT 5.6 Luna", ("global", "us-east-1")),
-    ("openai.gpt-5.5", "gpt-5.5", "GPT 5.5", ("us-east-1",)),
 ]
 
 
@@ -69,7 +65,10 @@ ACTIVE_MODELS: dict[str, str] = {mid: _label(i) for mid, i in EXPECTED_IDENTITY.
 # v2.31.0: active_channels가 OpenAI 패밀리마다 끝에 덧붙이는 표시 전용 "OpenAI 공식 가격" 채널(ACTIVE_MODELS 순서)
 OPENAI_LIST_IDS: list[str] = [f"openai-list:{fk}" for _, fk, _, _ in _OPENAI]
 
-HIDDEN_1P_MODELS: dict[str, str] = {  # 휴면 1P — 기본 숨김 패턴 "(1P)"
+# 휴면 1P — 기본 숨김 패턴 "(1P)". v2.43.0부터 1P 스펙이 없어(GPT 5.5, 5.6 세대를 뺐다) 등록되는 1P 채널도 없다.
+HIDDEN_1P_MODELS: dict[str, str] = {}
+# v2.43.0 이전의 휴면 1P 라벨 — 저장 행이 있으면 "(1P)"와 계열 패턴이 둘 다 숨긴다
+RETIRED_1P_MODELS: dict[str, str] = {
     f"openai:1p:{fk}": f"OpenAI {fam} (1P)"
     for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"),
                     ("gpt-5.6-luna", "GPT 5.6 Luna"), ("gpt-5.5", "GPT 5.5"))
@@ -103,4 +102,15 @@ RETIRED_V239_MODELS: dict[str, str] = {
     "anthropic:claude-sonnet-4-6": "Anthropic Claude Sonnet 4.6 (US)",
     "anthropic:claude-haiku-4-5-20251001": "Anthropic Claude Haiku 4.5 (US)",
     "openai:us-east-1:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-1)",
+}
+
+# v2.43.0(2026-11-10 사용자 결정, ADR-038)에 모니터링에서 뺀 채널 — 카탈로그에 없고, 저장 행은 기본 숨김 패턴이 가린다
+RETIRED_V243_MODELS: dict[str, str] = {
+    "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
+    "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
+    "anthropic:claude-opus-4-8": "Anthropic Claude Opus 4.8 (US)",
+    **{f"openai:{r}:{'global.' if r == 'global' else ''}openai.{fk}": f"OpenAI {fam} ({'Global' if r == 'global' else r})"
+       for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"), ("gpt-5.6-luna", "GPT 5.6 Luna"))
+       for r in ("global", "us-east-1")},
+    "openai:us-east-1:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-1)",
 }

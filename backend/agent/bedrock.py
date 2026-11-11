@@ -64,9 +64,14 @@ def _inference_config(max_tokens: int, temperature: Optional[float]) -> Dict:
     return config
 
 
+# 챗봇, follow-up, stream-regenerate client는 legacy 재시도(첫 시도 포함 5회)를 명시한다 — botocore 1.44.0부터 기본 retry 모드가
+# standard(3회)라, 설정 없이 두면 의존성 업데이트만으로 재시도 동작이 바뀐다(2026-11-11 CI가 잡았다).
+_CHAT_RETRIES = {"mode": "legacy"}
+
+
 def _client():
     region = os.environ.get("AWS_REGION", "us-east-1")
-    return boto3.client("bedrock-runtime", region_name=region)
+    return boto3.client("bedrock-runtime", region_name=region, config=Config(retries=dict(_CHAT_RETRIES)))
 
 
 # 인사이트 잡 전용 client 설정(v2.32.2). 호출할 때 읽는다(테스트가 시간을 줄여 본다).

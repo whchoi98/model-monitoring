@@ -226,25 +226,26 @@ def test_an_unknown_source_id_is_still_listed_so_its_footnote_resolves(db):
                    "title_ko": "mystery-source", "url": None, "as_of": "2026-09-25"}
 
 
-def test_production_note_cites_the_openai_pricing_reference(db, monkeypatch):
-    monkeypatch.undo()  # production PRICE_NOTES
-    payload = build_pricing_payload(db, ds.active(), now=ds.NOW)
+def test_production_note_cites_the_anthropic_pricing_reference():
+    """v2.43.0: the GPT-5.6 Sol promo note (OpenAI doc) left with its family (ADR-038). The remaining production note
+    is the Claude Sonnet 5.5 doc_conflict note, shown on the seeds (CP cache read 0.2) and cited through the
+    Anthropic pricing reference."""
+    payload = _production_payload(pricing_sources.PRICE_NOTES)
     assert "official_page" not in [r["kind"] for r in payload["references"]]
-    sol = _family(payload, "gpt-5.6-sol")
-    (note,) = sol["notes"]
-    assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source", "source_id"}
-    assert (note["source"], note["source_id"]) == ("openai_doc", "openai-pricing")
-    ref = next(r for r in payload["references"] if r["id"] == "openai-pricing")
-    assert (ref["n"], ref["kind"], ref["url"]) == (4, "openai_doc", "https://developers.openai.com/api/docs/pricing")
+    (note,) = _family(payload, "claude-sonnet-5-5")["notes"]
+    assert (note["kind"], note["source"], note["source_id"]) == ("doc_conflict", "anthropic_doc", "anthropic-pricing")
+    assert [f["family_key"] for f in payload["families"] if f["notes"]] == ["claude-sonnet-5-5"]
+    ref = next(r for r in payload["references"] if r["id"] == "anthropic-pricing")
+    assert ref["kind"] == "anthropic_doc"
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 49 active channels plus the 9 OpenAI official prices (v2.42.0)."""
+    """build_pricing_payload on the real seeds of the 39 active channels plus the 5 OpenAI official prices (v2.43.0)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 58
-    assert pricing_seed.ensure_seed(engine, active) == 58
+    assert len(active) == 44
+    assert pricing_seed.ensure_seed(engine, active) == 44
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -268,17 +269,17 @@ def test_production_references_list_only_cited_sources():
     kinds = [r["kind"] for r in payload["references"]]
     # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0) = 25,
     # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0), + the Claude Fable 5.2 offer (v2.41.0),
-    # - the Claude Fable 5 offer (v2.42.0)
-    assert len(kinds) == 20
+    # - the Claude Fable 5 offer (v2.42.0), - the Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 offers (v2.43.0)
+    assert len(kinds) == 15
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 17, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 12, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
-    note = {**ds.MANUAL_NOTE, "family_key": "gpt-5.5", "prior_price": {}}
+    note = {**ds.MANUAL_NOTE, "family_key": "gpt-6-luna", "prior_price": {}}  # GPT 5.5 until v2.42.x (21)
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(21, "note:gpt-5.5", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(16, "note:gpt-6-luna", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
@@ -339,10 +340,11 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
            if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS
            and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra", "claude-fable-5-2")}
     # v2.39.0 catalog: the retired Mantle us-east-2/us-west-2 channels (v2.38.0) and the five families left out in
-    # v2.39.0 are not active at all, and neither is Claude Fable 5 (v2.42.0) — it has no seed any more
-    assert len(old) == 39
+    # v2.39.0 are not active at all, and neither are Claude Fable 5 (v2.42.0), Claude Opus 4.8, GPT 5.6 and GPT 5.5
+    # (v2.43.0) — they have no seed any more
+    assert len(old) == 25
     try:
-        assert pricing_seed.ensure_seed(engine, old) == 39
+        assert pricing_seed.ensure_seed(engine, old) == 25
         synced = datetime(2026, 9, 29, 3, 0, tzinfo=timezone.utc)  # the last v2.31.2 sync
         with Session() as s:
             s.add(models.PriceSyncRun(started_at=synced, finished_at=synced + timedelta(seconds=31), status="completed"))
@@ -358,7 +360,7 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 20
+    assert len(as_of) == 15
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
     assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol
@@ -367,3 +369,12 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
     assert set(as_of.values()) == {"2026-09-29"}  # incl. the offers and docs the other new rows cite
     s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
     assert (s55["global"]["verification"], s55["global"]["observed_at"]) == ("seed_only", None)
+
+
+@pytest.fixture(autouse=True)
+def _v242_sample_families(monkeypatch):
+    """GPT 5.6 Sol, Terra, Luna, GPT 5.5 and Claude Opus 4.8 stay sample channels in this module after they left the
+    catalog in v2.43.0 (tests/_legacy_families.py) — the fixtures and goldens were built on them."""
+    from tests import _legacy_families
+
+    _legacy_families.register(monkeypatch)

@@ -379,6 +379,19 @@ describe("SchedulerStack", () => {
     }
   });
 
+  it("어느 스케줄 task def에도 GPT 5.5, GPT 5.6 model id가 없다 (v2.43.0 — 모니터링에서 뺐다)", () => {
+    const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
+    expect(containers).toHaveLength(7);
+    for (const c of containers) {
+      const names = c.Environment.map((e: any) => e.Name);
+      for (const retired of ["BEDROCK_OPENAI_GPT_55_MODEL_ID", "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID",
+        "OPENAI_1P_GPT_55_MODEL_ID", "OPENAI_1P_GPT_56_SOL_MODEL_ID", "OPENAI_1P_GPT_56_TERRA_MODEL_ID", "OPENAI_1P_GPT_56_LUNA_MODEL_ID"]) {
+        expect(names).not.toContain(retired);
+      }
+      expect(names.filter((n: string) => n.startsWith("OPENAI_1P_GPT_") || n.startsWith("BEDROCK_OPENAI_GPT_5"))).toEqual([]);
+    }
+  });
+
   it("all seven shared backend tasks retain the visitor origin configuration", () => {
     const tasks = Object.values(template.findResources("AWS::ECS::TaskDefinition"));
     expect(tasks).toHaveLength(7);

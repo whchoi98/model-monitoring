@@ -78,16 +78,17 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_49_active_channels():
+def test_expected_table_is_the_39_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
     # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널). v2.39.0: Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 제외
     # v2.41.0: Claude Fable 5.2(Global, US, CP) 추가, v2.42.0: Claude Fable 5(Global, US, CP) 제외
-    assert counts == {("anthropic", "global"): 8, ("anthropic", "us"): 8, ("anthropic", "cp"): 8,
-                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 8, ("openai", "us"): 5,
-                      ("openai", "in_region"): 9}
-    assert len(EXPECTED_IDENTITY) == 49
+    # v2.43.0: Claude Opus 4.8(Global, US, CP), GPT 5.6 Sol, Terra, Luna(Global, us-east-1), GPT 5.5(us-east-1) 제외
+    assert counts == {("anthropic", "global"): 7, ("anthropic", "us"): 7, ("anthropic", "cp"): 7,
+                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 5, ("openai", "us"): 5,
+                      ("openai", "in_region"): 5}
+    assert len(EXPECTED_IDENTITY) == 39
 
 
 def test_registered_catalog_minus_hidden_is_exactly_the_49_channels(monkeypatch):
@@ -155,7 +156,7 @@ def test_cp_point_release_safety():
     assert {m: (i.family_key if i else None) for m, i in fk.items()} == {
         "claude-opus-5": "claude-opus-5", "claude-opus-5-5": "claude-opus-5-5",
         "claude-fable-5": None, "claude-fable-5-1": "claude-fable-5-1",  # Fable 5는 v2.42.0 제외 — 5.1로 오분류되지 않는다
-        "claude-opus-4-8-20260101": "claude-opus-4-8",  # 8자리 날짜 접미사는 점 버전이 아니다
+        "claude-opus-4-8-20260101": None,  # v2.43.0 제외 — 어느 타깃에도 걸리지 않는다
         "claude-haiku-4-5-20251001": None, "claude-opus-4-7": None, "claude-sonnet-4-6": None,  # v2.39.0 제외
         "claude-opus-5-20261015": "claude-opus-5", "claude-fable-5-1-20261015": "claude-fable-5-1",
         "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5",  # v2.32.0 타깃
@@ -202,10 +203,12 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 18
+    assert len(ps.FAMILY_ORDER) == 13
     assert ps.FAMILY_ORDER[:3] == ("Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5")  # Fable 5는 v2.42.0 제외
     assert "Claude Fable 5" not in ps.FAMILY_ORDER
     assert not {"Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"} & set(ps.FAMILY_ORDER)
+    assert not {"Claude Opus 4.8", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5"} & set(ps.FAMILY_ORDER)  # v2.43.0
+    assert ps.FAMILY_ORDER[-1] == "GPT 6 Luna"
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Terra")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Terra") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
@@ -230,32 +233,33 @@ def test_openai_list_ids_are_classified(family_key):
         family_key, OPENAI_FAMILIES[family_key], "openai", "openai_list", "openai_doc", family_key)
 
 
-def test_openai_list_ids_are_the_nine_bedrock_gpt_families_and_rows_of_the_openai_doc():
-    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 9
+def test_openai_list_ids_are_the_five_bedrock_gpt_families_and_rows_of_the_openai_doc():
+    # v2.43.0: GPT 5.6 Sol, Terra, Luna and GPT 5.5 left (nine until v2.42.x)
+    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 5
     prices = parse_openai_pricing_md((FIXTURES / "openai_pricing.md").read_text(encoding="utf-8"))
     assert all(price_identity(m).source_ref in prices for m in OPENAI_LIST_IDS)  # exact doc model names
 
 
 def test_active_channels_appends_one_openai_list_channel_per_visible_openai_family(caplog):
-    models = {
-        "openai:us-east-1:openai.gpt-5.6-terra": "OpenAI GPT 5.6 Terra (us-east-1)",
+    models = {  # GPT 6 Luna and GPT 6.1 Terra stand in for the GPT 5.6 Terra and GPT 5.5 of v2.42.x (v2.43.0)
+        "openai:us-east-1:openai.gpt-6-luna": "OpenAI GPT 6 Luna (us-east-1)",
         "global.anthropic.claude-opus-5-5": "Bedrock Claude Opus 5.5 (Global)",
         "openai:global:global.openai.gpt-6-sol": "OpenAI GPT 6 Sol (Global)",
-        "openai:global:global.openai.gpt-5.6-terra": "OpenAI GPT 5.6 Terra (Global)",
+        "openai:global:global.openai.gpt-6-luna": "OpenAI GPT 6 Luna (Global)",
         "us.amazon.nova-2-lite-v1:0": "Bedrock Nova 2.0 Lite (US)",
-        "openai:us-east-1:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-1)",
+        "openai:us-east-1:openai.gpt-6.1-terra": "OpenAI GPT 6.1 Terra (us-east-1)",
     }
     with caplog.at_level(logging.WARNING, logger="pricing_sources"):
         active = active_channels(models, ["(us-east-1)"])
     assert list(active) == [
         "global.anthropic.claude-opus-5-5", "openai:global:global.openai.gpt-6-sol",
-        "openai:global:global.openai.gpt-5.6-terra", "us.amazon.nova-2-lite-v1:0",
-        "openai-list:gpt-6-sol", "openai-list:gpt-5.6-terra",  # GPT 5.5 is hidden: none
+        "openai:global:global.openai.gpt-6-luna", "us.amazon.nova-2-lite-v1:0",
+        "openai-list:gpt-6-sol", "openai-list:gpt-6-luna",  # GPT 6.1 Terra is hidden: none
     ]
-    assert active["openai-list:gpt-5.6-terra"].channel == "openai_list" and _warnings(caplog) == []
-    again = active_channels({"openai-list:gpt-5.6-terra": "OpenAI GPT 5.6 Terra (official)", **models}, [])
+    assert active["openai-list:gpt-6-luna"].channel == "openai_list" and _warnings(caplog) == []
+    again = active_channels({"openai-list:gpt-6-luna": "OpenAI GPT 6 Luna (official)", **models}, [])
     assert [m for m in again if m.startswith("openai-list:")] == [
-        "openai-list:gpt-5.6-terra", "openai-list:gpt-6-sol", "openai-list:gpt-5.5"]  # an id already present is kept once
+        "openai-list:gpt-6-luna", "openai-list:gpt-6-sol", "openai-list:gpt-6.1-terra"]  # an id already present is kept once
     no_openai = active_channels({"global.anthropic.claude-opus-5-5": "a", "us.amazon.nova-2-lite-v1:0": "b"}, [])
     assert list(no_openai) == ["global.anthropic.claude-opus-5-5", "us.amazon.nova-2-lite-v1:0"]
 
@@ -278,8 +282,9 @@ def test_source_metadata_constants():
         "https://developers.openai.com/api/docs/pricing.md", "openai-pricing",
         "https://developers.openai.com/api/docs/pricing", "openai-list:",
     )
-    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 8
+    assert ps.ANTHROPIC_DOC_NAMES["claude-opus-5-5"] == "Claude Opus 5.5" and len(ps.ANTHROPIC_DOC_NAMES) == 7
     assert "claude-fable-5" not in ps.ANTHROPIC_DOC_NAMES  # v2.42.0
+    assert "claude-opus-4-8" not in ps.ANTHROPIC_DOC_NAMES  # v2.43.0
     assert ps.ANTHROPIC_DOC_NAMES["claude-fable-5-2"] == "Claude Fable 5.2"
     assert ps.ANTHROPIC_DOC_NAMES["claude-haiku-5-5"] == "Claude Haiku 5.5"
     assert ps.CLAUDE_LONG_CONTEXT_FAMILIES == frozenset({"claude-haiku-5-5"})
@@ -320,24 +325,15 @@ def test_official_links_and_price_notes():
     ]
     # v2.31.1: references list only cited sources — the fixed official pages are gone
     assert not hasattr(ps, "OFFICIAL_PAGES") and not hasattr(ps, "official_source_id")
-    note, conflict = ps.PRICE_NOTES
+    # v2.43.0: the GPT-5.6 Sol promo note left with its family (ADR-038) — the doc_conflict note remains
+    (conflict,) = ps.PRICE_NOTES
     assert set(conflict) == {"family_key", "kind", "expected", "text_ko", "text_en", "source", "source_id"}
     assert (conflict["family_key"], conflict["kind"], conflict["source"], conflict["source_id"]) == (
         "claude-sonnet-5-5", "doc_conflict", "anthropic_doc", ps.ANTHROPIC_SOURCE_ID)
     assert conflict["expected"] == {"cp": {"cache_read": 0.1}}
     assert "$0.10" in conflict["text_ko"] and "$0.20" in conflict["text_ko"] and "·" not in conflict["text_ko"]
     assert "$0.10" in conflict["text_en"] and "$0.20" in conflict["text_en"]
-    assert set(note) == {"family_key", "kind", "min_until", "prior_price", "text_ko", "text_en", "source", "source_id"}
-    assert (note["family_key"], note["kind"], note["min_until"], note["source"], note["source_id"]) == (
-        "gpt-5.6-sol", "promo", "2026-11-21", "openai_doc", "openai-pricing")
-    assert note["source_id"] == ps.OPENAI_SOURCE_ID
-    assert note["prior_price"] == {"openai_list": {"input": 5, "output": 30}, "global": {"input": 5, "output": 30},
-                                   "in_region": {"input": 5.5, "output": 33}}
-    # dated: the sync never re-reads this sentence, so the note says when it was read (2026-09-27)
-    assert note["text_ko"] == "프로모션 단가다. 2026-09-27 기준 OpenAI 공식 요금 문서에 최소 2026-11-21까지 적용한다고 기재돼 있다."
-    assert note["text_en"] == (
-        "Promotional price. As of 2026-09-27, the OpenAI pricing page states that it applies at least through 2026-11-21.")
-    assert "·" not in note["text_ko"]
+    assert not [n for n in ps.PRICE_NOTES if n["family_key"].startswith("gpt-5.")]
 
 
 def test_bedrock_in_region_channels_are_seoul_claude_on_demand():

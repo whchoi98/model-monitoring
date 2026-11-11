@@ -7,6 +7,36 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.43.0 — 2026-11-10
+
+### Removed
+- **Claude Opus 4.8, GPT 5.5 and GPT 5.6 (Sol, Terra, Luna) are no longer monitored**, by user decision on 2026-11-10 ("fable 5.0, opus 4.8, gpt 5.5, gpt 5.6 을 deprecate 합니다"; Claude Fable 5 already left in v2.42.0), and every page drops them (ADR-038). Ten channels leave the catalog: Opus 4.8 Bedrock `global.`/`us.anthropic.claude-opus-4-8` and Claude Platform on AWS `anthropic:claude-opus-4-8` (the CP target `opus-4-8` is gone, so the id CP still serves is not registered), GPT 5.6 Sol, Terra and Luna Global CRIS `openai:global:global.openai.gpt-5.6-*` and Mantle `openai:us-east-1:openai.gpt-5.6-*`, and GPT 5.5 Mantle `openai:us-east-1:openai.gpt-5.5`. They also leave the price seeds and sources, the OpenAI official prices (`openai-list:gpt-5.6-*`, `openai-list:gpt-5.5`), the GPT on AWS bench, the trend colours, the Comparison Lab labels and the Opus 4.8 `/prompts` OptimizePrompt targets. The GPT-5.6 Sol promotion note is gone with its family. The dormant 1P specs were all GPT 5.5 and 5.6, so none is left; the 1P path and `ENABLE_OPENAI_1P=false` stay.
+- 사용자 결정(2026-11-10, "fable 5.0, opus 4.8, gpt 5.5, gpt 5.6 을 deprecate 합니다". Claude Fable 5는 v2.42.0에 이미 뺐다)으로 Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna)을 더 이상 모니터링하지 않고 모든 화면에서 뺐다(ADR-038). 카탈로그에서 10채널이 빠진다. Opus 4.8 Bedrock `global.`/`us.anthropic.claude-opus-4-8`과 Claude Platform on AWS `anthropic:claude-opus-4-8`(CP 타깃 `opus-4-8`를 지워, CP가 아직 서빙하는 id는 등록되지 않는다), GPT 5.6 Sol, Terra, Luna의 Global CRIS `openai:global:global.openai.gpt-5.6-*`와 Mantle `openai:us-east-1:openai.gpt-5.6-*`, GPT 5.5 Mantle `openai:us-east-1:openai.gpt-5.5`다. 단가 seed와 출처, OpenAI 공식 가격(`openai-list:gpt-5.6-*`, `openai-list:gpt-5.5`), GPT on AWS 벤치, 추세 색, Comparison Lab 라벨, Opus 4.8의 `/prompts` OptimizePrompt 대상에서도 지웠다. GPT-5.6 Sol 프로모션 메모도 패밀리와 함께 지웠다. 휴면 1P 스펙은 모두 GPT 5.5, 5.6이라 하나도 남지 않는다. 1P 경로와 `ENABLE_OPENAI_1P=false`는 그대로다.
+
+### Changed
+- The catalog has 39 active channels, down from 49: Bedrock 17 (Global 7, US 8 including Nova, Seoul in-region 2), Claude Platform on AWS 7 (84 CP calls per hour), OpenAI 15 (Mantle us-east-1 5, Global 5, US 5). `FAMILY_ORDER` has 13 families; `/pricing` lists 13 families and 15 references (12 agreement offers), and PricingSync logs `44 active channels` (39 + 5 OpenAI official prices); `/prompts` has 15 Bedrock targets; the daily ExplorerVerify run executes 71 examples. Claude API Features is unchanged (none of these models is representative).
+- The GPT on AWS bench has 15 channels (Mantle us-east-1 5 + cross-region 10), lanes `cris=10 mantle-us-east-1=5`, 150 rows per cycle; `/gpt-on-aws` shows one GPT 6.x generation group (the GPT 5.x group is gone).
+- Stored rows (probes, bench, parity, `price_history`) are kept and hidden: the default `HIDDEN_MODEL_PATTERNS` adds `Claude Opus 4.8`, `GPT 5.6` and `GPT 5.5`, and the frontend `EXCLUDED_FAMILIES` adds `Opus 4.8`, `GPT 5.6`, `GPT 5.5`. None of them matches a remaining label. An injected `HIDDEN_MODEL_PATTERNS` replaces the whole default and must carry them too.
+- The long-context note in `/pricing` and the exports no longer gives "(272K for GPT 5.5)" as an example, because OpenAI's pricing page states no short-context limit for the GPT 6.x rows: "Long-context prices apply to GPT requests above OpenAI's short-context limit and to Claude Haiku 5.5 prompts over 100K tokens".
+- The first PricingSync after the deploy compares against a snapshot that still had these channels, so the `/pricing` change list shows 14 removed-channel items once (the 10 channels and the 4 OpenAI official price channels).
+- 활성 채널은 49개에서 39개로 줄었다. Bedrock 17(Global 7, Nova 포함 US 8, 서울 in-region 2), Claude Platform on AWS 7(시간당 CP 호출 84회), OpenAI 15(Mantle us-east-1 5, Global 5, US 5)다. `FAMILY_ORDER`는 13개이고, `/pricing`은 패밀리 13개, 참고 자료 15개(약정 오퍼 12), PricingSync 로그는 `44 active channels`(39 + OpenAI 공식 가격 5), `/prompts` Bedrock 대상은 15개, 매일 ExplorerVerify 런은 예제 71개를 실행한다. Claude API Features는 그대로다(대표 모델이 아니다).
+- GPT on AWS 벤치는 15채널(Mantle us-east-1 5 + 교차 리전 10), 갈래 `cris=10 mantle-us-east-1=5`, 사이클당 150행이다. `/gpt-on-aws`는 GPT 6.x 세대 묶음 하나만 보인다(GPT 5.x 묶음이 없어졌다).
+- 저장 행(프로브, 벤치, 패리티, `price_history`)은 지우지 않고 숨긴다. 기본 `HIDDEN_MODEL_PATTERNS`에 `Claude Opus 4.8`, `GPT 5.6`, `GPT 5.5`를, 프런트 `EXCLUDED_FAMILIES`에 `Opus 4.8`, `GPT 5.6`, `GPT 5.5`를 더했다. 남은 라벨과 겹치는 패턴은 없다. `HIDDEN_MODEL_PATTERNS`를 주입하면 기본값 전체를 대신하므로 이 패턴들도 함께 적는다.
+- `/pricing`과 내보내기의 긴 컨텍스트 안내는 "(GPT 5.5는 272K)" 예시를 빼고 "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다"로 바꿨다. OpenAI 요금 문서가 GPT 6.x 행에는 짧은 컨텍스트 한도를 적지 않는다.
+- 배포 뒤 첫 PricingSync는 이 채널들이 있던 스냅샷과 비교하므로 `/pricing` 변경 목록에 채널 제외 항목 14건(10채널과 OpenAI 공식 가격 채널 4개)이 한 번 나온다.
+
+### Fixed
+- The chatbot, follow-up and stream-regenerate Bedrock client sets the legacy retry mode explicitly. botocore 1.44.0 made `standard` the default (3 attempts instead of 5), so a dependency update alone would have changed its retries; CI caught it on 2026-11-11 (`test_insights_client_is_dedicated_and_the_chat_client_is_unchanged`). The production images up to v2.42.0 ran botocore 1.43.127 (legacy default), so behaviour is unchanged.
+- 챗봇, follow-up, stream-regenerate의 Bedrock client가 legacy 재시도 모드를 명시한다. botocore 1.44.0부터 기본값이 `standard`(5회 대신 3회)라 의존성 업데이트만으로 재시도가 바뀔 뻔했다. 2026-11-11 CI가 잡았다(`test_insights_client_is_dedicated_and_the_chat_client_is_unchanged`). v2.42.0까지의 운영 이미지는 botocore 1.43.127(기본값 legacy)이라 동작은 그대로다.
+
+### Infra
+- The model id envs `BEDROCK_OPENAI_GPT_55_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID` and the dormant `OPENAI_1P_GPT_55_MODEL_ID`, `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID` leave the AppServices `backendEnv` and the Scheduler `buildTaskDef` (jest pins their absence). Deploy both stacks through the digest-pinned CDK path; an image-only deploy would keep the old envs on the task definitions.
+- 모델 id env `BEDROCK_OPENAI_GPT_55_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID`와 휴면 `OPENAI_1P_GPT_55_MODEL_ID`, `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`를 AppServices `backendEnv`와 Scheduler `buildTaskDef`에서 뺐다(jest가 없음을 고정). 두 스택을 digest 고정 CDK로 배포한다. 이미지만 배포하면 작업 정의에 옛 env가 남는다.
+
+### Docs
+- ADR-038 (Claude Opus 4.8, GPT 5.5 and GPT 5.6 leave monitoring); counts and channels in CLAUDE.md, module notes, README, architecture, API reference, onboarding and the deploy runbook (§5-15).
+- ADR-038(Claude Opus 4.8, GPT 5.5, GPT 5.6 모니터링 제외). CLAUDE.md, 모듈 노트, README, architecture, API reference, onboarding, 배포 런북(§5-15)의 수치와 채널.
+
 ## v2.42.0 — 2026-11-10
 
 ### Removed
