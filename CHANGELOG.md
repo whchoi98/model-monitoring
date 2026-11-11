@@ -7,6 +7,12 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.43.1 — 2026-11-11
+
+### Fixed
+- `boto3` is pinned below 1.44 in `backend/requirements.txt`. boto3/botocore 1.44.0 (released 2026-11-10) makes `standard` the default retry mode (3 attempts instead of legacy's 5), and the prober's Bedrock client has no retry config, so the v2.43.0 image would have changed how throttled probes are retried and therefore the reliability numbers. Production keeps the 1.43 line it has run so far; the 1.44 upgrade is a separate review. v2.43.0 was tagged but never deployed.
+- `backend/requirements.txt`의 `boto3`를 1.44 미만으로 고정했다. boto3/botocore 1.44.0(2026-11-10 배포)은 기본 재시도 모드가 `standard`(legacy 5회 대신 3회)이고 prober의 Bedrock client에는 재시도 설정이 없어, v2.43.0 이미지는 throttling된 프로브의 재시도와 신뢰성 수치를 바꿨을 것이다. 운영은 지금까지 쓰던 1.43 계열을 유지하고, 1.44 업그레이드는 따로 검토한다. v2.43.0은 태그만 있고 배포하지 않았다.
+
 ## v2.43.0 — 2026-11-10
 
 ### Removed
