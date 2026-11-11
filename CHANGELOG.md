@@ -25,6 +25,10 @@
 - `/pricing`과 내보내기의 긴 컨텍스트 안내는 "(GPT 5.5는 272K)" 예시를 빼고 "긴 컨텍스트 요금은 GPT에서는 OpenAI가 정한 짧은 컨텍스트 한도를 넘는 요청에, Claude Haiku 5.5에서는 100K 토큰을 넘는 프롬프트에 적용된다"로 바꿨다. OpenAI 요금 문서가 GPT 6.x 행에는 짧은 컨텍스트 한도를 적지 않는다.
 - 배포 뒤 첫 PricingSync는 이 채널들이 있던 스냅샷과 비교하므로 `/pricing` 변경 목록에 채널 제외 항목 14건(10채널과 OpenAI 공식 가격 채널 4개)이 한 번 나온다.
 
+### Fixed
+- The chatbot, follow-up and stream-regenerate Bedrock client sets the legacy retry mode explicitly. botocore 1.44.0 made `standard` the default (3 attempts instead of 5), so a dependency update alone would have changed its retries; CI caught it on 2026-11-11 (`test_insights_client_is_dedicated_and_the_chat_client_is_unchanged`). The production images up to v2.42.0 ran botocore 1.43.127 (legacy default), so behaviour is unchanged.
+- 챗봇, follow-up, stream-regenerate의 Bedrock client가 legacy 재시도 모드를 명시한다. botocore 1.44.0부터 기본값이 `standard`(5회 대신 3회)라 의존성 업데이트만으로 재시도가 바뀔 뻔했다. 2026-11-11 CI가 잡았다(`test_insights_client_is_dedicated_and_the_chat_client_is_unchanged`). v2.42.0까지의 운영 이미지는 botocore 1.43.127(기본값 legacy)이라 동작은 그대로다.
+
 ### Infra
 - The model id envs `BEDROCK_OPENAI_GPT_55_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID` and the dormant `OPENAI_1P_GPT_55_MODEL_ID`, `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID` leave the AppServices `backendEnv` and the Scheduler `buildTaskDef` (jest pins their absence). Deploy both stacks through the digest-pinned CDK path; an image-only deploy would keep the old envs on the task definitions.
 - 모델 id env `BEDROCK_OPENAI_GPT_55_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID`와 휴면 `OPENAI_1P_GPT_55_MODEL_ID`, `OPENAI_1P_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`를 AppServices `backendEnv`와 Scheduler `buildTaskDef`에서 뺐다(jest가 없음을 고정). 두 스택을 digest 고정 CDK로 배포한다. 이미지만 배포하면 작업 정의에 옛 env가 남는다.
