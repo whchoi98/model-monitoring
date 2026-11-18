@@ -264,6 +264,9 @@ export class SchedulerStack extends cdk.Stack {
           BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID: "openai.gpt-6.1-sol",
           // GPT-6.1 Terra (v2.38.0) — Global, US, Mantle us-east-1(us-east-2/us-west-2 404). 프로파일 id는 prober가 파생 (ADR-033).
           BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID: "openai.gpt-6.1-terra",
+          // GPT-6.2 Astra, GPT-6.2 Sol (v2.44.0) — Global, US, Mantle us-east-1 3채널씩. 프로파일 id는 prober가 파생 (ADR-039).
+          BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID: "openai.gpt-6.2-astra",
+          BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID: "openai.gpt-6.2-sol",
           // 1P direct model id — v2.43.0부터 없다(prober._OPENAI_1P_MODEL_SPECS가 비었다, app-services-stack.ts와 같다).
           ...extraEnvironment,
         },
@@ -320,8 +323,8 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/parityrun",
     );
 
-    // GPT on AWS 벤치 (v2.18.0) — GPT 19채널(Mantle 인리전 us-east-1 8 + CRIS 11 — GPT-6.1 Terra 편입과 Mantle us-east-1 일원화
-    // v2.38.0) × 10회 TTFB/TTFT 측정, 15분 주기.
+    // GPT on AWS 벤치 (v2.18.0) — GPT 21채널(Mantle 인리전 us-east-1 7 + CRIS 14 — GPT-6.2 Astra와 GPT-6.2 Sol 편입 v2.44.0;
+    // v2.43.0은 15채널, GPT-6.1 Terra 편입과 Mantle us-east-1 일원화 v2.38.0은 19채널) × 10회 TTFB/TTFT 측정, 15분 주기.
     // OpenAI bearer 키(secret)만 사용 — bedrock IAM 불필요하지만 autoprober role 재사용 (패턴 통일).
     const gptBenchTaskDef = buildTaskDef(
       "GptBenchTaskDef",
@@ -342,7 +345,7 @@ export class SchedulerStack extends cdk.Stack {
     );
 
     // Model Explorer 코드 예제 검증 (v2.40.0, ADR-035) — /models가 보여 주는 예제(Converse, InvokeModel, Messages, Responses)를
-    //   모델마다 실제로 실행한다(활성 49모델 → 85건, 동시 4). 예제가 Bedrock(IAM), CP(API 키), Mantle과 CRIS(ABSK 키)를 모두
+    //   모델마다 실제로 실행한다(활성 45모델 → 77건 — v2.44.0, v2.40.0 당시 49모델 85건, 동시 4). 예제가 Bedrock(IAM), CP(API 키), Mantle과 CRIS(ABSK 키)를 모두
     //   부르므로 autoprober role과 기본 env/secret을 그대로 쓴다. 예제 자식 프로세스에는 허용 목록 env만 넘긴다
     //   (model_explorer/execute.py — DB_*, JWT_SECRET_KEY는 자식에 가지 않는다). 새 env, 새 IAM 정책은 없다.
     const explorerTaskDef = buildTaskDef(
@@ -352,7 +355,7 @@ export class SchedulerStack extends cdk.Stack {
       "/ecs/explorer",
     );
 
-    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 61채널(v2.38.0) + OpenAI 공식 가격 10채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
+    // 공식 단가 동기화 (v2.30.0, ADR-030) — 12시간마다 활성 45채널(v2.44.0) + OpenAI 공식 가격 7채널의 Standard 입력/출력 단가를 공식 출처에서 읽어
     // price_history에 기록한다(50% 초과 변화는 검토 대기). 같은 env/secret(buildTaskDef 기본값)으로 CP 디스커버리와
     // OpenAI 채널 등록을 AutoProber와 똑같이 해야 활성 채널 집합이 맞는다. extraEnvironment 없음.
     const pricingSyncTaskDef = buildTaskDef(
@@ -445,9 +448,10 @@ export class SchedulerStack extends cdk.Stack {
     });
 
     new scheduler.Schedule(this, "GptBenchSchedule", {
-      // 15분 주기 — 19채널 × (워밍업 1 + 10회). 호스트별 갈래 병렬(갈래 안은 순차): v2.32.0은 CRIS 9 / Mantle 12 두 갈래,
+      // 15분 주기 — 21채널 × (워밍업 1 + 10회, v2.44.0). 호스트별 갈래 병렬(갈래 안은 순차): v2.32.0은 CRIS 9 / Mantle 12 두 갈래,
       //   v2.32.1부터 cris 9 + Mantle 리전마다 한 갈래(us-east-1 6, us-east-2 3, us-west-2 3 — GPT 5.4 us-east-2 저하 뒤 사용자 결정),
-      //   v2.38.0부터 cris 11 + mantle-us-east-1 8 두 갈래(Mantle 인리전 us-east-1 일원화, 2026-10-27 사용자 결정).
+      //   v2.38.0부터 cris 11 + mantle-us-east-1 8 두 갈래(Mantle 인리전 us-east-1 일원화, 2026-10-27 사용자 결정),
+      //   v2.43.0은 cris 10 + mantle-us-east-1 5, v2.44.0부터 cris 14 + mantle-us-east-1 7(GPT-6.2 Astra, GPT-6.2 Sol 편입).
       //   18채널 순차 실측(2026-09-30 24h) p50 623s, p90 750s, max 790s. 데드라인 13분(780s)은 모든 갈래가 공유하고 넘으면
       //   그 갈래의 남은 채널만 skip (사용자 결정 2026-09-30, D2 대체)
       //   겹침 방지: 사이클 데드라인(GPT_BENCH_DEADLINE) + 호출당 wall-clock 상한(GPT_BENCH_CALL_TIMEOUT, 재시도 0회).

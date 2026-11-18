@@ -240,12 +240,12 @@ def test_production_note_cites_the_anthropic_pricing_reference():
 
 
 def _production_payload(notes):
-    """build_pricing_payload on the real seeds of the 39 active channels plus the 5 OpenAI official prices (v2.43.0)."""
+    """build_pricing_payload on the real seeds of the 45 active channels plus the 7 OpenAI official prices (v2.44.0)."""
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     active = active_channels(ACTIVE_MODELS, [])
-    assert len(active) == 44
-    assert pricing_seed.ensure_seed(engine, active) == 44
+    assert len(active) == 52
+    assert pricing_seed.ensure_seed(engine, active) == 52
     try:
         with sessionmaker(bind=engine)() as session, pytest.MonkeyPatch.context() as mp:
             mp.setattr(pricing_sources, "PRICE_NOTES", notes)
@@ -269,24 +269,26 @@ def test_production_references_list_only_cited_sources():
     kinds = [r["kind"] for r in payload["references"]]
     # 23 in v2.32.0, + the Claude Haiku 5.5 offer (v2.33.0), + the GPT 6.1 Terra offer (v2.38.0) = 25,
     # - the Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers (v2.39.0), + the Claude Fable 5.2 offer (v2.41.0),
-    # - the Claude Fable 5 offer (v2.42.0), - the Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 offers (v2.43.0)
-    assert len(kinds) == 15
+    # - the Claude Fable 5 offer (v2.42.0), - the Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 offers (v2.43.0),
+    # + the GPT 6.2 Astra and GPT 6.2 Sol offers (v2.44.0)
+    assert len(kinds) == 17
     assert {k: kinds.count(k) for k in set(kinds)} == {
-        "agreement_offer": 12, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
+        "agreement_offer": 14, "price_list": 1, "anthropic_doc": 1, "openai_doc": 1}
 
 
 def test_production_manual_note_is_numbered_right_after_the_cited_sources():
     note = {**ds.MANUAL_NOTE, "family_key": "gpt-6-luna", "prior_price": {}}  # GPT 5.5 until v2.42.x (21)
     payload = _production_payload([*pricing_sources.PRICE_NOTES, note])
     _assert_every_reference_is_cited(payload)
-    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(16, "note:gpt-6-luna", "manual_note")]
+    assert [(r["n"], r["id"], r["kind"]) for r in payload["references"][-1:]] == [(18, "note:gpt-6-luna", "manual_note")]
 
 
 def test_production_payload_shows_the_v2_32_channels():
     payload = _production_payload(pricing_sources.PRICE_NOTES)
     order = [f["family_key"] for f in payload["families"]]
     assert order.index("claude-sonnet-5-5") + 1 == order.index("claude-sonnet-5")
-    assert [f["family_key"] for f in payload["families"] if f["provider"] == "openai"][0] == "gpt-6.1-sol"
+    # v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol lead the OpenAI table (GPT 6.1 Sol was first until v2.43.x)
+    assert [f["family_key"] for f in payload["families"] if f["provider"] == "openai"][0] == "gpt-6.2-astra"
     opus5 = _family(payload, "claude-opus-5")["tiers"]
     (seoul,) = opus5["in_region"]
     assert (seoul["regions"], seoul["input"], seoul["output"], seoul["cache_read"], seoul["cache_write"],
@@ -302,7 +304,23 @@ def test_production_payload_shows_the_v2_32_channels():
     assert g61["openai_list"]["long"] == {"input": 4, "output": 15, "cache_read": 0.2, "cache_write": 5}
     # GPT 6.1 Terra (v2.38.0): right after 6.1 Sol, and its offer's long context is plausible, so every tier keeps it
     openai = [f["family_key"] for f in payload["families"] if f["provider"] == "openai"]
-    assert openai[:2] == ["gpt-6.1-sol", "gpt-6.1-terra"]
+    assert openai[:4] == ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.1-terra"]
+    # GPT 6.2 Astra and GPT 6.2 Sol (v2.44.0): both offers' long context is plausible, so every tier keeps it
+    a62 = _family(payload, "gpt-6.2-astra")["tiers"]
+    (a62_e1,) = a62["in_region"]
+    assert (a62["global"]["input"], a62["global"]["output"], a62["us"]["input"], a62["us"]["output"],
+            a62_e1["input"], a62_e1["output"], a62["openai_list"]["input"], a62["openai_list"]["output"]) == (
+                8, 40, 8.8, 44, 8.8, 44, 8, 40)
+    assert a62["global"]["long"] == {"input": 16, "output": 60, "cache_read": 0.8, "cache_write": 20}
+    assert a62_e1["long"] == {"input": 17.6, "output": 66, "cache_read": 0.88, "cache_write": 22}
+    assert (a62["global"]["cache_read"], a62["us"]["cache_read"], a62["openai_list"]["cache_read"]) == (0.4, 0.44, 0.4)
+    s62 = _family(payload, "gpt-6.2-sol")["tiers"]
+    (s62_e1,) = s62["in_region"]
+    assert (s62["global"]["input"], s62["global"]["output"], s62["us"]["input"], s62["us"]["output"],
+            s62_e1["input"], s62_e1["output"], s62["openai_list"]["input"], s62["openai_list"]["output"]) == (
+                2, 10, 2.2, 11, 2.2, 11, 2, 10)
+    assert s62["us"]["long"] == {"input": 4.4, "output": 16.5, "cache_read": 0.22, "cache_write": 5.5}
+    assert a62["global"]["footnotes"] != s62["global"]["footnotes"]  # one offer per model
     t61 = _family(payload, "gpt-6.1-terra")["tiers"]
     (t61_e1,) = t61["in_region"]
     assert (t61["global"]["input"], t61["global"]["output"], t61["us"]["input"], t61["us"]["output"],
@@ -338,7 +356,7 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
     active = active_channels(ACTIVE_MODELS, [])
     old = {m: i for m, i in active.items()
            if m not in V2_32_NEW_CHANNELS | V2_33_NEW_CHANNELS
-           and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra", "claude-fable-5-2")}
+           and i.family_key not in ("gpt-6.1-sol", "gpt-6.1-terra", "claude-fable-5-2", "gpt-6.2-astra", "gpt-6.2-sol")}
     # v2.39.0 catalog: the retired Mantle us-east-2/us-west-2 channels (v2.38.0) and the five families left out in
     # v2.39.0 are not active at all, and neither are Claude Fable 5 (v2.42.0), Claude Opus 4.8, GPT 5.6 and GPT 5.5
     # (v2.43.0) — they have no seed any more
@@ -351,8 +369,9 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
             for row in s.query(models.PriceHistory):
                 row.observed_at = synced
             s.commit()
-        # the upgrade: backend lifespan seeds the new rows (8 + 4 v2.33.0 + 4 v2.38.0 GPT 6.1 Terra + 3 v2.41.0 Fable 5.2)
-        assert pricing_seed.ensure_seed(engine, active) == 19
+        # the upgrade: backend lifespan seeds the new rows (8 + 4 v2.33.0 + 4 v2.38.0 GPT 6.1 Terra + 3 v2.41.0 Fable 5.2
+        # + 8 v2.44.0 GPT 6.2 Astra and GPT 6.2 Sol: three channels and one OpenAI official price each)
+        assert pricing_seed.ensure_seed(engine, active) == 27
         with Session() as s:
             payload = build_pricing_payload(s, active, now=datetime(2026, 9, 30, 13, 0, tzinfo=timezone.utc))
     finally:
@@ -360,12 +379,14 @@ def test_upgrade_seed_before_the_first_sync_dates_the_new_offers_by_their_seed_c
 
     _assert_every_reference_is_cited(payload)
     as_of = {r["id"]: r["as_of"] for r in payload["references"]}
-    assert len(as_of) == 15
+    assert len(as_of) == 17
     assert as_of.pop("offer:offer-5fu2rhus3byrs") == "2026-09-30"  # Claude Sonnet 5.5
     assert as_of.pop("offer:offer-u3aih6zr7uw5u") == "2026-10-07"  # Claude Haiku 5.5 (v2.33.0)
     assert as_of.pop("offer:offer-wbhj4kycntgkk") == "2026-09-30"  # GPT 6.1 Sol
     assert as_of.pop("offer:offer-34pzbdgg26ley") == "2026-10-27"  # GPT 6.1 Terra (v2.38.0)
     assert as_of.pop("offer:offer-agsprgw6z3dg6") == "2026-11-09"  # Claude Fable 5.2 (v2.41.0)
+    assert as_of.pop("offer:offer-i5wczxyjg7weu") == "2026-11-17"  # GPT 6.2 Astra (v2.44.0)
+    assert as_of.pop("offer:offer-7vsvjk6xmsl7c") == "2026-11-17"  # GPT 6.2 Sol (v2.44.0)
     assert set(as_of.values()) == {"2026-09-29"}  # incl. the offers and docs the other new rows cite
     s55 = _family(payload, "claude-sonnet-5-5")["tiers"]
     assert (s55["global"]["verification"], s55["global"]["observed_at"]) == ("seed_only", None)

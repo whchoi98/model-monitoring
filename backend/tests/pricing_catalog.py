@@ -3,7 +3,8 @@
 (Global, US, CP), Claude Sonnet 5.5 US + v2.38.0 GPT 6.1 Terra (Global, US, us-east-1), OpenAI Mantle 인리전 us-east-1 일원화
 (us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1) − v2.39.0 Claude Opus 4.7, Opus 4.6, Sonnet 4.6,
 Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 + v2.41.0 Claude Fable 5.2(Global, US, CP) − v2.42.0 Claude Fable 5(Global, US, CP) − v2.43.0 Claude Opus 4.8(Global, US, CP),
-GPT 5.6 Sol, Terra, Luna(Global, us-east-1)와 GPT 5.5(us-east-1) 10채널 = 활성 39채널. 수집 대상 아님."""
+GPT 5.6 Sol, Terra, Luna(Global, us-east-1)와 GPT 5.5(us-east-1) 10채널 + v2.44.0 GPT 6.2 Astra, GPT 6.2 Sol(Global, US,
+us-east-1) 6채널 = 활성 45채널. 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
@@ -23,6 +24,8 @@ _CP_IDS = {
     "claude-sonnet-5-5": "claude-sonnet-5-5", "claude-sonnet-5": "claude-sonnet-5", "claude-haiku-5-5": "claude-haiku-5-5",
 }
 _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SPECS와 같은 리전(Mantle 인리전 us-east-1만, v2.38.0)
+    ("openai.gpt-6.2-astra", "gpt-6.2-astra", "GPT 6.2 Astra", ("global", "us", "us-east-1")),  # v2.44.0
+    ("openai.gpt-6.2-sol", "gpt-6.2-sol", "GPT 6.2 Sol", ("global", "us", "us-east-1")),  # v2.44.0
     ("openai.gpt-6.1-sol", "gpt-6.1-sol", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
     ("openai.gpt-6.1-terra", "gpt-6.1-terra", "GPT 6.1 Terra", ("global", "us", "us-east-1")),
     ("openai.gpt-6-astra", "gpt-6-astra", "GPT 6 Astra", ("global", "us", "us-east-1")),

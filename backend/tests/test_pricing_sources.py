@@ -35,6 +35,7 @@ _ENV = {
     "OPENAI_US_EAST_1_BASE_URL": "https://e1/v1", "OPENAI_US_EAST_2_BASE_URL": "https://e2/v1",
     "OPENAI_US_WEST_2_BASE_URL": "https://w2/v1",
     **{f"BEDROCK_OPENAI_GPT_{k}_MODEL_ID": f"openai.gpt-{v}" for k, v in (
+        ("62_ASTRA", "6.2-astra"), ("62_SOL", "6.2-sol"),  # v2.44.0
         ("61_SOL", "6.1-sol"), ("61_TERRA", "6.1-terra"), ("6_ASTRA", "6-astra"), ("6_SOL", "6-sol"), ("6_LUNA", "6-luna"), ("56_SOL", "5.6-sol"),
         ("56_TERRA", "5.6-terra"), ("56_LUNA", "5.6-luna"), ("54", "5.4"), ("55", "5.5"))},  # 5.4: v2.38.x env — 남아도 등록 안 됨
     **{f"OPENAI_1P_GPT_{k}_MODEL_ID": f"gpt-{v}" for k, v in (
@@ -78,20 +79,21 @@ def test_every_real_active_model_id_is_classified(model_id):
     assert price_identity(model_id) == PriceIdentity(*EXPECTED_IDENTITY[model_id])
 
 
-def test_expected_table_is_the_39_active_channels():
+def test_expected_table_is_the_45_active_channels():
     counts: dict[tuple[str, str], int] = {}
     for _, _, provider, channel, _, _ in EXPECTED_IDENTITY.values():
         counts[(provider, tier_of(channel))] = counts.get((provider, tier_of(channel)), 0) + 1
     # v2.38.0: OpenAI Mantle 인리전은 us-east-1만(모델당 1채널). v2.39.0: Claude Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4 제외
     # v2.41.0: Claude Fable 5.2(Global, US, CP) 추가, v2.42.0: Claude Fable 5(Global, US, CP) 제외
     # v2.43.0: Claude Opus 4.8(Global, US, CP), GPT 5.6 Sol, Terra, Luna(Global, us-east-1), GPT 5.5(us-east-1) 제외
+    # v2.44.0: GPT 6.2 Astra, GPT 6.2 Sol(Global, US, us-east-1) 추가
     assert counts == {("anthropic", "global"): 7, ("anthropic", "us"): 7, ("anthropic", "cp"): 7,
-                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 5, ("openai", "us"): 5,
-                      ("openai", "in_region"): 5}
-    assert len(EXPECTED_IDENTITY) == 39
+                      ("anthropic", "in_region"): 2, ("amazon", "us"): 1, ("openai", "global"): 7, ("openai", "us"): 7,
+                      ("openai", "in_region"): 7}
+    assert len(EXPECTED_IDENTITY) == 45
 
 
-def test_registered_catalog_minus_hidden_is_exactly_the_49_channels(monkeypatch):
+def test_registered_catalog_minus_hidden_is_exactly_the_45_channels(monkeypatch):
     """prober 등록 함수를 운영 env로 실제로 돌린다 — 새 모델, 리전을 넣고 매핑을 잊으면 실패."""
     import anthropic
 
@@ -107,7 +109,7 @@ def test_registered_catalog_minus_hidden_is_exactly_the_49_channels(monkeypatch)
     active = active_channels(catalog, ["(1P)"])
     listed = [m for m in active if m.startswith(ps.OPENAI_LIST_PREFIX)]
     assert {m: catalog[m] for m in active if m not in listed} == ACTIVE_MODELS  # 라벨까지 prober 규약과 같다
-    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 9개
+    assert sorted(listed) == sorted(OPENAI_LIST_IDS) and list(active)[-len(listed):] == listed  # 끝에 7개(v2.44.0)
 
 
 def test_active_channels_hidden_and_unclassifiable(caplog):
@@ -140,7 +142,7 @@ def test_active_channels_hidden_and_unclassifiable(caplog):
     "bedrock:ap-northeast-2:amazon.nova-2-lite-v1:0", "bedrock:ap-northeast-2:global.anthropic.claude-opus-5",
     "bedrock:ap-northeast-2:anthropic.claude-sonnet-5-6", "bedrock:ap-northeast-2", "bedrock::anthropic.claude-opus-5",
     "bedrock:ap-northeast-2:openai.gpt-6-sol", "openai:ap-northeast-2:openai.gpt-6-sol",
-    "global.anthropic.claude-sonnet-5-6", "us.anthropic.claude-sonnet-5-5-v1:0", "openai:global:global.openai.gpt-6.2-sol",
+    "global.anthropic.claude-sonnet-5-6", "us.anthropic.claude-sonnet-5-5-v1:0", "openai:global:global.openai.gpt-6.3-sol",
     "openai-list:gpt-6.1-sol-mini",
 ])
 def test_unclassifiable_model_ids_return_none(model_id):
@@ -203,13 +205,16 @@ def test_cp_targets_and_static_labels_mirror_prober():
 def test_family_order_matches_frontend_sort_models():
     m = re.search(r"export const FAMILY_ORDER = \[(.*?)\];", SORT_MODELS_TS.read_text(encoding="utf-8"), re.S)
     assert m and ps.FAMILY_ORDER == tuple(re.findall(r'"([^"]+)"', m.group(1)))
-    assert len(ps.FAMILY_ORDER) == 13
+    assert len(ps.FAMILY_ORDER) == 15  # v2.44.0: + GPT 6.2 Astra, GPT 6.2 Sol
     assert ps.FAMILY_ORDER[:3] == ("Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5")  # Fable 5는 v2.42.0 제외
     assert "Claude Fable 5" not in ps.FAMILY_ORDER
     assert not {"Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4"} & set(ps.FAMILY_ORDER)
     assert not {"Claude Opus 4.8", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5"} & set(ps.FAMILY_ORDER)  # v2.43.0
     assert ps.FAMILY_ORDER[-1] == "GPT 6 Luna"
     assert ps.FAMILY_ORDER.index("Claude Sonnet 5.5") + 1 == ps.FAMILY_ORDER.index("Claude Sonnet 5")
+    assert ps.FAMILY_ORDER.index("Nova 2.0 Lite") + 1 == ps.FAMILY_ORDER.index("GPT 6.2 Astra")  # v2.44.0: the first GPT
+    assert ps.FAMILY_ORDER.index("GPT 6.2 Astra") + 1 == ps.FAMILY_ORDER.index("GPT 6.2 Sol")
+    assert ps.FAMILY_ORDER.index("GPT 6.2 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Sol")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Sol") + 1 == ps.FAMILY_ORDER.index("GPT 6.1 Terra")
     assert ps.FAMILY_ORDER.index("GPT 6.1 Terra") + 1 == ps.FAMILY_ORDER.index("GPT 6 Astra")
     assert {v[1] for v in EXPECTED_IDENTITY.values()} == set(ps.FAMILY_ORDER)
@@ -233,9 +238,9 @@ def test_openai_list_ids_are_classified(family_key):
         family_key, OPENAI_FAMILIES[family_key], "openai", "openai_list", "openai_doc", family_key)
 
 
-def test_openai_list_ids_are_the_five_bedrock_gpt_families_and_rows_of_the_openai_doc():
-    # v2.43.0: GPT 5.6 Sol, Terra, Luna and GPT 5.5 left (nine until v2.42.x)
-    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 5
+def test_openai_list_ids_are_the_seven_bedrock_gpt_families_and_rows_of_the_openai_doc():
+    # v2.43.0: GPT 5.6 Sol, Terra, Luna and GPT 5.5 left (nine until v2.42.x); v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol joined
+    assert OPENAI_LIST_IDS == [ps.openai_list_model_id(fk) for fk in OPENAI_FAMILIES] and len(OPENAI_LIST_IDS) == 7
     prices = parse_openai_pricing_md((FIXTURES / "openai_pricing.md").read_text(encoding="utf-8"))
     assert all(price_identity(m).source_ref in prices for m in OPENAI_LIST_IDS)  # exact doc model names
 

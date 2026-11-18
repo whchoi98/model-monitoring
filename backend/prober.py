@@ -354,8 +354,8 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 
 # 모델별 채널 리전 — (model-id env var, display family, 채널 리전 튜플).
 # "global"은 GPT-5.6 세대 이상만 지원(2026-08-17 발표) — 5.4/5.5 스펙에 넣으면 매 프로브 404.
-# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30, 6.1 Terra 2026-10-27
-# 라이브 200) — 5.x는 미검증이라 미기재.
+# "us"(US CRIS)는 GPT-6 세대만 확인(Astra 2026-09-09, Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30, 6.1 Terra 2026-10-27,
+# 6.2 Astra와 6.2 Sol 2026-11-17 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
 # GPT 5.4는 사용자 결정(2026-10-27)으로 모니터링에서 뺐다 (v2.39.0, ADR-034 — Mantle과 휴면 1P 스펙 모두, 저장 행은 visibility.py가 숨긴다).
 # GPT 5.6 Sol, Terra, Luna와 GPT 5.5도 사용자 결정(2026-11-10)으로 뺐다 (v2.43.0, ADR-038 — 같은 방식). 남은 OpenAI는 GPT 6 세대뿐이다.
@@ -367,7 +367,12 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # GPT 6.1 Sol(2026-09-30)과 6.1 Terra(2026-10-27)는 us-east-2/us-west-2가 404 not_found_error였다.
 # 새 모델의 Mantle us-east-1 첫 호출은 401 "subscription is being set up"(Marketplace 구독 자동 개시, 과도 상태)이었다가
 # 수 분 뒤 200이다(GPT 6 Sol/Luna 2026-09-23, 6.1 Sol 2026-09-30, 6.1 Terra 2026-10-27 — 약 2분).
+# GPT 6.2 Astra, GPT 6.2 Sol (v2.44.0, 2026-11-17 사용자 요청, ADR-039): Global CRIS, US CRIS, Mantle us-east-1 모두 첫 호출부터
+# 200이었다(401 과도 상태 없음). Mantle us-east-2/us-west-2는 호출하지 않았다(Mantle 인리전은 us-east-1만 쓴다).
+# "gpt-6.2-astra"는 "gpt-6-astra"를, "GPT 6.2 Astra"는 "GPT 6 Astra"를 포함하지 않아 substring 규칙이 겹치지 않는다(Sol도 같다).
 _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
+    ("BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID", "GPT 6.2 Astra", ("global", "us", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID", "GPT 6.2 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", "GPT 6.1 Terra", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-east-1")),

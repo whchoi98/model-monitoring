@@ -46,6 +46,16 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 되돌리는 릴리스가 CDK(env, 스케줄, IAM)도 바꿨다면 직전 릴리스 git tag의 `cdk/`에서 실행한다
 (예: `git worktree add /tmp/rb vX.Y.Z && cd /tmp/rb/cdk && npm ci`). 현재 CDK로 배포하면 image만 돌아가고 env·스케줄은 새 값 그대로다.
 
+**v2.44.0에서 v2.43.1로 되돌릴 때 (과도 상태, 예상)**. v2.44.0은 CDK env(`BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID`, `BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID`)를 더한 릴리스라 위 규칙대로
+v2.43.1 tag의 `cdk/`로 v2.43.1 이미지 digest(`v4038207`, 값은 `docs/reviews/2026-11-11-v243-deployment.md`)를 배포한다. DB는 그대로 둔다. v2.43.1은 GPT 6.2 Astra,
+GPT 6.2 Sol 6채널을 등록하지 않아 프로브와 벤치가 멈춘다(활성 39채널, 벤치 15채널 `cris=10 mantle-us-east-1=5`). 그 채널의 `price_history` 행(6채널과
+`openai-list:gpt-6.2-astra`, `openai-list:gpt-6.2-sol`)은 남지만 v2.43.1 `price_identity`가 분류하지 않아 `/api/pricing`에 나오지 않는다.
+v2.43.1의 기본 숨김 패턴(`GPT 5.6`, `GPT 5.5` 등)은 GPT 6.2 라벨에 걸리지 않으므로 다음이 잠시 보인다. 아래는 v2.38.0 → v2.37.1과 같은 동작에서 추정한 것이고 해 보지는 않았다.
+1. `/gpt-on-aws`: v2.43.1 `FAMILY_GROUPS`에 GPT 6.2 Astra, GPT 6.2 Sol이 없어 남은 카드는 "기타" 열로 간다(다음 완료 사이클부터 사라진다). 7일 추세에는 지난 선이 남는다.
+2. 대시보드와 `/reliability`(7일), `/cost`(30일): 조회 창이 지날 때까지 GPT 6.2 행이 남는다. v2.43.1 `FAMILY_ORDER`에 두 패밀리가 없어 그 묶음은 아는 패밀리 뒤에 놓이고,
+   추세 차트는 색 표에 없는 라벨을 회색으로 그린다.
+데이터를 지울 필요는 없다. 다시 v2.44.0 이상으로 올리면 그대로 이어진다.
+
 **v2.39.0에서 v2.38.0으로 되돌릴 때 (과도 상태)**. v2.39.0은 CDK env(`BEDROCK_OPENAI_GPT_54_MODEL_ID`, 휴면 1P의
 `OPENAI_1P_GPT_54_MODEL_ID`)를 뺀 릴리스라 위 규칙대로 v2.38.0 tag의 `cdk/`로 v2.38.0 이미지 digest(`v2d64a44`, 값은
 `docs/reviews/2026-10-27-v238-deployment.md`)를 배포한다. 현재 `cdk/`로 v2.38.0 이미지만 넣으면 GPT 5.4 env가 없어 그 채널은 계속 빠진다.

@@ -369,6 +369,15 @@ describe("SchedulerStack", () => {
     for (const c of containers) expect(c.Environment).toContainEqual({ Name: "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", Value: "openai.gpt-6.1-terra" });
   });
 
+  it.each([
+    ["BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID", "openai.gpt-6.2-astra"],
+    ["BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID", "openai.gpt-6.2-sol"],
+  ])("모든 스케줄 task def에 GPT-6.2 model id %s가 주입된다 (v2.44.0)", (name, value) => {
+    const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
+    expect(containers).toHaveLength(7);
+    for (const c of containers) expect(c.Environment).toContainEqual({ Name: name, Value: value });
+  });
+
   it("어느 스케줄 task def에도 GPT 5.4 model id가 없다 (v2.39.0 — 모니터링에서 뺐다)", () => {
     const containers = Object.values(template.findResources("AWS::ECS::TaskDefinition")).flatMap((r: any) => r.Properties.ContainerDefinitions);
     expect(containers).toHaveLength(7);

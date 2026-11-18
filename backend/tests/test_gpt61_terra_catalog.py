@@ -68,7 +68,8 @@ def _register(monkeypatch, model_env):
 # ---------------------------------------------------------------- GPT 6.1 Terra
 
 def test_gpt61_terra_spec_follows_gpt61_sol():
-    assert prober._OPENAI_MODEL_SPECS[:2] == [
+    # v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol come first, so the 6.1 pair is the third and fourth entry
+    assert prober._OPENAI_MODEL_SPECS[2:4] == [
         ("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1")),
         ("BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", "GPT 6.1 Terra", ("global", "us", "us-east-1")),
     ]

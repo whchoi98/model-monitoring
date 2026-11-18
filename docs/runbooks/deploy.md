@@ -1201,9 +1201,96 @@ curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | lengt
   (숨김 패턴이 v2.42.0 기본값으로 돌아간다). 다시 노출하려면 카탈로그(`prober`, `gptbench`, `pricing_sources`, `pricing_seed`)와 CDK env를 되살리고
   세 패턴과 프런트 `EXCLUDED_FAMILIES` 항목을 지운다(ADR-038). 1P를 다시 노출할 때는 새 모델의 1P 스펙부터 만든다 — 남은 1P 스펙이 없다.
 
+### 5-16. v2.44.0 배포 경로와 확인 (GPT-6.2 Astra, GPT-6.2 Sol)
+
+**배포 경로**: 새 env 두 개(`BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID`, `BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID`)가 있어 이미지-only 경로(§6)는 쓰지 않는다.
+backend 서비스와 스케줄 태스크 7개에 env가 들어가도록 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다
+(§3 경고, jest가 두 스택의 env를 고정). 이미지만 배포하면 두 모델의 6채널이 오류 없이 빠진다. IAM, DB 스키마 변경은 없다. backend 기동 seed가
+6채널과 `openai-list:gpt-6.2-astra`, `openai-list:gpt-6.2-sol` 단가 행을 넣는다. 사용자 요청(2026-11-17), 자세히는 ADR-039.
+아래 기댓값은 코드와 2026-11-17 실측에서 계산한 값이고, 이 절을 쓴 시점에는 배포하지 않았다.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 0. 작업 정의 — 새 env 두 개가 있는지(backend와 스케줄 7개)
+for td in $(aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION --query 'services[0].taskDefinition' --output text) \
+  $(for n in $(aws scheduler list-schedules --region $REGION --query 'Schedules[?starts_with(Name, `BedrockMonitor`)].Name' --output text); do
+      aws scheduler get-schedule --name $n --region $REGION --query 'Target.EcsParameters.TaskDefinitionArn' --output text; done); do
+  aws ecs describe-task-definition --task-definition $td --region $REGION \
+    --query 'length(taskDefinition.containerDefinitions[0].environment[?contains(name, `GPT_62`)])' --output text
+done
+# 기댓값: 줄마다 2
+
+# 1. 카탈로그 — /status 45, /api/models 45, 새 id 6개
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count}'
+curl -s "https://$CF_DOMAIN/api/models" | jq '[length, ([.[] | select(.id | test("gpt-6\\.2-(astra|sol)"))] | length)]'
+# 기댓값: expected_model_count 45, [45, 6]
+
+# 2. 첫 새 AutoProber 회차(5분) 뒤 — OpenAI 21행, GPT-6.2 6채널 success
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '{n: length,
+  groups: (group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end)
+           | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add),
+  openai: ([.[] | select(.model_id | startswith("openai:")) | .model_id | split(":")[1]] | group_by(.) | map({(.[0]): length}) | add)}'
+# 기댓값: n 45, groups {"anthropic": 7, "bedrock": 17, "openai": 21}, openai {"global": 7, "us": 7, "us-east-1": 7}
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | test("gpt-6\\.2-")) | {model_id, model_name, status}]'
+# 기댓값: 6행, status "success"
+#   openai:global:global.openai.gpt-6.2-astra   "OpenAI GPT 6.2 Astra (Global)"
+#   openai:us:us.openai.gpt-6.2-astra           "OpenAI GPT 6.2 Astra (US)"
+#   openai:us-east-1:openai.gpt-6.2-astra       "OpenAI GPT 6.2 Astra (us-east-1)"
+#   openai:global:global.openai.gpt-6.2-sol     "OpenAI GPT 6.2 Sol (Global)"
+#   openai:us:us.openai.gpt-6.2-sol             "OpenAI GPT 6.2 Sol (US)"
+#   openai:us-east-1:openai.gpt-6.2-sol         "OpenAI GPT 6.2 Sol (us-east-1)"
+#   2026-11-17 실측은 호스트 IAM 자격의 단기 토큰으로 했고 여섯 채널 모두 첫 호출부터 200이었다. 운영 장기 키(OPENAI_API_KEY)로는
+#   호출해 보지 않았으므로 첫 회차의 status를 꼭 본다. Mantle us-east-1이 401 "subscription is being set up"이면 Marketplace 구독 개시
+#   과도 상태다(이전 신모델은 수 분 뒤 200).
+
+# 3. GPT on AWS 벤치 — 배포 뒤 첫 15분 사이클
+aws logs tail /ecs/gptbench --since 20m --region $REGION | grep -E 'GPT bench (lanes|lane done|cycle)'
+curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), first: [.channels[:6][].model_name]}'
+# 기댓값: "GPT bench lanes: cris=14 mantle-us-east-1=7", "lane done" 두 줄, "cycle done: rows=210 errors=0 skipped=none"(GPT_BENCH_RUNS 10).
+#   latest는 시작 후 14분이 지난 사이클만 돌려주므로 배포 직후 약 15분은 옛 사이클(15채널)이다. 그 뒤 n 21, first는 GPT 6.2 Astra 3채널과
+#   GPT 6.2 Sol 3채널(Global, US, us-east-1 순). 갈래가 데드라인(780초)을 넘기면 목록 끝인 GPT 6.2 Sol, 6.2 Astra부터 skipped에 나온다.
+
+# 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'
+# 기댓값: "pricing_sync_runner: 52 active channels"(45 + OpenAI 공식 가격 7), pending=0, errors=0.
+#   GPT-6.2 두 오퍼는 긴 컨텍스트가 정상값이라 새 WARNING이 없다(GPT-6.1 Sol WARNING은 v2.32.0과 같이 정상).
+
+# 5. /api/pricing — families 15, models 45, references 17, GPT 6.2 셀, 변경 목록의 신규 채널 8건(한 번만)
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{families: (.families | length), models: (.models | length),
+  references: (.references | length), kinds: ([.references[].kind] | group_by(.) | map({(.[0]): length}) | add),
+  openai: [.families[] | select(.provider == "openai") | .family_key],
+  astra62: (.families[] | select(.family_key == "gpt-6.2-astra") | {list: (.tiers.openai_list | {input, output}),
+    global: (.tiers.global | {input, output, long}), us: (.tiers.us | {input, output}), in_region: [.tiers.in_region[] | {regions, input, output}]}),
+  sol62: (.families[] | select(.family_key == "gpt-6.2-sol") | {list: (.tiers.openai_list | {input, output}),
+    global: (.tiers.global | {input, output}), us: (.tiers.us | {input, output})}),
+  added: ([.changes.items[]? | select(.kind == "channel" and .before == null)] | length)}'
+# 기댓값: families 15, models 45, references 17, kinds {"agreement_offer": 14, "anthropic_doc": 1, "openai_doc": 1, "price_list": 1},
+#   openai ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna"],
+#   astra62 list {8, 40}, global {8, 40, long {16, 60, 0.8, 20}}, us {8.8, 44}, in_region [{["us-east-1"], 8.8, 44}],
+#   sol62 list {2, 10}, global {2, 10}, us {2.2, 11},
+#   added — 배포 뒤 첫 동기화가 새 채널이 없던 스냅샷과 비교하므로 8건(6채널 + openai-list:gpt-6.2-astra, openai-list:gpt-6.2-sol)이
+#   한 번 나오고, 그다음 동기화부터는 없다. 60초 캐시가 있으니 런 뒤 1분 지나 확인한다.
+
+# 6. ExplorerVerify — 다음 스케줄 런(18:00 UTC) 또는 §5-12의 2번 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | length), examples: ([.models[].examples[]] | length)}'
+# 기댓값: models 45, examples 77(새 6채널은 Responses 예제 1건씩)
+```
+
+- 화면 확인(Playwright, KO/EN, 390px): 대시보드 카드 45장(GPT 6.2 Astra, GPT 6.2 Sol 묶음이 Nova 다음, GPT 6.1 Sol 앞), 추세 차트의 GPT 6.2 Astra
+  분홍 3색(Global `#ff1fa5` 실선, US `#f4a6c6` 파선, us-east-1 `#6a394e` 일점쇄선)과 GPT 6.2 Sol 주황 3색(`#ff5500`, `#7d4b36`, `#f5c09a`),
+  `/gpt-on-aws` 21채널과 GPT 6.x 세대 일곱 열(1479px까지 3 + 3 + 1, 1480px부터 4 + 3 — 첫 줄 GPT 6.2와 6.1, 둘째 줄 GPT 6 세대), 벤치 범례의
+  6.2 Astra 실선과 6.2 Sol 점선, `/pricing` OpenAI 표 첫 두 행(셋째 줄 긴 컨텍스트)과 변경 배너의 신규 채널 8건, `/models` 카드 45장,
+  `/parity`, `/reliability`, `/cost`, `/efficiency`, `/analysis`의 새 6채널. Claude 화면(`/claude-features`, `/prompts`)은 그대로다.
+- 벤치 추가 비용은 캐시 읽기 단가 기준 추정으로 하루 약 $100이다(6.2 Astra 약 $79, 6.2 Sol 약 $20). 줄이려면 `gptbench._BENCH_SPECS`의 두 줄을 빼거나
+  `GPT_BENCH_RUNS`를 낮춘다. 시간당 CP 호출(84회)과 Claude API Features(1365셀)는 그대로다.
+- Mantle us-east-1 `GET /v1/models`에는 2026-11-17 현재 두 모델이 없어(단건 조회 503) 모델별 데이터 보존 `allowed_modes`는 조회되지 않는다.
+- 롤백 지점은 v2.43.1 이미지 `v4038207`(backend `:98`, frontend `:103`, `docs/reviews/2026-11-11-v243-deployment.md`)이다. v2.44.0은 CDK env를 더한
+  릴리스라 v2.43.1 tag의 `cdk/`로 되돌린다(`rollback.md` "v2.44.0에서 v2.43.1로 되돌릴 때").
+
 ## 6. 후속 배포 (코드만 변경 시)
 
-⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`)에는 이미지-only
+⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`, v2.44.0 `BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID`와 `BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID`)에는 이미지-only
 경로(§2-1 기존 task-def 복사 재등록)를 쓰지 말 것** — 기존 task definition의 env가
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포

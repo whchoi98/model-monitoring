@@ -36,9 +36,11 @@ def test_the_ten_channels_are_out_of_the_catalog_and_the_cp_targets():
     assert tuple(s for s, _ in prober._ANTHROPIC_TARGETS) == pricing_sources._CP_TARGETS == (
         "fable-5-2", "fable-5-1", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5", "haiku-5-5")
     families = [family for _, family, _ in prober._OPENAI_MODEL_SPECS]
-    assert families == ["GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]
+    # v2.44.0 added GPT 6.2 Astra and GPT 6.2 Sol in front (ADR-039) — still no GPT 5.x family
+    assert families == ["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol",
+                        "GPT 6 Luna"]
     assert prober._OPENAI_1P_MODEL_SPECS == []  # the dormant 1P specs were GPT 5.5 and 5.6 only
-    assert len(ACTIVE_MODELS) == 39
+    assert len(ACTIVE_MODELS) == 45  # 39 in v2.43.0
 
 
 def test_cp_discovery_leaves_claude_opus_4_8_unregistered():
@@ -119,7 +121,8 @@ def test_the_gpt_5_6_sol_promo_note_is_gone():
     assert not [n for n in pricing_sources.PRICE_NOTES if n["family_key"].startswith("gpt-5.")]
 
 
-def test_the_bench_keeps_fifteen_gpt_6_channels_in_two_lanes(monkeypatch):
+def test_the_bench_keeps_only_gpt_6_channels_in_two_lanes(monkeypatch):
+    """15 channels in v2.43.0 (cris 10, mantle-us-east-1 5); v2.44.0 appended GPT 6.2 Astra and GPT 6.2 Sol."""
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     for env, url in (("OPENAI_US_EAST_1_BASE_URL", "https://e1"), ("OPENAI_GLOBAL_BASE_URL", "https://gl"),
                      ("OPENAI_US_BASE_URL", "https://us")):
@@ -127,8 +130,8 @@ def test_the_bench_keeps_fifteen_gpt_6_channels_in_two_lanes(monkeypatch):
     for env, _, _ in prober._OPENAI_MODEL_SPECS:
         monkeypatch.setenv(env, "openai.x")
     assert [family for family, _, _ in gptbench._BENCH_SPECS] == [
-        "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra"]
+        "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol"]
     chans = gptbench.bench_channels()
-    assert len(chans) == 15 and not [c for c in chans if c["family"].startswith("GPT 5.")]
+    assert len(chans) == 21 and not [c for c in chans if c["family"].startswith("GPT 5.")]
     lanes = gptbench.bench_lanes(chans)
-    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 10, "mantle-us-east-1": 5}
+    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 14, "mantle-us-east-1": 7}

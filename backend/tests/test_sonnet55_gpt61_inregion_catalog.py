@@ -239,8 +239,10 @@ _GPT61_SOL_KEYS = [
 ]
 
 
-def test_gpt61_sol_is_the_first_openai_spec():
-    assert prober._OPENAI_MODEL_SPECS[0] == (
+def test_gpt61_sol_spec_follows_the_gpt62_specs():
+    """First until v2.43.x; v2.44.0 put GPT 6.2 Astra and GPT 6.2 Sol in front (newest first)."""
+    assert [family for _, family, _ in prober._OPENAI_MODEL_SPECS[:2]] == ["GPT 6.2 Astra", "GPT 6.2 Sol"]
+    assert prober._OPENAI_MODEL_SPECS[2] == (
         "BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID", "GPT 6.1 Sol", ("global", "us", "us-east-1"))
 
 

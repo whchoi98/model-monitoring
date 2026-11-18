@@ -37,6 +37,13 @@ const MODEL_COLORS: Record<string, string> = {
   "GPT 6 Luna (Global)": "bg-sky-900",
   "GPT 6 Luna (US)": "bg-sky-800",
   "GPT 6 Luna (us-east-1)": "bg-blue-900",
+  // GPT 6.2 Astra / GPT 6.2 Sol (v2.44.0) — 분홍, 주황 계열(대시보드 추세 차트와 같은 계열, 배지 텍스트는 흰색)
+  "GPT 6.2 Astra (Global)": "bg-pink-600",
+  "GPT 6.2 Astra (US)": "bg-pink-800",
+  "GPT 6.2 Astra (us-east-1)": "bg-pink-950",
+  "GPT 6.2 Sol (Global)": "bg-orange-700",
+  "GPT 6.2 Sol (US)": "bg-orange-900",
+  "GPT 6.2 Sol (us-east-1)": "bg-orange-950",
   // GPT 6.1 Sol (v2.32.0)
   "GPT 6.1 Sol (Global)": "bg-cyan-700",
   "GPT 6.1 Sol (US)": "bg-cyan-950",
@@ -90,7 +97,9 @@ export function extractModelName(key: string, tokens: Map<string, string>): stri
       : rawRegion === "global" ? "Global"
       : rawRegion === "us" ? "US"
       : rawRegion;
-    const fam = modelId.includes("gpt-6.1-sol") ? "GPT 6.1 Sol"
+    const fam = modelId.includes("gpt-6.2-astra") ? "GPT 6.2 Astra"
+      : modelId.includes("gpt-6.2-sol") ? "GPT 6.2 Sol"
+      : modelId.includes("gpt-6.1-sol") ? "GPT 6.1 Sol"
       : modelId.includes("gpt-6.1-terra") ? "GPT 6.1 Terra"
       : modelId.includes("gpt-6-astra") ? "GPT 6 Astra"
       : modelId.includes("gpt-6-sol") ? "GPT 6 Sol"

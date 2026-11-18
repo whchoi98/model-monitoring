@@ -45,6 +45,18 @@ describe("extractModelName", () => {
     expect(name("openai:us-east-1:openai.gpt-5.6-terra:1")).toBe("GPT (us-east-1)");
     expect(name("openai:us-east-1:openai.gpt-6-astra:1")).toBe("GPT 6 Astra (us-east-1)");
   });
+  test("GPT 6.2 Astra, GPT 6.2 Sol 3채널씩(v2.44.0)은 GPT 6 Astra, GPT 6 Sol과 구분된다", () => {
+    expect(name("openai:global:global.openai.gpt-6.2-astra:1")).toBe("GPT 6.2 Astra (Global)");
+    expect(name("openai:us:us.openai.gpt-6.2-astra:1")).toBe("GPT 6.2 Astra (US)");
+    expect(name("openai:us-east-1:openai.gpt-6.2-astra:2")).toBe("GPT 6.2 Astra (us-east-1)");
+    expect(name("openai:global:global.openai.gpt-6.2-sol:1")).toBe("GPT 6.2 Sol (Global)");
+    expect(name("openai:us:us.openai.gpt-6.2-sol:1")).toBe("GPT 6.2 Sol (US)");
+    expect(name("openai:us-east-1:openai.gpt-6.2-sol:3")).toBe("GPT 6.2 Sol (us-east-1)");
+    // 이웃 패밀리는 그대로다
+    expect(name("openai:global:global.openai.gpt-6-astra:1")).toBe("GPT 6 Astra (Global)");
+    expect(name("openai:us:us.openai.gpt-6-sol:1")).toBe("GPT 6 Sol (US)");
+    expect(name("openai:us-east-1:openai.gpt-6.1-sol:1")).toBe("GPT 6.1 Sol (us-east-1)");
+  });
   test("FM id 안의 ':'는 마지막 iteration 세그먼트만 떼어 낸다", () => {
     expect(name("us.amazon.nova-2-lite-v1:0:1")).toBe("Nova 2.0 Lite");
     expect(name("bedrock:ap-northeast-2:anthropic.claude-sonnet-5:3")).toBe("Claude Sonnet 5 (ap-northeast-2)");

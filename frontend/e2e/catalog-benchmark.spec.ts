@@ -11,10 +11,12 @@ const catalog = [
 
 function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
   const cycle = new Date(Date.now() - 20 * 60_000).toISOString();
-  // 15채널 (v2.43.0) — /api/gptbench/latest 정렬(6.1 Sol → 6.1 Terra → Astra → Sol → Luna)과 동일.
+  // 21채널 (v2.44.0, v2.43.0은 15채널) — /api/gptbench/latest 정렬(6.2 Astra → 6.2 Sol → 6.1 Sol → 6.1 Terra → Astra → Sol → Luna)과 동일.
   // Mantle 인리전은 v2.38.0부터 us-east-1 하나다(v2.37.x 21채널은 미국 3리전, Astra us-west-2). GPT 5.4는 v2.39.0에,
   // GPT 5.6 Terra와 GPT 5.5는 v2.43.0에 뺐다(ADR-038) — GPT 5.x 세대 묶음도 없어졌다.
   const families = [
+    ["GPT 6.2 Astra", ["Global", "US", "us-east-1"]],
+    ["GPT 6.2 Sol", ["Global", "US", "us-east-1"]],
     ["GPT 6.1 Sol", ["Global", "US", "us-east-1"]],
     ["GPT 6.1 Terra", ["Global", "US", "us-east-1"]],
     ["GPT 6 Astra", ["Global", "US", "us-east-1"]],
@@ -59,9 +61,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/explorer/latest", (route) => route.fulfill({ json: explorerLatest(catalog) }));
 });
 
-test("benchmark cards show all 15 channels in the GPT 6.x generation group", async ({ page }) => {
+test("benchmark cards show all 21 channels in the GPT 6.x generation group", async ({ page }) => {
   const data = await mockBenchmark(page);
-  expect(data.latest.channels).toHaveLength(15);
+  expect(data.latest.channels).toHaveLength(21);
   await page.goto("/gpt-on-aws");
   const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
   for (const channel of data.latest.channels) {
@@ -69,10 +71,12 @@ test("benchmark cards show all 15 channels in the GPT 6.x generation group", asy
   }
   const gpt6 = cards.getByRole("group", { name: "GPT 6.x generation", exact: true });
   await expect(gpt6.getByRole("heading", { level: 3 })).toHaveText(
-    ["GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
-  await expect(gpt6.getByRole("button")).toHaveCount(15);
+    ["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
+  await expect(gpt6.getByRole("button")).toHaveCount(21);
   await expect(cards.getByRole("group", { name: "GPT 5.x generation", exact: true })).toHaveCount(0);  // v2.43.0
-  for (const name of ["OpenAI GPT 6.1 Sol (Global)", "OpenAI GPT 6.1 Sol (US)", "OpenAI GPT 6.1 Sol (us-east-1)",
+  for (const name of ["OpenAI GPT 6.2 Astra (Global)", "OpenAI GPT 6.2 Astra (US)", "OpenAI GPT 6.2 Astra (us-east-1)",
+    "OpenAI GPT 6.2 Sol (Global)", "OpenAI GPT 6.2 Sol (US)", "OpenAI GPT 6.2 Sol (us-east-1)",
+    "OpenAI GPT 6.1 Sol (Global)", "OpenAI GPT 6.1 Sol (US)", "OpenAI GPT 6.1 Sol (us-east-1)",
     "OpenAI GPT 6.1 Terra (Global)", "OpenAI GPT 6.1 Terra (US)", "OpenAI GPT 6.1 Terra (us-east-1)",
     "OpenAI GPT 6 Sol (Global)", "OpenAI GPT 6 Sol (US)", "OpenAI GPT 6 Sol (us-east-1)",
     "OpenAI GPT 6 Luna (Global)", "OpenAI GPT 6 Luna (US)", "OpenAI GPT 6 Luna (us-east-1)"]) {
@@ -80,25 +84,36 @@ test("benchmark cards show all 15 channels in the GPT 6.x generation group", asy
   }
   await expect(cards.getByRole("group", { name: "Other", exact: true })).toHaveCount(0);
   const legend = page.getByRole("list", { name: "Chart legend" }).first();
-  await expect(legend.getByRole("listitem")).toHaveCount(15);
+  await expect(legend.getByRole("listitem")).toHaveCount(21);
 });
 
-test("the five-column GPT 6.x group uses three columns at lg and five from 1800px (v2.38.0)", async ({ page }) => {
+test("the seven-column GPT 6.x group uses three columns at lg and four from 1480px (v2.44.0)", async ({ page }) => {
   await mockBenchmark(page);
   await page.setViewportSize({ width: 1100, height: 900 });
   await page.goto("/gpt-on-aws");
   const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
   const headings = cards.getByRole("group", { name: "GPT 6.x generation", exact: true }).getByRole("heading", { level: 3 });
-  await expect(headings).toHaveCount(5);
-  const rowsOf = async () => new Set((await headings.evaluateAll((items) =>
-    items.map((item) => Math.round(item.getBoundingClientRect().top)))));
-  expect((await rowsOf()).size).toBe(2);
-  await page.setViewportSize({ width: 1440, height: 900 });
-  await expect.poll(async () => (await rowsOf()).size).toBe(2);  // xl keeps three columns (3 + 2), not 4 + 1
-  await page.setViewportSize({ width: 1600, height: 900 });
-  await expect.poll(async () => (await rowsOf()).size).toBe(2);  // five ~266px cards would crowd the metric numbers
+  await expect(headings).toHaveCount(7);
+  // one entry per grid row: the families whose heading sits on that row, in order
+  const rowsOf = async () => {
+    const tops = await headings.evaluateAll((items) => items.map((item) =>
+      [Math.round(item.getBoundingClientRect().top), item.textContent ?? ""] as const));
+    const rows = new Map<number, string[]>();
+    for (const [top, family] of tops) rows.set(top, [...(rows.get(top) ?? []), family]);
+    return [...rows.values()];
+  };
+  expect((await rowsOf()).map((row) => row.length)).toEqual([3, 3, 1]);
+  await page.setViewportSize({ width: 1479, height: 900 });  // four columns here would be under 300px each (286px at 1400px)
+  await expect.poll(async () => (await rowsOf()).map((row) => row.length)).toEqual([3, 3, 1]);
+  // from 1480px: GPT 6.2 and GPT 6.1 on the first row, the GPT 6 generation on the second (4 + 3)
+  await page.setViewportSize({ width: 1480, height: 900 });
+  await expect.poll(rowsOf).toEqual([
+    ["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra"], ["GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]]);
+  const card = cards.getByRole("button", { name: "OpenAI GPT 6.2 Astra (Global)", exact: true });
+  expect((await card.boundingBox())!.width).toBeGreaterThanOrEqual(300);  // narrower cards crowd the metric numbers
+  // 1800px keeps four columns: five would split the GPT 6 generation across two rows (5 + 2)
   await page.setViewportSize({ width: 1800, height: 900 });
-  await expect.poll(async () => (await rowsOf()).size).toBe(1);
+  await expect.poll(async () => (await rowsOf()).map((row) => row.length)).toEqual([4, 3]);
 });
 
 test("benchmark cards with an unknown family land in Other instead of disappearing", async ({ page }) => {
@@ -250,7 +265,7 @@ test("benchmark charts use elapsed time and keep failed or missing cycles as gap
 test("dense benchmark charts keep isolated successes without ordinary marker nodes", async ({ page }) => {
   const data = await mockBenchmark(page);
   const latest = Date.parse(data.latest.cycle_ts!);
-  // 96 shared cycles across 18 channels exceed the 700-point marker limit.
+  // 96 shared cycles across 21 channels exceed the 700-point marker limit.
   data.trend.series = data.trend.series.map((series, channel) => ({
     ...series,
     points: Array.from({ length: 96 }, (_, index) => {
@@ -406,7 +421,7 @@ test("the phone trend legend tells how many channels are below the fold and desk
   await page.goto("/gpt-on-aws");
   const chart = page.getByRole("region", { name: "TTFB trend (median per cycle)", exact: true });
   const list = chart.getByRole("list", { name: "Chart legend" });
-  await expect(list.getByRole("listitem")).toHaveCount(15);  // 18 until v2.42.x
+  await expect(list.getByRole("listitem")).toHaveCount(21);  // 15 in v2.43.0, 18 until v2.42.x
   const cue = chart.locator("[data-legend-more]");
   await expect(cue).toBeVisible();
   const hidden = await list.evaluate((element) => {
@@ -416,7 +431,7 @@ test("the phone trend legend tells how many channels are below the fold and desk
       return box.top + box.height / 2 > bottom;
     }).length;
   });
-  expect(hidden).toBeGreaterThanOrEqual(7);  // about 6 of 15 fit at 390px (10 of 18 were hidden before v2.43.0)
+  expect(hidden).toBeGreaterThanOrEqual(13);  // about 6 of 21 fit at 390px (7 of 15 were hidden in v2.43.0)
   await expect(cue).toHaveText(`↓ +${hidden} more, scroll the legend`);
   await list.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect(cue).toHaveCount(0);

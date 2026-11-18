@@ -12,10 +12,13 @@ import pricing_changes
 import pricing_payload
 import pricing_sources as ps
 
-# pricing_sources.FAMILY_ORDER of v2.42.0 (18 families) — v2.43.0 removed Claude Opus 4.8 and the four GPT 5.x families
+# pricing_sources.FAMILY_ORDER of v2.42.0 (18 families) — v2.43.0 removed Claude Opus 4.8 and the four GPT 5.x families —
+# plus the families added since, at their real position, so the active families keep the catalog's relative order
+# (v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol in front of GPT 6.1 Sol; no golden dataset has them)
 V242_FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
-    "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra",
+    "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.2 Astra", "GPT 6.2 Sol",
+    "GPT 6.1 Sol", "GPT 6.1 Terra",
     "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5",
 )
 _CLAUDE_FM = {"anthropic.claude-opus-4-8": ("claude-opus-4-8", "Claude Opus 4.8")}

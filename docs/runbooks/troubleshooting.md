@@ -595,15 +595,15 @@ aws ecs stop-task --cluster bedrock-monitor --task <taskArn> --region $REGION \
   신뢰성 화면(`network` 버킷)에 오류로 보이는 것이 의도한 동작이다. 상한 조정이 필요하면 `PROBE_WALL_CLOCK_S`
   env를 바꾼다(모델별 사이클 타임아웃은 max(120초, 상한 + 30초)로 따라간다).
 
-## GPT on AWS 벤치 카드 누락 — `skipped=`, 갈래 정지 (v2.32.1 호스트별 갈래, v2.38.0부터 두 갈래, v2.39.0부터 18채널)
+## GPT on AWS 벤치 카드 누락 — `skipped=`, 갈래 정지 (v2.32.1 호스트별 갈래, v2.38.0부터 두 갈래, v2.44.0부터 21채널)
 
-**배경**: GptBench 태스크(`python -m gptbench_runner --once`, `rate(15 minutes)`)가 GPT 18채널(Mantle 인리전 us-east-1 7 + CRIS 11)을
-호스트별 갈래로 동시에 측정한다(ADR-031, ADR-033, GPT 5.4 제외 ADR-034). `cris` 갈래는 Global, US CRIS 11채널(Bedrock Runtime OpenAI 호환 호스트)이고, 인리전
+**배경**: GptBench 태스크(`python -m gptbench_runner --once`, `rate(15 minutes)`)가 GPT 21채널(Mantle 인리전 us-east-1 7 + CRIS 14 — v2.44.0, GPT 6.2 Astra와 GPT 6.2 Sol 편입, ADR-039. v2.43.0은 15채널 = 5 + 10, v2.39.0~v2.42.x는 18채널 = 7 + 11)을
+호스트별 갈래로 동시에 측정한다(ADR-031, ADR-033, GPT 5.4 제외 ADR-034). `cris` 갈래는 Global, US CRIS 14채널(Bedrock Runtime OpenAI 호환 호스트, v2.43.0은 10채널, v2.39.0~v2.42.x는 11채널)이고, 인리전
 채널은 Mantle 리전(`bedrock-mantle.<region>`)마다 한 갈래 `mantle-<region>`이다. v2.38.0부터 Mantle 인리전이 us-east-1 하나라
-`mantle-us-east-1` 한 갈래이고, v2.39.0에 GPT 5.4를 빼 7채널이다(v2.38.0은 8채널, v2.32.1~v2.37.x는 `mantle-us-east-1` 6, `mantle-us-east-2` 3, `mantle-us-west-2` 3). 새 Mantle 리전이나
+`mantle-us-east-1` 한 갈래이고, v2.44.0은 7채널이다(v2.43.0은 5채널, v2.39.0~v2.42.x는 GPT 5.4를 빼 7채널, v2.38.0은 8채널, v2.32.1~v2.37.x는 `mantle-us-east-1` 6, `mantle-us-east-2` 3, `mantle-us-west-2` 3). 새 Mantle 리전이나
 되살린 리전은 코드 수정 없이 자기 갈래를 얻는다. 갈래 안에서는 채널을 `_BENCH_SPECS` 순서대로
 하나씩 측정한다(워밍업 1 + `GPT_BENCH_RUNS` 10회, 같은 호스트 호출은 겹치지 않는다). 사이클 데드라인 `GPT_BENCH_DEADLINE`(780초)은
-모든 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만 건너뛴다(v2.38.0부터 GPT 6.1 Terra가 `cris`와 `mantle-us-east-1` 갈래의 끝이라 그
+모든 갈래가 공유하는 같은 시각이고, 넘긴 갈래는 자기 남은 채널만 건너뛴다(v2.44.0부터 GPT 6.2 Sol이, 그 앞이 GPT 6.2 Astra — v2.38.0~v2.43.x는 GPT 6.1 Terra가 — `cris`와 `mantle-us-east-1` 갈래의 끝이라 그
 갈래의 컷이 신규 채널부터 떨어진다. v2.32.0~v2.37.x는 GPT 6.1 Sol이 끝). 데드라인 + 호출 상한 + `LANE_JOIN_GRACE_S` 15초(기본 885초)가 지나도 끝나지 않는 갈래는
 기다리지 않는다. 이미 큐에 도착한 진행은 모두 저장하고, 진행 중 채널은 끝난 회차를 저장해 `라벨 (run N+)`, 시작하지 못한 채널은
 `라벨`로 skip에 보고한다. DB 저장은 메인 스레드가 채널 단위로 한다.
@@ -617,7 +617,7 @@ v2.38.0(2026-10-27 사용자 결정)에서 Mantle 인리전을 us-east-1로 모�
 
 ### 증상
 
-- `/gpt-on-aws`에 카드가 18장(v2.39.0, v2.38.0은 19장, 그 전에는 21장)보다 적거나 특정 채널 카드만 오래된 값이다. `/api/gptbench/latest`는 시작 후 14분이 지난 사이클만
+- `/gpt-on-aws`에 카드가 21장(v2.44.0, v2.43.0은 15장, v2.39.0~v2.42.x는 18장, v2.38.0은 19장, 그 전에는 21장)보다 적거나 특정 채널 카드만 오래된 값이다. `/api/gptbench/latest`는 시작 후 14분이 지난 사이클만
   완료로 보므로(`_CYCLE_COMPLETE_AFTER`) 진행 중에는 직전 사이클을 돌려준다 — 배포 직후 약 15분은 옛 사이클이다(v2.38.0 배포 직후에는 21장, Terra 6.1 열 비어 있음).
   v2.39.0 배포 직후 옛 사이클의 GPT 5.4 카드는 숨김 패턴(`visibility.py`)이 가리므로 18장으로 보인다.
 - 로그 `GPT bench cycle done: … skipped=[…]`에 채널 라벨(채널 전체를 건너뜀) 또는 `라벨 (run N+)`(도중부터 건너뜀)이 찍힌다.
