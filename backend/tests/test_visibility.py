@@ -117,7 +117,7 @@ def _hidden(label: str) -> bool:
 
 def test_no_active_label_or_family_matches_a_default_pattern():
     """숨김 패턴이 남은 채널을 가리지 않는다 — 예를 들어 "GPT 5.4"가 미래의 "GPT 5.45"를, "Claude Opus 4.6"이
-    다른 Opus를 잡지 않는지. 운영 카탈로그 39채널(tests/pricing_catalog.py, v2.43.0)과 FAMILY_ORDER 13개로 확인한다."""
+    다른 Opus를 잡지 않는지. 운영 카탈로그 45채널(tests/pricing_catalog.py, v2.44.0)과 FAMILY_ORDER 15개로 확인한다."""
     assert [label for label in ACTIVE_MODELS.values() if _hidden(label)] == []
     assert [family for family in FAMILY_ORDER if _hidden(family)] == []
     assert len(RETIRED_V239_MODELS) == 12 and all(_hidden(label) for label in RETIRED_V239_MODELS.values())

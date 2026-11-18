@@ -238,7 +238,46 @@ describe("sortModels — Bedrock In-Region (ap-northeast-2)", () => {
   });
 });
 
-// GPT 6.1 Sol (v2.32.0) — OpenAI 블록 최상단 family(GPT 6 Astra 앞). 채널은 Global → US → us-east-1.
+// GPT 6.2 Astra, GPT 6.2 Sol (v2.44.0) — OpenAI 블록 최상단 두 family(Nova 다음, GPT 6.1 Sol 앞). 채널은 Global → US → us-east-1.
+// FAMILY_ORDER는 includes 매칭이다 — "GPT 6.2 Astra" 라벨은 "GPT 6 Astra"를, "GPT 6.2 Sol"은 "GPT 6 Sol"을 포함하지 않는다.
+describe("sortModels — GPT 6.2 Astra and GPT 6.2 Sol", () => {
+  it("ranks GPT 6.2 Astra then GPT 6.2 Sol right after Nova and right before GPT 6.1 Sol", () => {
+    const astra = familyRank("OpenAI GPT 6.2 Astra (Global)");
+    expect(astra).toBe(familyRank("Bedrock Nova 2.0 Lite (US)") + 1);
+    expect(familyRank("OpenAI GPT 6.2 Sol (US)")).toBe(astra + 1);
+    expect(familyRank("OpenAI GPT 6.1 Sol (Global)")).toBe(astra + 2);
+    expect(astra).not.toBe(familyRank("OpenAI GPT 6 Astra (Global)"));
+    expect(familyRank("OpenAI GPT 6.2 Sol (Global)")).not.toBe(familyRank("OpenAI GPT 6 Sol (Global)"));
+    expect(FAMILY_ORDER.slice(8, 11)).toEqual(["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol"]);
+  });
+
+  it("sorts each family's three channels Global → US → us-east-1, apart from GPT 6 Astra and GPT 6 Sol", () => {
+    const rows = [
+      { model_name: "OpenAI GPT 6 Sol (Global)" },
+      { model_name: "OpenAI GPT 6.2 Sol (us-east-1)" },
+      { model_name: "OpenAI GPT 6.2 Astra (US)" },
+      { model_name: "OpenAI GPT 6 Astra (Global)" },
+      { model_name: "OpenAI GPT 6.2 Sol (Global)" },
+      { model_name: "OpenAI GPT 6.2 Astra (us-east-1)" },
+      { model_name: "OpenAI GPT 6.2 Sol (US)" },
+      { model_name: "OpenAI GPT 6.2 Astra (Global)" },
+    ];
+    expect(sortResults(rows).map((r) => r.model_name)).toEqual([
+      "OpenAI GPT 6.2 Astra (Global)",
+      "OpenAI GPT 6.2 Astra (US)",
+      "OpenAI GPT 6.2 Astra (us-east-1)",
+      "OpenAI GPT 6.2 Sol (Global)",
+      "OpenAI GPT 6.2 Sol (US)",
+      "OpenAI GPT 6.2 Sol (us-east-1)",
+      "OpenAI GPT 6 Astra (Global)",
+      "OpenAI GPT 6 Sol (Global)",
+    ]);
+    expect(groupByFamily(rows).map((g) => g.length)).toEqual([3, 3, 1, 1]);
+    for (const row of rows) expect(isExcludedModel(row.model_name)).toBe(false);
+  });
+});
+
+// GPT 6.1 Sol (v2.32.0) — GPT 6.2 다음 family(GPT 6 Astra 앞, v2.43.x까지 OpenAI 블록 최상단). 채널은 Global → US → us-east-1.
 describe("sortModels — GPT 6.1 Sol", () => {
   it("ranks GPT 6.1 Sol after Nova and above GPT 6 Astra, apart from GPT 6 Sol", () => {
     const r61 = familyRank("OpenAI GPT 6.1 Sol (Global)");
@@ -354,7 +393,8 @@ describe("isExcludedModel — families left out of monitoring", () => {
   });
 
   it("keeps every family still monitored", () => {
-    expect(FAMILY_ORDER).toHaveLength(13);  // v2.43.0: Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 left (18 in v2.42.0)
+    // v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol joined (13 in v2.43.0, when Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 left; 18 in v2.42.0)
+    expect(FAMILY_ORDER).toHaveLength(15);
     for (const family of FAMILY_ORDER) expect(isExcludedModel(family), family).toBe(false);
     for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4", "Claude Fable 5",
       "Claude Opus 4.8", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5"]) {

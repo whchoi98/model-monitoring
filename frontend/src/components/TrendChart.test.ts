@@ -135,7 +135,7 @@ describe("trend chart line encoding", () => {
   const selection = [...defaultTrendSelection(CATALOG)];
 
   test("no two default-selected series share both colour and pattern, in either theme", () => {
-    expect(selection.length).toBeGreaterThanOrEqual(13);  // one series per family — 13 families since v2.43.0 (18 in v2.42.0)
+    expect(selection.length).toBeGreaterThanOrEqual(15);  // one series per family — 15 families since v2.44.0 (13 in v2.43.0, 18 in v2.42.0)
     for (const theme of THEMES) {
       const encodings = selection.map((name) => `${getColor(name, theme)}|${lineDash(name) ?? "solid"}`);
       expect(new Set(encodings).size).toBe(selection.length);
@@ -240,6 +240,53 @@ describe("trend chart line encoding", () => {
       }
     }
   });
+  test("v2.44.0 channels (GPT 6.2 Astra, GPT 6.2 Sol) stay clear of other models with the same pattern and keep the contrast floor", () => {
+    const families = ["GPT 6.2 Astra", "GPT 6.2 Sol"];
+    for (const family of families) {
+      for (const channel of ["(Global)", "(US)", "(us-east-1)"]) {
+        const name = `OpenAI ${family} ${channel}`;
+        expect(CATALOG).toContain(name);
+        // the other new family counts as another model: Astra and Sol of the same generation must not look alike either
+        const nearest = nearestSamePattern(name, (other) => other.includes(family));
+        expect(nearest.delta, `${name} vs ${nearest.other} (${nearest.theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+        for (const theme of THEMES) {
+          for (const card of CARD_BACKGROUNDS[theme]) {
+            expect(contrastRatio(getColor(name, theme), card), `${name} on ${card} (${theme})`)
+              .toBeGreaterThanOrEqual(MIN_CONTRAST[theme]);
+          }
+        }
+      }
+    }
+    // the Global lines are the families' default series: both keep their distance from CP Sonnet 5.5 in every theme
+    for (const family of families) {
+      const name = `OpenAI ${family} (Global)`;
+      expect(selection).toContain(name);
+      for (const theme of THEMES) {
+        expect(distance(name, "Anthropic Claude Sonnet 5.5 (US)", theme), `${name} (${theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+      }
+    }
+  });
+
+  test("GPT 6.2 Astra and GPT 6.2 Sol each read as one family (three distinct steps in both themes)", () => {
+    // Astra is one pink hue. Sol is orange, brown and apricot: a pale step of the orange's own Lab hue is nearly gray
+    // (chroma 8), so the apricot sits 13.7 degrees away and the bound for Sol is 15 degrees.
+    for (const [family, hueSpread] of [["GPT 6.2 Astra", 10], ["GPT 6.2 Sol", 15]] as const) {
+      const names = ["(Global)", "(US)", "(us-east-1)"].map((channel) => `OpenAI ${family} ${channel}`);
+      const hues = names.map((name) => {
+        const [, a, b] = hexToLab(MODEL_COLORS[name]);
+        return Math.atan2(b, a) * 180 / Math.PI;
+      });
+      expect(Math.max(...hues) - Math.min(...hues), family).toBeLessThan(hueSpread);
+      for (const theme of THEMES) {
+        for (const [i, first] of names.entries()) {
+          for (const second of names.slice(i + 1)) {
+            expect(distance(first, second, theme), `${first} vs ${second} (${theme})`).toBeGreaterThanOrEqual(12);
+          }
+        }
+      }
+    }
+  });
+
   test("v2.41.0 Claude Fable 5.2 channels stay clear of other models with the same pattern and keep the contrast floor", () => {
     const added = ["Bedrock Claude Fable 5.2 (Global)", "Bedrock Claude Fable 5.2 (US)", "Anthropic Claude Fable 5.2 (US)"];
     expect(selection).toContain("Anthropic Claude Fable 5.2 (US)");  // the CP line is the family's default series

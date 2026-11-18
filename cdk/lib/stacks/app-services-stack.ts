@@ -208,6 +208,11 @@ export class AppServicesStack extends cdk.Stack {
       // GPT-6.1 Terra (v2.38.0) — 6.1 Sol과 같은 3채널(Global, US, Mantle us-east-1 — us-east-2/us-west-2 404,
       // 2026-10-27). 프로파일 id는 prober가 파생 (ADR-033).
       BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID: "openai.gpt-6.1-terra",
+      // GPT-6.2 Astra, GPT-6.2 Sol (v2.44.0, 2026-11-17 사용자 요청) — 같은 3채널씩(Global, US, Mantle us-east-1 — 2026-11-17
+      // 세 경로 모두 첫 호출부터 200). 프로파일 id는 prober가 파생한다. 없으면 prober와 gptbench가 그 모델 3채널을 조용히
+      // 건너뛰므로 scheduler-stack.ts와 함께 배포한다 (ADR-039).
+      BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID: "openai.gpt-6.2-astra",
+      BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID: "openai.gpt-6.2-sol",
       // 1P direct model id — v2.43.0부터 없다(prober._OPENAI_1P_MODEL_SPECS가 비었다). 1P를 다시 쓰면 그 스펙의
       // env를 여기와 scheduler-stack.ts buildTaskDef에 ENABLE_OPENAI_1P 조건으로 더한다.
     };

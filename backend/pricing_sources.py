@@ -24,10 +24,11 @@ PROVIDER_ORDER: tuple[str, ...] = ("anthropic", "openai", "amazon")  # /pricing 
 # v2.39.0: Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4를 뺐다(사용자 결정 2026-10-27, ADR-034).
 # v2.41.0: Claude Fable 5.2를 맨 앞에 더했다(2026-11-09, ADR-036). v2.42.0: Claude Fable 5를 뺐다(2026-11-10, ADR-037).
 # v2.43.0: Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna와 GPT 5.5를 뺐다(2026-11-10, ADR-038).
+# v2.44.0: GPT 6.2 Astra, GPT 6.2 Sol을 GPT 6.1 Sol 앞에 더했다(2026-11-17, ADR-039).
 FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5",
-    "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.1 Sol", "GPT 6.1 Terra",
-    "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna",
+    "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.2 Astra", "GPT 6.2 Sol",
+    "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna",
 )
 
 
@@ -70,6 +71,7 @@ NOVA_CACHE_USAGETYPES: dict[str, tuple[str, str]] = {
 _PRICELIST_MODEL_IDS = {"us.amazon.nova-2-lite-v1:0": ("nova-2-lite", "Nova 2.0 Lite", "us")}
 # OpenAI offer FM id(= Mantle in-region id) → (family_key, family)
 _OPENAI_FM: dict[str, tuple[str, str]] = {
+    "openai.gpt-6.2-astra": ("gpt-6.2-astra", "GPT 6.2 Astra"), "openai.gpt-6.2-sol": ("gpt-6.2-sol", "GPT 6.2 Sol"),  # v2.44.0
     "openai.gpt-6.1-sol": ("gpt-6.1-sol", "GPT 6.1 Sol"), "openai.gpt-6.1-terra": ("gpt-6.1-terra", "GPT 6.1 Terra"),
     "openai.gpt-6-astra": ("gpt-6-astra", "GPT 6 Astra"), "openai.gpt-6-sol": ("gpt-6-sol", "GPT 6 Sol"),
     "openai.gpt-6-luna": ("gpt-6-luna", "GPT 6 Luna"),

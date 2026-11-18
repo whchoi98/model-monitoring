@@ -71,6 +71,16 @@ export const MODEL_COLORS: Record<string, string> = {
   "Anthropic Claude Sonnet 5.5 (US)": "#e098d0",
   "Anthropic Claude Sonnet 5 (US)": "#4338ca",
   "Anthropic Claude Haiku 5.5 (US)": "#ddbb11",
+  // GPT 6.2 Astra (v2.44.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 분홍 계열 한 패밀리(Global 진분홍 실선, US 옅은 분홍
+  // 파선, us-east-1 자두색 일점쇄선 — 같은 패턴 최근접 ΔE 16.6, 17.1, 17.2). Opus의 장미색, CP Sonnet 5.5 자홍과 15 이상 떨어진다.
+  "OpenAI GPT 6.2 Astra (Global)": "#ff1fa5",
+  "OpenAI GPT 6.2 Astra (US)": "#f4a6c6",
+  "OpenAI GPT 6.2 Astra (us-east-1)": "#6a394e",
+  // GPT 6.2 Sol (v2.44.0) — 같은 3채널. 주황 계열(Global 주황 실선, US 갈색 파선, us-east-1 살구색 일점쇄선 — 최근접 ΔE 17.0,
+  // 17.5, 16.2). 살구색은 Lab 색조가 주황과 13.7° 벌어진다: 같은 색조의 옅은 단계는 거의 회색(채도 8)이라 쓰지 않았다.
+  "OpenAI GPT 6.2 Sol (Global)": "#ff5500",
+  "OpenAI GPT 6.2 Sol (US)": "#7d4b36",
+  "OpenAI GPT 6.2 Sol (us-east-1)": "#f5c09a",
   // GPT 6.1 Sol (v2.32.0) — Global CRIS / US CRIS / us-east-1 인리전 3채널. 금색 계열(청록은 v2.38.x까지 Haiku 4.5 Global과 겹쳤다).
   // 라이트 테마가 밝은 US를 어둡게 보정해 밝기 순서는 테마마다 다르지만, 두 테마 모두 세 채널 쌍이 CIEDE2000 16 이상 떨어진다.
   "OpenAI GPT 6.1 Sol (Global)": "#aa8f09",
@@ -107,6 +117,8 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["Sonnet 5", "#4f46e5"],
   ["Haiku 5.5", "#aa5533"],
   ["Nova", "#84cc16"],
+  ["GPT 6.2 Astra", "#ff1fa5"],
+  ["GPT 6.2 Sol", "#ff5500"],
   ["GPT 6.1 Sol", "#d9b40f"],
   ["GPT 6.1 Terra", "#d633ff"],
   ["GPT 6 Astra", "#2e8b57"],

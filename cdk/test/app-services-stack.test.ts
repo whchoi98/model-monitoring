@@ -210,6 +210,15 @@ describe("AppServicesStack", () => {
         Environment: Match.arrayWith([Match.objectLike({ Name: "BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID", Value: "openai.gpt-6.1-terra" })]) })]) }));
   });
 
+  it.each([
+    ["BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID", "openai.gpt-6.2-astra"],
+    ["BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID", "openai.gpt-6.2-sol"],
+  ])("backend env에 GPT-6.2 model id %s가 주입된다 (v2.44.0)", (name, value) => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({ Name: "backend",
+        Environment: Match.arrayWith([Match.objectLike({ Name: name, Value: value })]) })]) }));
+  });
+
   it("backend env에 GPT 5.4 model id가 없다 (v2.39.0 — 모니터링에서 뺐다)", () => {
     const backend = Object.values(template.findResources("AWS::ECS::TaskDefinition"))
       .flatMap((r: any) => r.Properties.ContainerDefinitions).filter((c: any) => c.Name === "backend");
