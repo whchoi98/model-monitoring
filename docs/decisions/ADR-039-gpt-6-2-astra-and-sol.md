@@ -101,12 +101,16 @@ Mantle이 추론은 처리하면서 모델 조회에는 두 모델을 올리지 
   Claude 쪽(CP 호출 수, `/claude-features`, `/prompts`)은 변하지 않는다.
 - 새 env가 두 개라 이미지와 함께 AppServices, Scheduler 두 스택을 digest 고정 CDK로 배포한다. 이미지만 배포하면 6채널이 조용히 빠진다.
   IAM 변경은 없다.
-- 배포 뒤 확인할 것(이 ADR을 쓴 시점에는 배포하지 않았다):
+- 배포 뒤 확인할 것(이 ADR을 쓴 시점에는 배포하지 않았다 — 결과는 아래 "배포 결과"):
   - `/api/models`는 45개, `/api/auto-probe/latest`의 `openai:` 행은 21개여야 한다.
   - 벤치 로그는 `GPT bench lanes: cris=14 mantle-us-east-1=7`, rows 210(`GPT_BENCH_RUNS` 10)이어야 한다.
   - PricingSync 로그는 `52 active channels`여야 한다. 첫 동기화는 새 채널이 없던 스냅샷과 비교하므로 `/pricing` 변경 목록에 신규 채널 8건
     (6채널 + OpenAI 공식 가격 2)이 한 번 나온다.
   - 운영 장기 키(`OPENAI_API_KEY`)로는 호출해 보지 않았으므로 첫 사이클에서 여섯 채널이 success인지 본다.
+- 배포 결과(2026-11-18 01:58–02:03 UTC, 이미지 `vb4d374e`, 기록 `docs/reviews/2026-11-18-v244-deployment.md`): 위 네 항목이 모두 맞았다.
+  운영 장기 키의 첫 회차(run 50026)에서는 Mantle us-east-1 두 채널이 오류였고(GPT 6.2 Sol 401 "Your subscription to the model is being set up",
+  GPT 6.2 Astra 61초 뒤 "Request timed out") 다음 회차(run 50027)부터 여섯 채널 모두 success였다. 전날 단기 토큰으로는 첫 호출부터 200이었으므로,
+  Marketplace 구독 개시 과도 상태는 호출하는 키마다 따로 생기는 것으로 보인다(원인은 확인하지 못했다).
 - 남은 일:
   - Mantle us-east-1 `GET /v1/models`에 두 모델이 올라오면 `allowed_modes`를 조회할 수 있다(지금은 목록에 없고 단건 조회 503).
   - OpenAI `pricing.md`의 "30m write" 열 이름 드리프트(ADR-033 후속)는 그대로다. `tests/fixtures/pricing/openai_pricing_20261117.md`도 두 모델의

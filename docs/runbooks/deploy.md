@@ -1207,7 +1207,7 @@ curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | lengt
 backend 서비스와 스케줄 태스크 7개에 env가 들어가도록 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다
 (§3 경고, jest가 두 스택의 env를 고정). 이미지만 배포하면 두 모델의 6채널이 오류 없이 빠진다. IAM, DB 스키마 변경은 없다. backend 기동 seed가
 6채널과 `openai-list:gpt-6.2-astra`, `openai-list:gpt-6.2-sol` 단가 행을 넣는다. 사용자 요청(2026-11-17), 자세히는 ADR-039.
-아래 기댓값은 코드와 2026-11-17 실측에서 계산한 값이고, 이 절을 쓴 시점에는 배포하지 않았다.
+2026-11-18 01:58–02:03 UTC에 이미지 `vb4d374e`로 배포했고 아래 기댓값이 모두 맞았다(기록 `docs/reviews/2026-11-18-v244-deployment.md`).
 
 ```bash
 REGION=ap-northeast-2
@@ -1240,9 +1240,11 @@ curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id
 #   openai:global:global.openai.gpt-6.2-sol     "OpenAI GPT 6.2 Sol (Global)"
 #   openai:us:us.openai.gpt-6.2-sol             "OpenAI GPT 6.2 Sol (US)"
 #   openai:us-east-1:openai.gpt-6.2-sol         "OpenAI GPT 6.2 Sol (us-east-1)"
-#   2026-11-17 실측은 호스트 IAM 자격의 단기 토큰으로 했고 여섯 채널 모두 첫 호출부터 200이었다. 운영 장기 키(OPENAI_API_KEY)로는
-#   호출해 보지 않았으므로 첫 회차의 status를 꼭 본다. Mantle us-east-1이 401 "subscription is being set up"이면 Marketplace 구독 개시
-#   과도 상태다(이전 신모델은 수 분 뒤 200).
+#   2026-11-17 실측은 호스트 IAM 자격의 단기 토큰으로 했고 여섯 채널 모두 첫 호출부터 200이었다. 그래도 운영 장기 키(OPENAI_API_KEY)의
+#   첫 회차(2026-11-18 02:07 UTC, run 50026)에서는 Mantle us-east-1 두 채널이 오류였다 — GPT 6.2 Sol은 401 "Your subscription to the model
+#   is being set up", GPT 6.2 Astra는 61초 뒤 "Request timed out". Global과 US CRIS 네 채널은 첫 회차부터 success였고, 다음 회차
+#   (02:12 UTC, run 50027)에는 여섯 채널 모두 success였다. 단기 토큰으로 미리 호출해 두어도 운영 키의 Marketplace 구독 개시 과도 상태는
+#   따로 생기므로, 첫 회차 오류만 보고 되돌리지 말고 두 번째 회차까지 본다.
 
 # 3. GPT on AWS 벤치 — 배포 뒤 첫 15분 사이클
 aws logs tail /ecs/gptbench --since 20m --region $REGION | grep -E 'GPT bench (lanes|lane done|cycle)'
