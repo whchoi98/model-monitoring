@@ -99,7 +99,7 @@ include a UTC offset.
   "last_completed_time": "2026-09-22T12:02:00Z",
   "next_run_time": "2026-09-22T12:05:00Z",
   "interval_seconds": 300,
-  "expected_model_count": 39,
+  "expected_model_count": 45,
   "category_count": 6,
   "category_interval_seconds": 1800,
   "channel_intervals": { "anthropic": 300 },
@@ -412,11 +412,11 @@ Data source for `/pricing` (Unit Prices / 비용 단가), Model Explorer card pr
 cache write, Claude 1-hour cache write) and, on GPT rows and since v2.33.0 on Claude Haiku 5.5 rows, the long-context prices; batch, flex and priority (fast) prices are not
 included. Costs use input and output only: the cache and long-context prices and the OpenAI official price are display-only.
 The PricingSync task (`python -m pricing_sync_runner --once`, every 12 hours) refreshes them from four official sources: the
-Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 16 + OpenAI 15 channels, 12 FMs since v2.43.0 — Claude 18, OpenAI 22 and 17 FMs in v2.42.0, Claude 20 and 18 FMs in v2.41.0, Claude 18 and 17 FMs in v2.39.0, Claude 26, OpenAI 23 and 22 FMs in v2.38.0, OpenAI 28 and 21 FMs in v2.33.0; the two Seoul
+Bedrock agreement-offer rate card (`ListFoundationModelAgreementOffers`, Bedrock Claude 16 + OpenAI 21 channels, 14 FMs since v2.44.0 — OpenAI 15 and 12 FMs in v2.43.0, Claude 18, OpenAI 22 and 17 FMs in v2.42.0, Claude 20 and 18 FMs in v2.41.0, Claude 18 and 17 FMs in v2.39.0, Claude 26, OpenAI 23 and 22 FMs in v2.38.0, OpenAI 28 and 21 FMs in v2.33.0; the two Seoul
 in-region Claude channels read the `APN2_*_standard` dimensions, v2.32.0), the AWS Price
 List API (`GetProducts`, Nova 2.0 Lite), Anthropic's `https://platform.claude.com/docs/en/about-claude/pricing.md` (Claude
-Platform on AWS 9 channels since v2.41.0, 8 in v2.39.0) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 9
-active OpenAI families, stored as the display-only channels `openai-list:<family_key>`, v2.31.0). A change of more than 50% on
+Platform on AWS 7 channels since v2.43.0, 9 in v2.41.0, 8 in v2.39.0) and OpenAI's `https://developers.openai.com/api/docs/pricing.md` (the OpenAI official price of the 7
+active OpenAI families since v2.44.0 — 5 in v2.43.0, 9 before — stored as the display-only channels `openai-list:<family_key>`, v2.31.0). A change of more than 50% on
 any price field (the boundary itself is applied) is stored as `pending_review` and waits for admin approval (see Admin below); a
 field that was empty and is observed for the first time fills the current row in place (run result `enriched`, no new history
 row). Observed prices are compared and stored at 6 decimals (a positive value that rounds to 0 counts as a parse failure; a
@@ -530,7 +530,7 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   to 24 in v2.33.0 (21 agreement offers: Claude Haiku 5.5 `offer-u3aih6zr7uw5u`; Sonnet 5.5 US reuses the Sonnet 5.5 offer), and to 25
   in v2.38.0 (22 agreement offers: GPT-6.1 Terra `offer-34pzbdgg26ley`), then to 20 in v2.39.0 (17 agreement offers: the Claude Opus 4.7,
   Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 offers are no longer cited, ADR-034), to 21 in v2.41.0 (18 agreement offers: Claude
-  Fable 5.2 `offer-agsprgw6z3dg6`, ADR-036), back to 20 in v2.42.0 (17 agreement offers: the Claude Fable 5 offer `offer-vk3fuman5qwzy` is no longer cited, ADR-037), and to 15 in v2.43.0 (12 agreement offers: the Claude Opus 4.8, GPT 5.5 and GPT 5.6 Sol, Terra, Luna offers are no longer cited, and with the GPT-5.6 Sol promotion note gone the OpenAI doc is cited by the five OpenAI official price cells only, ADR-038). Since v2.38.0 every OpenAI `in_region` tier has the
+  Fable 5.2 `offer-agsprgw6z3dg6`, ADR-036), back to 20 in v2.42.0 (17 agreement offers: the Claude Fable 5 offer `offer-vk3fuman5qwzy` is no longer cited, ADR-037), and to 15 in v2.43.0 (12 agreement offers: the Claude Opus 4.8, GPT 5.5 and GPT 5.6 Sol, Terra, Luna offers are no longer cited, and with the GPT-5.6 Sol promotion note gone the OpenAI doc is cited by the five OpenAI official price cells only, ADR-038), and to 17 in v2.44.0 (14 agreement offers: GPT-6.2 Astra `offer-i5wczxyjg7weu` and GPT-6.2 Sol `offer-7vsvjk6xmsl7c`; the OpenAI doc is cited by seven OpenAI official price cells, ADR-039). Since v2.38.0 every OpenAI `in_region` tier has the
   single region `["us-east-1"]` (Mantle in-region consolidated, ADR-033). The reference numbers are
   exactly the numbers used in cell `footnotes` plus the note references, 1..N without gaps. Fields: `n` (1-based, in order of first
   citation, then the notes whose `source` is `manual_note`), `id` (`offer:<offerId>`, `pricelist:<usagetype>`,
@@ -540,13 +540,13 @@ Current price table. The backend keeps a 60 s in-process cache per task (no `lan
   API pricing (Standard)" / "OpenAI API 요금 (Standard)"; a `manual_note` title names the family, e.g. "<family> promotion
   (manual note, <basis>)"), `url`, `as_of` (UTC date of the latest observation of that source; before any sync observes it, the
   source's seed check date from `pricing_seed.SEED_SOURCE_DATES` (2026-09-30 for the v2.32.0 Claude Sonnet 5.5 and GPT-6.1 Sol
-  offers, 2026-10-07 for the v2.33.0 Claude Haiku 5.5 offer, 2026-10-27 for the v2.38.0 GPT-6.1 Terra offer, 2026-11-09 for the v2.41.0 Claude Fable 5.2 offer), else the default seed date 2026-09-27; `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
+  offers, 2026-10-07 for the v2.33.0 Claude Haiku 5.5 offer, 2026-10-27 for the v2.38.0 GPT-6.1 Terra offer, 2026-11-09 for the v2.41.0 Claude Fable 5.2 offer, 2026-11-17 for the v2.44.0 GPT-6.2 Astra and GPT-6.2 Sol offers), else the default seed date 2026-09-27; `null` for `manual_note`, which also has `url: null`). The official pricing pages are links, not references: the screen's top
   box and the Markdown export header carry them.
 - Active channels are the backend's `AVAILABLE_MODELS` plus Claude Platform on AWS model ids observed in `price_history` in the
   last 30 days (so the table stays full when CP discovery failed at startup), minus hidden labels, plus one display-only
   `openai-list:<family_key>` channel per active OpenAI family (8 in v2.31.0, 9 since v2.32.0 with `openai-list:gpt-6.1-sol`, 10 since
-  v2.38.0 with `openai-list:gpt-6.1-terra`, 9 since v2.39.0 without `openai-list:gpt-5.4`, 5 since v2.43.0 without `openai-list:gpt-5.6-*` and `openai-list:gpt-5.5`): 39 + 5 = 44 in production (v2.43.0; 49 + 9 = 58 in v2.42.0,
-  52 + 9 = 61 in v2.41.0, 49 + 9 = 58 in v2.39.0, 61 + 10 = 71 in v2.38.0, 66 + 9 = 75 in v2.33.0, 62 + 9 = 71 in v2.32.0). `families` has 13 entries and `models` 39 since v2.43.0 (18 and 49 in v2.42.0, 19 and 52 in v2.41.0, 18 and 49 in v2.39.0).
+  v2.38.0 with `openai-list:gpt-6.1-terra`, 9 since v2.39.0 without `openai-list:gpt-5.4`, 5 since v2.43.0 without `openai-list:gpt-5.6-*` and `openai-list:gpt-5.5`, 7 since v2.44.0 with `openai-list:gpt-6.2-astra` and `openai-list:gpt-6.2-sol`): 45 + 7 = 52 in production (v2.44.0; 39 + 5 = 44 in v2.43.0, 49 + 9 = 58 in v2.42.0,
+  52 + 9 = 61 in v2.41.0, 49 + 9 = 58 in v2.39.0, 61 + 10 = 71 in v2.38.0, 66 + 9 = 75 in v2.33.0, 62 + 9 = 71 in v2.32.0). `families` has 15 entries and `models` 45 since v2.44.0 (13 and 39 in v2.43.0, 18 and 49 in v2.42.0, 19 and 52 in v2.41.0, 18 and 49 in v2.39.0).
 - **`changes` (v2.40.0, ADR-035)** — what changed in the table since the previous price sync. Every finished sync run stores what
   this endpoint showed at its end (`price_sync_runs.summary.snapshot`: per active channel the nine shown prices, the pending-review
   fields that differ from them, and the run's channel result). `changes` compares the latest `completed` or `partial` run that has a
@@ -705,7 +705,7 @@ that was run (moved byte for byte from the v2.39.0 frontend `codeExamples`). No 
 ```
 
 - `models` = `prober.AVAILABLE_MODELS` without the hidden labels (`visibility`), in catalog order; `api_id` ∈ `converse`,
-  `invoke_model`, `messages`, `responses` (Bedrock Claude 3, Nova 1, Claude Platform on AWS 1, OpenAI 1 — 71 for the 39 active channels since v2.43.0, 85 for 49 in v2.42.0, 92 for 52 in v2.41.0, 85 for 49 in v2.40.0).
+  `invoke_model`, `messages`, `responses` (Bedrock Claude 3, Nova 1, Claude Platform on AWS 1, OpenAI 1 — 77 for the 45 active channels since v2.44.0, 71 for 39 in v2.43.0, 85 for 49 in v2.42.0, 92 for 52 in v2.41.0, 85 for 49 in v2.40.0).
 - `result` is the same `(model_id, api_id)` cell of the latest **completed** run, `null` before it was verified. `status` ∈ `passed`
   (exit 0 with output), `failed` (no output — "출력 없음", an exception — the first line of `error_message` is the exception line and
   the rest the stderr tail, or "시간 초과 90초"), `skipped` (the reason: "자격 증명 미주입: <env>", "알 수 없는 플레이스홀더",
@@ -725,26 +725,26 @@ The manual run executes two examples at a time (it runs inside the 1 GiB backend
 
 ---
 
-## GPT on AWS bench (Public) — v2.18.0, 15 channels since v2.43.0
+## GPT on AWS bench (Public) — v2.18.0, 21 channels since v2.44.0
 
-Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --once`, every 15 min) measures 15 channels —
-Mantle in-region us-east-1 5 + CRIS 10: GPT 6 Astra
+Data source for `/gpt-on-aws`. The GptBench task (`python -m gptbench_runner --once`, every 15 min) measures 21 channels —
+Mantle in-region us-east-1 7 + CRIS 14: GPT 6 Astra
 (Global, US, us-east-1), GPT 6 Sol and GPT 6 Luna (Global, US, us-east-1), GPT 6.1 Sol (Global, US, us-east-1, v2.32.0), GPT 6.1
-Terra (Global, US, us-east-1, v2.38.0) — with a fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per
-channel. The cycle runs one lane per host at the same time: `cris` (the 10 Global and US CRIS channels on the Bedrock Runtime
+Terra (Global, US, us-east-1, v2.38.0), GPT 6.2 Astra and GPT 6.2 Sol (Global, US, us-east-1, v2.44.0, ADR-039) — with a fixed ~55.8k-token cached prompt, 1 unstored warm-up + 10 stored sequential calls per
+channel. The cycle runs one lane per host at the same time: `cris` (the 14 Global and US CRIS channels on the Bedrock Runtime
 OpenAI-compatible hosts, kept as one lane) and one `mantle-<region>` lane per Mantle region (`bedrock-mantle.<region>`), today
-only `mantle-us-east-1` (5 since v2.43.0; 7 in v2.39.0 to v2.42.x; 8 in v2.38.0, when GPT 5.4 was its first channel). The lane name comes from the channel region, so a new (or restored) Mantle region gets its own lane.
+only `mantle-us-east-1` (7 since v2.44.0; 5 in v2.43.0; 7 in v2.39.0 to v2.42.x; 8 in v2.38.0, when GPT 5.4 was its first channel). The lane name comes from the channel region, so a new (or restored) Mantle region gets its own lane.
 Inside a lane the channels stay sequential in `_BENCH_SPECS` order, so calls to one host never overlap. The task logs
-`GPT bench lanes: cris=10 mantle-us-east-1=5` at start (v2.43.0; `cris=11 mantle-us-east-1=7` in v2.39.0 to v2.42.x) and `GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main
+`GPT bench lanes: cris=14 mantle-us-east-1=7` at start (v2.44.0; `cris=10 mantle-us-east-1=5` in v2.43.0, `cris=11 mantle-us-east-1=7` in v2.39.0 to v2.42.x) and `GPT bench lane done: <lane> channels=N elapsed=Ns` per lane; the main
 thread saves and commits each finished channel. v2.38.0 (2026-10-27, user decision) moved every Mantle in-region channel to
 us-east-1 — v2.32.1 to v2.37.x measured 21 channels in four lanes (`cris` 9, `mantle-us-east-1` 6, `mantle-us-east-2` 3,
 `mantle-us-west-2` 3, GPT 6 Astra in us-west-2); in the last 24 hours before the change `cris` took p90 244 s and
 `mantle-us-east-1` p90 138 s. v2.32.0 ran two lanes, `cris` 9 and `mantle` 12; v2.32.1 split `mantle` per region after GPT 5.4
 (us-east-2) slowed on 2026-09-30 and pushed the single Mantle lane past the deadline (783 s, 802 s), which cut the us-east-1 tail
-channels (user decision). v2.39.0 (same day, user decision, ADR-034) dropped GPT 5.4: 180 rows per cycle instead of 190. v2.43.0 (2026-11-10, user decision, ADR-038) dropped GPT 5.5 and GPT 5.6 Terra: 150 rows per cycle. Each call has a wall-clock cap
+channels (user decision). v2.39.0 (same day, user decision, ADR-034) dropped GPT 5.4: 180 rows per cycle instead of 190. v2.43.0 (2026-11-10, user decision, ADR-038) dropped GPT 5.5 and GPT 5.6 Terra: 150 rows per cycle. v2.44.0 (2026-11-17, user request, ADR-039) appended GPT 6.2 Astra and GPT 6.2 Sol: 210 rows per cycle. Each call has a wall-clock cap
 (`GPT_BENCH_CALL_TIMEOUT`, default 90 s — an expired call is stored as an error row `WallClockTimeout: …`), the client never retries
-(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by all lanes; GPT 6.1 Terra is
-last in the lanes it belongs to, `cris` and `mantle-us-east-1`, since v2.38.0 — GPT 6.1 Sol before). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
+(`max_retries=0`), and a lane skips its own remaining channels after `GPT_BENCH_DEADLINE` (780 s, one deadline shared by all lanes; GPT 6.2 Sol is
+last in the lanes it belongs to, `cris` and `mantle-us-east-1`, since v2.44.0, right after GPT 6.2 Astra — GPT 6.1 Terra in v2.38.0 to v2.43.x, GPT 6.1 Sol before). A lane still running after deadline + call cap + 15 s (885 s) is no longer waited for: every event already queued is
 stored, the runs its in-flight channel already finished are stored and that channel is reported as `label (run N+)`, and the
 channels it never started are reported as `label` (a lane that raises is handled the same way). The 15 s grace is a best-effort
 bound, because the watchdog cannot cut the pre-stream phase (connect, request write, response headers).
@@ -753,7 +753,7 @@ bound, because the watchdog cannot cut the pre-stream phase (connect, request wr
 Latest **complete** cycle: `cycle_ts` + `channels[]` scorecards (`model_id`, `model_name`, `family`, `region`, `runs`, `success`,
 `median_ttfb_ms`, `median_ttft_ms`, `median_gap_ms`, `p95_ttft_ms`, `cache_hit_rate`, `median_reasoning_tokens`, `last_error`).
 A cycle counts as complete only 14 minutes after it started (deadline 13 min + margin); while the newest cycle is still running the
-previous one is returned, so the payload lags the newest cycle by about 15–30 minutes. Sorted by family (GPT 6.1 Sol, GPT 6.1 Terra (v2.38.0), GPT 6 Astra, Sol, Luna;
+previous one is returned, so the payload lags the newest cycle by about 15–30 minutes. Sorted by family (GPT 6.2 Astra, GPT 6.2 Sol (v2.44.0), GPT 6.1 Sol, GPT 6.1 Terra (v2.38.0), GPT 6 Astra, Sol, Luna;
 unknown families last; GPT 5.6 Terra and 5.5 left in v2.43.0) then region. Rows whose label matches `HIDDEN_MODEL_PATTERNS` are left out here and in
 `/trend` (v2.39.0 — the stored GPT 5.4 cycles no longer show, nor GPT 5.5 and 5.6 Terra since v2.43.0).
 
