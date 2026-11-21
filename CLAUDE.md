@@ -2,7 +2,7 @@
 
 ## Project Overview / 프로젝트 개요
 
-**Amazon Bedrock LLM Monitor** (v2.44.1 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
+**Amazon Bedrock LLM Monitor** (v2.44.2 — 현재 버전은 `frontend/src/lib/version.ts`가 source of truth) — A real-time dashboard for response speed, throughput, reliability, cost, and output-quality monitoring of AWS Bedrock + Anthropic CP on AWS + OpenAI (Mantle/1P) LLM channels.
 
 **Amazon Bedrock LLM 모니터** — Bedrock + Anthropic CP on AWS 채널의 응답 속도·처리량·신뢰성·비용·출력 품질을 실시간으로 모니터링하는 대시보드.
 
@@ -165,6 +165,7 @@ model-monitoring/
 │   │   │   ├── PromptsPanel.tsx         # OptimizePrompt (대상 Bedrock 15개 — v2.39.0에 Claude 4.x 네 패밀리 8개를 뺐고, v2.41.0에 Fable 5.2 Global, US를 더했고, v2.42.0에 Fable 5 Global, US를, v2.43.0에 Opus 4.8 Global, US를 뺐다)
 │   │   │   ├── ModelExplorer.tsx        # 모델 카드 + API 탭(Converse/InvokeModel/Messages/Responses) 코드 예제 (v2.9.x) — v2.40.0부터 예제와 검증 결과는 /api/explorer/latest: 머리글 최근 검증 런, 검증 배지, 변경 표지와 배너(항목 → 해당 API 탭 모달), 검증 실패만 필터, 모달 검증 상자
 │   │   │   ├── ParityPanel.tsx          # 패리티 매트릭스 + 증거 모달 + 수동 트리거 (v2.11.0)
+│   │   │   ├── EvidenceSection.tsx      # 증거 모달(/parity, /claude-features)의 접이식 JSON 영역 — 모듈 최상위 컴포넌트(렌더 함수 안에서 만들면 카운트다운 재렌더마다 재마운트돼 다시 접히고 포커스를 잃는다, v2.44.2)
 │   │   │   ├── ClaudeFeaturesPanel.tsx  # Claude API Features 5열(CP/Mantle/Bedrock 3서브열) 매트릭스 + 헬스 카드(docHealth, 클릭 → Key Findings 드로어) + 모델 칩 + 드리프트/변경(kind) 배너 + 증거 모달 + 수동 트리거 (v2.24.0)
 │   │   │   └── chat/                    # FloatingChat + ChatModal/Panel/Input
 │   │   ├── hooks/                       # useAsyncResource, useAutoRefresh, useProbeStream, useChatStream, usePageTitle, useUaPopupStrategy, useChatFabVisibility(v2.31.1)

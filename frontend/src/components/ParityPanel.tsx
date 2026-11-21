@@ -17,6 +17,7 @@ import { useAutoRefresh } from "@/hooks/useAutoRefresh";
 import { formatDateTime, parseTimestamp } from "@/lib/format";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
 import RefreshControls from "./RefreshControls";
+import EvidenceSection from "./EvidenceSection";
 import Dialog from "./Dialog";
 
 const BASE = "";
@@ -303,19 +304,6 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
         ? `${lang === "en" ? "Feature expected but probe failed" : "동작해야 하는 기능인데 프로브 실패"}: ${errorMsg.slice(0, 220)}${errorMsg.length > 220 ? "…" : ""}`
         : (lang === "en" ? "Evidence check failed — a response was received but did not pass the checks (canary/JSON/cached tokens…)." : "증거 검사 실패 — 응답은 수신했지만 검증 기준(카나리/JSON/캐시 토큰 등)을 통과하지 못했습니다.");
 
-  const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
-    <details open={!isOk} className="group">
-      <summary className="cursor-pointer select-none text-sm text-gray-400 hover:text-gray-200 py-1">
-        <span className="inline-block w-3 text-xs transition-transform group-open:rotate-90">▶</span> {title}
-      </summary>
-      <pre className={`mt-1 rounded-lg p-3 overflow-x-auto text-xs leading-relaxed border ${
-        tone === "error" ? "bg-gray-950 border-rose-500/30 text-rose-300 whitespace-pre-wrap break-all" : "bg-gray-950 border-gray-800 text-gray-200"
-      }`}>
-        {typeof json === "string" ? json : JSON.stringify(json ?? {}, null, 2)}
-      </pre>
-    </details>
-  );
-
   return (
     <Dialog title={lang === "en" ? "Execution evidence" : "실행 증거"} onClose={onClose}>
         <div>
@@ -344,9 +332,9 @@ function EvidenceModal({ runId, cell, onClose }: { runId: number; cell: ParityCe
           <DataError error={resource.error} resource={lang === "en" ? "execution evidence" : "실행 증거"} onRetry={resource.refresh} hasData={!!data} />
           {data && (
             <div className="space-y-1 pt-1">
-              {errorMsg && <Section title="Error" json={errorMsg} tone="error" />}
-              {request && <Section title="Request JSON" json={request} />}
-              <Section title="Response JSON" json={response} />
+              {errorMsg && <EvidenceSection title="Error" json={errorMsg} tone="error" defaultOpen={!isOk} />}
+              {request && <EvidenceSection title="Request JSON" json={request} defaultOpen={!isOk} />}
+              <EvidenceSection title="Response JSON" json={response} defaultOpen={!isOk} />
             </div>
           )}
         </div>

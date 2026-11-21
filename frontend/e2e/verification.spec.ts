@@ -1,4 +1,4 @@
-import { expect, test } from "@playwright/test";
+import { expect, test, type Page } from "@playwright/test";
 import { mockApi } from "./fixtures";
 
 const feature = {
@@ -72,6 +72,15 @@ test("parity evidence can be retried and Escape restores focus to the result", a
 });
 
 
+// Both pages re-render once per second for the auto-refresh countdown. Waiting for the countdown to move
+// ties the tests below to those re-renders instead of to an arbitrary delay.
+async function countdownTicks(page: Page, ticks = 2) {
+  const countdown = page.locator(".refresh-controls label .tabular-nums");
+  await expect(countdown).toHaveText(/^\d+s$/);  // a paused or missing countdown fails here, not as NaN in the poll below
+  const start = Number.parseInt(await countdown.innerText(), 10);
+  await expect.poll(async () => start - Number.parseInt(await countdown.innerText(), 10), { timeout: 10_000 }).toBeGreaterThanOrEqual(ticks);
+}
+
 for (const [path, api] of [["/parity", "parity"], ["/claude-features", "features"]]) {
   test(`${path} supported evidence disclosures are reachable and openable with the keyboard`, async ({ page }) => {
     const supported = api === "parity" ? { ...parityCell, status: "supported" } : { ...cell, status: "supported", verdict: "match" };
@@ -97,3 +106,39 @@ for (const [path, api] of [["/parity", "parity"], ["/claude-features", "features
     await expect(result).toBeFocused();
   });
 }
+
+for (const [path, api] of [["/parity", "parity"], ["/claude-features", "features"]]) {
+  // v2.44.2: the disclosure was a component created during render, so every countdown re-render replaced
+  // the <details> node. An opened section closed again within a second and the focused summary lost focus.
+  test(`${path} an opened evidence disclosure stays open and focused across countdown re-renders`, async ({ page }) => {
+    const supported = api === "parity" ? { ...parityCell, status: "supported" } : { ...cell, status: "supported", verdict: "match" };
+    const run = { id: 8, started_at: new Date().toISOString(), finished_at: new Date().toISOString(), totals: { supported: 1 }, running: false, catalog_version: "fixture" };
+    await page.route(`**/api/${api}/latest`, route => route.fulfill({ json: { run, results: [supported], changes: [], drift: [], previous_run_id: 7 } }));
+    await page.route(`**/api/${api}/evidence?*`, route => route.fulfill({ json: { ...supported, verification: "evidence", evidence: { request: { prompt: "keyboard evidence canary" }, signal: "validated" } } }));
+    await page.goto(path);
+    await page.getByRole("button", { name: "Expand all", exact: true }).click();
+    await page.getByRole("table").getByRole("button", { name: "Supported", exact: true }).click();
+    const dialog = page.getByRole("dialog", { name: "Execution evidence", exact: true });
+    const details = dialog.locator("details").filter({ hasText: "keyboard evidence canary" });
+    const summary = details.locator("summary");
+    await summary.focus();
+    await page.keyboard.press("Enter");
+    await expect(details).toHaveAttribute("open");
+    await details.evaluate((node) => { (window as unknown as { __disclosure: Element }).__disclosure = node; });
+    await countdownTicks(page);
+    expect(await details.evaluate((node) => node === (window as unknown as { __disclosure: Element }).__disclosure)).toBe(true);
+    await expect(details).toHaveAttribute("open");
+    await expect(summary).toBeFocused();
+  });
+}
+
+test("/claude-features Key Findings buttons keep focus across countdown re-renders", async ({ page }) => {
+  await page.goto("/claude-features");
+  await page.locator("button.ui-panel").filter({ hasText: "Claude Platform" }).click();
+  const drawer = page.locator("aside").filter({ hasText: "Key Findings" });
+  const model = drawer.getByRole("button", { name: "Claude Fable 5.1", exact: true }).first();
+  await model.focus();
+  await expect(model).toBeFocused();
+  await countdownTicks(page);
+  await expect(model).toBeFocused();
+});

@@ -7,6 +7,16 @@
 - 카테고리: `Added` / `Changed` / `Fixed` / `Removed` / `Security` / `Infra` / `Docs`
 - 매 commit 시 PR 또는 작업 종료 시 한 항목 추가.
 
+## v2.44.2 — 2026-11-21
+
+### Fixed
+- **Evidence sections on `/parity` and `/claude-features` no longer close by themselves, and Key Findings buttons keep keyboard focus.** The collapsible Request and Response sections of the evidence dialog (both pages) and the sections, cards and chips of the Key Findings drawer (`/claude-features`) were components created inside a render function. Both pages re-render once per second for the auto-refresh countdown (since v2.26.0), a component created during render is a new component type on every render, and React therefore replaced the DOM below it every second. Measured on production v2.44.0 on 2026-11-21, before the fix: a section opened on a Supported cell was closed again after three countdown ticks on both pages (a different `<details>` node, the summary no longer focused), and a focused button in the Key Findings drawer was replaced and focus fell to `<body>`. The same replacement reopens a section the user closed on a failed cell and drops a text selection inside the JSON.
+- **증거 영역이 저절로 접히지 않고, Key Findings 버튼이 키보드 포커스를 지킨다(`/parity`, `/claude-features`).** 증거 대화상자의 접이식 Request, Response 영역(두 화면)과 Key Findings 드로어의 섹션, 카드, 칩(`/claude-features`)이 렌더 함수 안에서 만든 컴포넌트였다. 두 화면은 자동 새로고침 카운트다운 때문에 1초마다 다시 그려지고(v2.26.0부터), 렌더 안에서 만든 컴포넌트는 렌더마다 새 컴포넌트 타입이라 React가 그 아래 DOM을 1초마다 새로 만들었다. 수정 전인 2026-11-21에 운영 v2.44.0에서 확인했다. Supported 셀에서 펼친 영역이 카운트다운 세 번 뒤 두 화면 모두 다시 접혀 있었고(`<details>` 노드가 바뀌고 summary의 포커스가 없어졌다), Key Findings 드로어에서 포커스를 둔 버튼도 새 노드로 바뀌어 포커스가 `<body>`로 떨어졌다. 같은 이유로 실패 셀에서 사용자가 접은 영역은 다시 펼쳐지고, JSON 안에서 선택한 글자는 선택이 풀린다.
+- The components are now defined at module level: `components/EvidenceSection.tsx`, shared by the two dialogs (`defaultOpen` sets only the initial state, and what the user opens or closes stays), and `FindingSection`, `FindingGroupCards`, `FindingChips` in `ClaudeFeaturesPanel.tsx`. Markup, classes and texts are unchanged.
+- 컴포넌트를 모듈 최상위로 옮겼다. 두 대화상자가 함께 쓰는 `components/EvidenceSection.tsx`(`defaultOpen`은 처음 상태만 정하고, 사용자가 여닫은 상태는 그대로 남는다)와 `ClaudeFeaturesPanel.tsx`의 `FindingSection`, `FindingGroupCards`, `FindingChips`다. 마크업, 클래스, 문구는 그대로다.
+- This is the cause of the intermittent WebKit failure of `e2e/verification.spec.ts` "supported evidence disclosures are reachable and openable with the keyboard" (the `/parity` case on PR #81, the `/claude-features` case on PR #83): when a countdown tick fell between the Enter key and the assertion, the section was already closed again. Three regression tests ("across countdown re-renders") wait for two countdown ticks instead of a fixed delay and check the same DOM node, the open state and the focus. They failed on the old code (Chromium, 3 of 3) and pass on the new code.
+- CI에서 가끔 실패하던 WebKit `e2e/verification.spec.ts` "supported evidence disclosures are reachable and openable with the keyboard"(PR #81의 `/parity` 판, PR #83의 `/claude-features` 판)의 원인이 이것이다. Enter 입력과 단언 사이에 카운트다운이 한 번 지나가면 영역이 이미 다시 접혀 있었다. 회귀 테스트 세 개("across countdown re-renders")는 정해진 시간 대신 카운트다운이 두 번 줄어들 때까지 기다린 뒤 같은 DOM 노드인지, 열려 있는지, 포커스가 남았는지 확인한다. 이전 코드에서는 세 개 모두 실패했고(Chromium) 새 코드에서는 통과한다.
+
 ## v2.44.1 — 2026-11-21
 
 ### Docs
