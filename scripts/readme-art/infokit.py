@@ -98,8 +98,7 @@ def parse_rich(s):
             segs.append((part[2:-1], "sup", None, None))
         elif part.startswith("**"):
             segs.append((part[2:-2], None, 700, None))
-        elif part.startswith("["):
-            m = re.match(r"\[([a-zA-Z0-9]+)\]\{(.*)\}$", part)
+        elif part.startswith("[") and (m := re.match(r"\[([a-zA-Z0-9]+)\]\{(.*)\}$", part)):
             segs.append((m.group(2), None, None, m.group(1)))
         else:
             segs.append((part, None, None, None))

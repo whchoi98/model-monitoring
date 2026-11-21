@@ -185,7 +185,7 @@ model-monitoring/
 │   │       └── version.ts               # APP_VERSION (single source of truth)
 │   └── next.config.mjs / src/proxy.ts
 ├── cdk/                                  # lib/stacks/ 8 stacks + lib/constructs/{fargate-service,pinned-image}.ts (TypeScript)
-├── scripts/readme-art/                   # README 구성도와 인포그래픽 생성기 — build.sh(AWS_ICON_BUNDLE 필요), architecture.py, glance.py, infokit.py, render.js (v2.44.1)
+├── scripts/readme-art/                   # README 구성도와 인포그래픽 생성기 — build.sh(AWS_ICON_BUNDLE 필요), architecture.py, glance.py, infokit.py, render.js + 스크린샷 캡처 capture.js (v2.44.1)
 └── docs/
     ├── architecture.md, api-reference.md
     ├── images/architecture/ # README와 architecture.md의 구성도(architecture-{en,ko}.svg, png)와 인포그래픽(infographic-{en,ko}-{light,dark}.svg, png) — scripts/readme-art/build.sh로 생성 (v2.44.1)
@@ -374,7 +374,7 @@ Claude Platform on AWS 채널(anthropic:*)도 기본값에서는 매 사이클 �
 
 (`cdk/package.json`은 인프라 패키지 버전이라 앱 버전과 무관 — 범프 대상 아님.)
 
-**README 그림 (v2.44.1)**: README 아키텍처 절과 `docs/architecture.md`가 쓰는 `docs/images/architecture/`의 구성도와 인포그래픽에는 채널 수(45 = Bedrock 17 + OpenAI 21 + Claude Platform on AWS 7), 패밀리 15개의 채널 행렬, 예약 태스크 7개와 산출 수치(사이클당 45행, 210행, 1,365셀, 예제 77건, 단가 채널 52개), 화면 11개, 버전(`VERSION`)과 기준일(`AS_OF`)이 들어 있다. 모델, 예약 태스크, 화면을 더하거나 빼면 `scripts/readme-art/architecture.py`의 `T`와 `glance.py`의 행렬(`CLAUDE`, `NOVA`, `GPT`)과 `T`를 고치고 `AWS_ICON_BUNDLE=<aws-diagram 스킬>/assets/icons.json scripts/readme-art/build.sh`로 다시 만든 뒤, README 아키텍처 절의 예약 태스크 표와 CDK 스택 표도 함께 고친다. `glance.py`의 assert가 채널 합계 45와 열 합계(7, 14, 15, 9)를 고정하므로 행렬을 고치면 이 값도 고친다. 빌드에는 `frontend/node_modules`의 Playwright Chromium과 글꼴(Amazon Ember, NanumSquareOTF, D2Coding)이 필요하고, 인포그래픽은 문구 lint와 배치 QA(넘침, 겹침) 0건이어야 끝난다.
+**README 그림 (v2.44.1)**: README 아키텍처 절과 `docs/architecture.md`가 쓰는 `docs/images/architecture/`의 구성도와 인포그래픽에는 채널 수(45 = Bedrock 17 + OpenAI 21 + Claude Platform on AWS 7), 패밀리 15개의 채널 행렬, 예약 태스크 7개와 산출 수치(사이클당 45행, 210행, 1,365셀, 예제 77건, 단가 채널 52개), 화면 11개, 버전(`VERSION`)과 기준일(`AS_OF`)이 들어 있다. 모델, 예약 태스크, 화면을 더하거나 빼면 `scripts/readme-art/architecture.py`의 `T`와 `glance.py`의 행렬(`CLAUDE`, `NOVA`, `GPT`)과 `T`를 고치고 `AWS_ICON_BUNDLE=<aws-diagram 스킬>/assets/icons.json scripts/readme-art/build.sh`로 다시 만든 뒤, README 아키텍처 절의 예약 태스크 표와 CDK 스택 표도 함께 고친다. `glance.py`의 assert가 채널 합계 45와 열 합계(7, 14, 15, 9)를 고정하므로 행렬을 고치면 이 값도 고친다. 빌드에는 `frontend/node_modules`의 Playwright Chromium과 글꼴(Amazon Ember, NanumSquareOTF, D2Coding)이 필요하고, 인포그래픽은 문구 lint와 배치 QA(넘침, 겹침) 0건이어야 끝난다. README 스크린샷(`docs/images/ui/`, 아홉 화면의 EN과 KO)은 `cd frontend && node ../scripts/readme-art/capture.js ../docs/images/ui`로 운영 화면에서 다시 찍는다(2026-11-21 v2.44.0 캡처, 모델 카드 화면은 카드 보기, `networkidle`을 기다리지 않는다).
 
 **Claude API Features 카탈로그 규칙 변경 시 `CATALOG_VERSION` 범프** (`backend/claude_features/runner.py`): `backend/claude_features/catalog.py`의 `_NOT_APPLICABLE_BY_DOC`, `documented` 기대치, `_CONVERSE_NOT_EXPRESSIBLE`, `is_applicable` 규칙이 바뀌면 함께 범프한다 — v2.23.1에서 누락돼 run #2→#3 변경 15건을 버전 비교로 식별할 수 없었고, 그래서 `/api/features/latest` `changes[].kind`는 `latency_ms IS NULL AND error_message IS NULL`(러너 사전판정 행)로 카탈로그 변경을 식별한다. **대표 `MODELS` 변경**(모델 추가/제거 — 런 형태가 달라짐, v2.28.0 Opus 5.5 편입 시 `2026-09-23`으로 범프)도 범프 트리거다. label/desc 문구만 바뀐 릴리스(v2.24.0)는 범프 대상이 아니다.
 

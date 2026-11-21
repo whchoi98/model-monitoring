@@ -38,6 +38,10 @@ const QA = () => {
   const scale = Number(scaleArg || 1);
   const svg = fs.readFileSync(src, "utf8");
   const m = svg.match(/viewBox="0 0 ([\d.]+) ([\d.]+)"/);
+  if (!m) {
+    console.error(`${src}: viewBox="0 0 W H" 속성이 없어 크기를 알 수 없다`);
+    process.exit(2);
+  }
   const width = Math.round(Number(m[1]));
   const height = Math.round(Number(m[2]));
   const browser = await chromium.launch();
