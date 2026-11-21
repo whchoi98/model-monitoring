@@ -21,6 +21,7 @@ import { formatDateTime, parseTimestamp } from "@/lib/format";
 import { DataEmpty, DataError, DataLoading } from "./DataState";
 import RefreshControls from "./RefreshControls";
 import Dialog from "./Dialog";
+import EvidenceSection from "./EvidenceSection";
 import {
   aggregateCell, buildGroups, cellBadge, cellLatencyLines, featureLabelOf, findCell, formatDuration, formatMs, isGroupOpen, isProbed, labelMaps,
   pickModel, runSummary, summarizeChanges, surfaceFindings, surfaceShortOf, surfaceSummary, verificationDesc, visibleSegments,
@@ -62,18 +63,6 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
         skipped: "문서상 지원(GA/Beta)이지만 이 엔드포인트에는 실측 경로가 없습니다(capability 엔드포인트 부재) — '문서상 지원'으로 표기, 측정값 아님.",
         not_applicable: `설계상 부적용: ${String(evidence.reason ?? "")}` };
 
-  const Section = ({ title, json, tone }: { title: string; json: unknown; tone?: "error" }) => (
-    <details open={!isOk} className="group">
-      <summary className="cursor-pointer select-none text-sm text-gray-400 hover:text-gray-200 py-1">
-        <span className="inline-block w-3 text-xs transition-transform group-open:rotate-90">▶</span> {title}
-      </summary>
-      <pre className={`mt-1 rounded-lg p-3 overflow-x-auto text-xs leading-relaxed border ${
-        tone === "error" ? "bg-gray-950 border-rose-500/30 text-rose-300 whitespace-pre-wrap break-all" : "bg-gray-950 border-gray-800 text-gray-200"}`}>
-        {typeof json === "string" ? json : JSON.stringify(json ?? {}, null, 2)}
-      </pre>
-    </details>
-  );
-
   return (
     <Dialog title={lang === "en" ? "Execution evidence" : "실행 증거"} onClose={onClose}>
         <div>
@@ -100,9 +89,9 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
           <DataError error={resource.error} resource={lang === "en" ? "execution evidence" : "실행 증거"} onRetry={resource.refresh} hasData={!!data} />
           {data && (
             <div className="space-y-1 pt-1">
-              {errorMsg && <Section title="Error" json={errorMsg} tone="error" />}
-              {request && <Section title="Request JSON" json={request} />}
-              <Section title="Response / evidence" json={response} />
+              {errorMsg && <EvidenceSection title="Error" json={errorMsg} tone="error" defaultOpen={!isOk} />}
+              {request && <EvidenceSection title="Request JSON" json={request} defaultOpen={!isOk} />}
+              <EvidenceSection title="Response / evidence" json={response} defaultOpen={!isOk} />
             </div>
           )}
         </div>
@@ -110,38 +99,32 @@ function EvidenceModal({ runId, cell, labels, onClose }: { runId: number; cell: 
   );
 }
 
-// Key Findings 드로어 (v2.24.0, D4) — surface 카드 클릭 → verdict 축 6섹션. 라벨은 카탈로그 LabelMaps(D2/RUL-6), 항목·칩 클릭 → 증거 모달(RUL-9).
-// scope: 모델 칩(D5)이 켜져 있을 때 그 모델 라벨 — 메타 줄이 "전체 N셀"이 아니라 "<모델> 모델의 N셀"이라고 말해야 한다.
-function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClose }: {
-  surface: SurfaceDef; findings: SurfaceFindings; labels: LabelMaps; scope?: string | null;
-  onPick: (c: FeatureCell) => void; onClose: () => void;
-}) {
+// Key Findings 드로어 조각. 모듈 최상위 컴포넌트여야 한다 — SurfaceDrawer 렌더 함수 안에서 만들면 페이지가 다시 그려질 때마다
+// (자동 새로고침 카운트다운, 1초) 컴포넌트 타입이 바뀌어 안의 버튼이 재마운트되고 키보드 포커스가 사라진다 (v2.44.2).
+function FindingSection({ title, sub, color, empty, children }: { title: string; sub: string; color: string; empty: boolean; children: ReactNode }) {
   const { lang } = useLang();
-  const T = (en: string, ko: string) => (lang === "en" ? en : ko);
-  const label = (id: string) => featureLabelOf(labels, id);
-  // Escape로 닫기 — 폰 폭에서는 aside가 오버레이를 거의 덮어 × 외에 닫을 수단이 없었다.
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) onClose(); };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [onClose]);
-  const none = (
-    <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{T("None.", "없음")}</div>
-  );
-
-  const Sec = ({ title, sub, color, empty, children }: { title: string; sub: string; color: string; empty: boolean; children: ReactNode }) => (
+  return (
     <section>
       <h3 className={`text-sm font-semibold mb-1 ${color}`}>{title}</h3>
       <p className="text-xs text-gray-500 mb-2">{sub}</p>
-      {empty ? none : children}
+      {empty
+        ? <div className="text-xs text-emerald-300 bg-emerald-500/10 border border-emerald-500/20 rounded-lg px-3 py-2">{lang === "en" ? "None." : "없음"}</div>
+        : children}
     </section>
   );
-  const GroupCards = ({ groups, tone }: { groups: FindingFeatureGroup[]; tone: "rose" | "amber" }) => (
+}
+
+function FindingGroupCards({ groups, tone, labels, onPick }: {
+  groups: FindingFeatureGroup[]; tone: "rose" | "amber"; labels: LabelMaps; onPick: (c: FeatureCell) => void;
+}) {
+  const { lang } = useLang();
+  const T = (en: string, ko: string) => (lang === "en" ? en : ko);
+  return (
     <div className="space-y-2">
       {groups.map((g) => (
         <div key={g.feature} className={`rounded-lg px-3 py-2 border ${tone === "rose" ? "bg-rose-500/10 border-rose-500/20" : "bg-amber-500/10 border-amber-500/20"}`}>
           <div className="flex items-center justify-between gap-2">
-            <span className="text-sm font-medium text-gray-100">{label(g.feature)}</span>
+            <span className="text-sm font-medium text-gray-100">{featureLabelOf(labels, g.feature)}</span>
             <span className={`text-xs font-semibold whitespace-nowrap ${tone === "rose" ? "text-rose-300" : "text-amber-300"}`}>{g.count}/{g.probed} {T("cells", "셀")}</span>
           </div>
           <div className="text-xs text-gray-500 font-mono mt-0.5">{g.feature}</div>
@@ -157,19 +140,40 @@ function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClos
       ))}
     </div>
   );
-  // RUL-9: 칩은 button — 첫 모델의 증거 모달을 연다. title에 모델 전체 목록.
-  const Chips = ({ chips, style }: { chips: FindingChip[]; style: string }) => (
+}
+
+// RUL-9: 칩은 button — 첫 모델의 증거 모달을 연다. title에 모델 전체 목록.
+function FindingChips({ chips, style, labels, onPick }: {
+  chips: FindingChip[]; style: string; labels: LabelMaps; onPick: (c: FeatureCell) => void;
+}) {
+  const { lang } = useLang();
+  return (
     <div className="flex flex-wrap gap-1.5">
       {chips.map((u) => (
         <button key={u.feature} type="button" onClick={() => onPick(u.cells[0])}
-          title={`${u.models.join(", ")} (${T("click: evidence of the first model", "클릭: 첫 모델 증거")})`}
+          title={`${u.models.join(", ")} (${lang === "en" ? "click: evidence of the first model" : "클릭: 첫 모델 증거"})`}
           className={`px-2 py-0.5 text-[11px] rounded-full border hover:border-blue-500/60 ${style}`}>
-          {label(u.feature)}
+          {featureLabelOf(labels, u.feature)}
         </button>
       ))}
     </div>
   );
+}
 
+// Key Findings 드로어 (v2.24.0, D4) — surface 카드 클릭 → verdict 축 6섹션. 라벨은 카탈로그 LabelMaps(D2/RUL-6), 항목·칩 클릭 → 증거 모달(RUL-9).
+// scope: 모델 칩(D5)이 켜져 있을 때 그 모델 라벨 — 메타 줄이 "전체 N셀"이 아니라 "<모델> 모델의 N셀"이라고 말해야 한다.
+function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClose }: {
+  surface: SurfaceDef; findings: SurfaceFindings; labels: LabelMaps; scope?: string | null;
+  onPick: (c: FeatureCell) => void; onClose: () => void;
+}) {
+  const { lang } = useLang();
+  const T = (en: string, ko: string) => (lang === "en" ? en : ko);
+  // Escape로 닫기 — 폰 폭에서는 aside가 오버레이를 거의 덮어 × 외에 닫을 수단이 없었다.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === "Escape" && !document.querySelector("dialog[open]")) onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [onClose]);
   return (
     <div className="fixed inset-0 z-50">
       <button type="button" aria-label="overlay" onClick={onClose} className="absolute inset-0 bg-black/50 backdrop-blur-sm" />
@@ -186,38 +190,38 @@ function SurfaceDrawer({ surface, findings, labels, scope = null, onPick, onClos
           </p>
         </div>
 
-        <Sec color="text-rose-300" empty={findings.drift.length === 0}
+        <FindingSection color="text-rose-300" empty={findings.drift.length === 0}
           title={T(`1. Documentation drift (${findings.drift.length} features)`, `1. 문서 드리프트 (${findings.drift.length}개 피처)`)}
           sub={T("Documented GA/Beta but measured unsupported or broken. Check the request snapshot in the evidence modal for a probe defect first.",
                  "문서상 GA/Beta인데 실측이 unsupported 또는 broken인 셀입니다. 증거 모달의 요청 스냅샷으로 프로브 결함 여부를 먼저 확인합니다.")}>
-          <GroupCards groups={findings.drift} tone="rose" />
-        </Sec>
+          <FindingGroupCards groups={findings.drift} tone="rose" labels={labels} onPick={onPick} />
+        </FindingSection>
 
-        <Sec color="text-rose-300" empty={findings.broken.length === 0}
+        <FindingSection color="text-rose-300" empty={findings.broken.length === 0}
           title={T(`2. Probe errors (${findings.broken.length} features)`, `2. 프로브 오류 (${findings.broken.length}개 피처)`)}
           sub={T("Cells that returned an error instead of a response. Listed by status (broken) regardless of the documented expectation.",
                  "응답 대신 오류를 받은 셀입니다. 문서 기대치와 무관하게 status가 broken이면 여기에 옵니다.")}>
-          <GroupCards groups={findings.broken} tone="rose" />
-        </Sec>
+          <FindingGroupCards groups={findings.broken} tone="rose" labels={labels} onPick={onPick} />
+        </FindingSection>
 
-        <Sec color="text-amber-300" empty={findings.intendedGaps.length === 0}
+        <FindingSection color="text-amber-300" empty={findings.intendedGaps.length === 0}
           title={T(`3. Intended gaps (${findings.intendedGaps.length})`, `3. 의도된 격차 (${findings.intendedGaps.length})`)}
           sub={T("Documented as unavailable and measured unsupported (not a bug).", "문서상 미제공, 실측도 미지원 (버그 아님)")}>
-          <Chips chips={findings.intendedGaps} style={STATUS_STYLE.unsupported} />
-        </Sec>
+          <FindingChips chips={findings.intendedGaps} style={STATUS_STYLE.unsupported} labels={labels} onPick={onPick} />
+        </FindingSection>
 
-        <Sec color="text-gray-300" empty={findings.undecidedGaps.length === 0}
+        <FindingSection color="text-gray-300" empty={findings.undecidedGaps.length === 0}
           title={T(`4. Documentation undecided (${findings.undecidedGaps.length})`, `4. 문서 미확정 (${findings.undecidedGaps.length})`)}
           sub={T("Documented expectation is unknown and the probe measured unsupported. Once the docs settle, these move to drift or intended gaps.",
                  "문서 기대치가 unknown인데 실측 미지원인 피처입니다. 문서가 확정되면 드리프트 또는 의도된 격차로 귀속됩니다.")}>
-          <Chips chips={findings.undecidedGaps} style="bg-gray-800 border-gray-700 text-gray-400" />
-        </Sec>
+          <FindingChips chips={findings.undecidedGaps} style="bg-gray-800 border-gray-700 text-gray-400" labels={labels} onPick={onPick} />
+        </FindingSection>
 
-        <Sec color="text-sky-300" empty={findings.undocumented.length === 0}
+        <FindingSection color="text-sky-300" empty={findings.undocumented.length === 0}
           title={T(`5. Undocumented behaviour (${findings.undocumented.length})`, `5. 문서에 없는 동작 (${findings.undocumented.length})`)}
           sub={T("Not promised by the docs, yet measured supported.", "문서가 약속하지 않았지만 실측이 supported인 피처입니다.")}>
-          <Chips chips={findings.undocumented} style="bg-sky-500/10 border-sky-500/30 text-sky-300" />
-        </Sec>
+          <FindingChips chips={findings.undocumented} style="bg-sky-500/10 border-sky-500/30 text-sky-300" labels={labels} onPick={onPick} />
+        </FindingSection>
 
         <section>
           <h3 className="text-sm font-semibold text-gray-200 mb-1">{T("6. Documented health per model", "6. 모델별 문서 일치율")}</h3>
