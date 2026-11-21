@@ -1,7 +1,7 @@
 # Amazon Bedrock LLM Monitor
 
 ![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)
-[![Version](https://img.shields.io/badge/version-2.44.0-blue.svg)](CHANGELOG.md)
+[![Version](https://img.shields.io/badge/version-2.44.1-blue.svg)](CHANGELOG.md)
 [![Build](https://img.shields.io/badge/build-CDK%20%7C%20Docker-success)](docs/runbooks/deploy.md)
 <a href="#english"><img src="https://img.shields.io/badge/lang-English-blue.svg" alt="English"></a>
 <a href="#korean"><img src="https://img.shields.io/badge/lang-한국어-red.svg" alt="Korean"></a>
@@ -22,7 +22,59 @@ Amazon Bedrock LLM Monitor is a production-grade observability platform that con
 
 The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories and a 12-hourly sync of official unit prices. A built-in chatbot (Claude Haiku 5.5 with four Bedrock tools) lets you query the time-series data conversationally.
 
-![Dashboard overview: channel counts, per-model status strip, collection cadence](docs/images/ui/dashboard-en.png)
+![Dashboard overview: channel counts, workload filter, latest model status and AI insights](docs/images/ui/dashboard-en.png)
+
+## Architecture
+
+The summary and the diagram show the production deployment as of 2026-11-21 (v2.44). [`docs/architecture.md`](docs/architecture.md) has the component tables and the design decisions behind them.
+
+### At a glance
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture/infographic-en-dark.png">
+  <img src="docs/images/architecture/infographic-en-light.png" alt="Amazon Bedrock LLM Monitor at a glance: 45 monitored channels across 15 model families, seven scheduled Fargate tasks and their cadence, six workload categories and eleven monitoring pages">
+</picture>
+
+The 45 channels are 15 model families, each called through up to four paths: Claude Platform on AWS, a Bedrock Global cross-region profile, a Bedrock US cross-region profile and an in-region endpoint (Seoul on-demand for Claude Opus 5 and Sonnet 5, Bedrock Mantle in us-east-1 for GPT). Vector versions: [light](docs/images/architecture/infographic-en-light.svg), [dark](docs/images/architecture/infographic-en-dark.svg).
+
+### System diagram
+
+![Production architecture: users reach CloudFront, a VPC Origin and an internal ALB in front of two ECS Fargate services; EventBridge Scheduler runs seven Fargate tasks that call Bedrock Runtime, Bedrock Mantle and Claude Platform on AWS and write to RDS PostgreSQL](docs/images/architecture/architecture-en.png)
+
+[Vector version](docs/images/architecture/architecture-en.svg). The diagram leaves out the S3 access-log buckets, the KMS keys and the RUM pipeline.
+
+- **Request path.** A browser or the installed PWA reaches CloudFront over HTTPS. CloudFront goes through a VPC Origin to an internal ALB, which sends `/api/*` to the backend service (FastAPI, port 8000) and everything else to the frontend service (Next.js, port 3000). Both services run on ECS Fargate in private subnets and scale from 1 to 3 tasks on CPU.
+- **Collection path.** EventBridge Scheduler starts seven one-shot Fargate tasks from the backend image. Each task calls the model endpoints and writes its rows to RDS PostgreSQL. The backend serves those rows from the database, so the dashboard keeps answering while a task is running or has failed.
+- **Model endpoints.** Bedrock Runtime in Seoul is reached through a VPC endpoint. It serves the Claude Global profiles, the two Seoul in-region models, the GPT Global profiles and the Claude Haiku 5.5 calls of the chatbot and the insights task. Bedrock Runtime in us-east-1 (Claude, Nova and GPT US profiles), Bedrock Mantle in us-east-1 (GPT in-region and the `/anthropic` surface) and Claude Platform on AWS in us-east-2 are reached through the NAT gateway.
+- **Prices.** PricingSync reads four official sources every 12 hours: the Bedrock agreement offers and the AWS Price List API in us-east-1, and the Anthropic and OpenAI pricing pages outside AWS.
+- **State and secrets.** All monitoring data is in one RDS PostgreSQL 16 instance (t4g.micro, Single-AZ). The API keys and the JWT key are SSM Parameter Store SecureStrings, the database credentials are in Secrets Manager, and chatbot conversations stay in AgentCore Memory for 30 days.
+
+### Scheduled tasks
+
+| Task | Schedule | What it does | Output per run |
+|------|----------|--------------|----------------|
+| AutoProber | every 5 minutes | One streaming call to each of the 45 channels with the cycle's workload category | 45 `probe_results` rows |
+| Insights | every 5 minutes | Claude Haiku 5.5 summarises the last 6 hours | one insight in Korean and English |
+| GptBench | every 15 minutes | TTFB and TTFT on the 21 GPT channels, 10 runs each after a warm-up call | 210 bench rows |
+| ParityRun | every 12 hours | Probes each model on up to 6 API surfaces and 20 features with execution evidence | one parity run |
+| PricingSync | every 12 hours | Reads the 4 official price sources for 52 price channels (45 active channels and 7 OpenAI official prices) | one price sync run; a change above 50% waits for admin approval |
+| FeaturesVerify | daily at 17:30 UTC | 39 Claude API feature rows on 5 surfaces for 7 representative models | 1,365 cells |
+| ExplorerVerify | daily at 18:00 UTC | Runs every Model Explorer code example | 77 example results |
+
+### CDK stacks
+
+| Stack | What it owns |
+|-------|--------------|
+| Network | VPC (or an existing VPC given in the CDK context), NAT gateway, VPC endpoints |
+| Data | RDS PostgreSQL, Secrets Manager secret, SSM parameters |
+| Cluster | ECS cluster, ECR repositories, shared KMS key |
+| AgentCore | AgentCore Memory and its IAM policy |
+| AppServices | frontend and backend Fargate services, internal ALB |
+| Edge | CloudFront distribution, VPC Origin, cache policies |
+| Scheduler | 7 EventBridge schedules and their task definitions |
+| Observability | CloudWatch alarms and dashboard, SNS topic |
+
+The infographic and the diagram are generated by [`scripts/readme-art/build.sh`](scripts/readme-art/build.sh). Rerun it when a channel, task or page count changes.
 
 ## Features
 
@@ -47,13 +99,13 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 | --- | --- |
 | ![Model cards with TTFT, latency and TPS graded blue, amber and rose](docs/images/ui/dashboard-cards-en.png) | ![TTFT and latency trend lines per channel](docs/images/ui/dashboard-trend-en.png) |
 | **GPT on AWS** | **Claude API Features** |
-| ![GPT 6 and GPT 5.x TTFB, TTFT and GAP scorecards per channel](docs/images/ui/gpt-on-aws-en.png) | ![Per-endpoint health cards and the feature by endpoint evidence matrix](docs/images/ui/claude-features-en.png) |
+| ![GPT 6.x TTFB, TTFT and GAP scorecards per channel](docs/images/ui/gpt-on-aws-en.png) | ![Per-endpoint health cards and the feature by endpoint evidence matrix](docs/images/ui/claude-features-en.png) |
 | **Parity Run** | **Cost** |
 | ![Provider health cards and the model by API surface parity matrix](docs/images/ui/parity-en.png) | ![24-hour cost, 30-day projection and channel comparison](docs/images/ui/cost-en.png) |
 | **Reliability** | **Unit Prices** |
 | ![Per-family success rate and latency across channels](docs/images/ui/reliability-en.png) | ![Unit Prices: per-model input / output, prompt-caching and GPT long-context prices by channel with footnoted official sources](docs/images/ui/pricing-en.png) |
 
-Captured from production on 2026-09-26 (v2.29.0, dark theme, 1440x900). The Claude Platform on AWS column in Claude API Features and Reliability still reflects the monthly usage-cap 429 period that v2.29.0 stopped retrying, and the dashboard collection line still shows "Claude Platform on AWS every 10 min", which v2.29.1 removed with the return to every-cycle probing. The Unit Prices capture is from 2026-09-27 (v2.31.0, after the first price sync with prompt-caching and long-context prices). Korean UI captures use the `-ko.png` suffix in the same directory.
+Captured from production on 2026-11-21 (v2.44.0, dark theme, 1440x900) with [`scripts/readme-art/capture.js`](scripts/readme-art/capture.js). The model-card capture uses the Cards view of the dashboard, which opens in the Compact view. Korean UI captures use the `-ko.png` suffix in the same directory.
 
 ## Prerequisites
 
@@ -185,7 +237,7 @@ TOKEN=$(curl -sX POST https://<your-cloudfront-domain>/api/auth/login \
 curl -N -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -X POST https://<your-cloudfront-domain>/api/probes/run \
-  -d '{"model_ids":["global.anthropic.claude-haiku-4-5-20251001-v1:0"],"prompt":"hello","max_tokens":50}'
+  -d '{"model_ids":["global.anthropic.claude-haiku-5-5"],"prompt":"hello","max_tokens":50}'
 ```
 
 ## iPhone / iPad App (PWA)
@@ -262,9 +314,10 @@ model-monitoring/
 │   ├── architecture.md           # full system design
 │   ├── api-reference.md          # endpoint reference
 │   ├── onboarding.md             # onboarding guide: local setup, key concepts, common tasks
-│   ├── decisions/                # ADR-001 through ADR-033
-│   ├── images/                   # README screenshots (ui/*-en.png, ui/*-ko.png)
+│   ├── decisions/                # ADR-001 through ADR-039
+│   ├── images/                   # README screenshots (ui/*-en.png, ui/*-ko.png), architecture diagram and infographic (architecture/)
 │   └── runbooks/                 # deploy, rollback, troubleshooting
+├── scripts/readme-art/           # generators for the README architecture diagram and infographic (build.sh)
 ├── CHANGELOG.md                  # Keep a Changelog format (bilingual, repo root)
 └── Makefile                      # `make verify` runs CDK/backend checks + frontend types and unit tests
 ```
@@ -362,7 +415,59 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 
 이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 프롬프트 카테고리를 라운드로빈하는 워크로드 프로빙을 실행하고, 12시간마다 공식 단가를 동기화합니다. Claude Haiku 5.5 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
 
-![대시보드 개요: 채널 수, 모델별 상태 스트립, 수집 주기](docs/images/ui/dashboard-ko.png)
+![대시보드 개요: 채널 수, 워크로드 필터, 모델별 최신 상태, AI 인사이트](docs/images/ui/dashboard-ko.png)
+
+## 아키텍처
+
+아래 요약과 구성도는 2026-11-21 운영 배포(v2.44) 기준입니다. 구성 요소 표와 설계 결정의 배경은 [`docs/architecture.md`](docs/architecture.md)에 있습니다.
+
+### 한눈에 보기
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture/infographic-ko-dark.png">
+  <img src="docs/images/architecture/infographic-ko-light.png" alt="Amazon Bedrock LLM Monitor 한눈에 보기: 모델 패밀리 15개의 모니터링 채널 45개, 예약 Fargate 태스크 7개와 주기, 워크로드 6종, 모니터링 화면 11개">
+</picture>
+
+45채널은 모델 패밀리 15개를 패밀리마다 최대 네 경로로 호출한 것입니다. 경로는 Claude Platform on AWS, Bedrock Global 교차 리전 프로파일, Bedrock US 교차 리전 프로파일, 인리전 엔드포인트(Claude Opus 5와 Sonnet 5는 서울 온디맨드, GPT는 us-east-1의 Bedrock Mantle)입니다. 벡터 파일: [라이트](docs/images/architecture/infographic-ko-light.svg), [다크](docs/images/architecture/infographic-ko-dark.svg).
+
+### 시스템 구성도
+
+![운영 아키텍처: 사용자는 CloudFront, VPC Origin, 내부 ALB를 거쳐 ECS Fargate 서비스 두 개에 닿고, EventBridge Scheduler가 실행하는 Fargate 태스크 일곱 개가 Bedrock Runtime, Bedrock Mantle, Claude Platform on AWS를 호출해 RDS PostgreSQL에 기록한다](docs/images/architecture/architecture-ko.png)
+
+[벡터 파일](docs/images/architecture/architecture-ko.svg). S3 액세스 로그 버킷, KMS 키, RUM 파이프라인은 그림에서 뺐습니다.
+
+- **요청 경로.** 브라우저나 설치한 PWA가 HTTPS로 CloudFront에 접속합니다. CloudFront는 VPC Origin으로 내부 ALB에 닿고, ALB는 `/api/*`를 backend 서비스(FastAPI, 포트 8000)로, 나머지를 frontend 서비스(Next.js, 포트 3000)로 보냅니다. 두 서비스는 프라이빗 서브넷의 ECS Fargate에서 돌고 CPU 기준으로 태스크 1개에서 3개까지 늘어납니다.
+- **수집 경로.** EventBridge Scheduler가 backend 이미지로 일회성 Fargate 태스크 일곱 개를 실행합니다. 태스크마다 모델 엔드포인트를 호출하고 결과 행을 RDS PostgreSQL에 씁니다. backend는 그 행을 DB에서 읽어 응답하므로, 태스크가 도는 중이거나 실패해도 대시보드는 계속 응답합니다.
+- **모델 엔드포인트.** 서울의 Bedrock Runtime은 VPC 엔드포인트로 호출합니다. Claude Global 프로파일, 서울 인리전 모델 두 개, GPT Global 프로파일, 챗봇과 인사이트 태스크의 Claude Haiku 5.5 호출이 여기로 갑니다. us-east-1의 Bedrock Runtime(Claude, Nova, GPT US 프로파일), us-east-1의 Bedrock Mantle(GPT 인리전과 `/anthropic` surface), us-east-2의 Claude Platform on AWS는 NAT 게이트웨이를 거쳐 호출합니다.
+- **단가.** PricingSync가 12시간마다 공식 출처 네 곳을 읽습니다. us-east-1의 Bedrock 약정 오퍼와 AWS Price List API, AWS 밖의 Anthropic 요금 문서와 OpenAI 요금 문서입니다.
+- **상태와 비밀 값.** 모니터링 데이터는 모두 RDS PostgreSQL 16 인스턴스 하나(t4g.micro, 단일 AZ)에 있습니다. API 키와 JWT 키는 SSM Parameter Store SecureString, DB 자격 증명은 Secrets Manager에 두고, 챗봇 대화는 AgentCore Memory에 30일 동안 보관합니다.
+
+### 예약 태스크
+
+| 태스크 | 주기 | 하는 일 | 런마다 남는 것 |
+|--------|------|---------|----------------|
+| AutoProber | 5분마다 | 45채널에 그 사이클의 워크로드 카테고리로 스트리밍 호출 1회씩 | `probe_results` 45행 |
+| Insights | 5분마다 | Claude Haiku 5.5가 최근 6시간을 요약 | 한국어와 영어 인사이트 1건 |
+| GptBench | 15분마다 | GPT 21채널의 TTFB와 TTFT 측정, 채널마다 워밍업 1회 뒤 10회 | 벤치 210행 |
+| ParityRun | 12시간마다 | 모델마다 API surface 최대 6개, 피처 20개를 실행 증거로 검증 | 패리티 런 1건 |
+| PricingSync | 12시간마다 | 단가 채널 52개(활성 45채널과 OpenAI 공식 가격 7개)의 공식 출처 네 곳 조회 | 단가 동기화 런 1건, 50%를 넘는 변경은 관리자 승인 대기 |
+| FeaturesVerify | 매일 17:30 UTC | Claude API 피처 39행을 surface 5개, 대표 모델 7개로 검증 | 1,365셀 |
+| ExplorerVerify | 매일 18:00 UTC | 모델 탐색 코드 예제를 모두 실행 | 예제 결과 77건 |
+
+### CDK 스택
+
+| 스택 | 담당 리소스 |
+|------|-------------|
+| Network | VPC(또는 CDK context로 받은 기존 VPC), NAT 게이트웨이, VPC 엔드포인트 |
+| Data | RDS PostgreSQL, Secrets Manager 시크릿, SSM 파라미터 |
+| Cluster | ECS 클러스터, ECR 리포지토리, 공용 KMS 키 |
+| AgentCore | AgentCore Memory와 IAM 정책 |
+| AppServices | frontend, backend Fargate 서비스, 내부 ALB |
+| Edge | CloudFront 배포, VPC Origin, 캐시 정책 |
+| Scheduler | EventBridge 스케줄 7개와 태스크 정의 |
+| Observability | CloudWatch 알람과 대시보드, SNS 토픽 |
+
+인포그래픽과 구성도는 [`scripts/readme-art/build.sh`](scripts/readme-art/build.sh)로 만듭니다. 채널, 태스크, 화면 수가 바뀌면 다시 실행합니다.
 
 ## 주요 기능
 
@@ -387,13 +492,13 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 | --- | --- |
 | ![TTFT, 총 응답시간, TPS 값을 파랑, 호박, 장미로 등급 표시한 모델 카드](docs/images/ui/dashboard-cards-ko.png) | ![채널별 TTFT, 총 응답시간 추이 선](docs/images/ui/dashboard-trend-ko.png) |
 | **GPT on AWS** | **Claude API 기능** |
-| ![채널별 GPT 6, GPT 5.x TTFB, TTFT, GAP 스코어 카드](docs/images/ui/gpt-on-aws-ko.png) | ![엔드포인트별 헬스 카드와 피처 × 엔드포인트 증거 매트릭스](docs/images/ui/claude-features-ko.png) |
+| ![채널별 GPT 6.x TTFB, TTFT, GAP 스코어 카드](docs/images/ui/gpt-on-aws-ko.png) | ![엔드포인트별 헬스 카드와 피처 × 엔드포인트 증거 매트릭스](docs/images/ui/claude-features-ko.png) |
 | **패리티 런** | **비용** |
 | ![프로바이더별 헬스 카드와 모델 × API surface 패리티 매트릭스](docs/images/ui/parity-ko.png) | ![24시간 비용, 30일 예측, 채널 비교](docs/images/ui/cost-ko.png) |
 | **신뢰성** | **비용 단가** |
 | ![family별 채널 성공률과 지연 비교](docs/images/ui/reliability-ko.png) | ![비용 단가: 채널별 모델 입력, 출력, 프롬프트 캐싱, GPT 긴 컨텍스트 단가와 각주로 연결된 공식 출처](docs/images/ui/pricing-ko.png) |
 
-2026-09-26 운영 환경에서 캡처했습니다(v2.29.0, 다크 테마, 1440x900). Claude API 기능과 신뢰성 화면의 Claude Platform on AWS 열은 v2.29.0에서 재시도를 멈춘 월간 사용 한도 429 기간의 결과가 남아 있고, 대시보드 수집 상태 줄의 "Claude Platform on AWS 10분 주기" 표시는 v2.29.1에서 매 사이클 수집으로 돌아가며 사라졌습니다. 비용 단가 화면은 2026-09-27(v2.31.0, 프롬프트 캐싱과 긴 컨텍스트 단가를 처음 동기화한 뒤)에 캡처했습니다. 영문 UI 캡처는 같은 디렉터리의 `-en.png` 파일입니다.
+2026-11-21 운영 환경에서 [`scripts/readme-art/capture.js`](scripts/readme-art/capture.js)로 캡처했습니다(v2.44.0, 다크 테마, 1440x900). 모델 카드 화면은 대시보드의 카드 보기로 찍었습니다(대시보드는 간결 보기로 열립니다). 영문 UI 캡처는 같은 디렉터리의 `-en.png` 파일입니다.
 
 ## 사전 요구 사항
 
@@ -507,7 +612,7 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 curl https://<your-cloudfront-domain>/api/auto-probe/status
 # {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
 
-# 최신 49개 모델 프로빙 결과 조회
+# 최신 45개 모델 프로빙 결과 조회
 curl https://<your-cloudfront-domain>/api/auto-probe/latest
 
 # 워크로드 카테고리별 필터링
@@ -525,7 +630,7 @@ TOKEN=$(curl -sX POST https://<your-cloudfront-domain>/api/auth/login \
 curl -N -H "Authorization: Bearer $TOKEN" \
   -H 'Content-Type: application/json' \
   -X POST https://<your-cloudfront-domain>/api/probes/run \
-  -d '{"model_ids":["global.anthropic.claude-haiku-4-5-20251001-v1:0"],"prompt":"hello","max_tokens":50}'
+  -d '{"model_ids":["global.anthropic.claude-haiku-5-5"],"prompt":"hello","max_tokens":50}'
 ```
 
 ## iPhone / iPad 앱 (PWA)
@@ -602,9 +707,10 @@ model-monitoring/
 │   ├── architecture.md           # 전체 시스템 설계
 │   ├── api-reference.md          # 엔드포인트 레퍼런스
 │   ├── onboarding.md             # 온보딩 가이드: 로컬 환경 구성, 핵심 개념, 자주 하는 작업
-│   ├── decisions/                # ADR-001 ~ ADR-033
-│   ├── images/                   # README 스크린샷 (ui/*-en.png, ui/*-ko.png)
+│   ├── decisions/                # ADR-001 ~ ADR-039
+│   ├── images/                   # README 스크린샷 (ui/*-en.png, ui/*-ko.png), 아키텍처 구성도와 인포그래픽 (architecture/)
 │   └── runbooks/                 # 배포, 롤백, 트러블슈팅
+├── scripts/readme-art/           # README 아키텍처 구성도와 인포그래픽 생성 스크립트 (build.sh)
 ├── CHANGELOG.md                  # Keep a Changelog 형식 (bilingual, 저장소 루트)
 └── Makefile                      # `make verify` — CDK/백엔드 검사 + 프론트엔드 타입·단위 테스트
 ```
