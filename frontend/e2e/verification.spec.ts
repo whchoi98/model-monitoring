@@ -76,6 +76,7 @@ test("parity evidence can be retried and Escape restores focus to the result", a
 // ties the tests below to those re-renders instead of to an arbitrary delay.
 async function countdownTicks(page: Page, ticks = 2) {
   const countdown = page.locator(".refresh-controls label .tabular-nums");
+  await expect(countdown).toHaveText(/^\d+s$/);  // a paused or missing countdown fails here, not as NaN in the poll below
   const start = Number.parseInt(await countdown.innerText(), 10);
   await expect.poll(async () => start - Number.parseInt(await countdown.innerText(), 10), { timeout: 10_000 }).toBeGreaterThanOrEqual(ticks);
 }
