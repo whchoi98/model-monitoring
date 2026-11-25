@@ -116,7 +116,7 @@ def _openai_seed(fm: str, region: str, spec: tuple) -> tuple[str, tuple[float, f
     return mid, (r_in, r_out, src)
 
 
-# model_id → (input, output, source_id) — CP를 뺀 활성 38채널(v2.44.0, v2.43.0은 32)
+# model_id → (input, output, source_id) — CP를 뺀 활성 44채널(v2.45.0, v2.44.0은 38, v2.43.0은 32)
 SEED: dict[str, tuple[float, float, str]] = {
     **{_claude_channel_id(fm, ch): ((g_in, g_out) if ch == "global" else (r_in, r_out)) + (offer_source_id(o),)
        for fm, (o, g_in, g_out, r_in, r_out, channels) in _CLAUDE.items() for ch in channels},
@@ -238,7 +238,7 @@ def _openai_channel_id(fm: str, region: str) -> str:
     return f"openai:{region}:{region}.{fm}" if region in ("global", "us") else f"openai:{region}:{fm}"
 
 
-# model_id → 확장 필드 — CP와 OpenAI 공식 가격을 뺀 활성 38채널(SEED와 같은 키)
+# model_id → 확장 필드 — CP와 OpenAI 공식 가격을 뺀 활성 44채널(SEED와 같은 키)
 _SEED_EXTRA: dict[str, dict[str, float | None]] = {
     **{_claude_channel_id(fm, ch): {**_extra(_CACHE_FIELDS, g if ch == "global" else r),
                                     **_long_extra(_CLAUDE_LONG.get(fm, (None, None))[0 if ch == "global" else 1])}
