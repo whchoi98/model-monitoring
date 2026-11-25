@@ -13,7 +13,7 @@ import sys
 
 LANG = sys.argv[1]
 OUT = sys.argv[2]
-VERSION = "v2.44"
+VERSION = "v2.45"
 BUNDLE = json.load(open(os.environ["AWS_ICON_BUNDLE"], encoding="utf-8"))["sets"]
 
 W, H = 1440, 1070
@@ -27,8 +27,8 @@ LINE = "#D5DBDB"
 T = {
     "title": {"en": "Amazon Bedrock LLM Monitor: production architecture",
               "ko": "Amazon Bedrock LLM Monitor 운영 아키텍처"},
-    "subtitle": {"en": f"{VERSION}, 45 monitored channels, 8 CDK stacks, deployed in ap-northeast-2 (Seoul)",
-                 "ko": f"{VERSION}, 모니터링 45채널, CDK 스택 8개, 서울 리전(ap-northeast-2) 배포"},
+    "subtitle": {"en": f"{VERSION}, 51 monitored channels, 8 CDK stacks, deployed in ap-northeast-2 (Seoul)",
+                 "ko": f"{VERSION}, 모니터링 51채널, CDK 스택 8개, 서울 리전(ap-northeast-2) 배포"},
     "users": {"en": "Users", "ko": "사용자"},
     "users_s1": {"en": "Browser", "ko": "브라우저"},
     "users_s2": {"en": "iPhone, iPad PWA", "ko": "iPhone, iPad PWA"},
@@ -46,13 +46,13 @@ T = {
     "be": {"en": "backend service", "ko": "backend 서비스"},
     "be_s": {"en": "FastAPI, port 8000, REST and SSE, chatbot", "ko": "FastAPI, 포트 8000, REST와 SSE, 챗봇"},
     "tasks": {"en": "Scheduled Fargate tasks ×7 (backend image)", "ko": "예약 Fargate 태스크 7개 (backend 이미지)"},
-    "t_auto": {"en": "every 5 min, 45 channels", "ko": "5분마다, 45채널"},
+    "t_auto": {"en": "every 5 min, 51 channels", "ko": "5분마다, 51채널"},
     "t_ins": {"en": "every 5 min, KO and EN", "ko": "5분마다, 한국어와 영어"},
-    "t_bench": {"en": "every 15 min, 21 channels", "ko": "15분마다, 21채널"},
+    "t_bench": {"en": "every 15 min, 23 channels", "ko": "15분마다, 23채널"},
     "t_parity": {"en": "every 12 h, 6 surfaces", "ko": "12시간마다, surface 6개"},
     "t_price": {"en": "every 12 h, 4 sources", "ko": "12시간마다, 출처 4곳"},
     "t_feat": {"en": "daily 17:30 UTC, 1,365 cells", "ko": "매일 17:30 UTC, 1,365셀"},
-    "t_expl": {"en": "daily 18:00 UTC, 77 examples", "ko": "매일 18:00 UTC, 예제 77건"},
+    "t_expl": {"en": "daily 18:00 UTC, 83 examples", "ko": "매일 18:00 UTC, 예제 83건"},
     "rds_s1": {"en": "PostgreSQL 16", "ko": "PostgreSQL 16"},
     "rds_s2": {"en": "t4g.micro", "ko": "t4g.micro"},
     "rds_s3": {"en": "Single-AZ", "ko": "단일 AZ"},
@@ -63,7 +63,7 @@ T = {
     "via_nat": {"en": "HTTPS egress through the NAT gateway", "ko": "NAT 게이트웨이를 거치는 HTTPS 외부 호출"},
     "br_seoul": {"en": "Amazon Bedrock Runtime", "ko": "Amazon Bedrock Runtime"},
     "br_seoul_1": {"en": "Claude Global CRIS ×7, Seoul in-region ×2", "ko": "Claude Global CRIS 7, 서울 in-region 2"},
-    "br_seoul_2": {"en": "OpenAI GPT Global CRIS ×7 (/openai/v1)", "ko": "OpenAI GPT Global CRIS 7 (/openai/v1)"},
+    "br_seoul_2": {"en": "OpenAI GPT Global CRIS ×10 (/openai/v1)", "ko": "OpenAI GPT Global CRIS 10 (/openai/v1)"},
     "br_seoul_3": {"en": "Claude Haiku 5.5: chatbot, AI insights", "ko": "Claude Haiku 5.5: 챗봇, AI 인사이트"},
     "ecr_s": {"en": "digest-pinned images", "ko": "digest 고정 이미지"},
     "ssm_l2": {"en": "Parameter Store", "ko": "Parameter Store"},
@@ -78,7 +78,7 @@ T = {
     "br_us_2": {"en": "OpenAI GPT US CRIS ×7 (/openai/v1)", "ko": "OpenAI GPT US CRIS 7 (/openai/v1)"},
     "br_us_3": {"en": "OptimizePrompt for /prompts", "ko": "/prompts의 OptimizePrompt"},
     "mantle": {"en": "Amazon Bedrock Mantle", "ko": "Amazon Bedrock Mantle"},
-    "mantle_1": {"en": "OpenAI GPT in-region ×7 (/openai/v1)", "ko": "OpenAI GPT 인리전 7 (/openai/v1)"},
+    "mantle_1": {"en": "OpenAI GPT in-region ×10 (/openai/v1)", "ko": "OpenAI GPT 인리전 10 (/openai/v1)"},
     "mantle_2": {"en": "/anthropic: parity, Claude API Features", "ko": "/anthropic: 패리티, Claude API 기능"},
     "priceapi": {"en": "Price catalogs for PricingSync", "ko": "PricingSync가 읽는 단가 카탈로그"},
     "priceapi_1": {"en": "Bedrock agreement offers,", "ko": "Bedrock 약정 오퍼,"},
@@ -87,11 +87,11 @@ T = {
     "cp": {"en": "Claude Platform on AWS", "ko": "Claude Platform on AWS"},
     "cp_1": {"en": "Anthropic Messages API ×7", "ko": "Anthropic Messages API 7"},
     "cp_2": {"en": "workspace ID header", "ko": "workspace ID 헤더"},
-    "sum_title": {"en": "45 monitored channels", "ko": "모니터링 45채널"},
+    "sum_title": {"en": "51 monitored channels", "ko": "모니터링 51채널"},
     "sum_1": {"en": "Amazon Bedrock (Claude, Nova)", "ko": "Amazon Bedrock (Claude, Nova)"},
     "sum_1s": {"en": "Global CRIS 7, US CRIS 8, Seoul in-region 2", "ko": "Global CRIS 7, US CRIS 8, 서울 in-region 2"},
     "sum_2": {"en": "OpenAI GPT on Bedrock", "ko": "OpenAI GPT on Bedrock"},
-    "sum_2s": {"en": "Mantle us-east-1 7, Global CRIS 7, US CRIS 7", "ko": "Mantle us-east-1 7, Global CRIS 7, US CRIS 7"},
+    "sum_2s": {"en": "Mantle us-east-1 10, Global CRIS 10, US CRIS 7", "ko": "Mantle us-east-1 10, Global CRIS 10, US CRIS 7"},
     "sum_3": {"en": "Claude Platform on AWS", "ko": "Claude Platform on AWS"},
     "sum_3s": {"en": "Messages API in us-east-2", "ko": "us-east-2의 Messages API"},
     "ext": {"en": "Official price pages (outside AWS)", "ko": "공식 요금 문서 (AWS 밖)"},
@@ -267,7 +267,7 @@ card(1100, 588, 290, 74, "category/Artificial-Intelligence", t("cp"), (t("cp_1")
 # 채널 요약
 add(f'<rect x="1086" y="694" width="318" height="260" rx="8" fill="#F7F8F9" stroke="{LINE}" stroke-width="1.5"/>')
 text(1102, 722, t("sum_title"), 15, INK, 700)
-rows = [("17", "sum_1", "sum_1s"), ("21", "sum_2", "sum_2s"), ("7", "sum_3", "sum_3s")]
+rows = [("17", "sum_1", "sum_1s"), ("27", "sum_2", "sum_2s"), ("7", "sum_3", "sum_3s")]
 for i, (num, k1, k2) in enumerate(rows):
     y = 762 + i * 66
     add(f'<rect x="1102" y="{y - 24}" width="46" height="46" rx="8" fill="{INK}"/>')

@@ -2,19 +2,19 @@
 <defs></defs>
 <rect x="0.0" y="0.0" width="1920.0" height="1080.0" fill="#161D26"/>
 <text x="48.0" y="76.0" font-size="42" font-weight="800" fill="#F3F3F7" letter-spacing="0.2">Amazon Bedrock LLM Monitor 한눈에 보기</text>
-<text x="48.0" y="115.0"><tspan font-size="21" font-weight="800" fill="#FF9900">Production at a Glance</tspan><tspan font-size="18" font-weight="700" fill="#A6ABBE" dx="16">운영 구성 요약, v2.44</tspan></text>
+<text x="48.0" y="115.0"><tspan font-size="21" font-weight="800" fill="#FF9900">Production at a Glance</tspan><tspan font-size="18" font-weight="700" fill="#A6ABBE" dx="16">운영 구성 요약, v2.45</tspan></text>
 <rect x="48.0" y="140.0" width="290.7" height="92.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
-<text x="70.0" y="201.0" font-size="42" font-weight="800" fill="#FF9900" data-box="48,140,291,92">45</text>
+<text x="70.0" y="201.0" font-size="42" font-weight="800" fill="#FF9900" data-box="48,140,291,92">51</text>
 <text x="136.1" y="182.0" font-size="17" font-weight="800" fill="#F3F3F7" data-box="48,140,291,92">모니터링 채널</text>
-<text x="136.1" y="204.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="48,140,291,92">Bedrock 17, GPT 21, CP 7</text>
+<text x="136.1" y="204.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="48,140,291,92">Bedrock 17, GPT 27, CP 7</text>
 <rect x="354.7" y="140.0" width="290.7" height="92.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
-<text x="376.7" y="201.0" font-size="42" font-weight="800" fill="#FF9900" data-box="355,140,291,92">15</text>
+<text x="376.7" y="201.0" font-size="42" font-weight="800" fill="#FF9900" data-box="355,140,291,92">18</text>
 <text x="442.8" y="182.0" font-size="17" font-weight="800" fill="#F3F3F7" data-box="355,140,291,92">모델 패밀리</text>
-<text x="442.8" y="204.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="355,140,291,92">Claude 7, GPT 7, Nova 1</text>
+<text x="442.8" y="204.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="355,140,291,92">Claude 7, GPT 10, Nova 1</text>
 <rect x="661.3" y="140.0" width="290.7" height="92.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
 <text x="683.3" y="201.0" font-size="42" font-weight="800" fill="#FF9900" data-box="661,140,291,92">5분</text>
 <text x="761.6" y="182.0" font-size="17" font-weight="800" fill="#F3F3F7" data-box="661,140,291,92">프로브 주기</text>
-<text x="761.6" y="204.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="661,140,291,92">사이클마다 45채널 호출</text>
+<text x="761.6" y="204.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="661,140,291,92">사이클마다 51채널 호출</text>
 <rect x="968.0" y="140.0" width="290.7" height="92.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
 <text x="990.0" y="201.0" font-size="42" font-weight="800" fill="#FF9900" data-box="968,140,291,92">7</text>
 <text x="1030.0" y="182.0" font-size="17" font-weight="800" fill="#F3F3F7" data-box="968,140,291,92">예약 태스크</text>
@@ -30,17 +30,17 @@
 <rect x="48.0" y="252.0" width="820.0" height="792.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
 <circle cx="82.0" cy="285.0" r="15.0" fill="#E2E4EC"/>
 <text x="82.0" y="290.6" font-size="16" font-weight="800" fill="#161D26" text-anchor="middle">1</text>
-<text x="106.0" y="292.0" data-box="48,252,820,792"><tspan font-size="21" font-weight="800" fill="#F3F3F7" letter-spacing="0.2">모델 패밀리별 채널</tspan><tspan font-size="15" font-weight="700" fill="#A6ABBE" dx="14">패밀리 15개, 호출 경로 4종, 채널 45개</tspan></text>
-<rect x="72.0" y="322.0" width="288.6" height="34.0" rx="6.0" fill="#FF9900"/>
-<text x="216.3" y="345.5" font-size="17" font-weight="800" fill="#161D26" text-anchor="middle">17</text>
-<rect x="363.6" y="322.0" width="357.3" height="34.0" rx="6.0" fill="#41B3FF"/>
-<text x="542.3" y="345.5" font-size="17" font-weight="800" fill="#161D26" text-anchor="middle">21</text>
-<rect x="723.9" y="322.0" width="117.1" height="34.0" rx="6.0" fill="#AD5CFF"/>
-<text x="782.5" y="345.5" font-size="17" font-weight="800" fill="#161D26" text-anchor="middle">7</text>
+<text x="106.0" y="292.0" data-box="48,252,820,792"><tspan font-size="21" font-weight="800" fill="#F3F3F7" letter-spacing="0.2">모델 패밀리별 채널</tspan><tspan font-size="15" font-weight="700" fill="#A6ABBE" dx="14">패밀리 18개, 호출 경로 4종, 채널 51개</tspan></text>
+<rect x="72.0" y="322.0" width="254.3" height="34.0" rx="6.0" fill="#FF9900"/>
+<text x="199.2" y="345.5" font-size="17" font-weight="800" fill="#161D26" text-anchor="middle">17</text>
+<rect x="329.3" y="322.0" width="405.7" height="34.0" rx="6.0" fill="#41B3FF"/>
+<text x="532.2" y="345.5" font-size="17" font-weight="800" fill="#161D26" text-anchor="middle">27</text>
+<rect x="738.0" y="322.0" width="103.0" height="34.0" rx="6.0" fill="#AD5CFF"/>
+<text x="789.5" y="345.5" font-size="17" font-weight="800" fill="#161D26" text-anchor="middle">7</text>
 <circle cx="78.0" cy="373.0" r="6.0" fill="#FF9900"/>
 <text x="90.0" y="378.0" font-size="13" font-weight="700" fill="#E2E4EC" data-box="48,252,820,792">Amazon Bedrock (Claude, Nova) 17</text>
 <circle cx="335.3" cy="373.0" r="6.0" fill="#41B3FF"/>
-<text x="347.3" y="378.0" font-size="13" font-weight="700" fill="#E2E4EC" data-box="48,252,820,792">OpenAI GPT on Bedrock 21</text>
+<text x="347.3" y="378.0" font-size="13" font-weight="700" fill="#E2E4EC" data-box="48,252,820,792">OpenAI GPT on Bedrock 27</text>
 <circle cx="542.2" cy="373.0" r="6.0" fill="#AD5CFF"/>
 <text x="554.2" y="378.0" font-size="13" font-weight="700" fill="#E2E4EC" data-box="48,252,820,792">Claude Platform on AWS 7</text>
 <text x="363.5" y="414.0" font-size="12.5" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">Claude Platform</text>
@@ -55,133 +55,157 @@
 <rect x="72.0" y="444.0" width="772.0" height="20.0" rx="6.0" fill="#3B4757" fill-opacity="0.450"/>
 <text x="82.0" y="458.5" font-size="12.5" font-weight="800" fill="#E2E4EC" data-box="48,252,820,792">Anthropic Claude</text>
 <text x="812.0" y="458.5" font-size="12.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">23</text>
-<text x="82.0" y="486.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Fable 5.2</text>
-<circle cx="363.5" cy="481.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="481.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="481.0" r="7.0" fill="#FF9900"/>
-<line x1="715.5" y1="481.0" x2="725.5" y2="481.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<text x="812.0" y="486.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="496.0" x2="844.0" y2="496.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="516.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Fable 5.1</text>
-<circle cx="363.5" cy="511.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="511.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="511.0" r="7.0" fill="#FF9900"/>
-<line x1="715.5" y1="511.0" x2="725.5" y2="511.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<text x="812.0" y="516.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="526.0" x2="844.0" y2="526.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="546.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Opus 5.5</text>
-<circle cx="363.5" cy="541.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="541.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="541.0" r="7.0" fill="#FF9900"/>
-<line x1="715.5" y1="541.0" x2="725.5" y2="541.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<text x="812.0" y="546.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="556.0" x2="844.0" y2="556.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="576.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Opus 5</text>
-<circle cx="363.5" cy="571.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="571.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="571.0" r="7.0" fill="#FF9900"/>
-<rect x="701.6" y="560.0" width="37.8" height="22.0" rx="11.0" fill="#FF9900" fill-opacity="0.140" stroke="#FF9900" stroke-width="1.1"/>
-<text x="720.5" y="575.3" font-size="12" font-weight="800" fill="#FF9900" text-anchor="middle" data-box="48,252,820,792">서울</text>
-<text x="812.0" y="576.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">4</text>
-<line x1="72.0" y1="586.0" x2="844.0" y2="586.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="606.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Sonnet 5.5</text>
-<circle cx="363.5" cy="601.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="601.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="601.0" r="7.0" fill="#FF9900"/>
-<line x1="715.5" y1="601.0" x2="725.5" y2="601.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<text x="812.0" y="606.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<text x="82.0" y="483.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Fable 5.2</text>
+<circle cx="363.5" cy="478.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="478.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="478.5" r="7.0" fill="#FF9900"/>
+<line x1="715.5" y1="478.5" x2="725.5" y2="478.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<text x="812.0" y="483.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="491.0" x2="844.0" y2="491.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="508.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Fable 5.1</text>
+<circle cx="363.5" cy="503.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="503.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="503.5" r="7.0" fill="#FF9900"/>
+<line x1="715.5" y1="503.5" x2="725.5" y2="503.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<text x="812.0" y="508.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="516.0" x2="844.0" y2="516.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="533.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Opus 5.5</text>
+<circle cx="363.5" cy="528.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="528.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="528.5" r="7.0" fill="#FF9900"/>
+<line x1="715.5" y1="528.5" x2="725.5" y2="528.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<text x="812.0" y="533.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="541.0" x2="844.0" y2="541.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="558.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Opus 5</text>
+<circle cx="363.5" cy="553.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="553.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="553.5" r="7.0" fill="#FF9900"/>
+<rect x="701.6" y="542.5" width="37.8" height="22.0" rx="11.0" fill="#FF9900" fill-opacity="0.140" stroke="#FF9900" stroke-width="1.1"/>
+<text x="720.5" y="557.8" font-size="12" font-weight="800" fill="#FF9900" text-anchor="middle" data-box="48,252,820,792">서울</text>
+<text x="812.0" y="558.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">4</text>
+<line x1="72.0" y1="566.0" x2="844.0" y2="566.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="583.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Sonnet 5.5</text>
+<circle cx="363.5" cy="578.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="578.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="578.5" r="7.0" fill="#FF9900"/>
+<line x1="715.5" y1="578.5" x2="725.5" y2="578.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<text x="812.0" y="583.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="591.0" x2="844.0" y2="591.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="608.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Sonnet 5</text>
+<circle cx="363.5" cy="603.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="603.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="603.5" r="7.0" fill="#FF9900"/>
+<rect x="701.6" y="592.5" width="37.8" height="22.0" rx="11.0" fill="#FF9900" fill-opacity="0.140" stroke="#FF9900" stroke-width="1.1"/>
+<text x="720.5" y="607.8" font-size="12" font-weight="800" fill="#FF9900" text-anchor="middle" data-box="48,252,820,792">서울</text>
+<text x="812.0" y="608.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">4</text>
 <line x1="72.0" y1="616.0" x2="844.0" y2="616.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="636.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Sonnet 5</text>
-<circle cx="363.5" cy="631.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="631.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="631.0" r="7.0" fill="#FF9900"/>
-<rect x="701.6" y="620.0" width="37.8" height="22.0" rx="11.0" fill="#FF9900" fill-opacity="0.140" stroke="#FF9900" stroke-width="1.1"/>
-<text x="720.5" y="635.3" font-size="12" font-weight="800" fill="#FF9900" text-anchor="middle" data-box="48,252,820,792">서울</text>
-<text x="812.0" y="636.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">4</text>
-<line x1="72.0" y1="646.0" x2="844.0" y2="646.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="666.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Haiku 5.5</text>
-<circle cx="363.5" cy="661.0" r="7.0" fill="#AD5CFF"/>
-<circle cx="482.5" cy="661.0" r="7.0" fill="#FF9900"/>
-<circle cx="601.5" cy="661.0" r="7.0" fill="#FF9900"/>
-<line x1="715.5" y1="661.0" x2="725.5" y2="661.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<text x="812.0" y="666.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="676.0" x2="844.0" y2="676.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<rect x="72.0" y="678.0" width="772.0" height="20.0" rx="6.0" fill="#3B4757" fill-opacity="0.450"/>
-<text x="82.0" y="692.5" font-size="12.5" font-weight="800" fill="#E2E4EC" data-box="48,252,820,792">Amazon Nova</text>
-<text x="812.0" y="692.5" font-size="12.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">1</text>
-<text x="82.0" y="720.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Nova 2.0 Lite</text>
-<line x1="358.5" y1="715.0" x2="368.5" y2="715.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<line x1="477.5" y1="715.0" x2="487.5" y2="715.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="601.5" cy="715.0" r="7.0" fill="#FF9900"/>
-<line x1="715.5" y1="715.0" x2="725.5" y2="715.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<text x="812.0" y="720.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">1</text>
-<line x1="72.0" y1="730.0" x2="844.0" y2="730.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<rect x="72.0" y="732.0" width="772.0" height="20.0" rx="6.0" fill="#3B4757" fill-opacity="0.450"/>
-<text x="82.0" y="746.5" font-size="12.5" font-weight="800" fill="#E2E4EC" data-box="48,252,820,792">OpenAI GPT</text>
-<text x="812.0" y="746.5" font-size="12.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">21</text>
-<text x="82.0" y="774.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.2 Astra</text>
-<line x1="358.5" y1="769.0" x2="368.5" y2="769.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="769.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="769.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="758.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="773.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="774.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="784.0" x2="844.0" y2="784.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="804.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.2 Sol</text>
-<line x1="358.5" y1="799.0" x2="368.5" y2="799.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="799.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="799.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="788.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="803.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="804.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<text x="82.0" y="633.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Claude Haiku 5.5</text>
+<circle cx="363.5" cy="628.5" r="7.0" fill="#AD5CFF"/>
+<circle cx="482.5" cy="628.5" r="7.0" fill="#FF9900"/>
+<circle cx="601.5" cy="628.5" r="7.0" fill="#FF9900"/>
+<line x1="715.5" y1="628.5" x2="725.5" y2="628.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<text x="812.0" y="633.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="641.0" x2="844.0" y2="641.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<rect x="72.0" y="643.0" width="772.0" height="20.0" rx="6.0" fill="#3B4757" fill-opacity="0.450"/>
+<text x="82.0" y="657.5" font-size="12.5" font-weight="800" fill="#E2E4EC" data-box="48,252,820,792">Amazon Nova</text>
+<text x="812.0" y="657.5" font-size="12.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">1</text>
+<text x="82.0" y="682.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">Nova 2.0 Lite</text>
+<line x1="358.5" y1="677.5" x2="368.5" y2="677.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="477.5" y1="677.5" x2="487.5" y2="677.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="601.5" cy="677.5" r="7.0" fill="#FF9900"/>
+<line x1="715.5" y1="677.5" x2="725.5" y2="677.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<text x="812.0" y="682.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">1</text>
+<line x1="72.0" y1="690.0" x2="844.0" y2="690.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<rect x="72.0" y="692.0" width="772.0" height="20.0" rx="6.0" fill="#3B4757" fill-opacity="0.450"/>
+<text x="82.0" y="706.5" font-size="12.5" font-weight="800" fill="#E2E4EC" data-box="48,252,820,792">OpenAI GPT</text>
+<text x="812.0" y="706.5" font-size="12.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">27</text>
+<text x="82.0" y="731.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.2 Astra</text>
+<line x1="358.5" y1="726.5" x2="368.5" y2="726.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="726.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="726.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="715.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="730.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="731.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="739.0" x2="844.0" y2="739.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="756.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.2 Sol</text>
+<line x1="358.5" y1="751.5" x2="368.5" y2="751.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="751.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="751.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="740.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="755.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="756.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="764.0" x2="844.0" y2="764.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="781.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.1 Sol</text>
+<line x1="358.5" y1="776.5" x2="368.5" y2="776.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="776.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="776.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="765.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="780.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="781.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="789.0" x2="844.0" y2="789.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="806.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.1 Terra</text>
+<line x1="358.5" y1="801.5" x2="368.5" y2="801.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="801.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="801.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="790.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="805.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="806.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
 <line x1="72.0" y1="814.0" x2="844.0" y2="814.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="834.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.1 Sol</text>
-<line x1="358.5" y1="829.0" x2="368.5" y2="829.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="829.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="829.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="818.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="833.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="834.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="844.0" x2="844.0" y2="844.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="864.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6.1 Terra</text>
-<line x1="358.5" y1="859.0" x2="368.5" y2="859.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="859.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="859.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="848.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="863.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="864.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="874.0" x2="844.0" y2="874.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="894.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6 Astra</text>
-<line x1="358.5" y1="889.0" x2="368.5" y2="889.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="889.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="889.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="878.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="893.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="894.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="904.0" x2="844.0" y2="904.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="924.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6 Sol</text>
-<line x1="358.5" y1="919.0" x2="368.5" y2="919.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="919.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="919.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="908.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="923.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="924.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
-<line x1="72.0" y1="934.0" x2="844.0" y2="934.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
-<text x="82.0" y="954.0" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6 Luna</text>
-<line x1="358.5" y1="949.0" x2="368.5" y2="949.0" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
-<circle cx="482.5" cy="949.0" r="7.0" fill="#41B3FF"/>
-<circle cx="601.5" cy="949.0" r="7.0" fill="#41B3FF"/>
-<rect x="684.4" y="938.0" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
-<text x="720.5" y="953.3" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
-<text x="812.0" y="954.0" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<text x="82.0" y="831.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6 Astra</text>
+<line x1="358.5" y1="826.5" x2="368.5" y2="826.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="826.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="826.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="815.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="830.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="831.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="839.0" x2="844.0" y2="839.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="856.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6 Sol</text>
+<line x1="358.5" y1="851.5" x2="368.5" y2="851.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="851.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="851.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="840.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="855.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="856.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="864.0" x2="844.0" y2="864.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="881.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 6 Luna</text>
+<line x1="358.5" y1="876.5" x2="368.5" y2="876.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="876.5" r="7.0" fill="#41B3FF"/>
+<circle cx="601.5" cy="876.5" r="7.0" fill="#41B3FF"/>
+<rect x="684.4" y="865.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="880.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="881.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">3</text>
+<line x1="72.0" y1="889.0" x2="844.0" y2="889.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="906.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 5.6 Sol</text>
+<line x1="358.5" y1="901.5" x2="368.5" y2="901.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="901.5" r="7.0" fill="#41B3FF"/>
+<line x1="596.5" y1="901.5" x2="606.5" y2="901.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="684.4" y="890.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="905.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="906.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">2</text>
+<line x1="72.0" y1="914.0" x2="844.0" y2="914.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="931.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 5.6 Terra</text>
+<line x1="358.5" y1="926.5" x2="368.5" y2="926.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="926.5" r="7.0" fill="#41B3FF"/>
+<line x1="596.5" y1="926.5" x2="606.5" y2="926.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="684.4" y="915.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="930.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="931.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">2</text>
+<line x1="72.0" y1="939.0" x2="844.0" y2="939.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
+<text x="82.0" y="956.5" font-size="14.5" font-weight="700" fill="#F3F3F7" data-box="48,252,820,792">GPT 5.6 Luna</text>
+<line x1="358.5" y1="951.5" x2="368.5" y2="951.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<circle cx="482.5" cy="951.5" r="7.0" fill="#41B3FF"/>
+<line x1="596.5" y1="951.5" x2="606.5" y2="951.5" stroke="#3B4757" stroke-width="1.6" stroke-linecap="round"/>
+<rect x="684.4" y="940.5" width="72.3" height="22.0" rx="11.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.1"/>
+<text x="720.5" y="955.8" font-size="12" font-weight="800" fill="#41B3FF" text-anchor="middle" data-box="48,252,820,792">us-east-1</text>
+<text x="812.0" y="956.5" font-size="14.5" font-weight="800" fill="#E2E4EC" text-anchor="middle" data-box="48,252,820,792">2</text>
 <line x1="72.0" y1="964.0" x2="844.0" y2="964.0" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
 <rect x="72.0" y="968.0" width="772.0" height="34.0" rx="8.0" fill="#FF9900" fill-opacity="0.100" stroke="#FF9900" stroke-width="1.1"/>
 <text x="82.0" y="990.5" font-size="14.5" font-weight="800" fill="#F3F3F7" data-box="48,252,820,792">채널 합계</text>
 <text x="363.5" y="990.5" font-size="15" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">7</text>
-<text x="482.5" y="990.5" font-size="15" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">14</text>
+<text x="482.5" y="990.5" font-size="15" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">17</text>
 <text x="601.5" y="990.5" font-size="15" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">15</text>
-<text x="720.5" y="990.5" font-size="15" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">9</text>
-<text x="812.0" y="991.5" font-size="18" font-weight="800" fill="#FF9900" text-anchor="middle" data-box="48,252,820,792">45</text>
+<text x="720.5" y="990.5" font-size="15" font-weight="800" fill="#F3F3F7" text-anchor="middle" data-box="48,252,820,792">12</text>
+<text x="812.0" y="991.5" font-size="18" font-weight="800" fill="#FF9900" text-anchor="middle" data-box="48,252,820,792">51</text>
 <text x="72.0" y="1024.0" font-size="12.5" font-weight="700" fill="#A6ABBE" data-box="48,252,820,792">In-Region: Claude는 서울 온디맨드, GPT는 Bedrock Mantle us-east-1</text>
 <rect x="888.0" y="252.0" width="984.0" height="392.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
 <circle cx="922.0" cy="285.0" r="15.0" fill="#E2E4EC"/>
@@ -192,9 +216,9 @@
 <rect x="912.0" y="325.3" width="158.0" height="30.0" rx="12.0" fill="#FF9900" fill-opacity="0.140" stroke="#FF9900" stroke-width="1.3"/>
 <text x="991.0" y="345.3" font-size="14" font-weight="800" fill="#F3F3F7" text-anchor="middle">5분</text>
 <text x="1088.0" y="345.8" font-size="16" font-weight="800" fill="#F3F3F7" data-box="888,252,984,392">AutoProber</text>
-<text x="1238.0" y="345.3" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">45채널에 워크로드 1종 스트리밍 호출</text>
+<text x="1238.0" y="345.3" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">51채널에 워크로드 1종 스트리밍 호출</text>
 <rect x="1749.5" y="328.3" width="98.5" height="24.0" rx="12.0" fill="#8CC63F" fill-opacity="0.140" stroke="#8CC63F" stroke-width="1.1"/>
-<text x="1798.7" y="345.0" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">사이클당 45행</text>
+<text x="1798.7" y="345.0" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">사이클당 51행</text>
 <line x1="912.0" y1="362.6" x2="1848.0" y2="362.6" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
 <rect x="912.0" y="369.9" width="158.0" height="30.0" rx="12.0" fill="#FF9900" fill-opacity="0.140" stroke="#FF9900" stroke-width="1.3"/>
 <text x="991.0" y="389.9" font-size="14" font-weight="800" fill="#F3F3F7" text-anchor="middle">5분</text>
@@ -206,23 +230,23 @@
 <rect x="912.0" y="414.4" width="158.0" height="30.0" rx="12.0" fill="#FBD332" fill-opacity="0.140" stroke="#FBD332" stroke-width="1.3"/>
 <text x="991.0" y="434.5" font-size="14" font-weight="800" fill="#F3F3F7" text-anchor="middle">15분</text>
 <text x="1088.0" y="434.9" font-size="16" font-weight="800" fill="#F3F3F7" data-box="888,252,984,392">GptBench</text>
-<text x="1238.0" y="434.4" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">GPT 21채널, 채널당 10회 TTFB와 TTFT 측정</text>
+<text x="1238.0" y="434.4" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">GPT 23채널, 채널당 10회 TTFB와 TTFT 측정</text>
 <rect x="1741.4" y="417.4" width="106.6" height="24.0" rx="12.0" fill="#8CC63F" fill-opacity="0.140" stroke="#8CC63F" stroke-width="1.1"/>
-<text x="1794.7" y="434.1" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">사이클당 210행</text>
+<text x="1794.7" y="434.1" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">사이클당 230행</text>
 <line x1="912.0" y1="451.7" x2="1848.0" y2="451.7" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
 <rect x="912.0" y="459.0" width="158.0" height="30.0" rx="12.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.3"/>
 <text x="991.0" y="479.0" font-size="14" font-weight="800" fill="#F3F3F7" text-anchor="middle">12시간</text>
 <text x="1088.0" y="479.5" font-size="16" font-weight="800" fill="#F3F3F7" data-box="888,252,984,392">ParityRun</text>
 <text x="1238.0" y="479.0" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">모델별 API surface 6개, 피처 20개 실행 증거 수집</text>
 <rect x="1773.1" y="462.0" width="74.9" height="24.0" rx="12.0" fill="#8CC63F" fill-opacity="0.140" stroke="#8CC63F" stroke-width="1.1"/>
-<text x="1810.6" y="478.7" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">45개 모델</text>
+<text x="1810.6" y="478.7" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">51개 모델</text>
 <line x1="912.0" y1="496.3" x2="1848.0" y2="496.3" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
 <rect x="912.0" y="503.6" width="158.0" height="30.0" rx="12.0" fill="#41B3FF" fill-opacity="0.140" stroke="#41B3FF" stroke-width="1.3"/>
 <text x="991.0" y="523.6" font-size="14" font-weight="800" fill="#F3F3F7" text-anchor="middle">12시간</text>
 <text x="1088.0" y="524.1" font-size="16" font-weight="800" fill="#F3F3F7" data-box="888,252,984,392">PricingSync</text>
 <text x="1238.0" y="523.6" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">공식 출처 4곳의 단가 동기화, 50% 초과 변경은 승인 대기</text>
 <rect x="1746.2" y="506.6" width="101.8" height="24.0" rx="12.0" fill="#8CC63F" fill-opacity="0.140" stroke="#8CC63F" stroke-width="1.1"/>
-<text x="1797.1" y="523.3" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">52개 단가 채널</text>
+<text x="1797.1" y="523.3" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">61개 단가 채널</text>
 <line x1="912.0" y1="540.9" x2="1848.0" y2="540.9" stroke="#2E3947" stroke-width="1" stroke-linecap="round"/>
 <rect x="912.0" y="548.1" width="158.0" height="30.0" rx="12.0" fill="#AD5CFF" fill-opacity="0.140" stroke="#AD5CFF" stroke-width="1.3"/>
 <text x="991.0" y="568.2" font-size="14" font-weight="800" fill="#F3F3F7" text-anchor="middle">매일 17:30 UTC</text>
@@ -236,7 +260,7 @@
 <text x="1088.0" y="613.2" font-size="16" font-weight="800" fill="#F3F3F7" data-box="888,252,984,392">ExplorerVerify</text>
 <text x="1238.0" y="612.7" font-size="14.5" font-weight="700" fill="#E2E4EC" data-box="888,252,984,392">모델 탐색 코드 예제 실행 검증</text>
 <rect x="1773.1" y="595.7" width="74.9" height="24.0" rx="12.0" fill="#8CC63F" fill-opacity="0.140" stroke="#8CC63F" stroke-width="1.1"/>
-<text x="1810.6" y="612.4" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">예제 77건</text>
+<text x="1810.6" y="612.4" font-size="13" font-weight="800" fill="#8CC63F" text-anchor="middle" data-box="888,252,984,392">예제 83건</text>
 <rect x="888.0" y="664.0" width="530.0" height="380.0" rx="14.0" fill="#1C2430" stroke="#2E3947" stroke-width="1.2"/>
 <circle cx="922.0" cy="697.0" r="15.0" fill="#E2E4EC"/>
 <text x="922.0" y="702.6" font-size="16" font-weight="800" fill="#161D26" text-anchor="middle">3</text>
@@ -320,5 +344,5 @@
 <image href="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iODBweCIgaGVpZ2h0PSI4MHB4IiB2aWV3Qm94PSIwIDAgODAgODAiIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayI+CiAgICA8dGl0bGU+SWNvbi1BcmNoaXRlY3R1cmUvNjQvQXJjaF9BbWF6b24tQmVkcm9ja182NDwvdGl0bGU+CiAgICA8ZyBpZD0iSWNvbi1BcmNoaXRlY3R1cmUvNjQvQXJjaF9BbWF6b24tQmVkcm9ja182NCIgc3Ryb2tlPSJub25lIiBzdHJva2Utd2lkdGg9IjEiIGZpbGw9Im5vbmUiIGZpbGwtcnVsZT0iZXZlbm9kZCI+CiAgICAgICAgPGcgaWQ9Ikljb24tQXJjaGl0ZWN0dXJlLUJHLzY0L01hY2hpbmUtTGVhcm5pbmciIGZpbGw9IiMwMUE4OEQiPgogICAgICAgICAgICA8cmVjdCBpZD0iUmVjdGFuZ2xlIiB4PSIwIiB5PSIwIiB3aWR0aD0iODAiIGhlaWdodD0iODAiPjwvcmVjdD4KICAgICAgICA8L2c+CiAgICAgICAgPGcgaWQ9Ikljb24tU2VydmljZS82NC9BbWF6b24tQmVkcm9ja182NCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTIuMDAwMDAwLCAxMi4wMDAwMDApIiBmaWxsPSIjRkZGRkZGIj4KICAgICAgICAgICAgPHBhdGggZD0iTTUyLDI2Ljk5OTg5MTggQzUwLjg5NywyNi45OTk4OTE4IDUwLDI2LjEwMjg5MTggNTAsMjQuOTk5ODkxOCBDNTAsMjMuODk2ODkxOCA1MC44OTcsMjIuOTk5ODkxOCA1MiwyMi45OTk4OTE4IEM1My4xMDMsMjIuOTk5ODkxOCA1NCwyMy44OTY4OTE4IDU0LDI0Ljk5OTg5MTggQzU0LDI2LjEwMjg5MTggNTMuMTAzLDI2Ljk5OTg5MTggNTIsMjYuOTk5ODkxOCBMNTIsMjYuOTk5ODkxOCBaIE0yMC4xMTMsNTMuOTA3ODkxOCBMMTYuODY1LDUyLjAxMzg5MTggTDIzLjUzLDQ3Ljg0Nzg5MTggTDIyLjQ3LDQ2LjE1MTg5MTggTDE0LjkxMyw1MC44NzQ4OTE4IEw5LDQ3LjQyNTg5MTggTDksMzguNTM0ODkxOCBMMTQuNTU1LDM0LjgzMTg5MTggTDEzLjQ0NSwzMy4xNjc4OTE4IEw3Ljk1OSwzNi44MjQ4OTE4IEwyLDMzLjQxOTg5MTggTDIsMjguNTc5ODkxOCBMOC40OTYsMjQuODY3ODkxOCBMNy41MDQsMjMuMTMxODkxOCBMMiwyNi4yNzY4OTE4IEwyLDIyLjU3OTg5MTggTDgsMTkuMTUxODkxOCBMMTQsMjIuNTc5ODkxOCBMMTQsMjYuNDMzODkxOCBMOS40ODUsMjkuMTQyODkxOCBMMTAuNTE1LDMwLjg1Njg5MTggTDE1LDI4LjE2NTg5MTggTDE5LjQ4NSwzMC44NTY4OTE4IEwyMC41MTUsMjkuMTQyODkxOCBMMTYsMjYuNDMzODkxOCBMMTYsMjIuNTM0ODkxOCBMMjEuNTU1LDE4LjgzMTg5MTggQzIxLjgzMywxOC42NDU4OTE4IDIyLDE4LjMzMzg5MTggMjIsMTcuOTk5ODkxOCBMMjIsMTAuOTk5ODkxOCBMMjAsMTAuOTk5ODkxOCBMMjAsMTcuNDY0ODkxOCBMMTQuOTU5LDIwLjgyNDg5MTggTDksMTcuNDE5ODkxOCBMOSw4LjU3Mzg5MTgxIEwxNCw1LjY1Nzg5MTgxIEwxNCwxMy45OTk4OTE4IEwxNiwxMy45OTk4OTE4IEwxNiw0LjQ5MDg5MTgxIEwyMC4xMTMsMi4wOTE4OTE4MSBMMjgsNC43MjA4OTE4MSBMMjgsMzMuNDMzODkxOCBMMTMuNDg1LDQyLjE0Mjg5MTggTDE0LjUxNSw0My44NTY4OTE4IEwyOCwzNS43NjU4OTE4IEwyOCw1MS4yNzg4OTE4IEwyMC4xMTMsNTMuOTA3ODkxOCBaIE01MCwzNy45OTk4OTE4IEM1MCwzOS4xMDI4OTE4IDQ5LjEwMywzOS45OTk4OTE4IDQ4LDM5Ljk5OTg5MTggQzQ2Ljg5NywzOS45OTk4OTE4IDQ2LDM5LjEwMjg5MTggNDYsMzcuOTk5ODkxOCBDNDYsMzYuODk2ODkxOCA0Ni44OTcsMzUuOTk5ODkxOCA0OCwzNS45OTk4OTE4IEM0OS4xMDMsMzUuOTk5ODkxOCA1MCwzNi44OTY4OTE4IDUwLDM3Ljk5OTg5MTggTDUwLDM3Ljk5OTg5MTggWiBNNDAsNDcuOTk5ODkxOCBDNDAsNDkuMTAyODkxOCAzOS4xMDMsNDkuOTk5ODkxOCAzOCw0OS45OTk4OTE4IEMzNi44OTcsNDkuOTk5ODkxOCAzNiw0OS4xMDI4OTE4IDM2LDQ3Ljk5OTg5MTggQzM2LDQ2Ljg5Njg5MTggMzYuODk3LDQ1Ljk5OTg5MTggMzgsNDUuOTk5ODkxOCBDMzkuMTAzLDQ1Ljk5OTg5MTggNDAsNDYuODk2ODkxOCA0MCw0Ny45OTk4OTE4IEw0MCw0Ny45OTk4OTE4IFogTTM5LDcuOTk5ODkxODEgQzM5LDYuODk2ODkxODEgMzkuODk3LDUuOTk5ODkxODEgNDEsNS45OTk4OTE4MSBDNDIuMTAzLDUuOTk5ODkxODEgNDMsNi44OTY4OTE4MSA0Myw3Ljk5OTg5MTgxIEM0Myw5LjEwMjg5MTgxIDQyLjEwMyw5Ljk5OTg5MTgxIDQxLDkuOTk5ODkxODEgQzM5Ljg5Nyw5Ljk5OTg5MTgxIDM5LDkuMTAyODkxODEgMzksNy45OTk4OTE4MSBMMzksNy45OTk4OTE4MSBaIE01MiwyMC45OTk4OTE4IEM1MC4xNDEsMjAuOTk5ODkxOCA0OC41ODksMjIuMjc5ODkxOCA0OC4xNDIsMjMuOTk5ODkxOCBMMzAsMjMuOTk5ODkxOCBMMzAsMTguOTk5ODkxOCBMNDEsMTguOTk5ODkxOCBDNDEuNTUzLDE4Ljk5OTg5MTggNDIsMTguNTUxODkxOCA0MiwxNy45OTk4OTE4IEw0MiwxMS44NTc4OTE4IEM0My43MiwxMS40MTA4OTE4IDQ1LDkuODU3ODkxODEgNDUsNy45OTk4OTE4MSBDNDUsNS43OTM4OTE4MSA0My4yMDYsMy45OTk4OTE4MSA0MSwzLjk5OTg5MTgxIEMzOC43OTQsMy45OTk4OTE4MSAzNyw1Ljc5Mzg5MTgxIDM3LDcuOTk5ODkxODEgQzM3LDkuODU3ODkxODEgMzguMjgsMTEuNDEwODkxOCA0MCwxMS44NTc4OTE4IEw0MCwxNi45OTk4OTE4IEwzMCwxNi45OTk4OTE4IEwzMCwzLjk5OTg5MTgxIEMzMCwzLjU2ODg5MTgxIDI5LjcyNSwzLjE4Nzg5MTgxIDI5LjMxNiwzLjA1MDg5MTgxIEwyMC4zMTYsMC4wNTA4OTE4MTEgQzIwLjA0MiwtMC4wMzkxMDgxODkgMTkuNzQ0LC0wLjAwOTEwODE4OTA0IDE5LjQ5NiwwLjEzNTg5MTgxMSBMNy40OTYsNy4xMzU4OTE4MSBDNy4xODgsNy4zMTQ4OTE4MSA3LDcuNjQ0ODkxODEgNyw3Ljk5OTg5MTgxIEw3LDE3LjQxOTg5MTggTDAuNTA0LDIxLjEzMTg5MTggQzAuMTkyLDIxLjMwOTg5MTggMCwyMS42NDA4OTE4IDAsMjEuOTk5ODkxOCBMMCwzMy45OTk4OTE4IEMwLDM0LjM1ODg5MTggMC4xOTIsMzQuNjg5ODkxOCAwLjUwNCwzNC44Njc4OTE4IEw3LDM4LjU3OTg5MTggTDcsNDcuOTk5ODkxOCBDNyw0OC4zNTQ4OTE4IDcuMTg4LDQ4LjY4NDg5MTggNy40OTYsNDguODYzODkxOCBMMTkuNDk2LDU1Ljg2Mzg5MTggQzE5LjY1LDU1Ljk1Mzg5MTggMTkuODI1LDU1Ljk5OTg5MTggMjAsNTUuOTk5ODkxOCBDMjAuMTA2LDU1Ljk5OTg5MTggMjAuMjEzLDU1Ljk4Mjg5MTggMjAuMzE2LDU1Ljk0ODg5MTggTDI5LjMxNiw1Mi45NDg4OTE4IEMyOS43MjUsNTIuODExODkxOCAzMCw1Mi40MzA4OTE4IDMwLDUxLjk5OTg5MTggTDMwLDM5Ljk5OTg5MTggTDM3LDM5Ljk5OTg5MTggTDM3LDQ0LjE0MTg5MTggQzM1LjI4LDQ0LjU4ODg5MTggMzQsNDYuMTQxODkxOCAzNCw0Ny45OTk4OTE4IEMzNCw1MC4yMDU4OTE4IDM1Ljc5NCw1MS45OTk4OTE4IDM4LDUxLjk5OTg5MTggQzQwLjIwNiw1MS45OTk4OTE4IDQyLDUwLjIwNTg5MTggNDIsNDcuOTk5ODkxOCBDNDIsNDYuMTQxODkxOCA0MC43Miw0NC41ODg4OTE4IDM5LDQ0LjE0MTg5MTggTDM5LDM4Ljk5OTg5MTggQzM5LDM4LjQ0Nzg5MTggMzguNTUzLDM3Ljk5OTg5MTggMzgsMzcuOTk5ODkxOCBMMzAsMzcuOTk5ODkxOCBMMzAsMzIuOTk5ODkxOCBMNDIuNSwzMi45OTk4OTE4IEw0NC42MzgsMzUuODQ5ODkxOCBDNDQuMjM5LDM2LjQ3MTg5MTggNDQsMzcuMjA2ODkxOCA0NCwzNy45OTk4OTE4IEM0NCw0MC4yMDU4OTE4IDQ1Ljc5NCw0MS45OTk4OTE4IDQ4LDQxLjk5OTg5MTggQzUwLjIwNiw0MS45OTk4OTE4IDUyLDQwLjIwNTg5MTggNTIsMzcuOTk5ODkxOCBDNTIsMzUuNzkzODkxOCA1MC4yMDYsMzMuOTk5ODkxOCA0OCwzMy45OTk4OTE4IEM0Ny4zMTYsMzMuOTk5ODkxOCA0Ni42ODIsMzQuMTg3ODkxOCA0Ni4xMTksMzQuNDkxODkxOCBMNDMuOCwzMS4zOTk4OTE4IEM0My42MTEsMzEuMTQ3ODkxOCA0My4zMTQsMzAuOTk5ODkxOCA0MywzMC45OTk4OTE4IEwzMCwzMC45OTk4OTE4IEwzMCwyNS45OTk4OTE4IEw0OC4xNDIsMjUuOTk5ODkxOCBDNDguNTg5LDI3LjcxOTg5MTggNTAuMTQxLDI4Ljk5OTg5MTggNTIsMjguOTk5ODkxOCBDNTQuMjA2LDI4Ljk5OTg5MTggNTYsMjcuMjA1ODkxOCA1NiwyNC45OTk4OTE4IEM1NiwyMi43OTM4OTE4IDU0LjIwNiwyMC45OTk4OTE4IDUyLDIwLjk5OTg5MTggTDUyLDIwLjk5OTg5MTggWiIgaWQ9IkZpbGwtMSI+PC9wYXRoPgogICAgICAgIDwvZz4KICAgIDwvZz4KPC9zdmc+" xlink:href="data:image/svg+xml;base64,PD94bWwgdmVyc2lvbj0iMS4wIiBlbmNvZGluZz0iVVRGLTgiPz4KPHN2ZyB3aWR0aD0iODBweCIgaGVpZ2h0PSI4MHB4IiB2aWV3Qm94PSIwIDAgODAgODAiIHZlcnNpb249IjEuMSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIiB4bWxuczp4bGluaz0iaHR0cDovL3d3dy53My5vcmcvMTk5OS94bGluayI+CiAgICA8dGl0bGU+SWNvbi1BcmNoaXRlY3R1cmUvNjQvQXJjaF9BbWF6b24tQmVkcm9ja182NDwvdGl0bGU+CiAgICA8ZyBpZD0iSWNvbi1BcmNoaXRlY3R1cmUvNjQvQXJjaF9BbWF6b24tQmVkcm9ja182NCIgc3Ryb2tlPSJub25lIiBzdHJva2Utd2lkdGg9IjEiIGZpbGw9Im5vbmUiIGZpbGwtcnVsZT0iZXZlbm9kZCI+CiAgICAgICAgPGcgaWQ9Ikljb24tQXJjaGl0ZWN0dXJlLUJHLzY0L01hY2hpbmUtTGVhcm5pbmciIGZpbGw9IiMwMUE4OEQiPgogICAgICAgICAgICA8cmVjdCBpZD0iUmVjdGFuZ2xlIiB4PSIwIiB5PSIwIiB3aWR0aD0iODAiIGhlaWdodD0iODAiPjwvcmVjdD4KICAgICAgICA8L2c+CiAgICAgICAgPGcgaWQ9Ikljb24tU2VydmljZS82NC9BbWF6b24tQmVkcm9ja182NCIgdHJhbnNmb3JtPSJ0cmFuc2xhdGUoMTIuMDAwMDAwLCAxMi4wMDAwMDApIiBmaWxsPSIjRkZGRkZGIj4KICAgICAgICAgICAgPHBhdGggZD0iTTUyLDI2Ljk5OTg5MTggQzUwLjg5NywyNi45OTk4OTE4IDUwLDI2LjEwMjg5MTggNTAsMjQuOTk5ODkxOCBDNTAsMjMuODk2ODkxOCA1MC44OTcsMjIuOTk5ODkxOCA1MiwyMi45OTk4OTE4IEM1My4xMDMsMjIuOTk5ODkxOCA1NCwyMy44OTY4OTE4IDU0LDI0Ljk5OTg5MTggQzU0LDI2LjEwMjg5MTggNTMuMTAzLDI2Ljk5OTg5MTggNTIsMjYuOTk5ODkxOCBMNTIsMjYuOTk5ODkxOCBaIE0yMC4xMTMsNTMuOTA3ODkxOCBMMTYuODY1LDUyLjAxMzg5MTggTDIzLjUzLDQ3Ljg0Nzg5MTggTDIyLjQ3LDQ2LjE1MTg5MTggTDE0LjkxMyw1MC44NzQ4OTE4IEw5LDQ3LjQyNTg5MTggTDksMzguNTM0ODkxOCBMMTQuNTU1LDM0LjgzMTg5MTggTDEzLjQ0NSwzMy4xNjc4OTE4IEw3Ljk1OSwzNi44MjQ4OTE4IEwyLDMzLjQxOTg5MTggTDIsMjguNTc5ODkxOCBMOC40OTYsMjQuODY3ODkxOCBMNy41MDQsMjMuMTMxODkxOCBMMiwyNi4yNzY4OTE4IEwyLDIyLjU3OTg5MTggTDgsMTkuMTUxODkxOCBMMTQsMjIuNTc5ODkxOCBMMTQsMjYuNDMzODkxOCBMOS40ODUsMjkuMTQyODkxOCBMMTAuNTE1LDMwLjg1Njg5MTggTDE1LDI4LjE2NTg5MTggTDE5LjQ4NSwzMC44NTY4OTE4IEwyMC41MTUsMjkuMTQyODkxOCBMMTYsMjYuNDMzODkxOCBMMTYsMjIuNTM0ODkxOCBMMjEuNTU1LDE4LjgzMTg5MTggQzIxLjgzMywxOC42NDU4OTE4IDIyLDE4LjMzMzg5MTggMjIsMTcuOTk5ODkxOCBMMjIsMTAuOTk5ODkxOCBMMjAsMTAuOTk5ODkxOCBMMjAsMTcuNDY0ODkxOCBMMTQuOTU5LDIwLjgyNDg5MTggTDksMTcuNDE5ODkxOCBMOSw4LjU3Mzg5MTgxIEwxNCw1LjY1Nzg5MTgxIEwxNCwxMy45OTk4OTE4IEwxNiwxMy45OTk4OTE4IEwxNiw0LjQ5MDg5MTgxIEwyMC4xMTMsMi4wOTE4OTE4MSBMMjgsNC43MjA4OTE4MSBMMjgsMzMuNDMzODkxOCBMMTMuNDg1LDQyLjE0Mjg5MTggTDE0LjUxNSw0My44NTY4OTE4IEwyOCwzNS43NjU4OTE4IEwyOCw1MS4yNzg4OTE4IEwyMC4xMTMsNTMuOTA3ODkxOCBaIE01MCwzNy45OTk4OTE4IEM1MCwzOS4xMDI4OTE4IDQ5LjEwMywzOS45OTk4OTE4IDQ4LDM5Ljk5OTg5MTggQzQ2Ljg5NywzOS45OTk4OTE4IDQ2LDM5LjEwMjg5MTggNDYsMzcuOTk5ODkxOCBDNDYsMzYuODk2ODkxOCA0Ni44OTcsMzUuOTk5ODkxOCA0OCwzNS45OTk4OTE4IEM0OS4xMDMsMzUuOTk5ODkxOCA1MCwzNi44OTY4OTE4IDUwLDM3Ljk5OTg5MTggTDUwLDM3Ljk5OTg5MTggWiBNNDAsNDcuOTk5ODkxOCBDNDAsNDkuMTAyODkxOCAzOS4xMDMsNDkuOTk5ODkxOCAzOCw0OS45OTk4OTE4IEMzNi44OTcsNDkuOTk5ODkxOCAzNiw0OS4xMDI4OTE4IDM2LDQ3Ljk5OTg5MTggQzM2LDQ2Ljg5Njg5MTggMzYuODk3LDQ1Ljk5OTg5MTggMzgsNDUuOTk5ODkxOCBDMzkuMTAzLDQ1Ljk5OTg5MTggNDAsNDYuODk2ODkxOCA0MCw0Ny45OTk4OTE4IEw0MCw0Ny45OTk4OTE4IFogTTM5LDcuOTk5ODkxODEgQzM5LDYuODk2ODkxODEgMzkuODk3LDUuOTk5ODkxODEgNDEsNS45OTk4OTE4MSBDNDIuMTAzLDUuOTk5ODkxODEgNDMsNi44OTY4OTE4MSA0Myw3Ljk5OTg5MTgxIEM0Myw5LjEwMjg5MTgxIDQyLjEwMyw5Ljk5OTg5MTgxIDQxLDkuOTk5ODkxODEgQzM5Ljg5Nyw5Ljk5OTg5MTgxIDM5LDkuMTAyODkxODEgMzksNy45OTk4OTE4MSBMMzksNy45OTk4OTE4MSBaIE01MiwyMC45OTk4OTE4IEM1MC4xNDEsMjAuOTk5ODkxOCA0OC41ODksMjIuMjc5ODkxOCA0OC4xNDIsMjMuOTk5ODkxOCBMMzAsMjMuOTk5ODkxOCBMMzAsMTguOTk5ODkxOCBMNDEsMTguOTk5ODkxOCBDNDEuNTUzLDE4Ljk5OTg5MTggNDIsMTguNTUxODkxOCA0MiwxNy45OTk4OTE4IEw0MiwxMS44NTc4OTE4IEM0My43MiwxMS40MTA4OTE4IDQ1LDkuODU3ODkxODEgNDUsNy45OTk4OTE4MSBDNDUsNS43OTM4OTE4MSA0My4yMDYsMy45OTk4OTE4MSA0MSwzLjk5OTg5MTgxIEMzOC43OTQsMy45OTk4OTE4MSAzNyw1Ljc5Mzg5MTgxIDM3LDcuOTk5ODkxODEgQzM3LDkuODU3ODkxODEgMzguMjgsMTEuNDEwODkxOCA0MCwxMS44NTc4OTE4IEw0MCwxNi45OTk4OTE4IEwzMCwxNi45OTk4OTE4IEwzMCwzLjk5OTg5MTgxIEMzMCwzLjU2ODg5MTgxIDI5LjcyNSwzLjE4Nzg5MTgxIDI5LjMxNiwzLjA1MDg5MTgxIEwyMC4zMTYsMC4wNTA4OTE4MTEgQzIwLjA0MiwtMC4wMzkxMDgxODkgMTkuNzQ0LC0wLjAwOTEwODE4OTA0IDE5LjQ5NiwwLjEzNTg5MTgxMSBMNy40OTYsNy4xMzU4OTE4MSBDNy4xODgsNy4zMTQ4OTE4MSA3LDcuNjQ0ODkxODEgNyw3Ljk5OTg5MTgxIEw3LDE3LjQxOTg5MTggTDAuNTA0LDIxLjEzMTg5MTggQzAuMTkyLDIxLjMwOTg5MTggMCwyMS42NDA4OTE4IDAsMjEuOTk5ODkxOCBMMCwzMy45OTk4OTE4IEMwLDM0LjM1ODg5MTggMC4xOTIsMzQuNjg5ODkxOCAwLjUwNCwzNC44Njc4OTE4IEw3LDM4LjU3OTg5MTggTDcsNDcuOTk5ODkxOCBDNyw0OC4zNTQ4OTE4IDcuMTg4LDQ4LjY4NDg5MTggNy40OTYsNDguODYzODkxOCBMMTkuNDk2LDU1Ljg2Mzg5MTggQzE5LjY1LDU1Ljk1Mzg5MTggMTkuODI1LDU1Ljk5OTg5MTggMjAsNTUuOTk5ODkxOCBDMjAuMTA2LDU1Ljk5OTg5MTggMjAuMjEzLDU1Ljk4Mjg5MTggMjAuMzE2LDU1Ljk0ODg5MTggTDI5LjMxNiw1Mi45NDg4OTE4IEMyOS43MjUsNTIuODExODkxOCAzMCw1Mi40MzA4OTE4IDMwLDUxLjk5OTg5MTggTDMwLDM5Ljk5OTg5MTggTDM3LDM5Ljk5OTg5MTggTDM3LDQ0LjE0MTg5MTggQzM1LjI4LDQ0LjU4ODg5MTggMzQsNDYuMTQxODkxOCAzNCw0Ny45OTk4OTE4IEMzNCw1MC4yMDU4OTE4IDM1Ljc5NCw1MS45OTk4OTE4IDM4LDUxLjk5OTg5MTggQzQwLjIwNiw1MS45OTk4OTE4IDQyLDUwLjIwNTg5MTggNDIsNDcuOTk5ODkxOCBDNDIsNDYuMTQxODkxOCA0MC43Miw0NC41ODg4OTE4IDM5LDQ0LjE0MTg5MTggTDM5LDM4Ljk5OTg5MTggQzM5LDM4LjQ0Nzg5MTggMzguNTUzLDM3Ljk5OTg5MTggMzgsMzcuOTk5ODkxOCBMMzAsMzcuOTk5ODkxOCBMMzAsMzIuOTk5ODkxOCBMNDIuNSwzMi45OTk4OTE4IEw0NC42MzgsMzUuODQ5ODkxOCBDNDQuMjM5LDM2LjQ3MTg5MTggNDQsMzcuMjA2ODkxOCA0NCwzNy45OTk4OTE4IEM0NCw0MC4yMDU4OTE4IDQ1Ljc5NCw0MS45OTk4OTE4IDQ4LDQxLjk5OTg5MTggQzUwLjIwNiw0MS45OTk4OTE4IDUyLDQwLjIwNTg5MTggNTIsMzcuOTk5ODkxOCBDNTIsMzUuNzkzODkxOCA1MC4yMDYsMzMuOTk5ODkxOCA0OCwzMy45OTk4OTE4IEM0Ny4zMTYsMzMuOTk5ODkxOCA0Ni42ODIsMzQuMTg3ODkxOCA0Ni4xMTksMzQuNDkxODkxOCBMNDMuOCwzMS4zOTk4OTE4IEM0My42MTEsMzEuMTQ3ODkxOCA0My4zMTQsMzAuOTk5ODkxOCA0MywzMC45OTk4OTE4IEwzMCwzMC45OTk4OTE4IEwzMCwyNS45OTk4OTE4IEw0OC4xNDIsMjUuOTk5ODkxOCBDNDguNTg5LDI3LjcxOTg5MTggNTAuMTQxLDI4Ljk5OTg5MTggNTIsMjguOTk5ODkxOCBDNTQuMjA2LDI4Ljk5OTg5MTggNTYsMjcuMjA1ODkxOCA1NiwyNC45OTk4OTE4IEM1NiwyMi43OTM4OTE4IDU0LjIwNiwyMC45OTk4OTE4IDUyLDIwLjk5OTg5MTggTDUyLDIwLjk5OTg5MTggWiIgaWQ9IkZpbGwtMSI+PC9wYXRoPgogICAgICAgIDwvZz4KICAgIDwvZz4KPC9zdmc+" x="1462.0" y="966.0" width="40.0" height="40.0"/>
 <text x="1514.0" y="983.0" font-size="15" font-weight="800" fill="#F3F3F7" data-box="1438,664,434,380">AI 챗봇, AI 인사이트</text>
 <text x="1514.0" y="1002.0" font-size="13" font-weight="700" fill="#E2E4EC" data-box="1438,664,434,380">Claude Haiku 5.5, 조회 도구 4개</text>
-<text x="1872.0" y="1064.0" font-size="13" font-weight="700" fill="#7B8198" text-anchor="end">2026-11-21 운영 기준, v2.44, 수치 출처는 저장소 코드와 운영 API</text>
+<text x="1872.0" y="1064.0" font-size="13" font-weight="700" fill="#7B8198" text-anchor="end">2026-11-25 운영 기준, v2.45, 수치 출처는 저장소 코드와 운영 API</text>
 </svg>

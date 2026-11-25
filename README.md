@@ -18,7 +18,7 @@ Amazon Bedrock, Anthropic CP on AWS, OpenAI GPT on Bedrock LLM 채널의 응답 
 
 ## Overview
 
-Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 45 LLM channels (17 Bedrock, 7 Anthropic CP on AWS, 21 OpenAI GPT on Bedrock) across Bedrock Global / US inference profiles (including Claude Opus 5.5, v2.27.0, Claude Sonnet 5.5 Global, v2.32.0, and US, v2.33.0, Claude Haiku 5.5, v2.33.0, and Claude Fable 5.2, v2.41.0), Seoul in-region on-demand Claude Opus 5 and Sonnet 5 (v2.32.0), Anthropic CP on AWS, and OpenAI GPT via the Bedrock Mantle in-region endpoint in us-east-1 (Path 4; one Mantle region for every model since v2.38.0) plus Bedrock Global cross-region profiles for GPT-6 Astra, Sol and Luna, GPT-6.1 Sol and GPT-6.1 Terra, GPT-6.2 Astra and GPT-6.2 Sol and US cross-region profiles for the same seven models (v2.20.0, v2.25.0, v2.27.0, v2.32.0, v2.38.0, v2.44.0). Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 left monitoring and every page in v2.39.0, Claude Fable 5 in v2.42.0, and Claude Opus 4.8, GPT 5.5 and GPT 5.6 (Sol, Terra, Luna) in v2.43.0. (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1, with no model spec left since v2.43.0.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, 30-day cost projections, and official unit prices synced every 12 hours — all behind a Next.js dashboard with eleven monitoring views.
+Amazon Bedrock LLM Monitor is a production-grade observability platform that continuously probes 51 LLM channels (17 Bedrock, 7 Anthropic CP on AWS, 27 OpenAI GPT on Bedrock) across Bedrock Global / US inference profiles (including Claude Opus 5.5, v2.27.0, Claude Sonnet 5.5 Global, v2.32.0, and US, v2.33.0, Claude Haiku 5.5, v2.33.0, and Claude Fable 5.2, v2.41.0), Seoul in-region on-demand Claude Opus 5 and Sonnet 5 (v2.32.0), Anthropic CP on AWS, and OpenAI GPT via the Bedrock Mantle in-region endpoint in us-east-1 (Path 4; one Mantle region for every model since v2.38.0) plus Bedrock Global cross-region profiles for GPT-6 Astra, Sol and Luna, GPT-6.1 Sol and GPT-6.1 Terra, GPT-6.2 Astra and GPT-6.2 Sol and US cross-region profiles for the same seven models (v2.20.0, v2.25.0, v2.27.0, v2.32.0, v2.38.0, v2.44.0), and for GPT-5.6 Sol, Terra and Luna the Mantle in-region endpoint and the Global cross-region profile (back in v2.45.0, no US profile channel). Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5 and GPT 5.4 left monitoring and every page in v2.39.0, Claude Fable 5 in v2.42.0, and Claude Opus 4.8, GPT 5.5 and GPT 5.6 (Sol, Terra, Luna) in v2.43.0; GPT 5.6 came back in v2.45.0. (An OpenAI 1P direct path — Path 5 — exists in code but is dormant/hidden as of v2.19.1, with no model spec left since v2.43.0.) It surfaces latency (TTFT, total, server), throughput (TPS), output token distribution, stop-reason patterns, multi-channel reliability, 30-day cost projections, and official unit prices synced every 12 hours — all behind a Next.js dashboard with eleven monitoring views.
 
 The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Scheduler driving 5-minute round-robin workload probes across six prompt categories and a 12-hourly sync of official unit prices. A built-in chatbot (Claude Haiku 5.5 with four Bedrock tools) lets you query the time-series data conversationally.
 
@@ -26,16 +26,16 @@ The system runs on AWS ECS Fargate (CDK-managed, 8 stacks), with EventBridge Sch
 
 ## Architecture
 
-The summary and the diagram show the production deployment as of 2026-11-21 (v2.44). [`docs/architecture.md`](docs/architecture.md) has the component tables and the design decisions behind them.
+The summary and the diagram show the production deployment as of 2026-11-25 (v2.45). [`docs/architecture.md`](docs/architecture.md) has the component tables and the design decisions behind them.
 
 ### At a glance
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture/infographic-en-dark.png">
-  <img src="docs/images/architecture/infographic-en-light.png" alt="Amazon Bedrock LLM Monitor at a glance: 45 monitored channels across 15 model families, seven scheduled Fargate tasks and their cadence, six workload categories and eleven monitoring pages">
+  <img src="docs/images/architecture/infographic-en-light.png" alt="Amazon Bedrock LLM Monitor at a glance: 51 monitored channels across 18 model families, seven scheduled Fargate tasks and their cadence, six workload categories and eleven monitoring pages">
 </picture>
 
-The 45 channels are 15 model families, each called through up to four paths: Claude Platform on AWS, a Bedrock Global cross-region profile, a Bedrock US cross-region profile and an in-region endpoint (Seoul on-demand for Claude Opus 5 and Sonnet 5, Bedrock Mantle in us-east-1 for GPT). Vector versions: [light](docs/images/architecture/infographic-en-light.svg), [dark](docs/images/architecture/infographic-en-dark.svg).
+The 51 channels are 18 model families, each called through up to four paths: Claude Platform on AWS, a Bedrock Global cross-region profile, a Bedrock US cross-region profile and an in-region endpoint (Seoul on-demand for Claude Opus 5 and Sonnet 5, Bedrock Mantle in us-east-1 for GPT). Vector versions: [light](docs/images/architecture/infographic-en-light.svg), [dark](docs/images/architecture/infographic-en-dark.svg).
 
 ### System diagram
 
@@ -53,13 +53,13 @@ The 45 channels are 15 model families, each called through up to four paths: Cla
 
 | Task | Schedule | What it does | Output per run |
 |------|----------|--------------|----------------|
-| AutoProber | every 5 minutes | One streaming call to each of the 45 channels with the cycle's workload category | 45 `probe_results` rows |
+| AutoProber | every 5 minutes | One streaming call to each of the 51 channels with the cycle's workload category | 51 `probe_results` rows |
 | Insights | every 5 minutes | Claude Haiku 5.5 summarises the last 6 hours | one insight in Korean and English |
-| GptBench | every 15 minutes | TTFB and TTFT on the 21 GPT channels, 10 runs each after a warm-up call | 210 bench rows |
+| GptBench | every 15 minutes | TTFB and TTFT on the 23 GPT channels, 10 runs each after a warm-up call | 230 bench rows |
 | ParityRun | every 12 hours | Probes each model on up to 6 API surfaces and 20 features with execution evidence | one parity run |
-| PricingSync | every 12 hours | Reads the 4 official price sources for 52 price channels (45 active channels and 7 OpenAI official prices) | one price sync run; a change above 50% waits for admin approval |
+| PricingSync | every 12 hours | Reads the 4 official price sources for 61 price channels (51 active channels and 10 OpenAI official prices) | one price sync run; a change above 50% waits for admin approval |
 | FeaturesVerify | daily at 17:30 UTC | 39 Claude API feature rows on 5 surfaces for 7 representative models | 1,365 cells |
-| ExplorerVerify | daily at 18:00 UTC | Runs every Model Explorer code example | 77 example results |
+| ExplorerVerify | daily at 18:00 UTC | Runs every Model Explorer code example | 83 example results |
 
 ### CDK stacks
 
@@ -81,8 +81,8 @@ The infographic and the diagram are generated by [`scripts/readme-art/build.sh`]
 - **Faster model comparison** — compact rows or detailed cards, family collapse and comparison, named attention channels and a fixed comparison dock. Search, period, workload and selections remain shareable in the URL.
 - **Visitor counts** — the footer shows browsers active within 90 seconds and persistent total visits, including an opening balance of 10,000. Refreshes and multiple tabs share one signed visitor identity; counts update every 30 seconds while visible and online.
 - **Installable on iPhone/iPad (PWA)** — open the dashboard in Safari, Share → "Add to Home Screen" for a full-screen standalone app (v2.21.0).
-- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 45 monitored channels. The 7 Claude Platform on AWS channels are probed every cycle with the same category as every other channel (v2.29.1 reverted the v2.29.0 10-minute cadence); setting `ANTHROPIC_CP_PROBE_INTERVAL_S=600` switches them to every other cycle with their own category rotation, an operational lever if the monthly usage cap returns.
-- **Eleven analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison, each probe priced at the unit price in effect at its time), Unit Prices (Standard input/output price per model family and channel, prompt-caching and long-context prices (GPT and, since v2.33.0, Claude Haiku 5.5), the OpenAI official price beside the AWS Bedrock channels, numbered source footnotes and CSV / Markdown / JSON download, v2.30.0, v2.31.0), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (21-channel TTFB/TTFT bench over Bedrock Mantle us-east-1 and cross-region profiles — GPT-6 Astra/Sol/Luna, GPT-6.1 Sol and GPT-6.1 Terra, GPT-6.2 Astra and GPT-6.2 Sol, 15-min cycles, one lane per host in parallel since v2.32.1: cross-region plus each Mantle region, two lanes since v2.38.0), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
+- **Real-time auto-probing** — EventBridge Scheduler fires a Fargate task every 5 minutes that round-robins six workload categories (chat-short, reasoning, code-gen, summarize, structured, translate) across all 51 monitored channels. The 7 Claude Platform on AWS channels are probed every cycle with the same category as every other channel (v2.29.1 reverted the v2.29.0 10-minute cadence); setting `ANTHROPIC_CP_PROBE_INTERVAL_S=600` switches them to every other cycle with their own category rotation, an operational lever if the monthly usage cap returns.
+- **Eleven analytical pages** — Dashboard (latency / TPS trends), Model Explorer (per-model cards with Converse/InvokeModel/Messages/Responses code examples), Parity Run (model × API-surface × feature evidence matrix), Cost (30-day projection + channel comparison, each probe priced at the unit price in effect at its time), Unit Prices (Standard input/output price per model family and channel, prompt-caching and long-context prices (GPT and, since v2.33.0, Claude Haiku 5.5), the OpenAI official price beside the AWS Bedrock channels, numbered source footnotes and CSV / Markdown / JSON download, v2.30.0, v2.31.0), Reliability (success rate per family/channel + error buckets), Efficiency (weighted 0-100 score), Analysis (stop-reason distribution + output-length histograms), Prompts (set CRUD + Bedrock OptimizePrompt), GPT on AWS (23-channel TTFB/TTFT bench over Bedrock Mantle us-east-1 and cross-region profiles — GPT-6 Astra/Sol/Luna, GPT-6.1 Sol and GPT-6.1 Terra, GPT-6.2 Astra and GPT-6.2 Sol, and GPT-5.6 Terra again since v2.45.0, 15-min cycles, one lane per host in parallel since v2.32.1: cross-region plus each Mantle region, two lanes since v2.38.0), Claude API Features (documented feature × endpoint × model evidence matrix with doc-drift detection).
 - **Unit prices from official sources** — the Unit Prices page (`/pricing`) lists the Standard input and output price per 1M tokens of every active model family in three tables, Anthropic Claude, OpenAI and Amazon Nova, with the columns Claude Platform on AWS (Claude) or OpenAI official price (GPT), AWS Bedrock - Global CRIS, AWS Bedrock - US CRIS and AWS Bedrock - In Region (Seoul Claude Opus 5 and Sonnet 5 since v2.32.0). A second line in each cell shows the prompt-caching prices (cache read, cache write and the Claude 1-hour cache write), and a third line on GPT rows and on Claude Haiku 5.5 rows (prompts over 100K tokens, v2.33.0) shows the long-context prices (v2.31.0). Each price carries a numbered footnote to its source, and the page links the reference list and downloads as CSV, Markdown or JSON. A scheduled PricingSync task reads the Bedrock agreement-offer rate cards, the AWS Price List API, Anthropic's pricing page and OpenAI's pricing page every 12 hours; a change above 50% on any price waits for admin approval. Cost and efficiency figures use the input and output price in effect at each probe's time; the cache, long-context and OpenAI official prices are shown for reference. The page and every download state that the list is reference information compiled from public sources, not an official AWS statement (v2.30.0, v2.31.0, ADR-030).
 - **Graded model-card metrics** — on the dashboard, each card's TTFT, total latency and TPS value turns blue (normal), amber ▲ (warning) or rose ◆ (critical) against per-workload-category thresholds derived from 48 h of production p90/p99 (TPS is graded only on the low side); a legend expands into the full threshold table, and values carry a `data-grade` attribute and screen-reader descriptions (v2.28.0, ADR-029).
 - **12-hourly parity sweep** — a scheduled Fargate task probes every model × API surface × feature cell (6 surfaces × 20 features) with execution evidence (tool-canary round-trip, JSON validity, cached-token counts, stream deltas) — HTTP 200 alone never counts as supported.
@@ -219,7 +219,7 @@ See `docs/runbooks/deploy.md` for the full step-by-step procedure including post
 curl https://<your-cloudfront-domain>/api/auto-probe/status
 # {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
 
-# Inspect the latest 45-model probe results
+# Inspect the latest 51-model probe results
 curl https://<your-cloudfront-domain>/api/auto-probe/latest
 
 # Filter by workload category
@@ -286,11 +286,11 @@ A service worker is deliberately **not** used: offline caching would show stale 
 model-monitoring/
 ├── backend/                      # FastAPI + SQLAlchemy + auto-prober
 │   ├── main.py                   # entrypoint, lifespan, DB migration with advisory_lock
-│   ├── prober.py                 # 45 active AVAILABLE_MODELS (v2.44.0; no dormant 1P spec since v2.43.0), retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P
+│   ├── prober.py                 # 51 active AVAILABLE_MODELS (v2.45.0; no dormant 1P spec since v2.43.0), retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P
 │   ├── auto_prober.py            # run_cycle() invoked by EventBridge Fargate task
-│   ├── gptbench.py               # GPT on AWS bench cycle (21 channels × 10 runs, one lane per host in parallel: CRIS plus each Mantle region — cris and mantle-us-east-1 since v2.38.0, TTFB/TTFT)
+│   ├── gptbench.py               # GPT on AWS bench cycle (23 channels × 10 runs, one lane per host in parallel: CRIS plus each Mantle region — cris and mantle-us-east-1 since v2.38.0, TTFB/TTFT)
 │   ├── pricing_sources.py        # price identity per channel, source maps, disclaimer, reference pages (v2.30.0)
-│   ├── pricing_seed.py           # official seed prices for the 45 active channels and 7 OpenAI official price channels, ensure_price_columns + ensure_seed
+│   ├── pricing_seed.py           # official seed prices for the 51 active channels and 10 OpenAI official price channels, ensure_price_columns + ensure_seed
 │   ├── pricing_parsers.py        # agreement-offer, Price List, Anthropic and OpenAI pricing.md parsers
 │   ├── pricing_sync.py           # 12-hourly sync: fetch, compare, 50% guard, record
 │   ├── pricing_sync_runner.py    # PricingSync task entry: python -m pricing_sync_runner --once
@@ -314,7 +314,7 @@ model-monitoring/
 │   ├── architecture.md           # full system design
 │   ├── api-reference.md          # endpoint reference
 │   ├── onboarding.md             # onboarding guide: local setup, key concepts, common tasks
-│   ├── decisions/                # ADR-001 through ADR-039
+│   ├── decisions/                # ADR-001 through ADR-040
 │   ├── images/                   # README screenshots (ui/*-en.png, ui/*-ko.png), architecture diagram and infographic (architecture/)
 │   └── runbooks/                 # deploy, rollback, troubleshooting
 ├── scripts/readme-art/           # generators for the README architecture diagram and infographic (build.sh)
@@ -411,7 +411,7 @@ This project is licensed under the MIT License.
 
 ## 개요
 
-Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opus 5.5 포함 v2.27.0, Claude Sonnet 5.5 Global v2.32.0과 US v2.33.0, Claude Haiku 5.5 v2.33.0, Claude Fable 5.2 v2.41.0), 서울 in-region 온디맨드 Claude Opus 5와 Sonnet 5(v2.32.0), Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle us-east-1 인리전 엔드포인트(Path 4, v2.38.0부터 모든 모델이 Mantle 리전 하나)와 GPT-6 Astra, Sol, Luna, GPT-6.1 Sol, GPT-6.1 Terra, GPT-6.2 Astra, GPT-6.2 Sol의 Bedrock Global cross-region 프로파일, 같은 일곱 모델의 US cross-region 프로파일(v2.20.0, v2.25.0, v2.27.0, v2.32.0, v2.38.0, v2.44.0)에 걸친 45개 LLM 채널(Bedrock 17, Anthropic CP on AWS 7, OpenAI GPT on Bedrock 21)을 지속적으로 프로빙하는 운영 등급 관측 플랫폼입니다. Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4는 v2.39.0에, Claude Fable 5는 v2.42.0에, Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna)은 v2.43.0에 모니터링과 모든 화면에서 뺐습니다. (OpenAI 1P direct 경로(Path 5)는 코드에 남아 있지만 v2.19.1부터 휴면·비노출 상태이고, v2.43.0부터는 남은 모델 스펙이 없습니다.) 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측, 12시간마다 갱신되는 공식 단가를 11개 모니터링 화면을 갖춘 Next.js 대시보드에서 제공합니다.
+Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opus 5.5 포함 v2.27.0, Claude Sonnet 5.5 Global v2.32.0과 US v2.33.0, Claude Haiku 5.5 v2.33.0, Claude Fable 5.2 v2.41.0), 서울 in-region 온디맨드 Claude Opus 5와 Sonnet 5(v2.32.0), Anthropic CP on AWS, OpenAI GPT via Bedrock Mantle us-east-1 인리전 엔드포인트(Path 4, v2.38.0부터 모든 모델이 Mantle 리전 하나)와 GPT-6 Astra, Sol, Luna, GPT-6.1 Sol, GPT-6.1 Terra, GPT-6.2 Astra, GPT-6.2 Sol의 Bedrock Global cross-region 프로파일, 같은 일곱 모델의 US cross-region 프로파일(v2.20.0, v2.25.0, v2.27.0, v2.32.0, v2.38.0, v2.44.0), GPT-5.6 Sol, Terra, Luna의 Mantle 인리전 엔드포인트와 Global cross-region 프로파일(v2.45.0 복귀, US 프로파일 채널은 없음)에 걸친 51개 LLM 채널(Bedrock 17, Anthropic CP on AWS 7, OpenAI GPT on Bedrock 27)을 지속적으로 프로빙하는 운영 등급 관측 플랫폼입니다. Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4는 v2.39.0에, Claude Fable 5는 v2.42.0에, Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna)은 v2.43.0에 모니터링과 모든 화면에서 뺐습니다. 이 가운데 GPT 5.6은 v2.45.0에 되살렸습니다. (OpenAI 1P direct 경로(Path 5)는 코드에 남아 있지만 v2.19.1부터 휴면·비노출 상태이고, v2.43.0부터는 남은 모델 스펙이 없습니다.) 지연(TTFT, 총 응답시간, 서버 처리시간), 처리량(TPS), 출력 토큰 분포, 정지 사유 패턴, 다중 채널 신뢰성, 30일 비용 예측, 12시간마다 갱신되는 공식 단가를 11개 모니터링 화면을 갖춘 Next.js 대시보드에서 제공합니다.
 
 이 시스템은 AWS ECS Fargate (CDK 8개 스택)에서 동작하며, EventBridge Scheduler가 5분마다 6개 프롬프트 카테고리를 라운드로빈하는 워크로드 프로빙을 실행하고, 12시간마다 공식 단가를 동기화합니다. Claude Haiku 5.5 + 4개 Bedrock 도구로 구성된 챗봇이 시계열 데이터에 대해 자연어 질의를 지원합니다.
 
@@ -419,16 +419,16 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 
 ## 아키텍처
 
-아래 요약과 구성도는 2026-11-21 운영 배포(v2.44) 기준입니다. 구성 요소 표와 설계 결정의 배경은 [`docs/architecture.md`](docs/architecture.md)에 있습니다.
+아래 요약과 구성도는 2026-11-25 운영 배포(v2.45) 기준입니다. 구성 요소 표와 설계 결정의 배경은 [`docs/architecture.md`](docs/architecture.md)에 있습니다.
 
 ### 한눈에 보기
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="docs/images/architecture/infographic-ko-dark.png">
-  <img src="docs/images/architecture/infographic-ko-light.png" alt="Amazon Bedrock LLM Monitor 한눈에 보기: 모델 패밀리 15개의 모니터링 채널 45개, 예약 Fargate 태스크 7개와 주기, 워크로드 6종, 모니터링 화면 11개">
+  <img src="docs/images/architecture/infographic-ko-light.png" alt="Amazon Bedrock LLM Monitor 한눈에 보기: 모델 패밀리 18개의 모니터링 채널 51개, 예약 Fargate 태스크 7개와 주기, 워크로드 6종, 모니터링 화면 11개">
 </picture>
 
-45채널은 모델 패밀리 15개를 패밀리마다 최대 네 경로로 호출한 것입니다. 경로는 Claude Platform on AWS, Bedrock Global 교차 리전 프로파일, Bedrock US 교차 리전 프로파일, 인리전 엔드포인트(Claude Opus 5와 Sonnet 5는 서울 온디맨드, GPT는 us-east-1의 Bedrock Mantle)입니다. 벡터 파일: [라이트](docs/images/architecture/infographic-ko-light.svg), [다크](docs/images/architecture/infographic-ko-dark.svg).
+51채널은 모델 패밀리 18개를 패밀리마다 최대 네 경로로 호출한 것입니다. 경로는 Claude Platform on AWS, Bedrock Global 교차 리전 프로파일, Bedrock US 교차 리전 프로파일, 인리전 엔드포인트(Claude Opus 5와 Sonnet 5는 서울 온디맨드, GPT는 us-east-1의 Bedrock Mantle)입니다. 벡터 파일: [라이트](docs/images/architecture/infographic-ko-light.svg), [다크](docs/images/architecture/infographic-ko-dark.svg).
 
 ### 시스템 구성도
 
@@ -446,13 +446,13 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 
 | 태스크 | 주기 | 하는 일 | 런마다 남는 것 |
 |--------|------|---------|----------------|
-| AutoProber | 5분마다 | 45채널에 그 사이클의 워크로드 카테고리로 스트리밍 호출 1회씩 | `probe_results` 45행 |
+| AutoProber | 5분마다 | 51채널에 그 사이클의 워크로드 카테고리로 스트리밍 호출 1회씩 | `probe_results` 51행 |
 | Insights | 5분마다 | Claude Haiku 5.5가 최근 6시간을 요약 | 한국어와 영어 인사이트 1건 |
-| GptBench | 15분마다 | GPT 21채널의 TTFB와 TTFT 측정, 채널마다 워밍업 1회 뒤 10회 | 벤치 210행 |
+| GptBench | 15분마다 | GPT 23채널의 TTFB와 TTFT 측정, 채널마다 워밍업 1회 뒤 10회 | 벤치 230행 |
 | ParityRun | 12시간마다 | 모델마다 API surface 최대 6개, 피처 20개를 실행 증거로 검증 | 패리티 런 1건 |
-| PricingSync | 12시간마다 | 단가 채널 52개(활성 45채널과 OpenAI 공식 가격 7개)의 공식 출처 네 곳 조회 | 단가 동기화 런 1건, 50%를 넘는 변경은 관리자 승인 대기 |
+| PricingSync | 12시간마다 | 단가 채널 61개(활성 51채널과 OpenAI 공식 가격 10개)의 공식 출처 네 곳 조회 | 단가 동기화 런 1건, 50%를 넘는 변경은 관리자 승인 대기 |
 | FeaturesVerify | 매일 17:30 UTC | Claude API 피처 39행을 surface 5개, 대표 모델 7개로 검증 | 1,365셀 |
-| ExplorerVerify | 매일 18:00 UTC | 모델 탐색 코드 예제를 모두 실행 | 예제 결과 77건 |
+| ExplorerVerify | 매일 18:00 UTC | 모델 탐색 코드 예제를 모두 실행 | 예제 결과 83건 |
 
 ### CDK 스택
 
@@ -474,8 +474,8 @@ Amazon Bedrock LLM Monitor는 Bedrock Global / US 추론 프로파일(Claude Opu
 - **모델 비교 동선** — 간결한 목록과 상세 카드, 계열 접기와 비교, 이름이 보이는 확인 필요 채널, 고정 비교 영역을 제공한다. 검색·기간·워크로드·선택 상태는 URL로 공유할 수 있다.
 - **접속 통계** — 하단에 최근 90초 접속자와 총 접속수를 표시한다. 초기값 10,000을 포함해 누적하며 새로고침과 여러 탭의 중복을 막는다. 화면이 보이고 온라인일 때 30초마다 갱신한다.
 - **iPhone/iPad 설치형 앱(PWA)** — Safari에서 대시보드를 열고 공유 → "홈 화면에 추가"하면 전체화면 standalone 앱으로 사용 가능 (v2.21.0).
-- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 45개 모니터링 채널에 호출합니다. Claude Platform on AWS 7채널도 매 사이클 다른 채널과 같은 카테고리로 호출합니다(v2.29.1에서 v2.29.0의 10분 주기를 되돌렸습니다). `ANTHROPIC_CP_PROBE_INTERVAL_S=600`으로 설정하면 이 채널만 두 사이클에 한 번, 카테고리를 따로 순환하며 호출하므로 월간 사용 한도가 다시 걸릴 때 운영 레버로 쓸 수 있습니다.
-- **11개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교, 프로브마다 그 시각에 유효했던 단가로 계산), 비용 단가(모델 패밀리와 채널별 Standard 입력/출력 단가, 프롬프트 캐싱과 긴 컨텍스트 단가(GPT, v2.33.0부터 Claude Haiku 5.5), AWS Bedrock 채널 옆 OpenAI 공식 가격, 번호 각주 출처, CSV / Markdown / JSON 다운로드, v2.30.0, v2.31.0), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle us-east-1과 교차 리전 프로파일 21채널 TTFB/TTFT 벤치 — GPT-6 Astra/Sol/Luna, GPT-6.1 Sol, GPT-6.1 Terra, GPT-6.2 Astra, GPT-6.2 Sol, 15분 주기, v2.32.1부터 호스트별 갈래 병렬: 교차 리전 한 갈래와 Mantle 리전마다 한 갈래, v2.38.0부터 두 갈래), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
+- **실시간 자동 프로빙** — EventBridge Scheduler가 5분마다 Fargate 태스크를 실행하여 6개 워크로드 카테고리(짧은 대화, 추론, 코드 생성, 요약, JSON 추출, 번역)를 라운드로빈으로 51개 모니터링 채널에 호출합니다. Claude Platform on AWS 7채널도 매 사이클 다른 채널과 같은 카테고리로 호출합니다(v2.29.1에서 v2.29.0의 10분 주기를 되돌렸습니다). `ANTHROPIC_CP_PROBE_INTERVAL_S=600`으로 설정하면 이 채널만 두 사이클에 한 번, 카테고리를 따로 순환하며 호출하므로 월간 사용 한도가 다시 걸릴 때 운영 레버로 쓸 수 있습니다.
+- **11개 분석 페이지** — 대시보드(지연/TPS 추이), 모델 탐색(모델별 카드 + Converse/InvokeModel/Messages/Responses 코드 예제), 패리티 런(모델×API surface×피처 증거 매트릭스), 비용(30일 예측 + 채널 비교, 프로브마다 그 시각에 유효했던 단가로 계산), 비용 단가(모델 패밀리와 채널별 Standard 입력/출력 단가, 프롬프트 캐싱과 긴 컨텍스트 단가(GPT, v2.33.0부터 Claude Haiku 5.5), AWS Bedrock 채널 옆 OpenAI 공식 가격, 번호 각주 출처, CSV / Markdown / JSON 다운로드, v2.30.0, v2.31.0), 신뢰성(family/channel별 성공률 + 에러 버킷), 효율성(가중 0~100 점수), 분석(정지 사유 분포 + 출력 길이 히스토그램), 프롬프트(세트 CRUD + Bedrock OptimizePrompt), GPT on AWS(Bedrock Mantle us-east-1과 교차 리전 프로파일 23채널 TTFB/TTFT 벤치 — GPT-6 Astra/Sol/Luna, GPT-6.1 Sol, GPT-6.1 Terra, GPT-6.2 Astra, GPT-6.2 Sol, v2.45.0에 되살린 GPT-5.6 Terra, 15분 주기, v2.32.1부터 호스트별 갈래 병렬: 교차 리전 한 갈래와 Mantle 리전마다 한 갈래, v2.38.0부터 두 갈래), Claude API 기능 검증(문서 피처 × 엔드포인트 × 모델 증거 매트릭스 + 문서 드리프트 감지).
 - **공식 출처 기반 단가** — 비용 단가 페이지(`/pricing`)가 활성 모델 패밀리마다 1M 토큰당 Standard 입력, 출력 단가를 Anthropic Claude, OpenAI, Amazon Nova 세 표로 보여 줍니다. 열은 Claude Platform on AWS(Claude) 또는 OpenAI 공식 가격(GPT), AWS Bedrock - Global CRIS, AWS Bedrock - US CRIS, AWS Bedrock - In Region입니다(In Region 열에 서울 Claude Opus 5, Sonnet 5, v2.32.0). 셀 둘째 줄에 프롬프트 캐싱 단가(캐시 읽기, 캐시 쓰기, Claude 1시간 캐시 쓰기)를, GPT 행과 Claude Haiku 5.5 행(100K 토큰 초과 프롬프트, v2.33.0) 셋째 줄에 긴 컨텍스트 단가를 표시합니다(v2.31.0). 단가마다 번호 각주로 출처를 달고, 참고 자료 목록과 CSV, Markdown, JSON 다운로드를 제공합니다. 스케줄된 PricingSync 태스크가 12시간마다 Bedrock agreement offer rate card, AWS Price List API, Anthropic 요금 문서, OpenAI 요금 문서를 읽고, 어느 단가든 50%를 넘게 바뀌면 관리자 승인을 기다립니다. 비용과 효율성 수치는 각 프로브 시각에 유효했던 입력, 출력 단가로 계산하고, 캐시와 긴 컨텍스트 단가, OpenAI 공식 가격은 참고용으로 표시합니다. 화면과 모든 다운로드 파일에 공개 자료를 모은 참고용 정보이며 AWS 공식 입장이 아니라는 안내를 표시합니다 (v2.30.0, v2.31.0, ADR-030).
 - **모델 카드 지표 등급** — 대시보드 카드의 TTFT, 총 응답시간, TPS 값을 운영 48시간 p90/p99로 정한 워크로드 카테고리별 기준에 따라 파랑(양호), 호박 ▲(경고), 장미 ◆(위험)으로 표시합니다(TPS는 낮은 쪽만 판정). 범례를 펼치면 전체 기준표가 나오고, 값마다 `data-grade` 속성과 스크린 리더 설명이 붙습니다 (v2.28.0, ADR-029).
 - **12시간 주기 패리티 스윕** — 스케줄된 Fargate 태스크가 모델 × API surface × 피처 셀 전체(6 surface × 20 피처)를 실행 증거(도구 카나리 왕복, JSON 유효성, 캐시 토큰 카운트, 스트림 델타)로 검증합니다 — HTTP 200만으로는 지원으로 판정하지 않습니다.
@@ -612,7 +612,7 @@ npx cdk deploy --exclusively BedrockMonitor-AppServices BedrockMonitor-Scheduler
 curl https://<your-cloudfront-domain>/api/auto-probe/status
 # {"is_running":true,"last_run_time":"...","next_run_time":"...","interval_seconds":300}
 
-# 최신 45개 모델 프로빙 결과 조회
+# 최신 51개 모델 프로빙 결과 조회
 curl https://<your-cloudfront-domain>/api/auto-probe/latest
 
 # 워크로드 카테고리별 필터링
@@ -679,11 +679,11 @@ curl -N -H "Authorization: Bearer $TOKEN" \
 model-monitoring/
 ├── backend/                      # FastAPI + SQLAlchemy + auto-prober
 │   ├── main.py                   # 엔트리포인트, lifespan, advisory_lock 기반 DB 마이그레이션
-│   ├── prober.py                 # 활성 45개 AVAILABLE_MODELS(v2.44.0, v2.43.0부터 휴면 1P 스펙 없음), retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P
+│   ├── prober.py                 # 활성 51개 AVAILABLE_MODELS(v2.45.0, v2.43.0부터 휴면 1P 스펙 없음), retry, Bedrock + Anthropic CP + OpenAI Mantle/Global/US/1P
 │   ├── auto_prober.py            # EventBridge Fargate task가 호출하는 run_cycle()
-│   ├── gptbench.py               # GPT on AWS 벤치 사이클 (21채널 × 10회, 호스트별 갈래 병렬: CRIS와 Mantle 리전마다 한 갈래 — v2.38.0부터 cris, mantle-us-east-1, TTFB/TTFT)
+│   ├── gptbench.py               # GPT on AWS 벤치 사이클 (23채널 × 10회, 호스트별 갈래 병렬: CRIS와 Mantle 리전마다 한 갈래 — v2.38.0부터 cris, mantle-us-east-1, TTFB/TTFT)
 │   ├── pricing_sources.py        # 채널별 단가 식별자, 출처 매핑, 면책 문구, 참고 페이지 (v2.30.0)
-│   ├── pricing_seed.py           # 활성 45채널과 OpenAI 공식 가격 7채널 공식 단가 seed, ensure_price_columns + ensure_seed
+│   ├── pricing_seed.py           # 활성 51채널과 OpenAI 공식 가격 10채널 공식 단가 seed, ensure_price_columns + ensure_seed
 │   ├── pricing_parsers.py        # agreement offer, Price List, Anthropic, OpenAI pricing.md 파서
 │   ├── pricing_sync.py           # 12시간 동기화: 가져오기, 비교, 50% 안전장치, 기록
 │   ├── pricing_sync_runner.py    # PricingSync 태스크 진입점: python -m pricing_sync_runner --once
@@ -707,7 +707,7 @@ model-monitoring/
 │   ├── architecture.md           # 전체 시스템 설계
 │   ├── api-reference.md          # 엔드포인트 레퍼런스
 │   ├── onboarding.md             # 온보딩 가이드: 로컬 환경 구성, 핵심 개념, 자주 하는 작업
-│   ├── decisions/                # ADR-001 ~ ADR-039
+│   ├── decisions/                # ADR-001 ~ ADR-040
 │   ├── images/                   # README 스크린샷 (ui/*-en.png, ui/*-ko.png), 아키텍처 구성도와 인포그래픽 (architecture/)
 │   └── runbooks/                 # 배포, 롤백, 트러블슈팅
 ├── scripts/readme-art/           # README 아키텍처 구성도와 인포그래픽 생성 스크립트 (build.sh)

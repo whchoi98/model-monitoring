@@ -56,6 +56,14 @@ v2.43.1의 기본 숨김 패턴(`GPT 5.6`, `GPT 5.5` 등)은 GPT 6.2 라벨에 �
    추세 차트는 색 표에 없는 라벨을 회색으로 그린다.
 데이터를 지울 필요는 없다. 다시 v2.44.0 이상으로 올리면 그대로 이어진다.
 
+**v2.45.0에서 v2.44.2로 되돌릴 때 (예상)**. v2.45.0은 CDK env(`BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID`,
+`BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID`)를 되살린 릴리스라 위 규칙대로 v2.44.2 tag의 `cdk/`로 v2.44.2 이미지 digest(`v4db0ea2`, 값은
+`docs/reviews/2026-11-21-v2442-deployment.md`)를 배포한다. DB는 그대로 둔다. v2.44.2는 GPT 5.6 Sol, Terra, Luna 6채널을 등록하지 않아 프로브와
+GPT 5.6 Terra 벤치가 멈춘다(활성 45채널, 벤치 21채널 `cris=14 mantle-us-east-1=7`). v2.44.2의 기본 숨김 패턴에는 `GPT 5.6`이 있어 그 사이 쌓인
+GPT 5.6 행이 모든 조회에서 바로 가려지고, 프런트 `EXCLUDED_FAMILIES`도 같다. 그래서 v2.44.0 롤백과 달리 남은 카드나 회색 선이 보이지 않는다
+(v2.43.0 배포 때와 같은 동작에서 추정한 것이고 해 보지는 않았다). `price_history` 행은 남지만 v2.44.2 `price_identity`가 분류하지 않아
+`/api/pricing`에 나오지 않고, 다음 PricingSync의 변경 목록에 채널 제외 9건이 한 번 나온다. 다시 v2.45.0 이상으로 올리면 그대로 이어진다.
+
 **v2.39.0에서 v2.38.0으로 되돌릴 때 (과도 상태)**. v2.39.0은 CDK env(`BEDROCK_OPENAI_GPT_54_MODEL_ID`, 휴면 1P의
 `OPENAI_1P_GPT_54_MODEL_ID`)를 뺀 릴리스라 위 규칙대로 v2.38.0 tag의 `cdk/`로 v2.38.0 이미지 digest(`v2d64a44`, 값은
 `docs/reviews/2026-10-27-v238-deployment.md`)를 배포한다. 현재 `cdk/`로 v2.38.0 이미지만 넣으면 GPT 5.4 env가 없어 그 채널은 계속 빠진다.
