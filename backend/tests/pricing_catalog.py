@@ -4,7 +4,7 @@
 (us-east-2, us-west-2 채널 8개 제외, GPT 6 Astra 인리전 us-west-2 → us-east-1) − v2.39.0 Claude Opus 4.7, Opus 4.6, Sonnet 4.6,
 Haiku 4.5(Global, US, CP)와 GPT 5.4(us-east-1) 12채널 + v2.41.0 Claude Fable 5.2(Global, US, CP) − v2.42.0 Claude Fable 5(Global, US, CP) − v2.43.0 Claude Opus 4.8(Global, US, CP),
 GPT 5.6 Sol, Terra, Luna(Global, us-east-1)와 GPT 5.5(us-east-1) 10채널 + v2.44.0 GPT 6.2 Astra, GPT 6.2 Sol(Global, US,
-us-east-1) 6채널 = 활성 45채널. 수집 대상 아님."""
+us-east-1) 6채널 + v2.45.0 GPT 5.6 Sol, Terra, Luna(Global, us-east-1) 6채널 복귀 = 활성 51채널. 수집 대상 아님."""
 
 _GU = ("global", "us")
 _CLAUDE = [  # (FM id, family_key, family, Bedrock 채널) — global/us는 CRIS 프로파일, AWS 리전은 in-region 온디맨드
@@ -31,6 +31,9 @@ _OPENAI = [  # (FM id, family_key, family, channels) — prober _OPENAI_MODEL_SP
     ("openai.gpt-6-astra", "gpt-6-astra", "GPT 6 Astra", ("global", "us", "us-east-1")),
     ("openai.gpt-6-sol", "gpt-6-sol", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("openai.gpt-6-luna", "gpt-6-luna", "GPT 6 Luna", ("global", "us", "us-east-1")),
+    ("openai.gpt-5.6-sol", "gpt-5.6-sol", "GPT 5.6 Sol", ("global", "us-east-1")),  # v2.45.0 복귀 (v2.43.0~v2.44.x 제외)
+    ("openai.gpt-5.6-terra", "gpt-5.6-terra", "GPT 5.6 Terra", ("global", "us-east-1")),
+    ("openai.gpt-5.6-luna", "gpt-5.6-luna", "GPT 5.6 Luna", ("global", "us-east-1")),
 ]
 
 
@@ -69,8 +72,9 @@ ACTIVE_MODELS: dict[str, str] = {mid: _label(i) for mid, i in EXPECTED_IDENTITY.
 OPENAI_LIST_IDS: list[str] = [f"openai-list:{fk}" for _, fk, _, _ in _OPENAI]
 
 # 휴면 1P — 기본 숨김 패턴 "(1P)". v2.43.0부터 1P 스펙이 없어(GPT 5.5, 5.6 세대를 뺐다) 등록되는 1P 채널도 없다.
+# v2.45.0에 GPT 5.6을 되살릴 때도 1P 스펙은 되살리지 않았다.
 HIDDEN_1P_MODELS: dict[str, str] = {}
-# v2.43.0 이전의 휴면 1P 라벨 — 저장 행이 있으면 "(1P)"와 계열 패턴이 둘 다 숨긴다
+# v2.43.0 이전의 휴면 1P 라벨 — 저장 행이 있으면 "(1P)"가 숨긴다(GPT 5.5는 계열 패턴도 숨긴다)
 RETIRED_1P_MODELS: dict[str, str] = {
     f"openai:1p:{fk}": f"OpenAI {fam} (1P)"
     for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"),
@@ -107,13 +111,18 @@ RETIRED_V239_MODELS: dict[str, str] = {
     "openai:us-east-1:openai.gpt-5.4": "OpenAI GPT 5.4 (us-east-1)",
 }
 
-# v2.43.0(2026-11-10 사용자 결정, ADR-038)에 모니터링에서 뺀 채널 — 카탈로그에 없고, 저장 행은 기본 숨김 패턴이 가린다
+# v2.45.0(2026-11-25 사용자 요청, ADR-040)에 되살린 채널 — v2.43.0에 뺐던 GPT 5.6 Sol, Terra, Luna의 Global CRIS와 Mantle us-east-1
+REENABLED_V245_MODELS: dict[str, str] = {
+    f"openai:{r}:{'global.' if r == 'global' else ''}openai.{fk}": f"OpenAI {fam} ({'Global' if r == 'global' else r})"
+    for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"), ("gpt-5.6-luna", "GPT 5.6 Luna"))
+    for r in ("global", "us-east-1")
+}
+
+# v2.43.0(2026-11-10 사용자 결정, ADR-038)에 모니터링에서 뺀 채널 중 지금도 빠져 있는 것 — 카탈로그에 없고, 저장 행은 기본 숨김
+# 패턴이 가린다. 그때는 GPT 5.6 여섯 채널까지 10채널이었다(REENABLED_V245_MODELS).
 RETIRED_V243_MODELS: dict[str, str] = {
     "global.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (Global)",
     "us.anthropic.claude-opus-4-8": "Bedrock Claude Opus 4.8 (US)",
     "anthropic:claude-opus-4-8": "Anthropic Claude Opus 4.8 (US)",
-    **{f"openai:{r}:{'global.' if r == 'global' else ''}openai.{fk}": f"OpenAI {fam} ({'Global' if r == 'global' else r})"
-       for fk, fam in (("gpt-5.6-sol", "GPT 5.6 Sol"), ("gpt-5.6-terra", "GPT 5.6 Terra"), ("gpt-5.6-luna", "GPT 5.6 Luna"))
-       for r in ("global", "us-east-1")},
     "openai:us-east-1:openai.gpt-5.5": "OpenAI GPT 5.5 (us-east-1)",
 }

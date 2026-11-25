@@ -37,7 +37,7 @@ interface Props {
 // 색은 선 패턴(lineDash)과 함께 읽힌다 — 같은 패턴끼리 가까운 색이 되지 않게 고른다(TrendChart.test.ts가 새 채널의 색 차이를 고정).
 // v2.39.0: 모니터링에서 뺀 Claude Opus 4.7, Opus 4.6, Sonnet 4.6, Haiku 4.5와 GPT 5.4의 색을 지웠다 — 지난 행은 백엔드가 숨긴다.
 // v2.42.0에 Claude Fable 5, v2.43.0에 Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna, GPT 5.5의 색을 같은 이유로 지웠다
-// (GPT 5.x의 수집을 멈춘 us-east-2, us-west-2, 1P 라벨 색도 함께).
+// (GPT 5.x의 수집을 멈춘 us-east-2, us-west-2, 1P 라벨 색도 함께). v2.45.0에 GPT 5.6 세 패밀리를 되살리며 활성 여섯 채널의 색을 새로 골랐다.
 export const MODEL_COLORS: Record<string, string> = {
   // Claude Fable 5.2 (v2.41.0) — 청록 계열(Global 짙은 청록 실선, US 옅은 청록 파선, CP 밝은 청록 점선).
   // 실선 자리가 가장 붐벼 밝은 청록은 Fable 5(v2.42.0에 제외), 5.1과 ΔE 15 안쪽이라 Global만 짙게 둔다(다크 테마는 getColor가 밝힌다).
@@ -105,6 +105,16 @@ export const MODEL_COLORS: Record<string, string> = {
   "OpenAI GPT 6 Luna (Global)": "#96f2d7",
   "OpenAI GPT 6 Luna (US)": "#63e6be",
   "OpenAI GPT 6 Luna (us-east-1)": "#38d9a9",
+  // GPT 5.6 Sol, Terra, Luna (v2.45.0 복귀) — Global 실선과 us-east-1 일점쇄선. v2.42.x의 초록 계열(#00fa9a, #5eead4 등)은 그 뒤
+  // 자리를 잡은 GPT 6 Astra, Sol, Luna와 같은 패턴에서 ΔE 4~5였고 Sol us-east-1(#22c55e)은 라이트 카드 대비가 2.2:1이라 쓰지 않는다.
+  // Sol 남보라와 파랑, Terra 짙은 올리브와 라임, Luna 모래색과 주홍 — 같은 패턴 최근접 ΔE 18.5, 두 테마 대비 하한을 지킨다.
+  // 수집을 멈춘 us-east-2, us-west-2 라벨(v2.37.x까지)은 추세 최대 범위(7일) 밖이라 색을 두지 않는다(패밀리 fallback 색). 1P도 없다.
+  "OpenAI GPT 5.6 Sol (Global)": "#594077",
+  "OpenAI GPT 5.6 Sol (us-east-1)": "#0038e0",
+  "OpenAI GPT 5.6 Terra (Global)": "#3c5214",
+  "OpenAI GPT 5.6 Terra (us-east-1)": "#d0f500",
+  "OpenAI GPT 5.6 Luna (Global)": "#dbc6bd",
+  "OpenAI GPT 5.6 Luna (us-east-1)": "#ff3b0a",
 };
 
 // ⚠️ includes 매칭 — "Fable 5"는 "Fable 5.1", "Fable 5.2"에, "Opus 5"는 "Opus 5.5"에, "Sonnet 5"는 "Sonnet 5.5"에도 포함되므로 긴 이름이 먼저 와야 함.
@@ -124,6 +134,9 @@ const FAMILY_FALLBACK: [string, string][] = [
   ["GPT 6 Astra", "#2e8b57"],
   ["GPT 6 Sol", "#12b886"],
   ["GPT 6 Luna", "#63e6be"],
+  ["GPT 5.6 Sol", "#594077"],
+  ["GPT 5.6 Terra", "#3c5214"],
+  ["GPT 5.6 Luna", "#dbc6bd"],
 ];
 
 export function getColor(modelName: string, theme: "dark" | "light"): string {

@@ -1,10 +1,15 @@
-"""v2.43.0 (2026-11-10) — Claude Opus 4.8, GPT 5.5 and GPT 5.6 Sol, Terra, Luna leave monitoring (user decision, ADR-038).
+"""v2.43.0 (2026-11-10) — Claude Opus 4.8 and GPT 5.5 stay out of monitoring (user decision, ADR-038).
 
-"fable 5.0, opus 4.8, gpt 5.5, gpt 5.6 을 deprecate 합니다." — Fable 5 already left in v2.42.0 (ADR-037). Ten channels leave
-the catalog (Opus 4.8 Bedrock Global, US and CP; GPT 5.6 Sol, Terra, Luna Global and Mantle us-east-1; GPT 5.5 Mantle
-us-east-1), with their pricing identity, seeds, OpenAI official-price channels, the GPT-5.6 Sol promo note, the GPT on
-AWS bench channels (GPT 5.5, GPT 5.6 Terra) and the dormant 1P specs. Stored rows stay; the default hide patterns
-"Claude Opus 4.8", "GPT 5.6" and "GPT 5.5" keep them out of every read. Active channels 49 → 39.
+"fable 5.0, opus 4.8, gpt 5.5, gpt 5.6 을 deprecate 합니다." — Fable 5 already left in v2.42.0 (ADR-037). Ten channels left
+the catalog then (Opus 4.8 Bedrock Global, US and CP; GPT 5.6 Sol, Terra, Luna Global and Mantle us-east-1; GPT 5.5
+Mantle us-east-1), with their pricing identity, seeds, OpenAI official-price channels, the GPT-5.6 Sol promo note, the
+GPT on AWS bench channels (GPT 5.5, GPT 5.6 Terra) and the dormant 1P specs. Stored rows stayed behind default hide
+patterns. Active channels 49 → 39.
+
+v2.45.0 (2026-11-25, ADR-040) brought GPT 5.6 Sol, Terra and Luna back ("gpt 5.6을 다시 활성화해주세요") — those six
+channels, their prices, the promo note and the GPT 5.6 Terra bench channels are pinned by test_reenable_gpt56.py. This
+file pins what stays retired: Opus 4.8 (three channels), GPT 5.5 (one channel), the dormant 1P specs, and the hide
+patterns "Claude Opus 4.8" and "GPT 5.5".
 """
 
 import pytest
@@ -21,26 +26,26 @@ import visibility
 from pricing_sources import price_identity
 from tests.pricing_catalog import ACTIVE_MODELS, CP_MODEL_IDS_20261109, RETIRED_1P_MODELS, RETIRED_V243_MODELS
 
-NEW_PATTERNS = ("Claude Opus 4.8", "GPT 5.6", "GPT 5.5")
+NEW_PATTERNS = ("Claude Opus 4.8", "GPT 5.5")  # "GPT 5.6" was the third until v2.45.0
 RETIRED_OFFERS = {  # offers no seed row cites any more
     "offer:offer-wdkl4yk6s7uu4",  # Claude Opus 4.8
-    "offer:offer-gnqokrqqvdbgw", "offer:offer-3dvyrx3okd4lq", "offer:offer-bklbyf2ewuawu",  # GPT 5.6 Sol, Terra, Luna
     "offer:offer-rtwlbb46hcxpw",  # GPT 5.5
 }
 
 
-def test_the_ten_channels_are_out_of_the_catalog_and_the_cp_targets():
-    assert len(RETIRED_V243_MODELS) == 10
+def test_the_four_channels_are_out_of_the_catalog_and_the_cp_targets():
+    assert len(RETIRED_V243_MODELS) == 4  # ten in v2.43.0; the six GPT 5.6 channels came back in v2.45.0
     assert not set(RETIRED_V243_MODELS) & set(prober.AVAILABLE_MODELS)
     assert "opus-4-8" not in dict(prober._ANTHROPIC_TARGETS)
     assert tuple(s for s, _ in prober._ANTHROPIC_TARGETS) == pricing_sources._CP_TARGETS == (
         "fable-5-2", "fable-5-1", "opus-5-5", "opus-5", "sonnet-5-5", "sonnet-5", "haiku-5-5")
     families = [family for _, family, _ in prober._OPENAI_MODEL_SPECS]
-    # v2.44.0 added GPT 6.2 Astra and GPT 6.2 Sol in front (ADR-039) — still no GPT 5.x family
+    # v2.44.0 added GPT 6.2 Astra and GPT 6.2 Sol in front (ADR-039), v2.45.0 put GPT 5.6 back at the end (ADR-040) —
+    # still no GPT 5.5
     assert families == ["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol",
-                        "GPT 6 Luna"]
-    assert prober._OPENAI_1P_MODEL_SPECS == []  # the dormant 1P specs were GPT 5.5 and 5.6 only
-    assert len(ACTIVE_MODELS) == 45  # 39 in v2.43.0
+                        "GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna"]
+    assert prober._OPENAI_1P_MODEL_SPECS == []  # the dormant 1P specs were GPT 5.5 and 5.6 only, none came back
+    assert len(ACTIVE_MODELS) == 51  # 39 in v2.43.0, 45 in v2.44.0
 
 
 def test_cp_discovery_leaves_claude_opus_4_8_unregistered():
@@ -60,18 +65,17 @@ def test_injected_retired_model_envs_register_nothing(monkeypatch):
                      ("OPENAI_US_BASE_URL", "https://us")):
         monkeypatch.setenv(env, url)
     for env, value in (("BEDROCK_OPENAI_GPT_55_MODEL_ID", "openai.gpt-5.5"),
-                       ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "openai.gpt-5.6-sol"),
-                       ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "openai.gpt-5.6-terra"),
-                       ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "openai.gpt-5.6-luna"),
-                       ("OPENAI_1P_GPT_55_MODEL_ID", "gpt-5.5"), ("OPENAI_1P_GPT_56_SOL_MODEL_ID", "gpt-5.6-sol")):
+                       ("OPENAI_1P_GPT_55_MODEL_ID", "gpt-5.5"), ("OPENAI_1P_GPT_56_SOL_MODEL_ID", "gpt-5.6-sol"),
+                       ("OPENAI_1P_GPT_56_TERRA_MODEL_ID", "gpt-5.6-terra"), ("OPENAI_1P_GPT_56_LUNA_MODEL_ID", "gpt-5.6-luna")):
         monkeypatch.setenv(env, value)
     prober._register_openai_models()
-    assert not [k for k in prober.AVAILABLE_MODELS if "gpt-5." in k or k.startswith("openai:1p:")]
+    assert not [k for k in prober.AVAILABLE_MODELS if "gpt-5.5" in k or k.startswith("openai:1p:")]
 
 
 def test_the_new_hide_patterns_hide_their_labels_and_no_active_label():
     patterns = visibility.hidden_patterns()
-    assert patterns[-3:] == list(NEW_PATTERNS)
+    assert patterns[-2:] == list(NEW_PATTERNS)
+    assert "GPT 5.6" not in patterns
     for label in [*RETIRED_V243_MODELS.values(), *RETIRED_1P_MODELS.values()]:
         assert any(p in label for p in patterns), label
     for label in ACTIVE_MODELS.values():
@@ -84,7 +88,7 @@ def test_the_new_hide_patterns_filter_stored_rows_in_sql():
     engine = create_engine("sqlite://", connect_args={"check_same_thread": False}, poolclass=StaticPool)
     models.Base.metadata.create_all(engine)
     kept = ["Bedrock Claude Opus 5 (US)", "Anthropic Claude Opus 5.5 (US)", "OpenAI GPT 6 Sol (us-east-1)",
-            "OpenAI GPT 6.1 Terra (Global)"]
+            "OpenAI GPT 6.1 Terra (Global)", "OpenAI GPT 5.6 Sol (Global)"]
     with sessionmaker(bind=engine)() as db:
         run = models.ProbeRun(prompt="p")
         db.add(run)
@@ -105,24 +109,18 @@ def test_every_retired_channel_has_no_price_identity_or_seed(model_id):
 
 def test_no_seed_offer_or_official_price_is_left_for_them():
     assert "claude-opus-4-8" not in pricing_seed.CP_SEED
-    assert not [fk for fk in pricing_seed.OPENAI_LIST_SEED if fk.startswith("gpt-5.")]
-    for list_id in ("openai-list:gpt-5.6-sol", "openai-list:gpt-5.6-terra", "openai-list:gpt-5.6-luna",
-                    "openai-list:gpt-5.5"):
-        assert price_identity(list_id) is None, list_id
+    assert "gpt-5.5" not in pricing_seed.OPENAI_LIST_SEED
+    assert price_identity("openai-list:gpt-5.5") is None
     cited = {src for *_, src in pricing_seed.SEED.values()}
     assert not RETIRED_OFFERS & cited
     assert not RETIRED_OFFERS & set(pricing_seed.SEED_SOURCE_DATES)
-    for name in ("Claude Opus 4.8", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5"):
+    for name in ("Claude Opus 4.8", "GPT 5.5"):
         assert name not in pricing_sources.FAMILY_ORDER, name
 
 
-def test_the_gpt_5_6_sol_promo_note_is_gone():
-    assert [n["kind"] for n in pricing_sources.PRICE_NOTES] == ["doc_conflict"]
-    assert not [n for n in pricing_sources.PRICE_NOTES if n["family_key"].startswith("gpt-5.")]
-
-
-def test_the_bench_keeps_only_gpt_6_channels_in_two_lanes(monkeypatch):
-    """15 channels in v2.43.0 (cris 10, mantle-us-east-1 5); v2.44.0 appended GPT 6.2 Astra and GPT 6.2 Sol."""
+def test_the_bench_has_no_gpt_5_5_channel(monkeypatch):
+    """15 channels in v2.43.0 (cris 10, mantle-us-east-1 5); v2.44.0 appended GPT 6.2 Astra and GPT 6.2 Sol, v2.45.0
+    GPT 5.6 Terra (Global, us-east-1)."""
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
     for env, url in (("OPENAI_US_EAST_1_BASE_URL", "https://e1"), ("OPENAI_GLOBAL_BASE_URL", "https://gl"),
                      ("OPENAI_US_BASE_URL", "https://us")):
@@ -130,8 +128,9 @@ def test_the_bench_keeps_only_gpt_6_channels_in_two_lanes(monkeypatch):
     for env, _, _ in prober._OPENAI_MODEL_SPECS:
         monkeypatch.setenv(env, "openai.x")
     assert [family for family, _, _ in gptbench._BENCH_SPECS] == [
-        "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol"]
+        "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol",
+        "GPT 5.6 Terra"]
     chans = gptbench.bench_channels()
-    assert len(chans) == 21 and not [c for c in chans if c["family"].startswith("GPT 5.")]
+    assert len(chans) == 23 and not [c for c in chans if c["family"] == "GPT 5.5"]
     lanes = gptbench.bench_lanes(chans)
-    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 14, "mantle-us-east-1": 7}
+    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 15, "mantle-us-east-1": 8}

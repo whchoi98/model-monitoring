@@ -358,7 +358,10 @@ _OPENAI_PSEUDO_REGIONS: dict[str, tuple[str, str]] = {
 # 6.2 Astra와 6.2 Sol 2026-11-17 라이브 200) — 5.x는 미검증이라 미기재.
 # pseudo-region 채널의 모델 id는 in-region id에 접두사를 파생(_OPENAI_PSEUDO_REGIONS, 등록 루프).
 # GPT 5.4는 사용자 결정(2026-10-27)으로 모니터링에서 뺐다 (v2.39.0, ADR-034 — Mantle과 휴면 1P 스펙 모두, 저장 행은 visibility.py가 숨긴다).
-# GPT 5.6 Sol, Terra, Luna와 GPT 5.5도 사용자 결정(2026-11-10)으로 뺐다 (v2.43.0, ADR-038 — 같은 방식). 남은 OpenAI는 GPT 6 세대뿐이다.
+# GPT 5.6 Sol, Terra, Luna와 GPT 5.5도 사용자 결정(2026-11-10)으로 뺐다 (v2.43.0, ADR-038 — 같은 방식).
+# GPT 5.6 Sol, Terra, Luna는 사용자 요청(2026-11-25 "gpt 5.6을 다시 활성화")으로 되살렸다 (v2.45.0, ADR-040) — v2.42.x와 같은
+# Global CRIS와 Mantle us-east-1 두 채널씩, 목록 끝(GPT 6 Luna 뒤)이다. 같은 날 여섯 채널 모두 첫 호출부터 200.
+# us.openai.gpt-5.6-* 프로파일도 us-east-1에 있지만 v2.42.x에 재지 않던 채널이라 넣지 않았다. GPT 5.5는 빠진 그대로다.
 # Mantle 인리전은 모든 모델이 us-east-1 하나다 (v2.38.0, 2026-10-27 사용자 결정 "gpt mantle은 모두 us-east-1으로 변경").
 # 같은 날 us-east-1 Mantle이 10개 모델 모두 200 — GPT 6 Astra도 서빙한다(2026-09-09·09-23에는 404라 us-west-2였다).
 # 그 전에는 모델마다 리전이 달랐다: 5.4 us-east-1/us-east-2/us-west-2, 5.5와 5.6 Sol us-east-1/us-east-2,
@@ -378,6 +381,9 @@ _OPENAI_MODEL_SPECS: list[tuple[str, str, tuple[str, ...]]] = [
     ("BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID", "GPT 6 Astra", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID", "GPT 6 Sol", ("global", "us", "us-east-1")),
     ("BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID", "GPT 6 Luna", ("global", "us", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "GPT 5.6 Sol", ("global", "us-east-1")),  # v2.45.0 복귀
+    ("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "GPT 5.6 Terra", ("global", "us-east-1")),
+    ("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "GPT 5.6 Luna", ("global", "us-east-1")),
 ]
 
 # =====================================================================
@@ -391,6 +397,7 @@ _OPENAI_1P_DEFAULT_BASE_URL = "https://api.openai.com/v1"
 # (model-id env var, display family) — 리전 없음 (글로벌 라우팅).
 # v2.43.0부터 남은 스펙이 없다 — 휴면 1P 스펙은 GPT 5.5와 5.6 세대뿐이었고 그 계열을 모니터링에서 뺐다(ADR-038).
 # 1P 경로(키, base_url, 등록 루프)는 그대로 둔다. 다시 쓰려면 여기에 (env, family)를 더하고 CDK에 그 env를 주입한다.
+# v2.45.0에 GPT 5.6 세대를 되살릴 때도 1P 스펙은 되살리지 않았다 — 1P는 2026-07-31부터 비교에서 뺀 휴면 경로다(ADR-040).
 _OPENAI_1P_MODEL_SPECS: list[tuple[str, str]] = []
 
 # OpenAI Responses API의 incomplete reason → 기존 stop_reason enum(anthropic/bedrock와 정렬).

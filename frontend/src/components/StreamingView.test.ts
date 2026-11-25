@@ -41,8 +41,8 @@ describe("extractModelName", () => {
     expect(name("openai:global:global.openai.gpt-6.1-terra:1")).toBe("GPT 6.1 Terra (Global)");
     expect(name("openai:us:us.openai.gpt-6.1-terra:1")).toBe("GPT 6.1 Terra (US)");
     expect(name("openai:us-east-1:openai.gpt-6.1-terra:2")).toBe("GPT 6.1 Terra (us-east-1)");
-    // GPT 5.6 Terra는 v2.43.0에 모니터링에서 뺐다(ADR-038) — family 이름 없이 "GPT"로만 읽힌다.
-    expect(name("openai:us-east-1:openai.gpt-5.6-terra:1")).toBe("GPT (us-east-1)");
+    // GPT 5.6 Terra는 v2.43.0에 뺐다가 v2.45.0에 되살렸다(ADR-038, ADR-040) — 6.1 Terra로 접히지 않는다.
+    expect(name("openai:us-east-1:openai.gpt-5.6-terra:1")).toBe("GPT 5.6 Terra (us-east-1)");
     expect(name("openai:us-east-1:openai.gpt-6-astra:1")).toBe("GPT 6 Astra (us-east-1)");
   });
   test("GPT 6.2 Astra, GPT 6.2 Sol 3채널씩(v2.44.0)은 GPT 6 Astra, GPT 6 Sol과 구분된다", () => {
@@ -56,6 +56,18 @@ describe("extractModelName", () => {
     expect(name("openai:global:global.openai.gpt-6-astra:1")).toBe("GPT 6 Astra (Global)");
     expect(name("openai:us:us.openai.gpt-6-sol:1")).toBe("GPT 6 Sol (US)");
     expect(name("openai:us-east-1:openai.gpt-6.1-sol:1")).toBe("GPT 6.1 Sol (us-east-1)");
+  });
+  test("GPT 5.6 Sol, Terra, Luna(v2.45.0 복귀)는 Global과 us-east-1로 읽히고 GPT 6 세대와 구분된다", () => {
+    expect(name("openai:global:global.openai.gpt-5.6-sol:1")).toBe("GPT 5.6 Sol (Global)");
+    expect(name("openai:us-east-1:openai.gpt-5.6-sol:2")).toBe("GPT 5.6 Sol (us-east-1)");
+    expect(name("openai:global:global.openai.gpt-5.6-terra:1")).toBe("GPT 5.6 Terra (Global)");
+    expect(name("openai:global:global.openai.gpt-5.6-luna:1")).toBe("GPT 5.6 Luna (Global)");
+    expect(name("openai:us-east-1:openai.gpt-5.6-luna:3")).toBe("GPT 5.6 Luna (us-east-1)");
+    // 이웃 패밀리는 그대로다
+    expect(name("openai:global:global.openai.gpt-6-sol:1")).toBe("GPT 6 Sol (Global)");
+    expect(name("openai:us-east-1:openai.gpt-6-luna:1")).toBe("GPT 6 Luna (us-east-1)");
+    // GPT 5.5는 v2.43.0에 뺀 그대로다 — family 이름 없이 "GPT"로만 읽힌다.
+    expect(name("openai:us-east-1:openai.gpt-5.5:1")).toBe("GPT (us-east-1)");
   });
   test("FM id 안의 ':'는 마지막 iteration 세그먼트만 떼어 낸다", () => {
     expect(name("us.amazon.nova-2-lite-v1:0:1")).toBe("Nova 2.0 Lite");

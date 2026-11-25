@@ -46,12 +46,17 @@ OPENAI = {  # family_key → (US CRIS와 in-region, Global CRIS)
     "gpt-6.2-astra": ((8.8, 44.0), (8.0, 40.0)), "gpt-6.2-sol": ((2.2, 11.0), (2.0, 10.0)),  # v2.44.0
     "gpt-6.1-sol": ((2.2, 11.0), (2.0, 10.0)), "gpt-6.1-terra": ((1.1, 5.5), (1.0, 5.0)),  # 6.1 Terra v2.38.0
     "gpt-6-astra": ((11.0, 55.0), (10.0, 50.0)), "gpt-6-sol": ((2.2, 11.0), (2.0, 10.0)),
-    "gpt-6-luna": ((0.11, 0.55), (0.1, 0.5)),  # GPT 5.6 Sol, Terra, Luna and GPT 5.5 left in v2.43.0 (ADR-038)
+    "gpt-6-luna": ((0.11, 0.55), (0.1, 0.5)),
+    # GPT 5.6 Sol, Terra, Luna and GPT 5.5 left in v2.43.0 (ADR-038); GPT 5.6 came back in v2.45.0 (ADR-040, 5.6 Sol at its
+    # promotional price), GPT 5.5 did not
+    "gpt-5.6-sol": ((4.4, 22.0), (4.0, 20.0)), "gpt-5.6-terra": ((2.2, 13.2), (2.0, 12.0)),
+    "gpt-5.6-luna": ((0.22, 1.32), (0.2, 1.2)),
 }
 OPENAI_LIST = {  # OpenAI 공식 가격(Standard, 짧은 컨텍스트) — OpenAI pricing.md 2026-09-27(6.1 Terra 2026-10-27, 6.2 2026-11-17)
     "gpt-6.2-astra": (8.0, 40.0), "gpt-6.2-sol": (2.0, 10.0),
     "gpt-6.1-sol": (2.0, 10.0), "gpt-6.1-terra": (1.0, 5.0),
     "gpt-6-astra": (10.0, 50.0), "gpt-6-sol": (2.0, 10.0), "gpt-6-luna": (0.1, 0.5),
+    "gpt-5.6-sol": (4.0, 20.0), "gpt-5.6-terra": (2.0, 12.0), "gpt-5.6-luna": (0.2, 1.2),  # v2.45.0, the same on 2026-11-25
 }
 FIXTURES = pathlib.Path(__file__).parent / "fixtures" / "pricing"
 
@@ -79,8 +84,9 @@ def _add(eng, **row):
 
 
 def test_seed_covers_every_active_channel():
-    assert len(SEED) == 38  # v2.39.0: -8 Bedrock Claude 4.x (Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5), -1 GPT 5.4; v2.41.0: +2 Fable 5.2;
-    #                         v2.42.0: -2 Fable 5; v2.43.0: -2 Opus 4.8, -6 GPT 5.6, -1 GPT 5.5; v2.44.0: +3 GPT 6.2 Astra, +3 GPT 6.2 Sol
+    assert len(SEED) == 44  # v2.39.0: -8 Bedrock Claude 4.x (Opus 4.7, 4.6, Sonnet 4.6, Haiku 4.5), -1 GPT 5.4; v2.41.0: +2 Fable 5.2;
+    #                         v2.42.0: -2 Fable 5; v2.43.0: -2 Opus 4.8, -6 GPT 5.6, -1 GPT 5.5; v2.44.0: +3 GPT 6.2 Astra, +3 GPT 6.2 Sol;
+    #                         v2.45.0: +6 GPT 5.6 back
     assert set(SEED) == {m for m, i in ACTIVE.items() if i.channel != "cp"}
     assert set(CP_SEED) == {i.family_key for i in ACTIVE.values() if i.channel == "cp"}
     rows = seed_rows(ACTIVE)
@@ -122,7 +128,7 @@ def test_gpt_us_cris_seed_equals_in_region_on_every_price():
 def test_seed_rows_resolve_openai_list_channels_by_family_key():
     active = active_channels({**ACTIVE_MODELS, **HIDDEN_1P_MODELS}, ["(1P)"])
     rows = seed_rows(active)
-    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS) and len(rows) == 52  # 45 active + 7 OpenAI official prices (v2.44.0)
+    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS) and len(rows) == 61  # 51 active + 10 OpenAI official prices (v2.45.0)
     assert rows["openai-list:gpt-6-sol"] == (2.0, 10.0, OPENAI_SOURCE_ID)
     assert not any(m in SEED for m in OPENAI_LIST_IDS)  # family_key 표(CP와 같은 방식), model_id 표에는 없다
 
@@ -156,8 +162,10 @@ def test_seed_source_ids_follow_the_price_identity():
             by_fm.setdefault(ident.source_ref, set()).add(src)
         else:
             assert src == pricelist_source_id(NOVA_USAGETYPES[ident.source_ref][0])
-    assert len(by_fm) == 14 and all(len(v) == 1 for v in by_fm.values())  # FM당 오퍼 1개를 모든 채널이 인용
-    assert len(set().union(*by_fm.values())) == 14  # v2.44.0: + GPT 6.2 Astra, GPT 6.2 Sol
+    assert len(by_fm) == 17 and all(len(v) == 1 for v in by_fm.values())  # FM당 오퍼 1개를 모든 채널이 인용
+    assert len(set().union(*by_fm.values())) == 17  # v2.44.0: + GPT 6.2 Astra, GPT 6.2 Sol; v2.45.0: + GPT 5.6 Sol, Terra, Luna
+    assert (by_fm["openai.gpt-5.6-sol"], by_fm["openai.gpt-5.6-terra"], by_fm["openai.gpt-5.6-luna"]) == (
+        {"offer:offer-gnqokrqqvdbgw"}, {"offer:offer-3dvyrx3okd4lq"}, {"offer:offer-bklbyf2ewuawu"})
     assert by_fm["openai.gpt-6.2-astra"] == {"offer:offer-i5wczxyjg7weu"}
     assert by_fm["openai.gpt-6.2-sol"] == {"offer:offer-7vsvjk6xmsl7c"}
     assert "anthropic.claude-fable-5" not in by_fm  # v2.42.0 (ADR-037)
@@ -184,7 +192,7 @@ def test_seed_rows_skip_active_ids_without_seed(caplog):
 def test_ensure_seed_inserts_every_active_channel_then_is_idempotent(engine):
     statements: list[str] = []
     event.listen(engine, "before_cursor_execute", lambda *a: statements.append(a[2]))
-    assert ensure_seed(engine, ACTIVE) == 45
+    assert ensure_seed(engine, ACTIVE) == 51
     assert not any("pg_advisory" in s for s in statements)  # SQLite는 잠금 생략
     rows = _rows(engine)
     assert set(rows) == set(ACTIVE)
@@ -194,17 +202,17 @@ def test_ensure_seed_inserts_every_active_channel_then_is_idempotent(engine):
         assert (row.status, row.observed_at, row.run_id) == ("seed", None, None)
         assert _utc(row.effective_from) == EPOCH and row.created_at is not None
     assert ensure_seed(engine, ACTIVE) == 0
-    assert len(_rows(engine)) == 45
+    assert len(_rows(engine)) == 51
 
 
 def test_existing_row_blocks_seeding_only_that_model_id(engine):
     _add(engine, model_id="us.amazon.nova-2-lite-v1:0", family_key="nova-2-lite", channel="us",
          input_per_mtok=0.06, output_per_mtok=0.24, effective_from=EPOCH, status="rejected",
          source_id="pricelist:USE1-Nova2.0Lite-input-tokens", observed_at=datetime(2026, 9, 26, 3, tzinfo=timezone.utc))
-    assert ensure_seed(engine, ACTIVE) == 44
+    assert ensure_seed(engine, ACTIVE) == 50
     rows = _rows(engine)
     assert (rows["us.amazon.nova-2-lite-v1:0"].status, rows["us.amazon.nova-2-lite-v1:0"].input_per_mtok) == ("rejected", 0.06)
-    assert sum(r.status == "seed" for r in rows.values()) == 44
+    assert sum(r.status == "seed" for r in rows.values()) == 50
 
 
 def test_sync_first_then_seed_still_fills_the_rest(engine):
@@ -217,9 +225,9 @@ def test_sync_first_then_seed_still_fills_the_rest(engine):
     _add(engine, model_id="us.anthropic.claude-opus-5-5", family_key="claude-opus-5-5", channel="us",
          input_per_mtok=4.4, output_per_mtok=22.0, effective_from=started, status="verified",
          source_id="offer:offer-7sp77cpl4rveu", observed_at=started, run_id=run_id)
-    assert ensure_seed(engine, active_channels({**ACTIVE_MODELS, **HIDDEN_1P_MODELS}, ["(1P)"])) == 51
+    assert ensure_seed(engine, active_channels({**ACTIVE_MODELS, **HIDDEN_1P_MODELS}, ["(1P)"])) == 60
     rows = _rows(engine)
-    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS)  # 45 - 1 already priced + 7 OpenAI official prices
+    assert set(rows) == set(ACTIVE) | set(OPENAI_LIST_IDS)  # 51 - 1 already priced + 10 OpenAI official prices
     listed = rows["openai-list:gpt-6-astra"]
     assert (listed.family_key, listed.channel, listed.source_id, listed.status) == (
         "gpt-6-astra", "openai_list", OPENAI_SOURCE_ID, "seed")
@@ -283,11 +291,14 @@ def test_v2_32_new_channels_seed_values():
 def test_per_source_seed_dates_name_seeded_sources_checked_after_the_default():
     """SEED_SOURCE_DATES holds only the offers checked after the default: the v2.32.0 offers (2026-09-30), the
     v2.33.0 Haiku 5.5 offer (2026-10-07), the v2.38.0 GPT 6.1 Terra offer (2026-10-27), the v2.41.0 Fable 5.2 offer
-    (2026-11-09) and the v2.44.0 GPT 6.2 Astra and GPT 6.2 Sol offers (2026-11-17); every key is a source a seed row cites."""
+    (2026-11-09), the v2.44.0 GPT 6.2 Astra and GPT 6.2 Sol offers (2026-11-17) and the three GPT 5.6 offers read again
+    when the family came back in v2.45.0 (2026-11-25); every key is a source a seed row cites."""
     assert {sid: d.isoformat() for sid, d in SEED_SOURCE_DATES.items()} == {
         "offer:offer-5fu2rhus3byrs": "2026-09-30", "offer:offer-wbhj4kycntgkk": "2026-09-30",
         "offer:offer-u3aih6zr7uw5u": "2026-10-07", "offer:offer-34pzbdgg26ley": "2026-10-27",
         "offer:offer-agsprgw6z3dg6": "2026-11-09",
-        "offer:offer-i5wczxyjg7weu": "2026-11-17", "offer:offer-7vsvjk6xmsl7c": "2026-11-17"}
+        "offer:offer-i5wczxyjg7weu": "2026-11-17", "offer:offer-7vsvjk6xmsl7c": "2026-11-17",
+        "offer:offer-gnqokrqqvdbgw": "2026-11-25", "offer:offer-3dvyrx3okd4lq": "2026-11-25",
+        "offer:offer-bklbyf2ewuawu": "2026-11-25"}
     assert set(SEED_SOURCE_DATES) <= {src for *_, src in seed_rows(ACTIVE).values()}
     assert all(d > SEED_SOURCE_DATE for d in SEED_SOURCE_DATES.values())

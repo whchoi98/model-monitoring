@@ -228,15 +228,27 @@ describe("AppServicesStack", () => {
     expect(names).not.toContain("OPENAI_1P_GPT_54_MODEL_ID");
   });
 
-  it("backend env에 GPT 5.5, GPT 5.6 model id가 없다 (v2.43.0 — 모니터링에서 뺐다)", () => {
+  it.each([
+    ["BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "openai.gpt-5.6-sol"],
+    ["BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "openai.gpt-5.6-terra"],
+    ["BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "openai.gpt-5.6-luna"],
+  ])("backend env에 GPT-5.6 model id %s가 다시 주입된다 (v2.45.0 — v2.43.0에 뺐다가 되살렸다)", (name, value) => {
+    template.hasResourceProperties("AWS::ECS::TaskDefinition", Match.objectLike({
+      ContainerDefinitions: Match.arrayWith([Match.objectLike({ Name: "backend",
+        Environment: Match.arrayWith([Match.objectLike({ Name: name, Value: value })]) })]) }));
+  });
+
+  it("backend env에 GPT 5.5 model id와 1P model id가 없다 (v2.43.0에 뺐고 v2.45.0에도 되살리지 않았다)", () => {
     const backend = Object.values(template.findResources("AWS::ECS::TaskDefinition"))
       .flatMap((r: any) => r.Properties.ContainerDefinitions).filter((c: any) => c.Name === "backend");
     expect(backend).toHaveLength(1);
     const names = backend[0].Environment.map((e: any) => e.Name);
-    for (const retired of ["BEDROCK_OPENAI_GPT_55_MODEL_ID", "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID", "BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID",
+    for (const retired of ["BEDROCK_OPENAI_GPT_55_MODEL_ID",
       "OPENAI_1P_GPT_55_MODEL_ID", "OPENAI_1P_GPT_56_SOL_MODEL_ID", "OPENAI_1P_GPT_56_TERRA_MODEL_ID", "OPENAI_1P_GPT_56_LUNA_MODEL_ID"]) {
       expect(names).not.toContain(retired);
     }
     expect(names.filter((n: string) => n.startsWith("OPENAI_1P_GPT_"))).toEqual([]);
+    expect(names.filter((n: string) => n.startsWith("BEDROCK_OPENAI_GPT_5")).sort()).toEqual(
+      ["BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID", "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID"]);
   });
 });

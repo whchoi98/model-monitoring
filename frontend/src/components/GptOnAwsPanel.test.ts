@@ -10,6 +10,8 @@
  * family ""가 된다(행은 백엔드가 숨긴다).
  * v2.44.0에서 GPT 6.2 Astra와 GPT 6.2 Sol이 들어왔다(사용자 요청 2026-11-17, ADR-039) — GPT 6.x 세대 묶음의 첫 두 열이고,
  * "GPT 6 Astra", "GPT 6 Sol"과 섞이지 않는 것을 고정한다.
+ * v2.45.0에서 GPT 5.6 Terra가 돌아왔다(사용자 요청 2026-11-25, ADR-040) — GPT 5.x 세대 묶음이 5.6 Terra 한 열로 다시 생기고,
+ * 선 패턴은 예전의 실선(지금은 GPT 6.2 Astra) 대신 비어 있던 파선 "7 4"다. GPT 5.5는 빠진 그대로다.
  */
 import { describe, expect, test } from "vitest";
 import type { GptBenchCard, GptBenchTrend, GptBenchTrendPoint } from "@/lib/api";
@@ -36,11 +38,11 @@ describe("regionOf", () => {
 });
 
 describe("familyOf", () => {
-  test("벤치 GPT 6 Astra 판별, 모니터링에서 뺀 GPT 5.x는 빈 문자열", () => {
+  test("벤치 GPT 6 Astra와 GPT 5.6 Terra 판별, 모니터링에서 뺀 GPT 5.5, 5.4는 빈 문자열", () => {
     expect(familyOf("OpenAI GPT 6 Astra (Global)")).toBe("GPT 6 Astra");
     expect(familyOf("OpenAI GPT 6 Astra (US)")).toBe("GPT 6 Astra");
     expect(familyOf("OpenAI GPT 6 Astra (us-west-2)")).toBe("GPT 6 Astra");
-    expect(familyOf("OpenAI GPT 5.6 Terra (us-east-1)")).toBe("");  // v2.43.0: GPT 5.6 left monitoring (ADR-038)
+    expect(familyOf("OpenAI GPT 5.6 Terra (us-east-1)")).toBe("GPT 5.6 Terra");  // "" in v2.43.0~v2.44.x, back in v2.45.0 (ADR-040)
     expect(familyOf("OpenAI GPT 5.5 (us-east-2)")).toBe("");        // v2.43.0
     expect(familyOf("OpenAI GPT 5.4 (us-west-2)")).toBe("");  // v2.39.0: GPT 5.4 left monitoring (ADR-034)
   });
@@ -65,7 +67,7 @@ describe("familyOf", () => {
     expect(familyOf("OpenAI GPT 6.1 Terra (Global)")).toBe("GPT 6.1 Terra");
     expect(familyOf("OpenAI GPT 6.1 Terra (US)")).toBe("GPT 6.1 Terra");
     expect(familyOf("OpenAI GPT 6.1 Terra (us-east-1)")).toBe("GPT 6.1 Terra");
-    expect(familyOf("OpenAI GPT 5.6 Terra (Global)")).toBe("");  // v2.43.0: GPT 5.6 left monitoring
+    expect(familyOf("OpenAI GPT 5.6 Terra (Global)")).toBe("GPT 5.6 Terra");  // its own family, never 6.1 Terra
     expect(familyOf("OpenAI GPT 6.1 Terran (US)")).toBe("");
   });
   test("GPT 6.2 Astra, GPT 6.2 Sol (v2.44.0) — Global, US CRIS, us-east-1 3채널, GPT 6 Astra나 GPT 6 Sol로 접히지 않는다", () => {
@@ -81,9 +83,10 @@ describe("familyOf", () => {
     }
   });
   test("GPT 5.6 Sol/Luna는 부분 문자열 \"6 Sol\"/\"6 Luna\"에 걸려 GPT 6로 오인되지 않는다", () => {
-    // v2.43.0부터 GPT 5.6은 벤치에 없어 ""다 — GPT 6 Sol, GPT 6 Luna로 접히지 않는 것이 요점이다.
-    expect(familyOf("OpenAI GPT 5.6 Sol (Global)")).toBe("");
-    expect(familyOf("OpenAI GPT 5.6 Luna (us-east-1)")).toBe("");
+    // GPT 5.6 Sol, Luna는 벤치 대상이 아니다 — 자기 이름으로 읽히고 GPT 6 Sol, GPT 6 Luna로 접히지 않는 것이 요점이다.
+    expect(familyOf("OpenAI GPT 5.6 Sol (Global)")).toBe("GPT 5.6 Sol");
+    expect(familyOf("OpenAI GPT 5.6 Luna (us-east-1)")).toBe("GPT 5.6 Luna");
+    expect("GPT 5.6 Sol" in FAMILY_DASH || "GPT 5.6 Luna" in FAMILY_DASH).toBe(false);
   });
   test("라벨 서픽스가 없어도 family만 있으면 판별", () => {
     expect(familyOf("GPT 6 Sol")).toBe("GPT 6 Sol");
@@ -99,13 +102,15 @@ describe("familyOf", () => {
 });
 
 describe("FAMILY_DASH", () => {
-  test("벤치 family 7종의 선 패턴이 모두 다르다", () => {
+  test("벤치 family 8종의 선 패턴이 모두 다르다", () => {
     const families = FAMILY_GROUPS.flatMap((group) => group.families);
-    // v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol joined (5 in v2.43.0 after GPT 5.6 Terra and GPT 5.5 left, 7 in v2.39.0, 8 in v2.38.0)
-    expect(families).toHaveLength(7);
+    // v2.45.0: GPT 5.6 Terra came back (7 in v2.44.0, when GPT 6.2 Astra and GPT 6.2 Sol joined; 5 in v2.43.0 after GPT 5.6 Terra
+    // and GPT 5.5 left, 7 in v2.39.0, 8 in v2.38.0)
+    expect(families).toHaveLength(8);
     expect(FAMILY_DASH["GPT 6.2 Astra"]).toBeUndefined();  // 실선 — 키는 있고 값이 없다
     expect(FAMILY_DASH["GPT 6.2 Sol"]).toBe("2 4");
-    for (const retired of ["GPT 5.4", "GPT 5.6 Terra", "GPT 5.5"]) expect(retired in FAMILY_DASH).toBe(false);
+    expect(FAMILY_DASH["GPT 5.6 Terra"]).toBe("7 4");  // 파선 — v2.42.x의 실선은 v2.44.0부터 GPT 6.2 Astra가 쓴다
+    for (const retired of ["GPT 5.4", "GPT 5.5"]) expect(retired in FAMILY_DASH).toBe(false);
     for (const family of families) expect(family in FAMILY_DASH).toBe(true);
     const patterns = families.map((family) => FAMILY_DASH[family] ?? "solid");
     expect(new Set(patterns).size).toBe(families.length);
@@ -129,14 +134,20 @@ describe("groupCardsByFamily", () => {
     cache_hit_rate: 1, median_reasoning_tokens: 40, last_error: null,
   });
 
-  test("GPT 6.x 세대 하나로 묶고 family 열 순서를 고정한다 (v2.43.0에 GPT 5.x 세대를 뺐다)", () => {
+  test("GPT 6.x 세대와 GPT 5.x 세대로 묶고 family 열 순서를 고정한다 (GPT 5.x 묶음은 v2.43.0에 뺐다가 v2.45.0에 5.6 Terra로 돌아왔다)", () => {
     const { groups, other } = groupCardsByFamily([
       card("OpenAI GPT 6 Luna (Global)", "GPT 6 Luna"),
       card("OpenAI GPT 6 Sol (US)", "GPT 6 Sol"),
+      card("OpenAI GPT 5.6 Terra (us-east-1)", "GPT 5.6 Terra"),
       card("OpenAI GPT 6 Sol (Global)", "GPT 6 Sol"),
+      card("OpenAI GPT 5.6 Terra (Global)", "GPT 5.6 Terra"),
     ]);
-    expect(groups.map((group) => group.key)).toEqual(["gpt-6"]);
-    expect(groups.map((group) => [group.en, group.ko])).toEqual([["GPT 6.x generation", "GPT 6.x 세대"]]);
+    expect(groups.map((group) => group.key)).toEqual(["gpt-6", "gpt-5"]);
+    expect(groups.map((group) => [group.en, group.ko])).toEqual(
+      [["GPT 6.x generation", "GPT 6.x 세대"], ["GPT 5.x generation", "GPT 5.x 세대"]]);
+    expect(groups[1].columns.map((column) => column.family)).toEqual(["GPT 5.6 Terra"]);
+    expect(groups[1].columns[0].cards.map((c) => c.model_name)).toEqual(
+      ["OpenAI GPT 5.6 Terra (us-east-1)", "OpenAI GPT 5.6 Terra (Global)"]);
     expect(groups[0].columns.map((column) => column.family)).toEqual(
       ["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
     // 열 안에서는 입력(API 응답) 순서를 그대로 유지한다 — 여기서 재정렬하지 않는다(US가 Global보다 앞선 입력 그대로).

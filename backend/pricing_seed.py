@@ -30,6 +30,9 @@ v2.43.0: 같은 날 사용자 결정으로 Claude Opus 4.8(Global, US, CP), GPT 
 v2.44.0: 2026-11-17 오퍼와 OpenAI 문서로 GPT 6.2 Astra(offer-i5wczxyjg7weu)와 GPT 6.2 Sol(offer-7vsvjk6xmsl7c) 6채널(Global, US,
 us-east-1)과 openai-list:gpt-6.2-astra, openai-list:gpt-6.2-sol을 더했다(사용자 요청, ADR-039). 6.2 Astra는 Global 8 / 40,
 US와 in-region 8.8 / 44, 6.2 Sol은 2 / 10과 2.2 / 11. 활성 45채널, offer FM 14개, openai-list 7개, 합계 52채널.
+v2.45.0: 사용자 요청(2026-11-25)으로 GPT 5.6 Sol, Terra, Luna 6채널(Global, us-east-1)과 openai-list:gpt-5.6-*를 되살렸다(ADR-040).
+값은 v2.42.x seed와 같고 2026-11-25 오퍼, OpenAI 문서로 다시 확인했다(5.6 Sol은 프로모션 단가 그대로 — 문서에 2026-11-30까지).
+운영에는 그 채널의 price_history 행이 남아 있어 seed는 새 환경에서만 쓰인다. 활성 51채널, offer FM 17개, openai-list 10개, 합계 61채널.
 """
 
 import logging
@@ -58,6 +61,10 @@ SEED_SOURCE_DATES: dict[str, date] = {
     offer_source_id("offer-agsprgw6z3dg6"): date(2026, 11, 9),  # Claude Fable 5.2 (v2.41.0)
     offer_source_id("offer-i5wczxyjg7weu"): date(2026, 11, 17),  # GPT 6.2 Astra (v2.44.0)
     offer_source_id("offer-7vsvjk6xmsl7c"): date(2026, 11, 17),  # GPT 6.2 Sol (v2.44.0)
+    # GPT 5.6 Sol, Terra, Luna (v2.45.0 복귀) — 2026-11-25에 오퍼를 다시 확인했다(값은 v2.42.x seed와 같다)
+    offer_source_id("offer-gnqokrqqvdbgw"): date(2026, 11, 25),
+    offer_source_id("offer-3dvyrx3okd4lq"): date(2026, 11, 25),
+    offer_source_id("offer-bklbyf2ewuawu"): date(2026, 11, 25),
 }
 # backend 태스크 기동과 PricingSync 러너가 겹쳐도 같은 model_id를 두 번 seed하지 않는다(트랜잭션 잠금).
 # 잠금 전에 트랜잭션 한정 상한을 건다 — 잠금 대기나 느린 쿼리가 lifespan/러너를 붙잡지 않게.
@@ -89,6 +96,10 @@ _OPENAI: dict[str, tuple[str, float, float, float | None, float | None, tuple[st
     "openai.gpt-6-astra": ("offer-7epta7rbw5aws", 11.0, 55.0, 10.0, 50.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-sol": ("offer-pycji3sz5gpcc", 2.2, 11.0, 2.0, 10.0, ("global", "us", "us-east-1")),
     "openai.gpt-6-luna": ("offer-gmo53nkzc5or6", 0.11, 0.55, 0.1, 0.5, ("global", "us", "us-east-1")),
+    # GPT 5.6 Sol, Terra, Luna (v2.45.0 복귀, 2026-11-25 오퍼) — 5.6 Sol은 프로모션 단가(이전 5.5 / 33, Global 5 / 30)
+    "openai.gpt-5.6-sol": ("offer-gnqokrqqvdbgw", 4.4, 22.0, 4.0, 20.0, ("global", "us-east-1")),
+    "openai.gpt-5.6-terra": ("offer-3dvyrx3okd4lq", 2.2, 13.2, 2.0, 12.0, ("global", "us-east-1")),
+    "openai.gpt-5.6-luna": ("offer-bklbyf2ewuawu", 0.22, 1.32, 0.2, 1.2, ("global", "us-east-1")),
 }
 
 
@@ -133,6 +144,7 @@ OPENAI_LIST_SEED: dict[str, tuple[float, float, str]] = {
         ("gpt-6.2-astra", 8.0, 40.0), ("gpt-6.2-sol", 2.0, 10.0),  # v2.44.0, 2026-11-17 문서
         ("gpt-6.1-sol", 2.0, 10.0), ("gpt-6.1-terra", 1.0, 5.0), ("gpt-6-astra", 10.0, 50.0), ("gpt-6-sol", 2.0, 10.0),
         ("gpt-6-luna", 0.1, 0.5),
+        ("gpt-5.6-sol", 4.0, 20.0), ("gpt-5.6-terra", 2.0, 12.0), ("gpt-5.6-luna", 0.2, 1.2),  # v2.45.0 복귀, 2026-11-25 문서
     )
 }
 
@@ -186,6 +198,10 @@ _OPENAI_EXTRA: dict[str, tuple[tuple, tuple | None]] = {
     "openai.gpt-6-astra": ((1.1, 13.75, 22.0, 82.5, 2.2, 27.5), (1.0, 12.5, 20.0, 75.0, 2.0, 25.0)),
     "openai.gpt-6-sol": ((0.22, 2.75, 4.4, 16.5, 0.44, 5.5), (0.2, 2.5, 4.0, 15.0, 0.4, 5.0)),
     "openai.gpt-6-luna": ((0.011, 0.1375, 0.22, 0.825, 0.022, 0.275), (0.01, 0.125, 0.2, 0.75, 0.02, 0.25)),
+    # GPT 5.6 Sol, Terra, Luna (v2.45.0 복귀) — 2026-11-25 오퍼의 cache_read, cache_write_30m, `_long_ctx` 차원
+    "openai.gpt-5.6-sol": ((0.44, 5.5, 8.8, 33.0, 0.88, 11.0), (0.4, 5.0, 8.0, 30.0, 0.8, 10.0)),
+    "openai.gpt-5.6-terra": ((0.22, 2.75, 4.4, 19.8, 0.44, 5.5), (0.2, 2.5, 4.0, 18.0, 0.4, 5.0)),
+    "openai.gpt-5.6-luna": ((0.022, 0.275, 0.44, 1.98, 0.044, 0.55), (0.02, 0.25, 0.4, 1.8, 0.04, 0.5)),
 }
 # OpenAI 공식 가격(openai-list:<family_key>) — OpenAI 문서 "### Standard pricing data" 첫 표, _GPT_FIELDS 순서
 _OPENAI_LIST_EXTRA: dict[str, tuple] = {
@@ -197,6 +213,10 @@ _OPENAI_LIST_EXTRA: dict[str, tuple] = {
     "gpt-6-astra": (1.0, 12.5, 20.0, 75.0, 2.0, 25.0),
     "gpt-6-sol": (0.2, 2.5, 4.0, 15.0, 0.4, 5.0),
     "gpt-6-luna": (0.01, 0.125, 0.2, 0.75, 0.02, 0.25),
+    # GPT 5.6 Sol, Terra, Luna (v2.45.0 복귀, 2026-11-25 문서)
+    "gpt-5.6-sol": (0.4, 5.0, 8.0, 30.0, 0.8, 10.0),
+    "gpt-5.6-terra": (0.2, 2.5, 4.0, 18.0, 0.4, 5.0),
+    "gpt-5.6-luna": (0.02, 0.25, 0.4, 1.8, 0.04, 0.5),
 }
 # Nova 2.0 Lite — Price List USE1 cache read / cache write usagetype(1K tokens × 1000), 공식 캐시 쓰기는 $0
 _NOVA_CACHE: dict[str, tuple[float, float]] = {"us.amazon.nova-2-lite-v1:0": (0.0825, 0.0)}

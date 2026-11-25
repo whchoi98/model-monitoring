@@ -1,5 +1,5 @@
 // 모델 카드/이력 정렬 공통 유틸.
-// 1차: 모델 family 우선순위 (Fable 5.2 > Fable 5.1 > Opus 5.5 > Opus 5 > Opus 4.8 > ... > Haiku 5.5 > Nova > GPT ...)
+// 1차: 모델 family 우선순위 (Fable 5.2 > Fable 5.1 > Opus 5.5 > Opus 5 > ... > Haiku 5.5 > Nova > GPT 6.x > GPT 5.6)
 // ⚠️ includes 매칭이므로 "Claude Fable 5"는 "Claude Fable 5.1", "Claude Fable 5.2" 라벨에도, "Claude Opus 5"는 "Claude Opus 5.5"
 // 라벨에도 포함된다 — 더 긴 이름(5.2, 5.1, 5.5)이 반드시 앞에 와야 함.
 // "Claude Sonnet 5"도 "Claude Sonnet 5.5" 라벨에 포함된다(v2.32.0).
@@ -22,6 +22,10 @@ export const FAMILY_ORDER = [
   "GPT 6 Astra",
   "GPT 6 Sol",
   "GPT 6 Luna",
+  // v2.45.0 (사용자 요청 2026-11-25, ADR-040): GPT 5.6 Sol, Terra, Luna를 예전 자리(GPT 6 세대 뒤)에 되살렸다.
+  "GPT 5.6 Sol",
+  "GPT 5.6 Terra",
+  "GPT 5.6 Luna",
 ];
 
 // 모니터링 catalogue에서 제외된 모델 (ADR-017). backend silent bug 대비 frontend hard-filter.
@@ -34,8 +38,9 @@ const EXCLUDED_FAMILIES = [
   "Opus 4.7", "Opus 4.6", "Sonnet 4.6", "Haiku 4.5", "GPT 5.4",
   // v2.42.0 (사용자 결정 2026-11-10, ADR-037): Fable 5 — includes 매칭이라 괄호까지 넣는다("Claude Fable 5"만 쓰면 5.1, 5.2 라벨도 걸린다).
   "Claude Fable 5 (",
-  // v2.43.0 (사용자 결정 2026-11-10, ADR-038): Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna). 남은 라벨과 겹치지 않는다.
-  "Opus 4.8", "GPT 5.6", "GPT 5.5",
+  // v2.43.0 (사용자 결정 2026-11-10, ADR-038): Claude Opus 4.8, GPT 5.5. 남은 라벨과 겹치지 않는다.
+  // 그때 함께 넣은 "GPT 5.6"은 v2.45.0에 그 계열을 되살리며 뺐다(ADR-040) — 1P 라벨은 "(1P)"가 계속 가린다.
+  "Opus 4.8", "GPT 5.5",
 ];
 
 export function isExcludedModel(modelName: string): boolean {

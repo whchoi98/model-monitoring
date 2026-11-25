@@ -62,7 +62,7 @@ class TrendResponse(BaseModel):
     series: list[TrendSeries] = []
 
 
-# 사이클은 채널 단위로 커밋되므로 실행 중(21채널 호스트별 갈래 병렬 — v2.44.0, v2.38.0부터 두 갈래, v2.32.1 네 갈래, 18채널 순차 실측 p50 620s)에는
+# 사이클은 채널 단위로 커밋되므로 실행 중(23채널 호스트별 갈래 병렬 — v2.45.0, v2.44.0은 21채널, v2.38.0부터 두 갈래, v2.32.1 네 갈래, 18채널 순차 실측 p50 620s)에는
 # max(cycle_ts)가 부분 사이클이다. 데드라인(13분) + 여유 = 14분 이상 지난 사이클만 "완료"로 간주하고, 최신이 진행 중이면
 # 직전 사이클로 폴백한다 (2026-07-22 "카드 4개만 보임" 실사고).
 # 15분으로 늘리지 않는 이유(v2.32.0): 화면에 보이는 사이클 나이가 최대 "이 값 + 15분 + 기동 지연"이 되어 프런트
@@ -131,11 +131,11 @@ def latest(db: Session = Depends(get_db)):
             median_reasoning_tokens=_median([r.reasoning_tokens for r in ok]),
             last_error=(errs[-1].error_message if errs else None),
         ))
-    # 정렬: family(최신 순, GPT 6.2 → GPT 6.1 → GPT 6 세대) → region. 누락된 family는 rank 9로 맨 뒤.
-    # GPT 5.6 Terra, GPT 5.5는 v2.43.0에 벤치에서 뺐다(지난 사이클 행은 visible_only가 숨긴다).
-    # GPT 6.2 Astra, GPT 6.2 Sol은 v2.44.0에 더했다(FAMILY_ORDER와 같은 순서).
+    # 정렬: family(최신 순, GPT 6.2 → GPT 6.1 → GPT 6 세대 → GPT 5.6) → region. 누락된 family는 rank 9로 맨 뒤.
+    # GPT 5.6 Terra, GPT 5.5는 v2.43.0에 벤치에서 뺐고, GPT 5.6 Terra는 v2.45.0에 되살렸다(GPT 5.5의 지난 사이클 행은
+    # visible_only가 숨긴다). GPT 6.2 Astra, GPT 6.2 Sol은 v2.44.0에 더했다(FAMILY_ORDER와 같은 순서).
     fam_rank = {"GPT 6.2 Astra": 0, "GPT 6.2 Sol": 1, "GPT 6.1 Sol": 2, "GPT 6.1 Terra": 3, "GPT 6 Astra": 4,
-                "GPT 6 Sol": 5, "GPT 6 Luna": 6}
+                "GPT 6 Sol": 5, "GPT 6 Luna": 6, "GPT 5.6 Terra": 7}
     cards.sort(key=lambda c: (fam_rank.get(c.family, 9), c.region))
     return LatestResponse(cycle_ts=last_cycle, channels=cards)
 
@@ -143,14 +143,14 @@ def latest(db: Session = Depends(get_db)):
 @router.get("/trend", response_model=TrendResponse)
 def trend(
     # 상한 168h = UI 최대 범위(GptOnAwsPanel RANGE_OPTIONS 7일). 공개 엔드포인트라 상한이 곧
-    # 1요청 메모리 상한이다 — 720h(30일)는 21채널에서 ~1.2 GB RSS까지 올라 1 GiB 태스크 OOM 위험
+    # 1요청 메모리 상한이다 — 720h(30일)는 21채널에서 ~1.2 GB RSS까지 올라 1 GiB 태스크 OOM 위험(v2.45.0부터 23채널)
     # (2026-09-01 /api/results/stats OOM과 같은 패턴).
     hours: int = Query(24, ge=1, le=168),
     db: Session = Depends(get_db),
 ):
     """시간 범위 내 사이클별 median 시계열 — 그래프용.
 
-    최대 범위(7일)에서 96사이클/일 × 21채널 × 10행 ≈ 14만 행을 읽는다(v2.44.0 — v2.43.0은 15채널 10만 행, v2.32.0~v2.37.x도 21채널). ORM 객체 대신 집계에 쓰는
+    최대 범위(7일)에서 96사이클/일 × 23채널 × 10행 ≈ 15만 행을 읽는다(v2.45.0 — v2.44.0은 21채널 14만 행, v2.43.0은 15채널 10만 행). ORM 객체 대신 집계에 쓰는
     7개 컬럼만 튜플로 읽어 행당 메모리를 줄이고(identity map·인스턴스 상태 없음), median은
     Python에서 계산한다.
     """

@@ -267,7 +267,7 @@ class GptBenchResult(Base):
     timestamp = Column(DateTime(timezone=True), nullable=False)  # 개별 호출 시각
     model_id = Column(Text, nullable=False)     # openai:<region>:<actual_id>
     model_name = Column(Text, nullable=False)   # "OpenAI GPT 6 Sol (us-east-1)"
-    family = Column(Text, nullable=False)       # "GPT 6 Astra" (v2.25.1) | "GPT 6 Sol" | "GPT 6 Luna" (v2.28.0) | "GPT 6.1 Sol" | "GPT 6.1 Terra" | "GPT 6.2 Astra" | "GPT 6.2 Sol" (v2.44.0) — 지난 행에는 "GPT 5.4"(v2.38.x까지), "GPT 5.5", "GPT 5.6 Terra"(v2.42.x까지)
+    family = Column(Text, nullable=False)       # "GPT 6 Astra" (v2.25.1) | "GPT 6 Sol" | "GPT 6 Luna" (v2.28.0) | "GPT 6.1 Sol" | "GPT 6.1 Terra" | "GPT 6.2 Astra" | "GPT 6.2 Sol" (v2.44.0) | "GPT 5.6 Terra" (v2.42.x까지, v2.45.0 복귀) — 지난 행에는 "GPT 5.4"(v2.38.x까지), "GPT 5.5"(v2.42.x까지)
     region = Column(Text, nullable=False)
     run_no = Column(Integer, nullable=False)    # 1..RUNS_PER_CHANNEL
     status = Column(Text, nullable=False)       # success | error

@@ -387,17 +387,32 @@ describe("isExcludedModel — families left out of monitoring", () => {
       "Bedrock Claude Haiku 4.5 (Global)", "Bedrock Claude Haiku 4.5 (US)", "Anthropic Claude Haiku 4.5 (US)",
       "OpenAI GPT 5.4 (us-east-1)", "OpenAI GPT 5.4 (us-east-2)", "OpenAI GPT 5.4 (us-west-2)", "OpenAI GPT 5.4 (1P)",
       "OpenAI GPT 5.5 (1P)", "Bedrock Claude Opus 4.5 (Global)", "Bedrock Claude Sonnet 4.5 (US)",
+      // v2.43.0 exclusions that stay: Opus 4.8 and GPT 5.5; the GPT 5.6 1P labels stay hidden through "(1P)"
+      "Bedrock Claude Opus 4.8 (Global)", "Anthropic Claude Opus 4.8 (US)", "OpenAI GPT 5.5 (us-east-1)",
+      "OpenAI GPT 5.6 Sol (1P)", "OpenAI GPT 5.6 Terra (1P)", "OpenAI GPT 5.6 Luna (1P)",
     ]) {
       expect(isExcludedModel(label), label).toBe(true);
     }
   });
 
+  it("shows the GPT 5.6 labels again (v2.45.0), the regions collection stopped at included", () => {
+    for (const label of [
+      "OpenAI GPT 5.6 Sol (Global)", "OpenAI GPT 5.6 Sol (us-east-1)", "OpenAI GPT 5.6 Terra (Global)",
+      "OpenAI GPT 5.6 Terra (us-east-1)", "OpenAI GPT 5.6 Luna (Global)", "OpenAI GPT 5.6 Luna (us-east-1)",
+      "OpenAI GPT 5.6 Sol (us-east-2)", "OpenAI GPT 5.6 Terra (us-west-2)",
+    ]) {
+      expect(isExcludedModel(label), label).toBe(false);
+    }
+  });
+
   it("keeps every family still monitored", () => {
-    // v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol joined (13 in v2.43.0, when Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 left; 18 in v2.42.0)
-    expect(FAMILY_ORDER).toHaveLength(15);
+    // v2.45.0: GPT 5.6 Sol, Terra and Luna came back at the end (15 in v2.44.0, when GPT 6.2 Astra and GPT 6.2 Sol joined; 13 in
+    // v2.43.0, when Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 left; 18 in v2.42.0)
+    expect(FAMILY_ORDER).toHaveLength(18);
+    expect(FAMILY_ORDER.slice(-4)).toEqual(["GPT 6 Luna", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna"]);
     for (const family of FAMILY_ORDER) expect(isExcludedModel(family), family).toBe(false);
     for (const family of ["Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4", "Claude Fable 5",
-      "Claude Opus 4.8", "GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna", "GPT 5.5"]) {
+      "Claude Opus 4.8", "GPT 5.5"]) {
       expect(FAMILY_ORDER).not.toContain(family);
     }
   });

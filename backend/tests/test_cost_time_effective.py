@@ -75,10 +75,12 @@ RETIRED_V239 = {
 # channels, so 10 corrected channels minus the v2.39.0 ones are still active
 RETIRED_V242 = {"global.anthropic.claude-fable-5", "us.anthropic.claude-fable-5", "anthropic:claude-fable-5"}
 # v2.43.0 (2026-11-10 user decision, ADR-038): Claude Opus 4.8, GPT 5.6 Sol, Terra, Luna and GPT 5.5 left monitoring —
-# every channel of those families is unclassified, the v2.38.0-retired us-east-2 and us-west-2 ones included
+# every channel of those families was unclassified, the v2.38.0-retired us-east-2 and us-west-2 ones included.
+# v2.45.0 (2026-11-25 user request, ADR-040): GPT 5.6 is classified and seeded again (Global, us-east-1), so its six
+# channels are back in the v2.29.1 equivalence; its us-east-2 and us-west-2 channels stay unseeded (RETIRED_V238).
 RETIRED_V243 = {
     "global.anthropic.claude-opus-4-8", "us.anthropic.claude-opus-4-8", "anthropic:claude-opus-4-8",
-    *(m for m in OPENAI if "gpt-5.6-" in m or "gpt-5.5" in m),
+    *(m for m in OPENAI if "gpt-5.5" in m),
 }
 UNCLASSIFIED = (RETIRED_V239 | RETIRED_V242 | RETIRED_V243
                 | {"openai:us-east-2:openai.gpt-5.4", "openai:us-west-2:openai.gpt-5.4"})  # GPT 5.4 family gone
@@ -223,12 +225,13 @@ def test_seeded_costs_match_v2291_on_unchanged_channels_and_fix_the_11_corrected
     identities = {mid: price_identity(mid) for mid in ACTIVE_IDS}
     assert {m for m, i in identities.items() if i is None} == UNCLASSIFIED
     active = {m: i for m, i in identities.items() if i is not None}
-    assert len(ACTIVE_IDS) == 55 and len(active) == 55 - 14 - 3 - 16
+    assert len(ACTIVE_IDS) == 55 and len(active) == 55 - 14 - 3 - 5
     assert len(UNCHANGED) == 44 and len(CORRECTED) == 11
     assert len(RETIRED_V238) == 9 and RETIRED_V238 <= set(UNCHANGED)
     assert len(RETIRED_V239) == 12 and len(RETIRED_V239 & set(CORRECTED)) == 4
     assert len(RETIRED_V242) == 3 and RETIRED_V242 & set(CORRECTED) == {"us.anthropic.claude-fable-5"}
-    assert len(RETIRED_V243) == 16 and RETIRED_V243 & set(CORRECTED) == {"us.anthropic.claude-opus-4-8"}
+    assert len(RETIRED_V243) == 5 and RETIRED_V243 & set(CORRECTED) == {"us.anthropic.claude-opus-4-8"}  # 16 until v2.44.x
+    assert len([m for m in OPENAI if "gpt-5.6-" in m and m in pricing_seed.SEED]) == 6
     assert not (RETIRED_V238 | RETIRED_V239 | RETIRED_V242 | RETIRED_V243) & set(pricing_seed.SEED)
     pricing_seed.ensure_seed(engine, active)
     in_tok, out_tok = 12_345, 6_789

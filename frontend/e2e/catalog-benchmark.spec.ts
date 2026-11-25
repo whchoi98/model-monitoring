@@ -11,9 +11,10 @@ const catalog = [
 
 function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
   const cycle = new Date(Date.now() - 20 * 60_000).toISOString();
-  // 21채널 (v2.44.0, v2.43.0은 15채널) — /api/gptbench/latest 정렬(6.2 Astra → 6.2 Sol → 6.1 Sol → 6.1 Terra → Astra → Sol → Luna)과 동일.
-  // Mantle 인리전은 v2.38.0부터 us-east-1 하나다(v2.37.x 21채널은 미국 3리전, Astra us-west-2). GPT 5.4는 v2.39.0에,
-  // GPT 5.6 Terra와 GPT 5.5는 v2.43.0에 뺐다(ADR-038) — GPT 5.x 세대 묶음도 없어졌다.
+  // 23채널 (v2.45.0, v2.44.0은 21채널, v2.43.0은 15채널) — /api/gptbench/latest 정렬(6.2 Astra → 6.2 Sol → 6.1 Sol → 6.1 Terra →
+  // Astra → Sol → Luna → 5.6 Terra)과 동일. Mantle 인리전은 v2.38.0부터 us-east-1 하나다(v2.37.x 21채널은 미국 3리전, Astra
+  // us-west-2). GPT 5.4는 v2.39.0에, GPT 5.6 Terra와 GPT 5.5는 v2.43.0에 뺐다(ADR-038). GPT 5.6 Terra(Global, us-east-1)는
+  // v2.45.0에 되살려(ADR-040) GPT 5.x 세대 묶음이 5.6 Terra 한 열로 다시 있다.
   const families = [
     ["GPT 6.2 Astra", ["Global", "US", "us-east-1"]],
     ["GPT 6.2 Sol", ["Global", "US", "us-east-1"]],
@@ -22,6 +23,7 @@ function benchmarkData(): { latest: GptBenchLatest; trend: GptBenchTrend } {
     ["GPT 6 Astra", ["Global", "US", "us-east-1"]],
     ["GPT 6 Sol", ["Global", "US", "us-east-1"]],
     ["GPT 6 Luna", ["Global", "US", "us-east-1"]],
+    ["GPT 5.6 Terra", ["Global", "us-east-1"]],
   ] as const;
   const channels = families.flatMap(([family, regions]) => regions.map((region) => ({
     model_id: `${family}:${region}`, model_name: `OpenAI ${family} (${region})`,
@@ -61,9 +63,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/explorer/latest", (route) => route.fulfill({ json: explorerLatest(catalog) }));
 });
 
-test("benchmark cards show all 21 channels in the GPT 6.x generation group", async ({ page }) => {
+test("benchmark cards show all 23 channels in the GPT 6.x and GPT 5.x generation groups", async ({ page }) => {
   const data = await mockBenchmark(page);
-  expect(data.latest.channels).toHaveLength(21);
+  expect(data.latest.channels).toHaveLength(23);
   await page.goto("/gpt-on-aws");
   const cards = page.getByRole("region", { name: "Benchmark cards", exact: true });
   for (const channel of data.latest.channels) {
@@ -73,7 +75,15 @@ test("benchmark cards show all 21 channels in the GPT 6.x generation group", asy
   await expect(gpt6.getByRole("heading", { level: 3 })).toHaveText(
     ["GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna"]);
   await expect(gpt6.getByRole("button")).toHaveCount(21);
-  await expect(cards.getByRole("group", { name: "GPT 5.x generation", exact: true })).toHaveCount(0);  // v2.43.0
+  // v2.45.0: the GPT 5.x group is back with GPT 5.6 Terra alone (gone in v2.43.0~v2.44.x), below the GPT 6.x group
+  const gpt5 = cards.getByRole("group", { name: "GPT 5.x generation", exact: true });
+  await expect(gpt5.getByRole("heading", { level: 3 })).toHaveText(["GPT 5.6 Terra"]);
+  await expect(gpt5.getByRole("button")).toHaveCount(2);
+  for (const name of ["OpenAI GPT 5.6 Terra (Global)", "OpenAI GPT 5.6 Terra (us-east-1)"]) {
+    await expect(gpt5.getByRole("button", { name, exact: true })).toBeVisible();
+  }
+  const [top6, top5] = await Promise.all([gpt6, gpt5].map(async (group) => (await group.boundingBox())!.y));
+  expect(top5).toBeGreaterThan(top6);
   for (const name of ["OpenAI GPT 6.2 Astra (Global)", "OpenAI GPT 6.2 Astra (US)", "OpenAI GPT 6.2 Astra (us-east-1)",
     "OpenAI GPT 6.2 Sol (Global)", "OpenAI GPT 6.2 Sol (US)", "OpenAI GPT 6.2 Sol (us-east-1)",
     "OpenAI GPT 6.1 Sol (Global)", "OpenAI GPT 6.1 Sol (US)", "OpenAI GPT 6.1 Sol (us-east-1)",
@@ -84,7 +94,7 @@ test("benchmark cards show all 21 channels in the GPT 6.x generation group", asy
   }
   await expect(cards.getByRole("group", { name: "Other", exact: true })).toHaveCount(0);
   const legend = page.getByRole("list", { name: "Chart legend" }).first();
-  await expect(legend.getByRole("listitem")).toHaveCount(21);
+  await expect(legend.getByRole("listitem")).toHaveCount(23);
 });
 
 test("the seven-column GPT 6.x group uses three columns at lg and four from 1480px (v2.44.0)", async ({ page }) => {
@@ -421,7 +431,7 @@ test("the phone trend legend tells how many channels are below the fold and desk
   await page.goto("/gpt-on-aws");
   const chart = page.getByRole("region", { name: "TTFB trend (median per cycle)", exact: true });
   const list = chart.getByRole("list", { name: "Chart legend" });
-  await expect(list.getByRole("listitem")).toHaveCount(21);  // 15 in v2.43.0, 18 until v2.42.x
+  await expect(list.getByRole("listitem")).toHaveCount(23);  // 21 in v2.44.0, 15 in v2.43.0, 18 until v2.42.x
   const cue = chart.locator("[data-legend-more]");
   await expect(cue).toBeVisible();
   const hidden = await list.evaluate((element) => {
@@ -431,7 +441,7 @@ test("the phone trend legend tells how many channels are below the fold and desk
       return box.top + box.height / 2 > bottom;
     }).length;
   });
-  expect(hidden).toBeGreaterThanOrEqual(13);  // about 6 of 21 fit at 390px (7 of 15 were hidden in v2.43.0)
+  expect(hidden).toBeGreaterThanOrEqual(15);  // about 6 of 23 fit at 390px (7 of 15 were hidden in v2.43.0)
   await expect(cue).toHaveText(`↓ +${hidden} more, scroll the legend`);
   await list.evaluate((element) => { element.scrollTop = element.scrollHeight; });
   await expect(cue).toHaveCount(0);

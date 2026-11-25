@@ -302,4 +302,43 @@ describe("trend chart line encoding", () => {
       }
     }
   });
+
+  test("v2.45.0 channels (GPT 5.6 Sol, Terra, Luna back) stay clear of other models with the same pattern and keep the contrast floor", () => {
+    // The v2.42.x greens are not used: against today's catalog GPT 5.6 Luna (Global) was ΔE 5.0 from GPT 6 Luna (Global), GPT 5.6 Sol
+    // (Global) 4.9 from GPT 6 Astra (Global), and GPT 5.6 Sol (us-east-1) had 2.2:1 on the light card.
+    const families = ["GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna"];
+    for (const family of families) {
+      const names = ["(Global)", "(us-east-1)"].map((channel) => `OpenAI ${family} ${channel}`);
+      expect(names.map(lineDash)).toEqual([undefined, "1 2 6 2"]);
+      for (const name of names) {
+        expect(CATALOG).toContain(name);
+        // the other returning families count as other models
+        const nearest = nearestSamePattern(name, (other) => other.includes(family));
+        expect(nearest.delta, `${name} vs ${nearest.other} (${nearest.theme})`).toBeGreaterThanOrEqual(MIN_DELTA_E);
+        for (const theme of THEMES) {
+          for (const card of CARD_BACKGROUNDS[theme]) {
+            expect(contrastRatio(getColor(name, theme), card), `${name} on ${card} (${theme})`)
+              .toBeGreaterThanOrEqual(MIN_CONTRAST[theme]);
+          }
+        }
+      }
+      // one family: one Lab hue, two distinct steps in both themes
+      const hues = names.map((name) => {
+        const [, a, b] = hexToLab(MODEL_COLORS[name]);
+        return Math.atan2(b, a) * 180 / Math.PI;
+      });
+      expect(Math.abs(hues[0] - hues[1]), family).toBeLessThan(10);
+      for (const theme of THEMES) {
+        expect(distance(names[0], names[1], theme), `${family} (${theme})`).toBeGreaterThanOrEqual(12);
+        // the Global line is the family's default series: it keeps its distance from CP Sonnet 5.5
+        expect(distance(names[0], "Anthropic Claude Sonnet 5.5 (US)", theme), `${family} vs CP Sonnet 5.5 (${theme})`)
+          .toBeGreaterThanOrEqual(MIN_DELTA_E);
+      }
+    }
+    // labels that never get a colour entry: 1P stays hidden, and the Mantle regions collection stopped at in v2.38.0 are
+    // older than the longest trend window (7 days) — they would fall back to the family colour
+    expect(Object.keys(MODEL_COLORS).filter((label) => label.includes("(1P)"))).toEqual([]);
+    expect(Object.keys(MODEL_COLORS).filter((label) => /GPT 5\.6 .*\(us-(east-2|west-2)\)/.test(label))).toEqual([]);
+    expect(getColor("OpenAI GPT 5.6 Terra (us-west-2)", "light")).toBe(getColor("OpenAI GPT 5.6 Terra (Global)", "light"));
+  });
 });

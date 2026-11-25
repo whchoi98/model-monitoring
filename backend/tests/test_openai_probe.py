@@ -105,20 +105,21 @@ def test_register_openai_models_per_region_availability(monkeypatch):
     # v2.38.0 (2026-10-27 user decision): Mantle in-region is us-east-1 only — the us-east-2 and us-west-2 base URLs
     # are still injected, yet no spec names those regions, so no model registers there.
     # v2.39.0 (same day, ADR-034): GPT 5.4 left monitoring; v2.43.0 (2026-11-10, ADR-038): GPT 5.5 and 5.6 too —
-    # their envs alone register nothing.
+    # the GPT 5.4 and 5.5 envs alone register nothing. v2.45.0 (2026-11-25, ADR-040): GPT 5.6 is back, at the end.
     assert openai_keys == ["openai:us-east-1:openai.gpt-6-sol"]
     assert prober.AVAILABLE_MODELS["openai:us-east-1:openai.gpt-6-sol"] == "OpenAI GPT 6 Sol (us-east-1)"
     families = [family for _, family, _ in prober._OPENAI_MODEL_SPECS]
-    assert not [f for f in families if f.startswith("GPT 5.")]
+    assert [f for f in families if f.startswith("GPT 5.")] == ["GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna"]
+    assert families[-3:] == ["GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna"]
     in_region = {r for _, _, regions in prober._OPENAI_MODEL_SPECS for r in regions
                  if r not in prober._OPENAI_PSEUDO_REGIONS}
     assert in_region == {"us-east-1"}
     assert all("us-east-1" in regions for _, _, regions in prober._OPENAI_MODEL_SPECS)  # every family keeps one
 
 
-def test_register_openai_models_global_channels_and_no_gpt5(monkeypatch):
-    """global 채널 — id는 'global.' 접두사 파생, 라벨은 '(Global)' 대문자. GPT 5.x env는 v2.43.0부터 아무것도 등록하지
-    않는다(5.6 세대도 global 채널이 있었다, ADR-038)."""
+def test_register_openai_models_global_channels_and_no_gpt54_or_gpt55(monkeypatch):
+    """global 채널 — id는 'global.' 접두사 파생, 라벨은 '(Global)' 대문자. GPT 5.4, 5.5 env는 아무것도 등록하지 않는다
+    (v2.39.0, v2.43.0). GPT 5.6 세대는 v2.43.0에 빠졌다가 v2.45.0에 돌아와 global 채널을 다시 등록한다(ADR-038, ADR-040)."""
     monkeypatch.setattr(prober, "AVAILABLE_MODELS", dict(prober.AVAILABLE_MODELS))
     monkeypatch.delenv("OPENAI_1P_API_KEY", raising=False)
     monkeypatch.setenv("OPENAI_API_KEY", "ABSK-fake")
@@ -138,11 +139,15 @@ def test_register_openai_models_global_channels_and_no_gpt5(monkeypatch):
     monkeypatch.setenv("BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID", "openai.gpt-5.6-luna")
     prober._register_openai_models()
     all_openai = sorted(k for k in prober.AVAILABLE_MODELS if k.startswith("openai:"))
-    # GPT 5.x는 스펙에 없다 — us 리전 env도 없으므로 GPT 6 Sol, Luna의 global 2개가 전부.
+    # GPT 5.4, 5.5는 스펙에 없다 — us 리전 env도 없으므로 GPT 5.6 세 모델과 GPT 6 Sol, Luna의 global 5개가 전부.
     assert all_openai == [
+        "openai:global:global.openai.gpt-5.6-luna",
+        "openai:global:global.openai.gpt-5.6-sol",
+        "openai:global:global.openai.gpt-5.6-terra",
         "openai:global:global.openai.gpt-6-luna",
         "openai:global:global.openai.gpt-6-sol",
     ]
+    assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-5.6-terra"] == "OpenAI GPT 5.6 Terra (Global)"
     assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-6-sol"] == "OpenAI GPT 6 Sol (Global)"
     assert prober.AVAILABLE_MODELS["openai:global:global.openai.gpt-6-luna"] == "OpenAI GPT 6 Luna (Global)"
 
