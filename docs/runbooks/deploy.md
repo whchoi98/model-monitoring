@@ -1290,9 +1290,112 @@ curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | lengt
 - 롤백 지점은 v2.43.1 이미지 `v4038207`(backend `:98`, frontend `:103`, `docs/reviews/2026-11-11-v243-deployment.md`)이다. v2.44.0은 CDK env를 더한
   릴리스라 v2.43.1 tag의 `cdk/`로 되돌린다(`rollback.md` "v2.44.0에서 v2.43.1로 되돌릴 때").
 
+### 5-17. v2.45.0 배포 경로와 확인 (GPT 5.6 Sol, Terra, Luna 복귀)
+
+**배포 경로**: v2.43.0에 뺐던 모델 id env 세 개(`BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID`, `BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID`,
+`BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID`)가 AppServices `backendEnv`와 Scheduler `buildTaskDef`에 돌아왔으므로 이미지-only 경로(§6)는 쓰지 않는다.
+backend 서비스와 스케줄 태스크 7개에 env가 들어가도록 **digest 고정 CDK로 `BedrockMonitor-AppServices` + `BedrockMonitor-Scheduler`**를 배포한다
+(§3 경고, jest가 두 스택의 env를 고정). 이미지만 배포하면 prober가 GPT 5.6 여섯 채널을, gptbench가 GPT 5.6 Terra 두 채널을 오류 없이 건너뛴다.
+IAM, DB 스키마 변경은 없다. 휴면 1P env(`OPENAI_1P_GPT_56_*`)와 GPT 5.5 env는 되살리지 않았다. 저장 행은 지운 적이 없어, 기본 숨김 패턴에서
+`GPT 5.6`이 빠지면 v2.42.x까지 쌓인 GPT 5.6 행이 조회에 다시 잡힌다. `HIDDEN_MODEL_PATTERNS`를 주입하고 있다면 그 값에서도 `GPT 5.6`을 뺀다.
+사용자 요청(2026-11-25), 자세히는 ADR-040.
+
+```bash
+REGION=ap-northeast-2
+CF_DOMAIN=d36s7ml54xwemr.cloudfront.net
+# 0. 작업 정의 — 되살린 env 세 개가 있고 GPT 5.5 env는 없는지(backend와 스케줄 7개)
+for td in $(aws ecs describe-services --cluster bedrock-monitor --services backend --region $REGION --query 'services[0].taskDefinition' --output text) \
+  $(for n in $(aws scheduler list-schedules --region $REGION --query 'Schedules[?starts_with(Name, `BedrockMonitor`)].Name' --output text); do
+      aws scheduler get-schedule --name $n --region $REGION --query 'Target.EcsParameters.TaskDefinitionArn' --output text; done); do
+  aws ecs describe-task-definition --task-definition $td --region $REGION \
+    --query '[length(taskDefinition.containerDefinitions[0].environment[?contains(name, `GPT_56`)]), length(taskDefinition.containerDefinitions[0].environment[?contains(name, `GPT_55`)])]' --output text
+done
+# 기댓값: 줄마다 3과 0 (BEDROCK_OPENAI_GPT_56_* 세 개, OPENAI_1P_GPT_56_*와 GPT 5.5 env는 없음)
+
+# 1. 카탈로그 — /status 51, /api/models 51, GPT 5.6 id 6개, GPT 5.5와 Opus 4.8 id 없음
+curl -s "https://$CF_DOMAIN/api/auto-probe/status" | jq '{expected_model_count}'
+curl -s "https://$CF_DOMAIN/api/models" | jq '[length, ([.[] | select(.id | test("gpt-5\\.6-(sol|terra|luna)"))] | length),
+  ([.[] | select(.id | test("opus-4-8|gpt-5\\.5|openai:us:us\\.openai\\.gpt-5\\.6|openai:1p:"))] | length)]'
+# 기댓값: expected_model_count 51, [51, 6, 0] (US CRIS와 1P 채널은 없다)
+
+# 2. 첫 새 AutoProber 회차(5분) 뒤 — 51행, OpenAI 27행, GPT 5.6 6채널 success
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '{n: length,
+  groups: (group_by(.model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end)
+           | map({(.[0].model_id | split(":")[0] | if . == "anthropic" or . == "openai" then . else "bedrock" end): length}) | add),
+  openai: ([.[] | select(.model_id | startswith("openai:")) | .model_id | split(":")[1]] | group_by(.) | map({(.[0]): length}) | add)}'
+# 기댓값: n 51, groups {"anthropic": 7, "bedrock": 17, "openai": 27}, openai {"global": 10, "us": 7, "us-east-1": 10}
+curl -s "https://$CF_DOMAIN/api/auto-probe/latest" | jq '[.[] | select(.model_id | test("gpt-5\\.6-")) | {model_id, model_name, status}]'
+# 기댓값: 6행, status "success"
+#   openai:global:global.openai.gpt-5.6-sol     "OpenAI GPT 5.6 Sol (Global)"
+#   openai:us-east-1:openai.gpt-5.6-sol         "OpenAI GPT 5.6 Sol (us-east-1)"
+#   openai:global:global.openai.gpt-5.6-terra   "OpenAI GPT 5.6 Terra (Global)"
+#   openai:us-east-1:openai.gpt-5.6-terra       "OpenAI GPT 5.6 Terra (us-east-1)"
+#   openai:global:global.openai.gpt-5.6-luna    "OpenAI GPT 5.6 Luna (Global)"
+#   openai:us-east-1:openai.gpt-5.6-luna        "OpenAI GPT 5.6 Luna (us-east-1)"
+#   2026-11-25 실측은 호스트 IAM 자격의 단기 토큰으로 했고 여섯 채널 모두 첫 호출부터 200이었다(운영 장기 키로는 호출하지 않았다).
+#   v2.44.0 때는 단기 토큰으로 미리 확인했어도 운영 장기 키(OPENAI_API_KEY)의 첫 회차에 Mantle us-east-1 채널이 401 "Your subscription
+#   to the model is being set up"이었고 다음 회차부터 success였다(§5-16의 2번). 이번에도 Mantle us-east-1 세 채널이 첫 회차에 같은 구독
+#   과도 상태일 수 있으니, 첫 회차 오류만 보고 되돌리지 말고 두 번째 회차까지 본다.
+
+# 3. GPT on AWS 벤치 — 배포 뒤 첫 15분 사이클
+aws logs tail /ecs/gptbench --since 20m --region $REGION | grep -E 'GPT bench (lanes|lane done|cycle)'
+curl -s "https://$CF_DOMAIN/api/gptbench/latest" | jq '{n: (.channels | length), last: [.channels[-2:][].model_name]}'
+# 기댓값: "cycle start: 23 channels x 10 runs", "GPT bench lanes: cris=15 mantle-us-east-1=8", "lane done" 두 줄,
+#   "cycle done: rows=230 errors=0 skipped=none"(GPT_BENCH_RUNS 10).
+#   latest는 시작 후 14분이 지난 사이클만 돌려주므로 배포 직후 약 15분은 옛 사이클(21채널)이다. 그 뒤 n 23,
+#   last ["OpenAI GPT 5.6 Terra (Global)", "OpenAI GPT 5.6 Terra (us-east-1)"](GPT 6 Luna 뒤, fam_rank 7).
+#   GPT 5.6 Sol과 Luna는 벤치 대상이 아니다. 갈래가 데드라인(780초)을 넘기면 목록 끝인 GPT 5.6 Terra부터 skipped에 나온다.
+
+# 4. PricingSync 수동 1회 — §5-5의 2번과 같은 명령(SCHED, FAM, NETCFG, run-task)
+aws logs tail /ecs/pricingsync --since 15m --region $REGION | grep -E 'pricing_sync_runner:|long-context price below'
+# 기댓값: "pricing_sync_runner: 61 active channels"(51 + OpenAI 공식 가격 10), pending=0, errors=0.
+#   운영 price_history에는 GPT 5.6 채널의 행이 남아 있어 seed는 이 채널들을 건너뛴다(ADR-040).
+#   GPT 5.6 세 오퍼는 긴 컨텍스트가 정상값이라 새 WARNING이 없다(GPT-6.1 Sol WARNING은 v2.32.0과 같이 정상).
+
+# 5. /api/pricing — families 18, models 51, references 20, GPT 5.6 셀과 프로모션 메모, 변경 목록의 신규 채널 9건(한 번만)
+curl -s "https://$CF_DOMAIN/api/pricing" | jq '{families: (.families | length), models: (.models | length),
+  references: (.references | length), kinds: ([.references[].kind] | group_by(.) | map({(.[0]): length}) | add),
+  openai: [.families[] | select(.provider == "openai") | .family_key],
+  sol56: (.families[] | select(.family_key == "gpt-5.6-sol") | {list: (.tiers.openai_list | {input, output}),
+    global: (.tiers.global | {input, output}), us: .tiers.us, in_region: [.tiers.in_region[] | {regions, input, output}],
+    notes: [.notes[] | {kind, min_until}]}),
+  terra56: (.families[] | select(.family_key == "gpt-5.6-terra") | {global: (.tiers.global | {input, output}),
+    in_region: [.tiers.in_region[] | {input, output}]}),
+  luna56: (.families[] | select(.family_key == "gpt-5.6-luna") | {global: (.tiers.global | {input, output}),
+    in_region: [.tiers.in_region[] | {input, output}]}),
+  added: ([.changes.items[]? | select(.kind == "channel" and .before == null)] | length)}'
+# 기댓값: families 18, models 51, references 20, kinds {"agreement_offer": 17, "anthropic_doc": 1, "openai_doc": 1, "price_list": 1},
+#   openai ["gpt-6.2-astra", "gpt-6.2-sol", "gpt-6.1-sol", "gpt-6.1-terra", "gpt-6-astra", "gpt-6-sol", "gpt-6-luna",
+#           "gpt-5.6-sol", "gpt-5.6-terra", "gpt-5.6-luna"],
+#   sol56 list {4, 20}, global {4, 20}, us null(US CRIS 채널 없음), in_region [{["us-east-1"], 4.4, 22}],
+#     notes [{"kind": "promo", "min_until": "2026-11-30"}],
+#   terra56 global {2, 12}, in_region [{2.2, 13.2}], luna56 global {0.2, 1.2}, in_region [{0.22, 1.32}],
+#   added — 배포 뒤 첫 동기화가 GPT 5.6이 없던 스냅샷과 비교하므로 9건(6채널 + openai-list:gpt-5.6-sol, -terra, -luna)이
+#   한 번 나오고, 그다음 동기화부터는 없다. 60초 캐시가 있으니 런 뒤 1분 지나 확인한다.
+
+# 6. ExplorerVerify — 다음 스케줄 런(18:00 UTC) 또는 §5-12의 2번 수동 1회 뒤
+curl -s "https://$CF_DOMAIN/api/explorer/latest" | jq '{models: (.models | length), examples: ([.models[].examples[]] | length)}'
+# 기댓값: models 51, examples 83(GPT 5.6 6채널은 Responses 예제 1건씩)
+```
+
+- 화면 확인(Playwright, KO/EN, 390px): 대시보드 카드 51장(GPT 5.6 Sol, Terra, Luna 묶음이 GPT 6 Luna 뒤), 추세 차트의 GPT 5.6 색(Global 실선과
+  us-east-1 일점쇄선 순으로 Sol `#594077`, `#0038e0`, Terra `#3c5214`, `#d0f500`, Luna `#dbc6bd`, `#ff3b0a` — v2.42.x의 초록 계열이 아니다),
+  `/gpt-on-aws` 23채널과 GPT 6.x 세대 묶음 아래의 GPT 5.x 세대 묶음(GPT 5.6 Terra 한 열, 카드 2장), 벤치 범례의 5.6 Terra 파선,
+  `/pricing` OpenAI 표 끝 세 행(패밀리 18개)과 GPT 5.6 Sol 프로모션 배지, 변경 배너의 신규 채널 9건, `/models` 카드 51장,
+  `/parity`(다음 12시간 런부터), `/reliability`, `/cost`, `/efficiency`, `/analysis`의 GPT 5.6 6채널. Claude 화면(`/claude-features`, `/prompts` 대상 15개)은 그대로다.
+- `/cost`(30일)와 이력처럼 긴 창의 화면에는 2026-11-10까지의 GPT 5.6 행이 다시 잡히고 2026-11-11부터 배포까지는 공백이다. v2.37.x까지 수집한
+  us-east-2, us-west-2 라벨의 행도 30일 창에 며칠 더 보인다(ADR-040). 1P 라벨은 `(1P)` 패턴이 계속 숨긴다.
+- 벤치 추가 비용은 캐시 읽기 단가 기준 추정으로 하루 약 $25다(GPT 5.6 Terra 2채널). 줄이려면 `gptbench._BENCH_SPECS`의 마지막 줄을 빼거나
+  `GPT_BENCH_RUNS`를 낮춘다. 시간당 CP 호출(84회)과 Claude API Features(1365셀)는 그대로다.
+- GPT-5.6 Sol 프로모션은 OpenAI 요금 문서 기준 2026-11-30까지다. 그 뒤 동기화가 이전 단가를 관측하면 입력 +25%, 출력 +50%라 관리자 승인 없이
+  적용되고 메모가 빠진다. 단가가 그대로면 2026-12-01(UTC)부터 배지가 "프로모션 종료 여부 확인 필요"로 바뀐다(ADR-040).
+- 롤백 지점은 v2.44.2 이미지 `v4db0ea2`(backend `:100`, frontend `:105`, `docs/reviews/2026-11-21-v2442-deployment.md`)다. v2.45.0은 CDK env를 더한
+  릴리스라 v2.44.2 tag의 `cdk/`로 되돌린다(`rollback.md` A-2의 규칙). 되돌리면 GPT 5.6 6채널이 등록되지 않고 v2.44.2의 기본 숨김 패턴 `GPT 5.6`이
+  저장 행을 다시 가린다.
+
 ## 6. 후속 배포 (코드만 변경 시)
 
-⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`, v2.44.0 `BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID`와 `BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID`)에는 이미지-only
+⚠️ **신규 env가 추가된 릴리스(예: v2.20.0 `OPENAI_GLOBAL_BASE_URL`, v2.25.0 `OPENAI_US_BASE_URL` + `BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID`, v2.27.0 `BEDROCK_OPENAI_GPT_6_{SOL,LUNA}_MODEL_ID`, v2.32.0 `BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID`, v2.38.0 `BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID`, v2.44.0 `BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID`와 `BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID`, v2.45.0에 되살린 `BEDROCK_OPENAI_GPT_56_{SOL,TERRA,LUNA}_MODEL_ID`)에는 이미지-only
 경로(§2-1 기존 task-def 복사 재등록)를 쓰지 말 것** — 기존 task definition의 env가
 그대로 복사돼 신규 env가 누락되고, prober는 base_url env가 없으면 해당 채널을 **조용히
 skip**한다 (에러 없음, 해당 채널만 카탈로그에서 사라짐). 반드시 CDK 배포

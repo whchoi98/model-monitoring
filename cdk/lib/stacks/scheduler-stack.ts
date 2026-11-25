@@ -242,7 +242,7 @@ export class SchedulerStack extends cdk.Stack {
           OPENAI_US_EAST_2_BASE_URL: "https://bedrock-mantle.us-east-2.api.aws/openai/v1",
           OPENAI_US_WEST_2_BASE_URL: "https://bedrock-mantle.us-west-2.api.aws/openai/v1",
           // global CRIS(global.openai.*)는 bedrock-mantle 호스트 미지원 — bedrock-runtime
-          // OpenAI-compat 엔드포인트(Seoul)로만 호출 가능. OpenAI Global CRIS 채널용 — v2.20.0 GPT-5.6 세대로 시작, v2.43.0부터 GPT 6 세대 5개.
+          // OpenAI-compat 엔드포인트(Seoul)로만 호출 가능. OpenAI Global CRIS 채널용 — v2.20.0 GPT-5.6 세대로 시작, v2.45.0은 GPT 6 세대 7개와 GPT 5.6 세대 3개.
           OPENAI_GLOBAL_BASE_URL: "https://bedrock-runtime.ap-northeast-2.amazonaws.com/openai/v1",
           // US CRIS(us.openai.*)도 bedrock-mantle 호스트 미지원 — us-east-1 bedrock-runtime
           // OpenAI-compat 엔드포인트로만 호출 가능. GPT-6 Astra US 채널용 (v2.25.0, ADR-027).
@@ -253,6 +253,11 @@ export class SchedulerStack extends cdk.Stack {
           FEATURES_MCP_SERVER_URL: "https://mcp.deepwiki.com/mcp",
           // GPT 5.4는 v2.39.0에 모니터링에서 뺐다(사용자 결정 2026-10-27, ADR-034) — BEDROCK_/OPENAI_1P_GPT_54_MODEL_ID 미주입.
           // GPT 5.5와 GPT 5.6 Sol, Terra, Luna도 v2.43.0에 뺐다(사용자 결정 2026-11-10, ADR-038) — 그 model id env 미주입.
+          // GPT-5.6 Sol, Terra, Luna는 v2.45.0에 되살렸다(사용자 요청 2026-11-25, ADR-040) — Global CRIS와 Mantle us-east-1 두 채널씩.
+          // GPT 5.5와 1P id는 빠진 그대로다.
+          BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID: "openai.gpt-5.6-sol",
+          BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID: "openai.gpt-5.6-terra",
+          BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID: "openai.gpt-5.6-luna",
           // GPT-6 Astra — Mantle 인리전 native id. Global/US 프로파일 id는 prober가 파생.
           // Mantle 인리전은 v2.38.0부터 us-east-1(2026-10-27 200, 그 전에는 us-west-2 — ADR-027, ADR-033).
           BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID: "openai.gpt-6-astra",

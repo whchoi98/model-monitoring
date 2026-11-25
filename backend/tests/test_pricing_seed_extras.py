@@ -14,7 +14,7 @@ from pricing_seed import ensure_seed, seed_extra, seed_rows
 from pricing_sources import EPOCH, OPENAI_SOURCE_ID, active_channels
 from tests.pricing_catalog import ACTIVE_MODELS
 
-ACTIVE = active_channels(ACTIVE_MODELS, ["(1P)"])  # 활성 45채널 + OpenAI 공식 가격 7채널(openai-list:<family_key>, v2.44.0)
+ACTIVE = active_channels(ACTIVE_MODELS, ["(1P)"])  # 활성 51채널 + OpenAI 공식 가격 10채널(openai-list:<family_key>, v2.45.0)
 COLUMNS = [f"{f}_per_mtok" for f in EXTRA_FIELDS]
 CACHE = ("cache_read", "cache_write", "cache_write_1h")
 GPT = ("cache_read", "cache_write", "long_input", "long_output", "long_cache_read", "long_cache_write")
@@ -42,7 +42,10 @@ GPT_STANDARD = {  # US CRIS와 모든 in-region 채널 — GPT 순서
     "gpt-6.1-sol": (0.11, 2.75, N, N, N, N),  # 오퍼의 긴 컨텍스트 출력이 짧은 컨텍스트보다 낮다: 긴 컨텍스트 없음
     "gpt-6.1-terra": (0.055, 1.375, 2.2, 8.25, 0.11, 2.75),  # 2026-10-27 오퍼 — 긴 컨텍스트 출력 8.25 > 5.5, 정상값
     "gpt-6-astra": (1.1, 13.75, 22, 82.5, 2.2, 27.5), "gpt-6-sol": (0.22, 2.75, 4.4, 16.5, 0.44, 5.5),
-    "gpt-6-luna": (0.011, 0.1375, 0.22, 0.825, 0.022, 0.275),  # GPT 5.6 and 5.5 left in v2.43.0 (ADR-038)
+    "gpt-6-luna": (0.011, 0.1375, 0.22, 0.825, 0.022, 0.275),
+    # GPT 5.6 and 5.5 left in v2.43.0 (ADR-038); GPT 5.6 came back in v2.45.0 (ADR-040) — the offers read on 2026-11-25
+    "gpt-5.6-sol": (0.44, 5.5, 8.8, 33, 0.88, 11), "gpt-5.6-terra": (0.22, 2.75, 4.4, 19.8, 0.44, 5.5),
+    "gpt-5.6-luna": (0.022, 0.275, 0.44, 1.98, 0.044, 0.55),
 }
 GPT_GLOBAL = {  # Global CRIS
     "gpt-6.2-astra": (0.4, 10, 16, 60, 0.8, 20), "gpt-6.2-sol": (0.1, 2.5, 4, 15, 0.2, 5),
@@ -50,6 +53,8 @@ GPT_GLOBAL = {  # Global CRIS
     "gpt-6.1-terra": (0.05, 1.25, 2, 7.5, 0.1, 2.5),
     "gpt-6-astra": (1, 12.5, 20, 75, 2, 25), "gpt-6-sol": (0.2, 2.5, 4, 15, 0.4, 5),
     "gpt-6-luna": (0.01, 0.125, 0.2, 0.75, 0.02, 0.25),
+    "gpt-5.6-sol": (0.4, 5, 8, 30, 0.8, 10), "gpt-5.6-terra": (0.2, 2.5, 4, 18, 0.4, 5),
+    "gpt-5.6-luna": (0.02, 0.25, 0.4, 1.8, 0.04, 0.5),
 }
 OPENAI_LIST = {  # 입력, 출력, 그다음 GPT 순서 — OpenAI 문서 Standard 표
     "gpt-6.2-astra": (8, 40, 0.4, 10, 16, 60, 0.8, 20),  # 2026-11-17 문서(캐시 쓰기 = "30m write" 열)
@@ -58,6 +63,8 @@ OPENAI_LIST = {  # 입력, 출력, 그다음 GPT 순서 — OpenAI 문서 Standa
     "gpt-6.1-terra": (1, 5, 0.05, 1.25, 2, 7.5, 0.1, 2.5),  # 2026-10-27 문서(캐시 쓰기 = "30m write" 열)
     "gpt-6-astra": (10, 50, 1, 12.5, 20, 75, 2, 25), "gpt-6-sol": (2, 10, 0.2, 2.5, 4, 15, 0.4, 5),
     "gpt-6-luna": (0.1, 0.5, 0.01, 0.125, 0.2, 0.75, 0.02, 0.25),
+    "gpt-5.6-sol": (4, 20, 0.4, 5, 8, 30, 0.8, 10), "gpt-5.6-terra": (2, 12, 0.2, 2.5, 4, 18, 0.4, 5),  # v2.45.0
+    "gpt-5.6-luna": (0.2, 1.2, 0.02, 0.25, 0.4, 1.8, 0.04, 0.5),
 }
 NOVA = {"cache_read": 0.0825, "cache_write": 0}  # Nova 캐시 쓰기는 공식 $0 — None이 아니라 0
 
@@ -109,8 +116,8 @@ def _add(eng, model_id, inp, out, status="seed", **extras):
         s.commit()
 
 
-def test_the_active_set_has_45_channels_plus_seven_openai_list_channels():
-    assert len(ACTIVE) == 52
+def test_the_active_set_has_51_channels_plus_ten_openai_list_channels():
+    assert len(ACTIVE) == 61
     assert sorted(i.family_key for i in ACTIVE.values() if i.channel == "openai_list") == sorted(OPENAI_LIST)
 
 
@@ -136,7 +143,7 @@ def test_seed_extra_returns_a_copy():
 
 def test_new_seed_rows_carry_the_extras_and_a_rerun_changes_nothing(engine, caplog):
     with caplog.at_level(logging.INFO, logger="pricing_seed"):
-        assert ensure_seed(engine, ACTIVE) == 52
+        assert ensure_seed(engine, ACTIVE) == 61
     rows = _rows(engine)
     assert set(rows) == set(ACTIVE)
     for model_id, row in rows.items():
@@ -157,7 +164,7 @@ def test_v230_seed_rows_get_only_their_null_extras_filled(engine, caplog):
     _add(engine, OPUS5_US, 5.0, 25.0)                            # not the seed value (5.5 / 27.5): left alone
     _add(engine, SOL_G, 2.0, 10.0, status="verified")            # only status='seed' rows are filled
     with caplog.at_level(logging.INFO, logger="pricing_seed"):
-        assert ensure_seed(engine, ACTIVE) == 52 - 7              # the return value still counts inserted rows only
+        assert ensure_seed(engine, ACTIVE) == 61 - 7              # the return value still counts inserted rows only
     assert "Price seed filled cache/long-context fields on 5 rows" in caplog.messages
     rows = _rows(engine)
     for model_id in (OPUS_G, SOL61_E1, NOVA_ID, CP_OPUS5):
@@ -187,7 +194,7 @@ def test_a_value_committed_between_the_snapshot_and_the_update_is_kept(engine):
             raced.append(statement)
             cursor.execute("UPDATE price_history SET cache_read_per_mtok = 0.3 WHERE model_id = ?", (OPUS_G,))
 
-    assert ensure_seed(engine, ACTIVE) == 52 - 1
+    assert ensure_seed(engine, ACTIVE) == 61 - 1
     event.remove(engine, "before_cursor_execute", concurrent_sync)
     assert raced, "the fill UPDATE never ran"
     row = _rows(engine)[OPUS_G]

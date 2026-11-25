@@ -64,12 +64,12 @@ def test_jobs_are_every_visible_model_times_its_examples():
     assert jobs[0]["code"] == first["code"]["en"] and jobs[0]["code_sha"] == first["code_sha"]
 
 
-def test_the_production_catalog_makes_77_jobs():
+def test_the_production_catalog_makes_83_jobs():
     from tests.pricing_catalog import ACTIVE_MODELS
 
     # v2.42.0: − Fable 5 (7 examples); v2.43.0: − Opus 4.8 (7), GPT 5.6 Sol, Terra, Luna (6) and GPT 5.5 (1)
-    # v2.44.0: + GPT 6.2 Astra (3) and GPT 6.2 Sol (3)
-    assert len(runner.build_jobs(runner.visible_models(ACTIVE_MODELS))) == 77
+    # v2.44.0: + GPT 6.2 Astra (3) and GPT 6.2 Sol (3); v2.45.0: + GPT 5.6 Sol, Terra, Luna back (6)
+    assert len(runner.build_jobs(runner.visible_models(ACTIVE_MODELS))) == 83
 
 
 def test_a_run_saves_one_row_per_example_with_totals(Session):

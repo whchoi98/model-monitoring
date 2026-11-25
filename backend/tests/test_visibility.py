@@ -22,6 +22,7 @@ from tests.pricing_catalog import ACTIVE_MODELS, RETIRED_V239_MODELS
 VISIBLE = [
     ("OpenAI GPT 6 Sol (us-east-1)", "openai:us-east-1:openai.gpt-6-sol"),  # GPT 5.5 until v2.42.x
     ("Bedrock Claude Haiku 5.5 (Global)", "global.anthropic.claude-haiku-5-5"),
+    ("OpenAI GPT 5.6 Terra (Global)", "openai:global:global.openai.gpt-5.6-terra"),  # hidden v2.43.0~v2.44.x, back in v2.45.0
 ]
 HIDDEN_1P = [("OpenAI GPT 6 Sol (1P)", "openai:1p:gpt-6-sol")]  # "(1P)" alone hides it
 RETIRED = [  # v2.39.0 — 다섯 패밀리마다 한 채널 이상
@@ -31,10 +32,10 @@ RETIRED = [  # v2.39.0 — 다섯 패밀리마다 한 채널 이상
     ("Anthropic Claude Sonnet 4.6 (US)", "anthropic:claude-sonnet-4-6"),
     ("Bedrock Claude Opus 4.7 (US)", "us.anthropic.claude-opus-4-7"),
     ("Bedrock Claude Opus 4.6 (Global)", "global.anthropic.claude-opus-4-6-v1"),
-    # v2.42.0 Fable 5, v2.43.0 Claude Opus 4.8, GPT 5.6, GPT 5.5
+    # v2.42.0 Fable 5, v2.43.0 Claude Opus 4.8, GPT 5.5 (GPT 5.6 too until v2.44.x — its 1P label stays hidden by "(1P)")
     ("Anthropic Claude Fable 5 (US)", "anthropic:claude-fable-5"),
     ("Bedrock Claude Opus 4.8 (US)", "us.anthropic.claude-opus-4-8"),
-    ("OpenAI GPT 5.6 Terra (Global)", "openai:global:global.openai.gpt-5.6-terra"),
+    ("OpenAI GPT 5.6 Terra (1P)", "openai:1p:gpt-5.6-terra"),
     ("OpenAI GPT 5.5 (us-east-1)", "openai:us-east-1:openai.gpt-5.5"),
 ]
 
@@ -106,7 +107,7 @@ def test_hidden_patterns_parsing(monkeypatch):
     assert visibility.hidden_patterns() == [
         "(1P)", "Claude Opus 4.7", "Claude Opus 4.6", "Claude Sonnet 4.6", "Claude Haiku 4.5", "GPT 5.4",
         "Claude Fable 5 (",  # v2.42.0 — 괄호까지 넣어 Fable 5.1, 5.2 라벨은 걸리지 않는다
-        "Claude Opus 4.8", "GPT 5.6", "GPT 5.5"]  # v2.43.0
+        "Claude Opus 4.8", "GPT 5.5"]  # v2.43.0 — "GPT 5.6" was between them until v2.45.0 brought the family back
     monkeypatch.setenv("HIDDEN_MODEL_PATTERNS", " (1P) , Opus 4.5 ")
     assert visibility.hidden_patterns() == ["(1P)", "Opus 4.5"]
 
@@ -117,7 +118,7 @@ def _hidden(label: str) -> bool:
 
 def test_no_active_label_or_family_matches_a_default_pattern():
     """숨김 패턴이 남은 채널을 가리지 않는다 — 예를 들어 "GPT 5.4"가 미래의 "GPT 5.45"를, "Claude Opus 4.6"이
-    다른 Opus를 잡지 않는지. 운영 카탈로그 45채널(tests/pricing_catalog.py, v2.44.0)과 FAMILY_ORDER 15개로 확인한다."""
+    다른 Opus를 잡지 않는지. 운영 카탈로그 51채널(tests/pricing_catalog.py, v2.45.0)과 FAMILY_ORDER 18개로 확인한다."""
     assert [label for label in ACTIVE_MODELS.values() if _hidden(label)] == []
     assert [family for family in FAMILY_ORDER if _hidden(family)] == []
     assert len(RETIRED_V239_MODELS) == 12 and all(_hidden(label) for label in RETIRED_V239_MODELS.values())

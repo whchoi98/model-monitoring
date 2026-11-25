@@ -13,6 +13,9 @@
 
 2026-11-10 사용자 결정(v2.43.0, ADR-038): Claude Opus 4.8, GPT 5.5, GPT 5.6(Sol, Terra, Luna)도 뺀다. 세 패턴은 남은 라벨과 겹치지 않는다.
 
+2026-11-25 사용자 요청(v2.45.0, ADR-040): GPT 5.6(Sol, Terra, Luna)을 되살린다 — 패턴 "GPT 5.6"을 기본값에서 뺀다. 그래서
+v2.42.x까지 쌓인 GPT 5.6 행(수집을 멈춘 Mantle us-east-2, us-west-2 라벨 포함)도 다시 보인다. 1P 라벨은 "(1P)"가 계속 숨긴다.
+
 재노출 방법: env HIDDEN_MODEL_PATTERNS=""(빈 값) 주입 + CDK ENABLE_OPENAI_1P=true
 (+ 유효 키를 SSM /bedrock-monitor/openai-1p-api-key 에 저장). env를 주면 기본값 전체를 대신하므로
 1P만 다시 보이려면 나머지 패턴은 그대로 적는다.
@@ -21,9 +24,10 @@
 import os
 
 # model_name 라벨 부분일치 패턴 (쉼표 구분). 기본: OpenAI 1P direct 채널, v2.39.0에 모니터링에서 뺀 다섯 패밀리,
-# v2.42.0에 뺀 Claude Fable 5(괄호까지 — 점 버전 라벨을 피한다), v2.43.0에 뺀 Claude Opus 4.8, GPT 5.6, GPT 5.5.
+# v2.42.0에 뺀 Claude Fable 5(괄호까지 — 점 버전 라벨을 피한다), v2.43.0에 뺀 Claude Opus 4.8, GPT 5.5.
+# v2.43.0~v2.44.x에는 "GPT 5.6"도 있었다 — v2.45.0에 그 계열을 되살리며 뺐다.
 _DEFAULT_HIDDEN = ("(1P),Claude Opus 4.7,Claude Opus 4.6,Claude Sonnet 4.6,Claude Haiku 4.5,GPT 5.4,Claude Fable 5 (,"
-                   "Claude Opus 4.8,GPT 5.6,GPT 5.5")
+                   "Claude Opus 4.8,GPT 5.5")
 
 
 def hidden_patterns() -> list[str]:

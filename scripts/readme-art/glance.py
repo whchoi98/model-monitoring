@@ -2,7 +2,7 @@
 """README 인포그래픽 "Amazon Bedrock LLM Monitor 한눈에 보기" SVG 4종을 만든다 (16:9, KO와 EN × dark와 light).
 
 사용: AWS_ICON_BUNDLE=<aws-diagram 스킬>/assets/icons.json python3 glance.py <out_dir>
-채널 행렬(CLAUDE, NOVA, GPT)과 T의 수치를 고친 뒤 build.sh로 다시 만든다. s1의 assert가 합계 45와 열 합계를 확인한다.
+채널 행렬(CLAUDE, NOVA, GPT)과 T의 수치를 고친 뒤 build.sh로 다시 만든다. s1의 assert가 합계 51과 열 합계를 확인한다.
 """
 import html
 import re
@@ -25,9 +25,11 @@ CLAUDE = [
 NOVA = [("Nova 2.0 Lite", (0, 0, 1, 0))]
 GPT = [(name, (0, 1, 1, "use1")) for name in (
     "GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna")]
+# GPT 5.6 세대(v2.45.0 복귀)는 Global CRIS와 Mantle us-east-1 두 채널이다 — US CRIS 채널이 없다
+GPT += [(name, (0, 1, 0, "use1")) for name in ("GPT 5.6 Sol", "GPT 5.6 Terra", "GPT 5.6 Luna")]
 GROUPS = [("Anthropic Claude", "orange", CLAUDE), ("Amazon Nova", "orange", NOVA), ("OpenAI GPT", "blue", GPT)]
-VERSION = "v2.44"
-AS_OF = "2026-11-21"
+VERSION = "v2.45"
+AS_OF = "2026-11-25"
 
 T = {
     "ko": dict(
@@ -35,15 +37,15 @@ T = {
         sub_en="Production at a Glance",
         sub_ko=f"운영 구성 요약, {VERSION}",
         kpi=[
-            ("45", "모니터링 채널", "Bedrock 17, GPT 21, CP 7"),
-            ("15", "모델 패밀리", "Claude 7, GPT 7, Nova 1"),
-            ("5분", "프로브 주기", "사이클마다 45채널 호출"),
+            ("51", "모니터링 채널", "Bedrock 17, GPT 27, CP 7"),
+            ("18", "모델 패밀리", "Claude 7, GPT 10, Nova 1"),
+            ("5분", "프로브 주기", "사이클마다 51채널 호출"),
             ("7", "예약 태스크", "EventBridge Scheduler, Fargate"),
             ("11", "모니터링 화면", "한국어, 영어 지원"),
             ("8", "CDK 스택", "서울 리전 배포"),
         ],
-        s1=("모델 패밀리별 채널", "패밀리 15개, 호출 경로 4종, 채널 45개"),
-        legend=["Amazon Bedrock (Claude, Nova) 17", "OpenAI GPT on Bedrock 21", "Claude Platform on AWS 7"],
+        s1=("모델 패밀리별 채널", "패밀리 18개, 호출 경로 4종, 채널 51개"),
+        legend=["Amazon Bedrock (Claude, Nova) 17", "OpenAI GPT on Bedrock 27", "Claude Platform on AWS 7"],
         cols=[("Claude Platform", "on AWS"), ("Bedrock", "Global CRIS"), ("Bedrock", "US CRIS"),
               ("Bedrock", "In-Region")],
         total="합계",
@@ -52,13 +54,13 @@ T = {
         s1_note="In-Region: Claude는 서울 온디맨드, GPT는 Bedrock Mantle us-east-1",
         s2=("수집 주기", "EventBridge Scheduler가 실행하는 Fargate 태스크 7개"),
         tasks=[
-            ("5분", "orange", "AutoProber", "45채널에 워크로드 1종 스트리밍 호출", "사이클당 45행"),
+            ("5분", "orange", "AutoProber", "51채널에 워크로드 1종 스트리밍 호출", "사이클당 51행"),
             ("5분", "orange", "Insights", "Claude Haiku 5.5의 최근 6시간 요약", "한국어, 영어 요약"),
-            ("15분", "yellow", "GptBench", "GPT 21채널, 채널당 10회 TTFB와 TTFT 측정", "사이클당 210행"),
-            ("12시간", "blue", "ParityRun", "모델별 API surface 6개, 피처 20개 실행 증거 수집", "45개 모델"),
-            ("12시간", "blue", "PricingSync", "공식 출처 4곳의 단가 동기화, 50% 초과 변경은 승인 대기", "52개 단가 채널"),
+            ("15분", "yellow", "GptBench", "GPT 23채널, 채널당 10회 TTFB와 TTFT 측정", "사이클당 230행"),
+            ("12시간", "blue", "ParityRun", "모델별 API surface 6개, 피처 20개 실행 증거 수집", "51개 모델"),
+            ("12시간", "blue", "PricingSync", "공식 출처 4곳의 단가 동기화, 50% 초과 변경은 승인 대기", "61개 단가 채널"),
             ("매일 17:30 UTC", "purple", "FeaturesVerify", "Claude API 피처 39행, surface 5개, 대표 모델 7개 검증", "1,365셀"),
-            ("매일 18:00 UTC", "purple", "ExplorerVerify", "모델 탐색 코드 예제 실행 검증", "예제 77건"),
+            ("매일 18:00 UTC", "purple", "ExplorerVerify", "모델 탐색 코드 예제 실행 검증", "예제 83건"),
         ],
         s3=("워크로드와 지표", "6종 순환, 같은 종류는 30분마다 반복"),
         workloads=[("짧은 대화", "chat-short"), ("추론", "reasoning"), ("코드 생성", "code-gen"),
@@ -82,15 +84,15 @@ T = {
         sub_en="Production configuration",
         sub_ko=f"{VERSION}, deployed in ap-northeast-2 (Seoul)",
         kpi=[
-            ("45", "Monitored channels", "Bedrock 17, GPT 21, CP 7"),
-            ("15", "Model families", "Claude 7, GPT 7, Nova 1"),
-            ("5 min", "Probe cycle", "All 45 channels"),
+            ("51", "Monitored channels", "Bedrock 17, GPT 27, CP 7"),
+            ("18", "Model families", "Claude 7, GPT 10, Nova 1"),
+            ("5 min", "Probe cycle", "All 51 channels"),
             ("7", "Scheduled tasks", "EventBridge Scheduler, Fargate"),
             ("11", "Monitoring pages", "Korean and English UI"),
             ("8", "CDK stacks", "Deployed in Seoul"),
         ],
-        s1=("Channels by model family", "15 families, 4 call paths, 45 channels"),
-        legend=["Amazon Bedrock (Claude, Nova) 17", "OpenAI GPT on Bedrock 21", "Claude Platform on AWS 7"],
+        s1=("Channels by model family", "18 families, 4 call paths, 51 channels"),
+        legend=["Amazon Bedrock (Claude, Nova) 17", "OpenAI GPT on Bedrock 27", "Claude Platform on AWS 7"],
         cols=[("Claude Platform", "on AWS"), ("Bedrock", "Global CRIS"), ("Bedrock", "US CRIS"),
               ("Bedrock", "In-Region")],
         total="Total",
@@ -100,15 +102,15 @@ T = {
         s2=("Collection cadence", "7 Fargate tasks run by EventBridge Scheduler"),
         tasks=[
             ("5 min", "orange", "AutoProber", "One streaming call per channel with one workload category",
-             "45 rows per cycle"),
+             "51 rows per cycle"),
             ("5 min", "orange", "Insights", "Claude Haiku 5.5 summary of the last 6 hours", "Korean, English"),
-            ("15 min", "yellow", "GptBench", "TTFB and TTFT on 21 GPT channels, 10 runs each", "210 rows per cycle"),
-            ("12 h", "blue", "ParityRun", "Execution evidence per model: 6 API surfaces, 20 features", "45 models"),
+            ("15 min", "yellow", "GptBench", "TTFB and TTFT on 23 GPT channels, 10 runs each", "230 rows per cycle"),
+            ("12 h", "blue", "ParityRun", "Execution evidence per model: 6 API surfaces, 20 features", "51 models"),
             ("12 h", "blue", "PricingSync", "Unit prices from 4 official sources, changes above 50% wait for approval",
-             "52 price channels"),
+             "61 price channels"),
             ("Daily 17:30 UTC", "purple", "FeaturesVerify", "39 Claude API feature rows on 5 surfaces for 7 models",
              "1,365 cells"),
-            ("Daily 18:00 UTC", "purple", "ExplorerVerify", "Runs every Model Explorer code example", "77 examples"),
+            ("Daily 18:00 UTC", "purple", "ExplorerVerify", "Runs every Model Explorer code example", "83 examples"),
         ],
         s3=("Workloads and metrics", "6 categories in rotation, each repeats every 30 min"),
         workloads=[("Short chat", "chat-short"), ("Reasoning", "reasoning"), ("Code generation", "code-gen"),
@@ -150,8 +152,8 @@ def s1(d, x, y, w, h, L):
 
     # 제공 경로별 비중 막대
     by, bh, sx = cy + 4, 34, ix
-    for color, n, tc in (("orange", 17, "onwarm"), ("blue", 21, "badgetext"), ("purple", 7, "badgetext")):
-        sw_ = iw * n / 45
+    for color, n, tc in (("orange", 17, "onwarm"), ("blue", 27, "badgetext"), ("purple", 7, "badgetext")):
+        sw_ = iw * n / 51
         d.rect(sx, by, sw_ - 3, bh, rx=6, fill=color + "F")
         d.text(sx + (sw_ - 3) / 2, by + 23.5, str(n), 17, 700, tc, "middle")
         sx += sw_
@@ -172,7 +174,7 @@ def s1(d, x, y, w, h, L):
         d.text(cx, my + 32, l2, 12.5, 400, "muted", "middle", box=box)
     d.text(tot_x, my + 24, L["total"], 12.5, 700, "muted", "middle", box=box)
 
-    ry, rh, gh = my + 44, 30, 24
+    ry, rh, gh = my + 44, 25, 24  # 패밀리 18행(v2.45.0) — 15행일 때는 행 높이 30이었다(18 × 25 = 15 × 30)
     col_tot = [0, 0, 0, 0]
     for gname, gcolor, rows in GROUPS:
         gsum = sum(sum(1 for c in cells if c) for _, cells in rows)
@@ -207,7 +209,7 @@ def s1(d, x, y, w, h, L):
         d.text(cx, ry + 22.5, str(n), 15, 700, "text", "middle", box=box)
     d.text(tot_x, ry + 23.5, str(sum(col_tot)), 18, 700, "orange", "middle", box=box)
     d.text(ix, ry + 34 + 22, L["s1_note"], 12.5, 400, "muted", box=box)
-    assert sum(col_tot) == 45 and col_tot == [7, 14, 15, 9], col_tot
+    assert sum(col_tot) == 51 and col_tot == [7, 17, 15, 12], col_tot
 
 
 def s2(d, x, y, w, h, L):

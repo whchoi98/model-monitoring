@@ -6,6 +6,9 @@ in that order. v2.43.0 took those families out of `pricing_sources`, so `price_i
 `register(monkeypatch)` puts exactly their v2.42.0 table entries back for one test, so the goldens and the sync
 expectations stay as they were. Tests of the real catalog (seeds, identity counts, `test_production_*`) do not
 need it — the extra entries change nothing for the active channels, whose relative family order is the same.
+
+v2.45.0 (ADR-040) put GPT 5.6 Sol, Terra and Luna back into the catalog at the same position, so for them `register()`
+only sets what is already there. It is still needed for GPT 5.5 and Claude Opus 4.8, which stay retired.
 """
 
 import pricing_changes
@@ -14,7 +17,8 @@ import pricing_sources as ps
 
 # pricing_sources.FAMILY_ORDER of v2.42.0 (18 families) — v2.43.0 removed Claude Opus 4.8 and the four GPT 5.x families —
 # plus the families added since, at their real position, so the active families keep the catalog's relative order
-# (v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol in front of GPT 6.1 Sol; no golden dataset has them)
+# (v2.44.0: GPT 6.2 Astra and GPT 6.2 Sol in front of GPT 6.1 Sol; no golden dataset has them). Since v2.45.0 the real
+# FAMILY_ORDER is this tuple without "Claude Opus 4.8" and "GPT 5.5".
 V242_FAMILY_ORDER: tuple[str, ...] = (
     "Claude Fable 5.2", "Claude Fable 5.1", "Claude Opus 5.5", "Claude Opus 5", "Claude Opus 4.8",
     "Claude Sonnet 5.5", "Claude Sonnet 5", "Claude Haiku 5.5", "Nova 2.0 Lite", "GPT 6.2 Astra", "GPT 6.2 Sol",

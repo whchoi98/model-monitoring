@@ -43,7 +43,8 @@ _MODEL_ENV = {
     "BEDROCK_OPENAI_GPT_6_ASTRA_MODEL_ID": "openai.gpt-6-astra",
     "BEDROCK_OPENAI_GPT_6_SOL_MODEL_ID": "openai.gpt-6-sol",
     "BEDROCK_OPENAI_GPT_6_LUNA_MODEL_ID": "openai.gpt-6-luna",
-    # v2.43.0: no spec reads the GPT 5.6 and 5.5 ids any more (ADR-038) — injected anyway, they must add no channel
+    # v2.43.0 took the GPT 5.6 and 5.5 specs out (ADR-038); v2.45.0 reads the GPT 5.6 ids again (ADR-040, Global and
+    # us-east-1 each) — the GPT 5.5 id is injected anyway and must add no channel
     "BEDROCK_OPENAI_GPT_56_SOL_MODEL_ID": "openai.gpt-5.6-sol",
     "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID": "openai.gpt-5.6-terra",
     "BEDROCK_OPENAI_GPT_56_LUNA_MODEL_ID": "openai.gpt-5.6-luna",
@@ -144,9 +145,11 @@ def test_every_mantle_in_region_channel_is_us_east_1(monkeypatch):
     monitored = {env for env, _, _ in prober._OPENAI_MODEL_SPECS}
     assert in_region == sorted(f"openai:us-east-1:{fm}" for env, fm in _MODEL_ENV.items() if env in monitored)  # 모델마다 하나
     assert not [k for k in openai if k.startswith(("openai:us-east-2:", "openai:us-west-2:"))]
-    assert not [k for k in openai if "gpt-5." in k]  # v2.43.0 — GPT 5.6 and 5.5 left
-    # Mantle us-east-1 5 + Global CRIS 5 + US CRIS 5 (v2.43.0; 22 in v2.39.0 — GPT 5.4 left; 23 in v2.38.0)
-    assert len(openai) == 15
+    assert not [k for k in openai if "gpt-5.5" in k]  # v2.43.0 — GPT 5.5 left (GPT 5.6 came back in v2.45.0)
+    assert not [k for k in openai if "gpt-5.6" in k and k.startswith("openai:us:")]  # GPT 5.6 has no US CRIS channel
+    # this env (no GPT 6.2 ids): Mantle us-east-1 8 + Global CRIS 8 + US CRIS 5 (v2.45.0; 15 in v2.43.0, 22 in v2.39.0 —
+    # GPT 5.4 left; 23 in v2.38.0)
+    assert len(openai) == 21
 
 
 def test_gpt6_astra_in_region_channel_moved_to_us_east_1(monkeypatch):
@@ -162,12 +165,15 @@ def test_bench_keeps_one_mantle_lane_and_appends_gpt61_terra(monkeypatch):
     for env, value in _MODEL_ENV.items():
         monkeypatch.setenv(env, value)
     chans = gptbench.bench_channels()
-    assert [c["model_id"] for c in chans][-3:] == [
+    # this env has no GPT 6.2 id, so 6.1 Terra is followed only by the returning GPT 5.6 Terra pair (v2.45.0)
+    assert [c["model_id"] for c in chans][-5:] == [
         "openai:global:global.openai.gpt-6.1-terra", "openai:us:us.openai.gpt-6.1-terra",
-        "openai:us-east-1:openai.gpt-6.1-terra"]
+        "openai:us-east-1:openai.gpt-6.1-terra",
+        "openai:global:global.openai.gpt-5.6-terra", "openai:us-east-1:openai.gpt-5.6-terra"]
     lanes = gptbench.bench_lanes(chans)
-    # v2.43.0 (GPT 5.5 and GPT 5.6 Terra left); cris 11, mantle-us-east-1 7 in v2.39.0, mantle-us-east-1 8 in v2.38.0
-    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 10, "mantle-us-east-1": 5}
+    # v2.45.0 (GPT 5.6 Terra back); cris 10, mantle-us-east-1 5 in v2.43.0 (GPT 5.5 and GPT 5.6 Terra left); cris 11,
+    # mantle-us-east-1 7 in v2.39.0, mantle-us-east-1 8 in v2.38.0
+    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 11, "mantle-us-east-1": 6}
 
 
 @pytest.mark.parametrize("region", ["us-east-2", "us-west-2"])

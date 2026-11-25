@@ -58,7 +58,7 @@ _BASE_URLS = (
     ("OPENAI_US_EAST_2_BASE_URL", "https://e2/openai/v1"),
     ("OPENAI_US_WEST_2_BASE_URL", "https://w2/openai/v1"),
 )
-# 운영 CDK가 주입하는 모델 id env (v2.44.0)
+# 운영 CDK가 주입하던 모델 id env (v2.44.0 — v2.45.0은 GPT 5.6 id 세 개를 더 주입한다, test_reenable_gpt56.py)
 _PRODUCTION_ENV = {
     "BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID": "openai.gpt-6.2-astra",
     "BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID": "openai.gpt-6.2-sol",
@@ -170,7 +170,7 @@ def test_bench_appends_gpt62_astra_then_sol_in_both_lanes(monkeypatch):
         monkeypatch.setenv(env, url)
     for env, value in _PRODUCTION_ENV.items():
         monkeypatch.setenv(env, value)
-    assert gptbench._BENCH_SPECS[-2:] == [
+    assert gptbench._BENCH_SPECS[-3:-1] == [  # the last entry is GPT 5.6 Terra since v2.45.0, skipped without its env
         ("GPT 6.2 Astra", "BEDROCK_OPENAI_GPT_62_ASTRA_MODEL_ID", ("global", "us", "us-east-1")),
         ("GPT 6.2 Sol", "BEDROCK_OPENAI_GPT_62_SOL_MODEL_ID", ("global", "us", "us-east-1")),
     ]

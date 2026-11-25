@@ -37,8 +37,9 @@ BENCH_ENV = {
     "OPENAI_US_WEST_2_BASE_URL": "http://w2",
     "OPENAI_GLOBAL_BASE_URL": "http://gl",
     "OPENAI_US_BASE_URL": "http://us",
-    # GPT 5.4 (v2.39.0, ADR-034), GPT 5.5 and GPT 5.6 Terra (v2.43.0, ADR-038): no production spec reads them; the
-    # frozen four-lane spec (lane_env) still does, and an injected env must not bring their channels back
+    # GPT 5.4 (v2.39.0, ADR-034) and GPT 5.5 (v2.43.0, ADR-038): no production spec reads them; the frozen four-lane
+    # spec (lane_env) still does, and an injected env must not bring their channels back. GPT 5.6 Terra left with
+    # GPT 5.5 and came back in v2.45.0 (ADR-040), so the production spec reads its env again
     "BEDROCK_OPENAI_GPT_54_MODEL_ID": "openai.gpt-5.4",
     "BEDROCK_OPENAI_GPT_55_MODEL_ID": "openai.gpt-5.5",
     "BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID": "openai.gpt-5.6-terra",
@@ -103,12 +104,13 @@ def test_bench_channels_includes_gpt6_sol_luna_three_channels_each(bench_env):
         ("GPT 6 Luna", "us-east-1", "openai:us-east-1:openai.gpt-6-luna", "OpenAI GPT 6 Luna (us-east-1)"),
     ]
     # GPT 6 Sol/Luna 6채널 뒤에 GPT 6.1 Sol 3채널(v2.32.0), GPT 6.1 Terra 3채널(v2.38.0), GPT 6.2 Astra와 GPT 6.2 Sol
-    # 3채널씩(v2.44.0)이 목록 끝 — 데드라인 컷이 신규 채널부터 떨어진다.
-    assert [c["family"] for c in chans[-18:-12]] == ["GPT 6 Sol"] * 3 + ["GPT 6 Luna"] * 3
-    assert [c["family"] for c in chans[-12:-6]] == ["GPT 6.1 Sol"] * 3 + ["GPT 6.1 Terra"] * 3
-    assert [c["family"] for c in chans[-6:]] == ["GPT 6.2 Astra"] * 3 + ["GPT 6.2 Sol"] * 3
-    # GPT 5.x는 벤치 대상 아님 — 5.6 Sol/Luna는 처음부터, 5.5와 5.6 Terra는 v2.43.0부터 ("6 Sol" 부분 문자열 혼동 방지).
-    assert not any(c["family"].startswith("GPT 5.") for c in chans)
+    # 3채널씩(v2.44.0), 되살린 GPT 5.6 Terra 2채널(v2.45.0)이 목록 끝 — 데드라인 컷이 뒤쪽 채널부터 떨어진다.
+    assert [c["family"] for c in chans[-20:-14]] == ["GPT 6 Sol"] * 3 + ["GPT 6 Luna"] * 3
+    assert [c["family"] for c in chans[-14:-8]] == ["GPT 6.1 Sol"] * 3 + ["GPT 6.1 Terra"] * 3
+    assert [c["family"] for c in chans[-8:-2]] == ["GPT 6.2 Astra"] * 3 + ["GPT 6.2 Sol"] * 3
+    assert [c["family"] for c in chans[-2:]] == ["GPT 5.6 Terra"] * 2
+    # GPT 5.x 중 벤치 대상은 5.6 Terra뿐이다 — 5.6 Sol/Luna는 처음부터 아니고, 5.5는 v2.43.0에 뺐다("6 Sol" 부분 문자열 혼동 방지).
+    assert {c["family"] for c in chans if c["family"].startswith("GPT 5.")} == {"GPT 5.6 Terra"}
 
 
 def test_bench_channels_includes_gpt61_sol_three_channels(bench_env):
@@ -129,12 +131,12 @@ def test_bench_channels_includes_gpt61_sol_three_channels(bench_env):
 
 
 def test_bench_channels_gpt61_sol_needs_its_env(bench_env, monkeypatch):
-    """BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID가 없으면(이미지만 배포) 6.1 Sol 3채널만 조용히 빠지고 18채널은 그대로다."""
+    """BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID가 없으면(이미지만 배포) 6.1 Sol 3채널만 조용히 빠지고 20채널은 그대로다."""
     import gptbench
 
     monkeypatch.delenv("BEDROCK_OPENAI_GPT_61_SOL_MODEL_ID")
     chans = gptbench.bench_channels()
-    assert len(chans) == 18
+    assert len(chans) == 20
     assert not any(c["family"] == "GPT 6.1 Sol" for c in chans)
 
 
@@ -144,7 +146,7 @@ def test_bench_channels_gpt61_terra_needs_its_env(bench_env, monkeypatch):
 
     monkeypatch.delenv("BEDROCK_OPENAI_GPT_61_TERRA_MODEL_ID")
     chans = gptbench.bench_channels()
-    assert len(chans) == 18
+    assert len(chans) == 20
     assert not any(c["family"] == "GPT 6.1 Terra" for c in chans)
 
 
@@ -158,9 +160,25 @@ def test_bench_channels_gpt62_need_their_env(bench_env, monkeypatch, env, family
 
     monkeypatch.delenv(env)
     chans = gptbench.bench_channels()
-    assert len(chans) == 18
+    assert len(chans) == 20
     assert not any(c["family"] == family for c in chans)
     assert sum(1 for c in chans if c["family"] == other) == 3
+
+
+def test_bench_channels_gpt56_terra_is_back_with_two_channels_and_needs_its_env(bench_env, monkeypatch):
+    """GPT 5.6 Terra 2채널 복귀 (v2.45.0, 2026-11-25 사용자 요청) — Global CRIS와 Mantle us-east-1, v2.42.x와 같은 채널.
+    US CRIS 채널은 없다. BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID가 없으면 그 2채널만 조용히 빠진다."""
+    import gptbench
+
+    terra = [c for c in gptbench.bench_channels() if c["family"] == "GPT 5.6 Terra"]
+    assert [(c["region"], c["actual_id"], c["model_id"], c["model_name"]) for c in terra] == [
+        ("global", "global.openai.gpt-5.6-terra", "openai:global:global.openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (Global)"),
+        ("us-east-1", "openai.gpt-5.6-terra", "openai:us-east-1:openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (us-east-1)"),
+    ]
+    monkeypatch.delenv("BEDROCK_OPENAI_GPT_56_TERRA_MODEL_ID")
+    chans = gptbench.bench_channels()
+    assert len(chans) == 21
+    assert not any(c["family"] == "GPT 5.6 Terra" for c in chans)
 
 
 def test_bench_channels_includes_gpt62_astra_and_sol_three_channels_each(bench_env):
@@ -179,11 +197,12 @@ def test_bench_channels_includes_gpt62_astra_and_sol_three_channels_each(bench_e
 
 
 def test_bench_channels_matrix(bench_env):
-    """astra×3 + sol×3 + luna×3 + 6.1 sol×3 + 6.1 terra×3 + 6.2 astra×3 + 6.2 sol×3 (Global, US CRIS, us-east-1) = 21채널
-    (Mantle 인리전 us-east-1 7 + CRIS 14). v2.38.0(2026-10-27 사용자 결정)에서 Mantle 인리전을 us-east-1로 모았고 — v2.37.x는
+    """astra×3 + sol×3 + luna×3 + 6.1 sol×3 + 6.1 terra×3 + 6.2 astra×3 + 6.2 sol×3 (Global, US CRIS, us-east-1) + 5.6 terra×2
+    (Global, us-east-1) = 23채널 (Mantle 인리전 us-east-1 8 + CRIS 15). v2.38.0(2026-10-27 사용자 결정)에서 Mantle 인리전을 us-east-1로 모았고 — v2.37.x는
     21채널(5.4 ×3 리전, 5.5 ×2, 5.6 Terra 인리전 ×3, Astra us-west-2) — v2.39.0(같은 날 사용자 결정)에서 GPT 5.4를,
     v2.43.0(2026-11-10 사용자 결정)에서 GPT 5.5(us-east-1)와 GPT 5.6 Terra(Global, us-east-1)를 뺐다(18 → 15채널). 그 env가
-    있어도 채널은 없다. v2.44.0(2026-11-17 사용자 요청)에서 GPT 6.2 Astra와 GPT 6.2 Sol을 목록 끝에 더했다(15 → 21채널)."""
+    있어도 채널은 없다. v2.44.0(2026-11-17 사용자 요청)에서 GPT 6.2 Astra와 GPT 6.2 Sol을 목록 끝에 더했다(15 → 21채널).
+    v2.45.0(2026-11-25 사용자 요청)에서 GPT 5.6 Terra(Global, us-east-1)를 목록 끝에 되살렸다(21 → 23채널, GPT 5.5는 빠진 그대로)."""
     import gptbench
 
     chans = gptbench.bench_channels()
@@ -209,14 +228,17 @@ def test_bench_channels_matrix(bench_env):
         ("openai:global:global.openai.gpt-6.2-sol", "OpenAI GPT 6.2 Sol (Global)"),
         ("openai:us:us.openai.gpt-6.2-sol", "OpenAI GPT 6.2 Sol (US)"),
         ("openai:us-east-1:openai.gpt-6.2-sol", "OpenAI GPT 6.2 Sol (us-east-1)"),
+        ("openai:global:global.openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (Global)"),
+        ("openai:us-east-1:openai.gpt-5.6-terra", "OpenAI GPT 5.6 Terra (us-east-1)"),
     ]
-    assert len(chans) == 21
-    assert sum(1 for c in chans if c["region"] in ("global", "us")) == 14
+    assert len(chans) == 23
+    assert sum(1 for c in chans if c["region"] in ("global", "us")) == 15
     assert {c["region"] for c in chans if c["region"] not in ("global", "us")} == {"us-east-1"}
     # pseudo-region 채널 id는 접두사 파생, 라벨은 "(Global)"/"(US)" 대문자 (prober 규약).
     glb = [c for c in chans if c["region"] == "global"]
     assert [c["family"] for c in glb] == ["GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra",
-                                          "GPT 6.2 Astra", "GPT 6.2 Sol"]
+                                          "GPT 6.2 Astra", "GPT 6.2 Sol", "GPT 5.6 Terra"]
+    assert not [c for c in chans if c["region"] == "us" and c["family"] == "GPT 5.6 Terra"]  # no US CRIS channel
 
 
 def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
@@ -237,25 +259,27 @@ def test_bench_channel_keys_match_prober_registration(bench_env, monkeypatch):
 
 
 def test_bench_channels_no_global_env(bench_env, monkeypatch):
-    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Astra, Sol, Luna, 6.1 Sol, 6.1 Terra, 6.2 Astra, 6.2 Sol)만 조용히 빠진다."""
+    """OPENAI_GLOBAL_BASE_URL 미설정이면 Global 채널(Astra, Sol, Luna, 6.1 Sol, 6.1 Terra, 6.2 Astra, 6.2 Sol, 5.6 Terra)만
+    조용히 빠진다."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_GLOBAL_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 14
+    assert len(chans) == 15
     assert not any(c["region"] == "global" for c in chans)
 
 
 def test_bench_channels_no_us_env(bench_env, monkeypatch):
     """OPENAI_US_BASE_URL 미설정이면 US CRIS 채널(Astra, Sol, Luna, 6.1 Sol, 6.1 Terra, 6.2 Astra, 6.2 Sol)만 빠지고(KeyError
-    없이) 나머지 14채널 유지."""
+    없이) 나머지 16채널 유지(GPT 5.6 Terra는 US CRIS 채널이 없어 두 채널 그대로)."""
     import gptbench
 
     monkeypatch.delenv("OPENAI_US_BASE_URL")
     chans = gptbench.bench_channels()
-    assert len(chans) == 14
+    assert len(chans) == 16
     assert not any(c["region"] == "us" for c in chans)
-    for fam in ("GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol"):
+    for fam in ("GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol",
+                "GPT 5.6 Terra"):
         assert sum(1 for c in chans if c["family"] == fam) == 2
 
 
@@ -268,11 +292,11 @@ def test_run_cycle_persists_rows(bench_env, session_factory, monkeypatch):
     monkeypatch.setattr(gptbench, "RUNS_PER_CHANNEL", 2)
 
     res = gptbench.run_cycle()
-    assert res["rows"] == 42 and res["errors"] == 0  # 21ch × 2
+    assert res["rows"] == 46 and res["errors"] == 0  # 23ch × 2
 
     s = session_factory()
     rows = s.query(models.GptBenchResult).all()
-    assert len(rows) == 42
+    assert len(rows) == 46
     assert all(r.cycle_ts == rows[0].cycle_ts for r in rows)  # 사이클 그룹 키 동일
     assert rows[0].gap_ms == pytest.approx(900.0)
     s.close()
@@ -290,7 +314,7 @@ def test_run_cycle_deadline_skips_channels(bench_env, session_factory, monkeypat
 
     res = gptbench.run_cycle()
     assert res["rows"] == 0
-    assert len(res["skipped_channels"]) == 21
+    assert len(res["skipped_channels"]) == 23
 
 
 def _seed(session_factory, cycles=3, channels=2, runs=3, base_ttfb=700.0, start_min_ago=20):
@@ -473,13 +497,13 @@ def test_latest_uses_only_cycle_even_if_fresh(session_factory, client):
 
 
 def test_latest_orders_gpt6_family_first(session_factory, client):
-    """카드 정렬은 family(최신 순) → region — 6.1 Sol → 6.1 Terra → Astra → Sol → Luna,
+    """카드 정렬은 family(최신 순) → region — 6.2 Astra → 6.2 Sol → 6.1 Sol → 6.1 Terra → Astra → Sol → Luna → 5.6 Terra,
     각 family 안에서 리전은 Global, US, 인리전 순.
 
     fam_rank에 누락된 family는 rank 9로 밀려 맨 뒤에 찍힌다 (v2.25.1 Astra, v2.28.0 Sol/Luna, v2.32.0 6.1 Sol,
     v2.38.0 6.1 Terra). 지난 사이클의 us-west-2 행(v2.37.x까지 수집)도 같은 규칙으로 정렬된다. 지난 사이클의
-    GPT 5.4 행(v2.38.x까지 수집)은 숨김 패턴이 카드에서 뺀다(v2.39.0). GPT 5.6 Terra와 GPT 5.5 행(v2.42.x까지 수집)도
-    같다(v2.43.0).
+    GPT 5.4 행(v2.38.x까지 수집)은 숨김 패턴이 카드에서 뺀다(v2.39.0). GPT 5.5 행(v2.42.x까지 수집)도 같다(v2.43.0).
+    GPT 5.6 Terra 행은 v2.43.0~v2.44.x에 숨겼다가 v2.45.0에 되살려 GPT 6 Luna 뒤에 찍힌다(fam_rank 7).
     """
     s = session_factory()
     cts = datetime.now(timezone.utc) - timedelta(minutes=20)  # 완료 사이클
@@ -543,7 +567,9 @@ def test_latest_orders_gpt6_family_first(session_factory, client):
         "OpenAI GPT 6 Luna (Global)",
         "OpenAI GPT 6 Luna (US)",
         "OpenAI GPT 6 Luna (us-east-1)",
-    ]  # GPT 5.4 (us-west-2), GPT 5.6 Terra (Global, us-east-1) and GPT 5.5 (us-east-1) are seeded but hidden
+        "OpenAI GPT 5.6 Terra (Global)",  # back in v2.45.0, after the GPT 6 generation
+        "OpenAI GPT 5.6 Terra (us-east-1)",
+    ]  # GPT 5.4 (us-west-2) and GPT 5.5 (us-east-1) are seeded but hidden
 
 
 def test_bench_channels_unknown_region_skipped(bench_env, monkeypatch):
@@ -952,17 +978,18 @@ def test_bench_lanes_split_by_host_cris_then_one_lane_per_mantle_region(lane_env
 
 
 def test_bench_lanes_production_spec_has_two_lanes(bench_env):
-    """v2.44.0 운영 스펙: cris 14(Global 7 + US 7), mantle-us-east-1 7 — 두 갈래(v2.43.0은 cris 10, mantle-us-east-1 5;
-    v2.39.0~v2.42.x는 cris 11, mantle-us-east-1 7, GPT 5.5가 첫 채널; v2.38.0은 mantle-us-east-1 8, GPT 5.4가 첫 채널).
-    6.2 Sol은 두 갈래 각각의 끝이다(그 앞이 6.2 Astra)."""
+    """v2.45.0 운영 스펙: cris 15(Global 8 + US 7), mantle-us-east-1 8 — 두 갈래(v2.44.0은 cris 14, mantle-us-east-1 7;
+    v2.43.0은 cris 10, mantle-us-east-1 5; v2.39.0~v2.42.x는 cris 11, mantle-us-east-1 7, GPT 5.5가 첫 채널; v2.38.0은
+    mantle-us-east-1 8, GPT 5.4가 첫 채널). 되살린 5.6 Terra가 두 갈래 각각의 끝이다(그 앞이 6.2 Sol, 6.2 Astra)."""
     import gptbench
 
     lanes = gptbench.bench_lanes(gptbench.bench_channels())
     assert list(lanes) == ["cris", "mantle-us-east-1"]
-    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 14, "mantle-us-east-1": 7}
+    assert {lane: len(items) for lane, items in lanes.items()} == {"cris": 15, "mantle-us-east-1": 8}
     assert [ch["family"] for _, ch in lanes["mantle-us-east-1"]] == [
-        "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol"]
-    assert [ch["family"] for _, ch in lanes["cris"][-4:]] == ["GPT 6.2 Astra"] * 2 + ["GPT 6.2 Sol"] * 2
+        "GPT 6 Astra", "GPT 6 Sol", "GPT 6 Luna", "GPT 6.1 Sol", "GPT 6.1 Terra", "GPT 6.2 Astra", "GPT 6.2 Sol",
+        "GPT 5.6 Terra"]
+    assert [ch["family"] for _, ch in lanes["cris"][-5:]] == ["GPT 6.2 Astra"] * 2 + ["GPT 6.2 Sol"] * 2 + ["GPT 5.6 Terra"]
 
 
 def test_bench_lanes_new_mantle_region_gets_its_own_lane(bench_env, monkeypatch):

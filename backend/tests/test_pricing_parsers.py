@@ -62,7 +62,9 @@ def test_fixtures_are_sanitized():
                      # v2.38.0 (2026-10-27): GPT 6.1 Terra offer and the OpenAI doc of that day
                      "offers_gpt-6.1-terra.json", "openai_pricing_20261027.md",
                      # v2.44.0 (2026-11-17): GPT 6.2 Astra and GPT 6.2 Sol offers and the OpenAI doc of that day
-                     "offers_gpt-6.2-astra.json", "offers_gpt-6.2-sol.json", "openai_pricing_20261117.md"}
+                     "offers_gpt-6.2-astra.json", "offers_gpt-6.2-sol.json", "openai_pricing_20261117.md",
+                     # v2.45.0 (2026-11-25): the GPT 5.6 Sol offer, read when the GPT 5.6 family came back
+                     "offers_gpt-5.6-sol.json"}
     for f in FIXTURES.iterdir():
         text = f.read_text(encoding="utf-8")
         for forbidden in ("offerToken", "legalTerm", "X-Amz", "Security-Token", "awsmp-offer-legal"):

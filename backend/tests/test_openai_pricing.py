@@ -19,9 +19,10 @@ def _seed(model_id):
 def test_openai_channels_classify_per_channel():
     assert price_identity("openai:us-east-1:openai.gpt-6-sol").channel == "inregion:us-east-1"
     assert price_identity("openai:us-east-1:openai.gpt-5.4") is None  # GPT 5.4 left monitoring in v2.39.0 (ADR-034)
-    for mid in ("openai:us-east-1:openai.gpt-5.5", "openai:global:global.openai.gpt-5.6-sol",
-                "openai:us-east-1:openai.gpt-5.6-terra"):
-        assert price_identity(mid) is None, mid  # GPT 5.5 and 5.6 left monitoring in v2.43.0 (ADR-038)
+    assert price_identity("openai:us-east-1:openai.gpt-5.5") is None  # GPT 5.5 left monitoring in v2.43.0 (ADR-038)
+    # GPT 5.6 left with it and came back in v2.45.0 (ADR-040)
+    assert price_identity("openai:global:global.openai.gpt-5.6-sol").channel == "global"
+    assert price_identity("openai:us-east-1:openai.gpt-5.6-terra").channel == "inregion:us-east-1"
     assert price_identity("openai:us-east-2:openai.gpt-6-sol").channel == "inregion:us-east-2"
     assert price_identity("openai:global:global.openai.gpt-6-sol").channel == "global"
     assert price_identity("openai:us:us.openai.gpt-6-astra").channel == "us"
@@ -56,10 +57,14 @@ def test_gpt6_sol_luna_seed_per_channel():
             assert mid in pricing_seed.SEED, mid
 
 
-def test_no_gpt5_seed_left():
-    """v2.39.0 removed GPT 5.4, v2.43.0 GPT 5.5 and 5.6 Sol, Terra, Luna — no channel seed, no OpenAI list seed."""
-    assert not [m for m in pricing_seed.SEED if "gpt-5." in m]
-    assert not [fk for fk in pricing_seed.OPENAI_LIST_SEED if fk.startswith("gpt-5.")]
+def test_the_only_gpt5_seeds_are_gpt56():
+    """v2.39.0 removed GPT 5.4, v2.43.0 GPT 5.5 and 5.6 Sol, Terra, Luna; v2.45.0 brought GPT 5.6 back (Global and
+    us-east-1) — no other GPT 5.x channel seed or OpenAI list seed."""
+    assert sorted(m for m in pricing_seed.SEED if "gpt-5." in m) == sorted(
+        f"openai:{r}:{'global.' if r == 'global' else ''}openai.gpt-5.6-{f}"
+        for f in ("sol", "terra", "luna") for r in ("global", "us-east-1"))
+    assert sorted(fk for fk in pricing_seed.OPENAI_LIST_SEED if fk.startswith("gpt-5.")) == [
+        "gpt-5.6-luna", "gpt-5.6-sol", "gpt-5.6-terra"]
 
 
 def test_seed_gpt6_global_vs_in_region():
